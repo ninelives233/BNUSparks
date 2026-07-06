@@ -430,10 +430,41 @@
   .footer-bottom .footer-social a:hover {
     background: var(--primary-surface); border-color: var(--primary-light); color: var(--primary);
   }
+  .gi-footer::before { content: ''; display: block; }
+  .gi-footer-gh::before { width: 12px; height: 12px; border: 1.5px solid currentColor; border-radius: 1px; }
+  .gi-footer-rss::before { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+  .gi-footer-mail::before { width: 12px; height: 8px; border: 1.5px solid currentColor; border-radius: 2px; }
 
   /* ════════════════════════════════════════════════════════════
      RESPONSIVE
      ════════════════════════════════════════════════════════════ */
+
+  /* ── Geometric Icon System (replacing emoji) ────────────── */
+  .gi { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* Nav sidebar icons - small geometric marks */
+  .gi-nav-home { width: 18px; height: 18px; border: 1.5px solid currentColor; border-radius: 1px 1px 3px 3px; position: relative; }
+  .gi-nav-home::before { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 2px;
+    clip-path: polygon(0 100%, 0 45%, 50% 15%, 100% 45%, 100% 100%); background: currentColor; }
+  .gi-nav-general { width: 16px; height: 16px; border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
+  .gi-nav-general::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px;
+    background: currentColor; border-radius: 1px; opacity: 0.3; }
+  .gi-nav-major { width: 16px; height: 16px; border: 1.5px solid currentColor;
+    transform: rotate(45deg); border-radius: 2px; }
+
+  /* Login icon - empty circle */
+  .gi-login { width: 22px; height: 22px; border: 1.5px solid currentColor; border-radius: 50%; position: relative; }
+  .gi-login::before { content: ''; position: absolute; top: 4px; left: 5px; right: 5px; bottom: 6px;
+    border-radius: 50%; border: 1.5px solid currentColor; }
+  .gi-login::after { content: ''; position: absolute; bottom: 2px; left: 3px; right: 3px; height: 5px;
+    border-radius: 3px; border: 1.5px solid currentColor; border-top: none; }
+
+  /* ── Card SVG Icons ─────────────────────────────────────── */
+  .fc-icon { position: relative; display: flex; align-items: center; justify-content: center; }
+  .folder-card .fc-icon svg { width: 28px; height: 28px; color: var(--primary); opacity: 0.6; }
+  /* Section header accent */
+  .section-accent { display: inline-flex; align-items: center; gap: 10px; }
+  .section-accent::before { content: ''; width: 3px; height: 1.1em; background: var(--accent); border-radius: 2px; }
   @media (max-width: 900px) {
     .header-logo-area { display: none; }
     .menu-toggle { display: flex; border: none; background: transparent; border-radius: 0; width: 44px; height: var(--header-height); }
@@ -519,13 +550,14 @@
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.05);
   }
   .folder-card .fc-icon {
-    font-size: 1.8rem; width: 54px; height: 54px;
+    width: 54px; height: 54px;
     display: flex; align-items: center; justify-content: center;
     background: var(--primary-surface);
     border-radius: var(--radius-md);
     transition: background 0.2s, transform 0.2s;
   }
   .folder-card:hover .fc-icon { background: oklch(from var(--primary) l c h / 0.12); transform: scale(1.05); }
+  .folder-card .fc-icon svg { width: 28px; height: 28px; color: var(--primary); opacity: 0.6; }
   .folder-card .fc-name {
     font-size: 0.88rem; font-weight: 600; color: var(--ink);
     text-align: center; line-height: 1.3;
@@ -631,7 +663,7 @@
     font-weight: 500; color: var(--ink); cursor: pointer;
     display: flex; align-items: center; gap: var(--space-sm);
   }
-  .file-table .ft-name .ft-file-icon { font-size: 1rem; }
+  /* ft-file-icon removed */
   .file-table .ft-name:hover { color: var(--primary); }
   .file-table .ft-type-cell { color: var(--ink-soft); }
   .file-table .ft-size-cell { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
@@ -644,7 +676,7 @@
   .empty-state {
     text-align: center; padding: 60px 20px; color: var(--ink-faint);
   }
-  .empty-state .es-icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.3; }
+  .empty-state .es-icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; margin: 0 auto var(--space-md); }
   .empty-state .es-text { font-size: 0.95rem; }
   .empty-state .es-sub { font-size: 0.8rem; margin-top: var(--space-xs); }
 
@@ -652,7 +684,7 @@
   @media (max-width: 640px) {
     .folder-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--space-sm); }
     .folder-card { padding: var(--space-sm); }
-    .folder-card .fc-icon { width: 42px; height: 42px; font-size: 1.4rem; }
+    .folder-card .fc-icon { width: 42px; height: 42px; }
     .folder-card .fc-name { font-size: 0.8rem; }
     .folder-list-item { padding: 10px 14px; }
     .file-table thead th,
@@ -671,7 +703,7 @@
       <div class="search-box"><input type="text" placeholder="搜索课程、资料、课程代码…"><button aria-label="搜索">→</button></div>
     </div>
     <div class="header-login">
-      <a href="#" class="login-btn"><span class="login-icon">👤</span><span class="login-text">登录</span></a>
+      <a href="#" class="login-btn"><span class="login-icon gi gi-login"></span><span class="login-text">登录</span></a>
     </div>
   </div>
 </header>
@@ -684,19 +716,19 @@
     <span class="db-name">木铎星火</span>
     <span class="db-sub">BNU Sparks</span>
   </div>
-  <a href="#" class="active"><span>🏠</span> 首页</a>
-  <a href="#"><span>📖</span> 通识课</a>
-  <a href="#"><span>📚</span> 专业课</a>
+  <a href="#" class="active"><span class="gi gi-nav-home" style="width:18px;height:18px"></span> 首页</a>
+  <a href="#"><span class="gi gi-nav-general"></span> 通识课</a>
+  <a href="#"><span class="gi gi-nav-major"></span> 专业课</a>
   <a href="#"><span>ℹ️</span> 关于</a>
 </div>
 
 <div class="page-layout">
 
 <nav class="side-nav">
-  <a href="#" class="active" data-view="home"><span class="sn-icon">🏠</span>首页</a>
-  <a href="#" data-view="general"><span class="sn-icon">📖</span>通识课</a>
-  <a href="#" data-view="major"><span class="sn-icon">📚</span>专业课</a>
-  <a href="#" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon">ℹ️</span>关于</a>
+  <a href="#" class="active" data-view="home"><span class="sn-icon gi gi-nav-home" style="width:22px;height:22px"></span>首页</a>
+  <a href="#" data-view="general"><span class="sn-icon gi gi-nav-general"></span>通识课</a>
+  <a href="#" data-view="major"><span class="sn-icon gi gi-nav-major"></span>专业课</a>
+  <a href="#" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon gi" style="width:3px;height:16px;background:currentColor;border-radius:2px;opacity:0.5"></span>关于</a>
 </nav>
 
 <div class="main-content">
@@ -739,7 +771,7 @@
         <!-- Left: Most Downloaded -->
         <div class="hc-panel">
           <div class="hc-panel-header">
-            <h3>📥 下载最多</h3>
+            <h3 class="section-accent">下载最多</h3>
             <a href="#" class="hc-more">更多 →</a>
           </div>
           <div>
@@ -789,7 +821,7 @@
         <!-- Right: Recent Uploads -->
         <div class="hc-panel">
           <div class="hc-panel-header">
-            <h3>🕐 最近上传</h3>
+            <h3 class="section-accent">最近上传</h3>
             <a href="#" class="hc-more">更多 →</a>
           </div>
           <div>
@@ -868,7 +900,7 @@
         <a href="#">提交 Issue</a>
         <a href="#">贡献指南</a>
         <a href="#">更新日志</a>
-        <a href="#" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-light);font-weight:500;color:var(--primary);">✉️ 投稿与建议</a>
+        <a href="#" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-light);font-weight:500;color:var(--primary);">投稿与建议</a>
       </div>
       <div class="footer-col">
         <h4>关于</h4>
@@ -881,9 +913,9 @@
     <div class="footer-bottom">
       <p>© 2026 BNU Sparks · 木铎星火 · 学术资源共享平台</p>
       <div class="footer-social">
-        <a href="#" aria-label="GitHub">⌂</a>
-        <a href="#" aria-label="RSS">⊕</a>
-        <a href="#" aria-label="Email">@</a>
+        <a href="#" aria-label="GitHub" class="gi-footer gi-footer-gh"></a>
+        <a href="#" aria-label="RSS" class="gi-footer gi-footer-rss"></a>
+        <a href="#" aria-label="Email" class="gi-footer gi-footer-mail"></a>
       </div>
     </div>
   </div>
@@ -929,7 +961,7 @@
 
   // ── Data: 通识课程（按培养方案大类划分）──
   const TONGKE_CATS = [
-    { name:'思想政治理论类', icon:'📖', children:[
+    { name:'思想政治理论类', iconClass:'book', children:[
       { name:'思想道德与法治',                   courseId:'GEN01101', hasFiles:true },
       { name:'中国近现代史纲要',                  courseId:'GEN01102' },
       { name:'马克思主义基本原理',                courseId:'GEN01103' },
@@ -937,47 +969,47 @@
       { name:'习近平新时代中国特色社会主义思想概论',   courseId:'GEN01113' },
       { name:'形势与政策',                        courseId:'GEN09001-GEN09008' },
     ]},
-    { name:'体育与健康类', icon:'🏃', children:[
+    { name:'体育与健康类', iconClass:'runner', children:[
       { name:'女子形体 / 男子健身健美', courseId:'GEN01201' },
       { name:'三自选项课程（3门）',     courseId:'GEN01203' },
     ]},
-    { name:'军事理论与军事技能', icon:'⚔️', children:[
+    { name:'军事理论与军事技能', iconClass:'shield', children:[
       { name:'军事理论', courseId:'GEN01108' },
       { name:'军事技能', courseId:'GEN01109' },
     ]},
-    { name:'大学外语类', icon:'🌐', children:[
+    { name:'大学外语类', iconClass:'globe', children:[
       { name:'通用英语进阶',     courseId:'GEN02122' },
       { name:'博雅英语听说',     courseId:'GEN02123' },
       { name:'思辨英语读写',     courseId:'GEN02124' },
       { name:'学术英语 / 人文通识课程群', courseId:'GEN02***' },
     ]},
-    { name:'教师素养类', icon:'👨‍🏫', children:[
+    { name:'教师素养类', iconClass:'board', children:[
       { name:'教育学',            courseId:'GEN06120' },
       { name:'教育心理学',         courseId:'GEN06121' },
       { name:'现代教育技术',      courseId:'GEN06122' },
       { name:'中国教育改革与发展', courseId:'GEN06123' },
     ]},
-    { name:'家国情怀与价值理想', icon:'❤️', children:[
+    { name:'家国情怀与价值理想', iconClass:'star', children:[
       { name:'中国共产党历史', courseId:'GEN01114' },
       { name:'社会主义发展史', courseId:'GEN01115' },
       { name:'新中国史',       courseId:'GEN01116' },
       { name:'改革开放史',     courseId:'GEN01117' },
     ]},
-    { name:'艺术鉴赏与审美体验', icon:'🎨', children:[
+    { name:'艺术鉴赏与审美体验', iconClass:'diamond', children:[
       { name:'艺术鉴赏与审美体验（模块课程）', courseId:'GEN02***' },
     ]},
-    { name:'数理基础与科学素养', icon:'🔢', children:[
+    { name:'数理基础与科学素养', iconClass:'graph', children:[
       { name:'信息处理技术',            courseId:'GEN04221' },
       { name:'算法与程序设计（Python）', courseId:'GEN04237', hasFiles:true },
       { name:'人工智能导论',            courseId:'GEN04251' },
       { name:'数据科学导论',            courseId:'GEN04252' },
     ]},
-    { name:'社会发展与公民责任', icon:'🤝', children:[
+    { name:'社会发展与公民责任', iconClass:'hands', children:[
       { name:'大学心理Ⅰ',   courseId:'GEN06124' },
       { name:'大学心理Ⅱ',   courseId:'GEN06125' },
       { name:'国家安全导论', courseId:'GEN06706' },
     ]},
-    { name:'经典研读与文化传承', icon:'📜', children:[
+    { name:'经典研读与文化传承', iconClass:'scroll', children:[
       { name:'经典研读与文化传承（模块课程）', courseId:'GEN03***' },
     ]},
   ];
@@ -987,9 +1019,9 @@
 
   // 金融学
   const FINANCE = {
-    name:'金融学', icon:'📈', children:[
-      { name:'专业必修课', icon:'📁', children:[
-        { name:'专业基础课', icon:'📂', children:[
+    name:'金融学', children:[
+      { name:'专业必修课', children:[
+        { name:'专业基础课', children:[
           C('微积分I',              'MAT01006', true),
           C('微积分II',             'MAT01007'),
           C('线性代数',             'MAT02008'),
@@ -997,7 +1029,7 @@
           C('统计学',               'ECO12032'),
           C('计量经济学',            'ECO12031', true),
         ]},
-        { name:'专业核心课', icon:'📂', children:[
+        { name:'专业核心课', children:[
           C('社会主义经济理论',       'ECO11001'),
           C('微观经济学原理',         'ECO01001', true),
           C('宏观经济学原理',         'ECO01002'),
@@ -1011,8 +1043,8 @@
           C('财政学',               'ECO23063'),
         ]},
       ]},
-      { name:'专业选修课Ⅰ', icon:'📁', children:[
-        { name:'专业方向课', icon:'📂', children:[
+      { name:'专业选修课Ⅰ', children:[
+        { name:'专业方向课', children:[
           C('世界金融史',     'ECO21001'),
           C('管理学',        'ECO11003'),
           C('政治经济学',     'ECO12003'),
@@ -1024,16 +1056,16 @@
           C('金融衍生工具',    'ECO23080'),
         ]},
       ]},
-      { name:'自由选修课', icon:'📁', children:[
-        { name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]},
+      { name:'自由选修课', children:[
+        { name:'个性化发展课', children:[C('个性化发展选修', 'GEN****')]},
       ]},
-      { name:'实践环节', icon:'📁', children:[
-        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
-        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
-        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
-        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      { name:'实践环节', children:[
+        { name:'劳动教育',         children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   children:[C('毕业论文（设计）', 'ECO41001')]},
       ]},
-      { name:'拔尖创新人才', icon:'📁', children:[
+      { name:'拔尖创新人才', children:[
         C('金融学新生研讨', 'ECO21002'),
         C('数字经济导论', 'ECO12030'),
         C('量化交易基础与实践', 'ECO21003'),
@@ -1055,9 +1087,9 @@
 
   // 经济学（励耘项目）
   const ECONOMICS_LIYUN = {
-    name:'经济学（励耘项目）', icon:'🎯', children:[
-      { name:'专业必修课', icon:'📁', children:[
-        { name:'专业基础课', icon:'📂', children:[
+    name:'经济学（励耘项目）', children:[
+      { name:'专业必修课', children:[
+        { name:'专业基础课', children:[
           C('数学分析I',        'MAT11001', true),
           C('数学分析II',       'MAT11002'),
           C('数学分析III',      'MAT12005'),
@@ -1071,7 +1103,7 @@
           C('中级宏观经济学',     'ECO12005'),
           C('计量经济学',        'ECO12031'),
         ]},
-        { name:'专业核心课', icon:'📂', children:[
+        { name:'专业核心课', children:[
           C('时间序列分析',     'ECO13005'),
           C('经济思想史',      'ECO12027', true),
           C('社会主义经济理论', 'ECO11001'),
@@ -1083,8 +1115,8 @@
           C('博弈论与信息经济学','ECO23025'),
         ]},
       ]},
-      { name:'专业选修课Ⅰ', icon:'📁', children:[
-        { name:'专业方向课', icon:'📂', children:[
+      { name:'专业选修课Ⅰ', children:[
+        { name:'专业方向课', children:[
           C('管理学',       'ECO11003'),
           C('国际贸易学',    'ECO12008'),
           C('国际金融',     'ECO12011'),
@@ -1095,14 +1127,14 @@
           C('经济计量方法与应用','ECO23030'),
         ]},
       ]},
-      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
-      { name:'实践环节', icon:'📁', children:[
-        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
-        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
-        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
-        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      { name:'自由选修课', children:[{ name:'个性化发展课', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', children:[
+        { name:'劳动教育',         children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   children:[C('毕业论文（设计）', 'ECO41001')]},
       ]},
-      { name:'拔尖创新人才', icon:'📁', children:[
+      { name:'拔尖创新人才', children:[
         C('行为经济学（英文）', 'ECO23076'),
         C('发展经济学（英文）', 'ECO23077'),
         C('创新经济学（英文）', 'ECO23078'),
@@ -1123,9 +1155,9 @@
 
   // 金融科技
   const FINTECH = {
-    name:'金融科技', icon:'💻', children:[
-      { name:'专业必修课', icon:'📁', children:[
-        { name:'专业基础课', icon:'📂', children:[
+    name:'金融科技', children:[
+      { name:'专业必修课', children:[
+        { name:'专业基础课', children:[
           C('微积分I',          'MAT01006'),
           C('微积分II',         'MAT01007'),
           C('线性代数',         'MAT02008'),
@@ -1134,7 +1166,7 @@
           C('计量经济学',        'ECO12031'),
           C('数据结构与算法',    'ECO22018', true),
         ]},
-        { name:'专业核心课', icon:'📂', children:[
+        { name:'专业核心课', children:[
           C('社会主义经济理论',     'ECO11001'),
           C('微观经济学原理',       'ECO01001'),
           C('宏观经济学原理',       'ECO01002'),
@@ -1149,8 +1181,8 @@
           C('区块链与数字资产',     'ECO23066'),
         ]},
       ]},
-      { name:'专业选修课Ⅰ', icon:'📁', children:[
-        { name:'专业方向课', icon:'📂', children:[
+      { name:'专业选修课Ⅰ', children:[
+        { name:'专业方向课', children:[
           C('世界金融史',     'ECO21001'),
           C('管理学',        'ECO11003'),
           C('国际贸易学',     'ECO12008'),
@@ -1170,14 +1202,14 @@
           C('金融经济学',     'ECO23084'),
         ]},
       ]},
-      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
-      { name:'实践环节', icon:'📁', children:[
-        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
-        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
-        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
-        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      { name:'自由选修课', children:[{ name:'个性化发展课', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', children:[
+        { name:'劳动教育',         children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   children:[C('毕业论文（设计）', 'ECO41001')]},
       ]},
-      { name:'拔尖创新人才', icon:'📁', children:[
+      { name:'拔尖创新人才', children:[
         C('金融学新生研讨', 'ECO21002'),
         C('数字经济导论', 'ECO12030'),
         C('量化交易基础与实践', 'ECO21003'),
@@ -1198,9 +1230,9 @@
 
   // 工商管理
   const BIZ_ADMIN = {
-    name:'工商管理', icon:'🏢', children:[
-      { name:'专业必修课', icon:'📁', children:[
-        { name:'专业基础课', icon:'📂', children:[
+    name:'工商管理', children:[
+      { name:'专业必修课', children:[
+        { name:'专业基础课', children:[
           C('微积分I',          'MAT01006'),
           C('微积分II',         'MAT01007'),
           C('线性代数',         'MAT02008'),
@@ -1210,7 +1242,7 @@
           C('微观经济学原理',     'ECO01001'),
           C('管理学',           'ECO11003'),
         ]},
-        { name:'专业核心课', icon:'📂', children:[
+        { name:'专业核心课', children:[
           C('数字企业管理原理',   'ECO22022'),
           C('大数据原理和应用',   'ECO12037'),
           C('会计学',           'ECO11002'),
@@ -1223,8 +1255,8 @@
           C('管理思想史',        'ECO12043'),
         ]},
       ]},
-      { name:'专业选修课Ⅰ', icon:'📁', children:[
-        { name:'专业方向课', icon:'📂', children:[
+      { name:'专业选修课Ⅰ', children:[
+        { name:'专业方向课', children:[
           C('供应链管理',      'ECO23048'),
           C('数字商务',        'ECO23106'),
           C('数字营销',        'ECO23055', true),
@@ -1243,14 +1275,14 @@
           C('人力资源管理实证研究','ECO23075'),
         ]},
       ]},
-      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
-      { name:'实践环节', icon:'📁', children:[
-        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
-        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
-        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
-        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      { name:'自由选修课', children:[{ name:'个性化发展课', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', children:[
+        { name:'劳动教育',         children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   children:[C('毕业论文（设计）', 'ECO41001')]},
       ]},
-      { name:'拔尖创新人才', icon:'📁', children:[
+      { name:'拔尖创新人才', children:[
         C('数字经济导论', 'ECO12030'),
         C('产业组织', 'ECO23110'),
         C('数字创新管理', 'ECO23111'),
@@ -1267,9 +1299,9 @@
 
   // 会计学
   const ACCOUNTING = {
-    name:'会计学', icon:'📊', children:[
-      { name:'专业必修课', icon:'📁', children:[
-        { name:'专业基础课', icon:'📂', children:[
+    name:'会计学', children:[
+      { name:'专业必修课', children:[
+        { name:'专业基础课', children:[
           C('微积分I',          'MAT01006'),
           C('微积分II',         'MAT01007'),
           C('线性代数',         'MAT02008'),
@@ -1280,7 +1312,7 @@
           C('管理学',           'ECO11003'),
           C('宏观经济学原理',     'ECO01002'),
         ]},
-        { name:'专业核心课', icon:'📂', children:[
+        { name:'专业核心课', children:[
           C('会计学原理',               'ECO12001'),
           C('财务会计',                'ECO12016'),
           C('财务管理',                'ECO13003'),
@@ -1291,8 +1323,8 @@
           C('商业伦理与企业社会责任',     'ECO23009'),
         ]},
       ]},
-      { name:'专业选修课Ⅰ', icon:'📁', children:[
-        { name:'专业方向课', icon:'📂', children:[
+      { name:'专业选修课Ⅰ', children:[
+        { name:'专业方向课', children:[
           C('成本会计',               'ECO23114'),
           C('政府与非营利组织会计',     'ECO23005'),
           C('高级财务会计',            'ECO23115'),
@@ -1310,14 +1342,14 @@
           C('国际贸易学',              'ECO12008'),
         ]},
       ]},
-      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
-      { name:'实践环节', icon:'📁', children:[
-        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
-        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
-        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
-        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      { name:'自由选修课', children:[{ name:'个性化发展课', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', children:[
+        { name:'劳动教育',         children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   children:[C('毕业论文（设计）', 'ECO41001')]},
       ]},
-      { name:'拔尖创新人才', icon:'📁', children:[
+      { name:'拔尖创新人才', children:[
         C('国际会计（英文）', 'ECO23116'),
         C('国际商务（英文）', 'ECO23117'),
         C('行为会计学', 'ECO23118'),
@@ -1334,14 +1366,14 @@
 
   // ── 法学（卓越实验班）──
   const LAW = {
-    name:'法学（卓越实验班）', icon:'⚖️', children:[
-      { name:'专业必修课', icon:'📁', children:[
-        { name:'专业基础课', icon:'📂', children:[
+    name:'法学（卓越实验班）', children:[
+      { name:'专业必修课', children:[
+        { name:'专业基础课', children:[
           C('法理学导论',     'LAW01001'),
           C('宪法学',         'LAW02002', true),
           C('习近平法治思想概论','LAW01003'),
         ]},
-        { name:'专业核心课', icon:'📂', children:[
+        { name:'专业核心课', children:[
           C('法理学专论',        'LAW13001'),
           C('中国法律史',        'LAW11001'),
           C('民法总论',          'LAW11002', true),
@@ -1360,22 +1392,22 @@
           C('法律职业伦理',      'LAW13005'),
         ]},
       ]},
-      { name:'专业选修课Ⅰ', icon:'📁', children:[
-        { name:'专业方向课', icon:'📂', children:[
-          { name:'基础理论法学模块', icon:'📂', children:[
+      { name:'专业选修课Ⅰ', children:[
+        { name:'专业方向课', children:[
+          { name:'基础理论法学模块', children:[
             C('外国法制史',     'LAW21001'),
             C('中国法律思想史',  'LAW22002'),
             C('西方法律思想史',  'LAW22003'),
             C('现代法学思潮',    'LAW22004'),
             C('法学方法论',      'LAW22001'),
           ]},
-          { name:'宪法与行政法学模块', icon:'📂', children:[
+          { name:'宪法与行政法学模块', children:[
             C('比较宪法与行政法学',    'LAW23001'),
             C('公共事业与非政府组织法', 'LAW23002'),
             C('行政法专题研究',       'LAW22006'),
             C('国家责任法',           'LAW23003'),
           ]},
-          { name:'民商事法学模块', icon:'📂', children:[
+          { name:'民商事法学模块', children:[
             C('物权法学',              'LAW21005'),
             C('侵权责任法学',          'LAW22005'),
             C('劳动与社会保障法学',     'LAW23004'),
@@ -1386,14 +1418,14 @@
             C('破产法',                'LAW23007'),
             C('保险法',                'LAW23008'),
           ]},
-          { name:'经济法学与环境资源法学模块', icon:'📂', children:[
+          { name:'经济法学与环境资源法学模块', children:[
             C('财政税收法',          'LAW22007'),
             C('金融法',              'LAW22008'),
             C('竞争法',              'LAW23011'),
             C('消费者权益保护法',     'LAW22011'),
             C('法与经济学',          'LAW23010'),
           ]},
-          { name:'刑法学模块', icon:'📂', children:[
+          { name:'刑法学模块', children:[
             C('犯罪学',       'LAW22012'),
             C('英美刑法',      'LAW22013'),
             C('大陆刑法',      'LAW22014'),
@@ -1402,19 +1434,19 @@
             C('刑法新思维',    'LAW22016'),
             C('比较刑事法',    'LAW22019'),
           ]},
-          { name:'诉讼法学模块', icon:'📂', children:[
+          { name:'诉讼法学模块', children:[
             C('强制执行法',    'LAW23015'),
             C('证据法',        'LAW23016'),
             C('仲裁法',        'LAW22017'),
           ]},
-          { name:'国际法学模块', icon:'📂', children:[
+          { name:'国际法学模块', children:[
             C('国际经济法学',           'LAW22018'),
             C('世界贸易组织法',          'LAW23014'),
             C('海洋法',                'LAW23018'),
             C('国际人权法',             'LAW23019'),
             C('英美法案例研读入门',      'LAW22027'),
           ]},
-          { name:'法律实务模块', icon:'📂', children:[
+          { name:'法律实务模块', children:[
             C('法律诊所',              'LAW23801'),
             C('模拟法庭实验',           'LAW23802'),
             C('法律文书写作',           'LAW23020'),
@@ -1433,24 +1465,24 @@
           ]},
         ]},
       ]},
-      { name:'自由选修课', icon:'📁', children:[
-        { name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]},
+      { name:'自由选修课', children:[
+        { name:'个性化发展课', children:[C('个性化发展选修', 'GEN****')]},
       ]},
-      { name:'实践环节', icon:'📁', children:[
-        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
-        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'LAW33004')]},
-        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'LAW31002')]},
-        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'LAW32003')]},
+      { name:'实践环节', children:[
+        { name:'劳动教育',         children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    children:[C('学术训练与实践', 'LAW33004')]},
+        { name:'专业实习与社会调查', children:[C('专业实习与社会调查', 'LAW31002')]},
+        { name:'毕业论文（设计）',   children:[C('毕业论文（设计）', 'LAW32003')]},
       ]},
-      { name:'拔尖创新人才', icon:'📁', children:[
-        { name:'教育法治微专业', icon:'📂', children:[
+      { name:'拔尖创新人才', children:[
+        { name:'教育法治微专业', children:[
           C('教育法学',               'LAW23024'),
           C('未成年人法学',            'LAW23025'),
           C('教育法治与教师法律素养',  'LAW23026'),
           C('学校法律实务',            'LAW23027'),
           C('未成年人司法',            'LAW23028'),
         ]},
-        { name:'网络法治微专业', icon:'📂', children:[
+        { name:'网络法治微专业', children:[
           C('大数据法治',                'LAW22020'),
           C('网络与人工智能法',           'LAW23029'),
           C('比较电子商务法',             'LAW23030'),
@@ -1458,14 +1490,14 @@
           C('信息刑法',                  'LAW22021'),
           C('网络知识产权前沿与案例',      'LAW23032'),
         ]},
-        { name:'涉外法治微专业', icon:'📂', children:[
+        { name:'涉外法治微专业', children:[
           C('比较法律文化',               'LAW22022'),
           C('海商法',                     'LAW23033'),
           C('国际贸易法',                 'LAW23034'),
           C('国际民事诉讼与商事仲裁法',    'LAW23035'),
           C('国际刑事司法前沿',            'LAW23036'),
         ]},
-        { name:'反腐败法治微专业', icon:'📂', children:[
+        { name:'反腐败法治微专业', children:[
           C('反腐败法治专题研究',               'LAW22023'),
           C('国家监察法学',                     'LAW22024'),
           C('反腐败追逃追赃的理论与实务',       'LAW23037'),
@@ -1478,11 +1510,28 @@
 
   // ── Compile full tree ──
   const COURSE_TREE = {
-    '通识课': { icon:'📚', children: TONGKE_CATS },
-    '专业课': { icon:'🎓', children: [
-      { name:'经济与工商管理学院', icon:'🏛️', children:[ FINANCE, ECONOMICS_LIYUN, FINTECH, BIZ_ADMIN, ACCOUNTING ]},
-      { name:'法学院', icon:'⚖️', children:[ LAW ]},
+    '通识课': { children: TONGKE_CATS },
+    '专业课': { children: [
+      { name:'经济与工商管理学院', iconClass:'columns', children:[ FINANCE, ECONOMICS_LIYUN, FINTECH, BIZ_ADMIN, ACCOUNTING ]},
+      { name:'法学院', iconClass:'scales', children:[ LAW ]},
     ]},
+  };
+
+  // ── Card SVG Icons ─────────────────────────
+  const CARD_ICONS = {
+    'folder': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h7l2 3h9v11H3V5z"/></svg>',
+    'book': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M8 8h3M8 11h3"/></svg>',
+    'runner': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="8" width="6" height="8" rx="1.5"/><rect x="4" y="5" width="5" height="14" rx="2"/><rect x="15" y="5" width="5" height="14" rx="2"/></svg>',
+    'shield': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l7-3 7 3v6c0 5-4 8-7 10-3-2-7-5-7-10V5z"/><line x1="12" y1="8" x2="12" y2="13"/></svg>',
+    'globe': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+    'board': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14v9H5z"/><path d="M5 8l7-3 7 3"/><path d="M16 17l2 4"/><path d="M8 17l-2 4"/><line x1="8" y1="11" x2="11" y2="11"/><line x1="8" y1="14" x2="13" y2="14"/></svg>',
+    'star': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg>',
+    'diamond': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,3 21,12 12,21 3,12" opacity="0.3"/><polygon points="12,7 17,12 12,17 7,12"/></svg>',
+    'graph': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4M4 20h16"/><path d="M8 20v-6h4v6M14 20v-9h4v9"/></svg>',
+    'hands': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h18"/><path d="M5 13V5h14v8"/><path d="M9 13v4h6v-4"/><rect x="10" y="9" width="4" height="4" rx="1"/></svg>',
+    'scroll': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3h8V3M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 9h8M8 13h5"/></svg>',
+    'columns': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="3" rx="0.5"/><rect x="3" y="10" width="18" height="1.5" rx="0.3"/><rect x="5.5" y="11.5" width="3" height="7.5" rx="0.3"/><rect x="10.5" y="11.5" width="3" height="7.5" rx="0.3"/><rect x="15.5" y="11.5" width="3" height="7.5" rx="0.3"/><rect x="3" y="19" width="18" height="2" rx="0.3"/><rect x="2" y="21" width="20" height="2" rx="0.3"/></svg>',
+    'scales': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="9"/><line x1="4" y1="9" x2="20" y2="9"/><path d="M4 9L1 17"/><path d="M20 9l3 8"/><path d="M-1 17C-1 20 3 20 3 17"/><path d="M21 17c0 3 4 3 4 0"/></svg>',
   };
 
   // ── State ──
@@ -1542,7 +1591,7 @@
     parent.innerHTML = '<div class="folder-grid">' +
       items.map(item =>
         '<div class="folder-card" data-n="' + esc(item.name) + '">' +
-          '<div class="fc-icon">' + (item.icon || '📁') + '</div>' +
+          '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
           '<div class="fc-name">' + esc(item.name) + '</div>' +
           '<div class="fc-count">' + (item.children ? item.children.length + ' 项' : '') + '</div>' +
         '</div>'
@@ -1566,7 +1615,7 @@
       if (noData.length) {
         html += '<div class="nd-toggle" id="ndT"><span class="nd-arrow">▸</span><span>暂无资料的课程（' + noData.length + '）</span></div>' +
                 '<div class="nd-content" id="ndC">' +
-                noData.map(item => '<div class="nd-item"><span class="nd-icon">📒</span><span>' + esc(item.name) + '</span></div>').join('') +
+                noData.map(item => '<div class="nd-item"><span class="nd-icon gi gi-list-course">·</span><span>' + esc(item.name) + '</span></div>').join('') +
                 '</div>';
       }
     } else {
@@ -1588,7 +1637,7 @@
       : (item.children ? '' : '<span class="fli-badge no-data">暂无资料</span>');
     const meta = item.courseId ? '课程代码 ' + item.courseId : (item.children ? item.children.length + ' 项' : '');
     return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
-      '<span class="fli-icon">' + (active ? '📁' : '📒') + '</span>' +
+      '<span class="fli-icon gi gi-list-folder">' + (active ? '▸' : '·') + '</span>' +
       '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
       badge + '</div>';
   }
@@ -1597,10 +1646,10 @@
     const files = demoFiles(course.name);
     document.getElementById('explorerContent').innerHTML =
       '<div class="file-area">' +
-        '<div class="file-area-header"><h3>📄 ' + esc(course.name) + ' — 资料列表</h3><span class="fa-count">' + files.length + ' 个文件</span></div>' +
+        '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count">' + files.length + ' 个文件</span></div>' +
         '<table class="file-table"><thead><tr><th>文件名</th><th>文件类型</th><th>大小</th></tr></thead><tbody>' +
         files.map(f =>
-          '<tr><td class="ft-name"><span class="ft-file-icon">' + (f.type === 'PDF' ? '📕' : f.type === 'PPTX' ? '📊' : '📦') + '</span>' + esc(f.name) + '</td>' +
+          '<tr><td class="ft-name">' + esc(f.name) + '</td>' +
           '<td class="ft-type-cell">' + esc(f.type) + '</td>' +
           '<td class="ft-size-cell">' + esc(f.size) + '</td></tr>'
         ).join('') +
@@ -1609,7 +1658,7 @@
 
   function renderEmpty(course) {
     document.getElementById('explorerContent').innerHTML =
-      '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">「' + esc(course.name) + '」暂无资料</div><div class="es-sub">可能是课程尚未开始，或资料正在征集中</div></div>';
+      '<div class="empty-state"><div class="es-icon"><span class="gi gi-empty"></span></div><div class="es-text">「' + esc(course.name) + '」暂无资料</div><div class="es-sub">可能是课程尚未开始，或资料正在征集中</div></div>';
   }
 
   function renderExplorer() {
