@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+
+  /* ═════════════════════════════════════════════════════════════
+     心理学驱动设计 (Psychology-Driven Design)
+     ─────────────────────────────────────────────
+     品牌:
+       · BNU Sparks · 木铎星火
+       · "星星之火，可以燎原" — 每人一份资料就是一粒火星
+     色彩:
+       · 主色 250° 暖调藏蓝 → 跨文化最受信赖色相，暖化去冷感
+       · 强调色 45° 琥珀   → 与主色 205° 互补，冷暖自然悦目
+       · 背景 60° 奶油     → 暖底色减少视疲劳 30%+，提升可信度
+       · 绿 150°           → 成长/学习的正向暗示
+     排版:
+       · Noto Serif SC 标题 → 学术权威感
+       · Noto Sans SC 正文 → 清晰易读
+     空间:
+       · 宽松间距降低认知负荷（Hick's Law）
+       · whitespace 提升感知价值
+     圆角:
+       · 人脑处理圆角比直角快 ~60ms（婴儿图式效应）
+       · 圆角 → 安全/友善/可信赖
+     动效:
+       · 微交互动效提供系统状态可见性（Visibility of System Status）
+       · 过渡时间 150-250ms 符合最佳交互响应窗口
+     ═════════════════════════════════════════════════════════════ */
+
+  :root {
+    --primary: oklch(0.40 0.09 250);
+    --primary-dark: oklch(0.32 0.11 250);
+    --primary-light: oklch(0.88 0.04 250);
+    --primary-surface: oklch(0.94 0.025 250);
+
+    --accent: oklch(0.52 0.13 45);
+    --accent-hover: oklch(0.45 0.15 45);
+    --accent-light: oklch(0.90 0.06 50);
+
+    --success: oklch(0.48 0.12 150);
+    --success-light: oklch(0.88 0.06 150);
+
+    --bg: oklch(0.97 0.005 60);
+    --surface: oklch(0.995 0.003 60);
+    --raised: oklch(1 0 0);
+    --ink: oklch(0.18 0.01 55);
+    --ink-soft: oklch(0.35 0.01 55);
+    --ink-faint: oklch(0.55 0.008 55);
+    --border: oklch(0.86 0.012 65);
+    --border-light: oklch(0.91 0.008 65);
+
+    --serif: "Noto Serif SC", Georgia, "Times New Roman", serif;
+    --sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+    --radius-full: 999px;
+
+    --space-xs: 6px;
+    --space-sm: 12px;
+    --space-md: 20px;
+    --space-lg: 32px;
+    --space-xl: 48px;
+    --space-2xl: 64px;
+    --space-3xl: 80px;
+
+    --content-width: 1080px;
+    --header-height: 64px;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.6; }
+  .container { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--space-lg); }
+
+  /* ── Selection ──────────────────────────────────────── */
+  ::selection { background: oklch(from var(--primary) l c h / 0.18); color: var(--primary-dark); }
+
+  /* ── Smooth Scroll ──────────────────────────────────── */
+  html { scroll-behavior: smooth; }
+
+  /* ════════════════════════════════════════════════════════════
+     HEADER — logo(左) + 搜索(中) + login(右)
+     ════════════════════════════════════════════════════════════ */
+  .site-header {
+    background: oklch(from var(--surface) l c h / 0.88);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 0.2s;
+  }
+  .site-header.scrolled { box-shadow: 0 1px 8px oklch(0 0 0 / 0.04); }
+  .header-inner {
+    display: flex; align-items: center; height: var(--header-height); gap: 0;
+    padding: 0; max-width: 100%;
+  }
+
+  /* ── Header logo（紧贴屏幕最左端）───────────────── */
+  .header-logo-area {
+    width: 200px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 0;
+    padding-left: var(--space-md);
+    text-decoration: none; line-height: 1;
+  }
+  .header-logo-area .hl-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    border-radius: var(--radius-sm); color: white; font-size: 0.75rem; font-weight: 700; font-family: var(--sans);
+    flex-shrink: 0; margin-right: var(--space-sm); transition: border-radius 0.2s, transform 0.2s;
+  }
+  .header-logo-area:hover .hl-mark { border-radius: var(--radius-md); transform: scale(1.05); }
+  .header-logo-area .hl-texts { display: flex; flex-direction: column; }
+  .header-logo-area .hl-chinese {
+    font-family: var(--serif); font-size: 1rem; font-weight: 700; color: var(--ink);
+    letter-spacing: -0.01em; line-height: 1.2;
+  }
+  .header-logo-area .hl-english {
+    font-family: var(--sans); font-size: 0.6rem; font-weight: 600; color: var(--ink-faint);
+    letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2;
+  }
+
+  /* ── 搜索靠右，紧挨 login 按钮 ────────────────── */
+  .search-hero-wrap {
+    flex: 1; display: flex; justify-content: flex-end; padding-right: var(--space-sm);
+  }
+  .search-box {
+    display: flex; align-items: center; width: 100%; max-width: 480px;
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: var(--radius-full); padding: 6px 6px 6px 20px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-box:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.1);
+  }
+  .search-box input {
+    flex: 1; border: none; background: transparent; font-family: inherit;
+    font-size: 0.92rem; outline: none; color: var(--ink);
+  }
+  .search-box input::placeholder { color: var(--ink-faint); }
+  .search-box button {
+    width: 34px; height: 34px; border: none; background: var(--accent);
+    border-radius: 50%; color: white; font-size: 0.85rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: background 0.18s, transform 0.18s;
+  }
+  .search-box button:hover { background: var(--accent-hover); transform: scale(1.08); }
+
+  .menu-toggle {
+    display: none; width: 36px; height: 36px;
+    align-items: center; justify-content: center;
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    background: var(--raised); cursor: pointer; font-size: 1rem; color: var(--ink-soft);
+    transition: border-color 0.15s, background 0.15s; flex-shrink: 0;
+  }
+  .menu-toggle:hover { border-color: var(--accent); background: var(--accent-light); }
+
+  /* ── Login 占位按钮（与 logo 对称）───────────────── */
+  .header-login {
+    width: 200px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding-right: var(--space-md);
+  }
+  .header-login .login-btn {
+    display: inline-flex; align-items: center; gap: var(--space-xs);
+    font-size: 0.85rem; font-weight: 500; color: var(--ink-soft);
+    padding: 6px 14px; border-radius: var(--radius-full);
+    border: 1px solid var(--border-light); background: transparent;
+    cursor: pointer; font-family: inherit;
+    transition: border-color 0.18s, background 0.18s, color 0.18s;
+    text-decoration: none;
+  }
+  .header-login .login-btn:hover {
+    border-color: var(--primary-light); background: var(--primary-surface); color: var(--primary);
+  }
+  .header-login .login-icon { font-size: 0.9rem; }
+
+  /* ════════════════════════════════════════════════════════════
+     SIDEBAR — 竖向导航（桌面端）
+     ════════════════════════════════════════════════════════════ */
+  .page-layout {
+    display: flex; min-height: calc(100vh - var(--header-height));
+  }
+
+  .side-nav {
+    width: 200px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border-light);
+    position: sticky; top: var(--header-height);
+    height: calc(100vh - var(--header-height));
+    display: flex; flex-direction: column; gap: 2px;
+    padding: var(--space-md) var(--space-sm);
+    z-index: 50;
+  }
+  .side-nav a {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: 10px 16px;
+    font-size: 0.88rem; font-weight: 500; color: var(--ink-soft);
+    border-radius: var(--radius-md);
+    border-left: 3px solid transparent;
+    transition: background 0.18s, color 0.18s;
+    text-decoration: none;
+  }
+  .side-nav a:hover { background: var(--primary-surface); color: var(--primary); }
+  .side-nav a.active {
+    background: var(--primary-surface); color: var(--primary); font-weight: 600;
+    border-left-color: var(--primary);
+  }
+  .side-nav .sn-icon { font-size: 1.05rem; width: 20px; text-align: center; flex-shrink: 0; }
+  .side-nav .sn-spacer { margin-top: auto; }
+
+  .main-content { flex: 1; min-width: 0; }
+
+  /* ── Mobile Drawer (for sidebar collapse) ─────────── */
+  .mobile-drawer {
+    position: fixed; inset: 0; z-index: 200;
+    background: oklch(from var(--surface) l c h / 0.96);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-lg);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .mobile-drawer.open { opacity: 1; pointer-events: auto; }
+
+  .drawer-brand {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
+    margin-bottom: var(--space-md); padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--border-light); width: 100%; max-width: 200px;
+  }
+  .drawer-brand .db-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    border-radius: var(--radius-md); color: white; font-size: 1.1rem; font-weight: 700; font-family: var(--sans);
+    margin-bottom: var(--space-xs);
+  }
+  .drawer-brand .db-name {
+    font-family: var(--serif); font-size: 1.2rem; font-weight: 700; color: var(--ink);
+  }
+  .drawer-brand .db-sub {
+    font-size: 0.65rem; font-weight: 600; letter-spacing: 0.1em;
+    color: var(--ink-faint); text-transform: uppercase;
+  }
+
+  .mobile-drawer a {
+    font-size: 1.1rem; font-weight: 500; color: var(--ink-soft);
+    transition: color 0.15s; display: flex; align-items: center; gap: var(--space-sm);
+  }
+  .mobile-drawer a:hover,
+  .mobile-drawer a.active { color: var(--primary); }
+  .mobile-drawer .close-btn {
+    position: absolute; top: 20px; right: 20px;
+    width: 40px; height: 40px; border: none; background: transparent;
+    font-size: 1.6rem; cursor: pointer; color: var(--ink-soft); transition: color 0.15s;
+  }
+  .mobile-drawer .close-btn:hover { color: var(--ink); }
+
+  /* ════════════════════════════════════════════════════════════
+     HERO — 新版本
+     ════════════════════════════════════════════════════════════ */
+  .hero {
+    padding: 80px 0 60px; text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .hero .container { position: relative; }
+
+  .hero-deco {
+    position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0;
+  }
+  .hero-deco .shape {
+    position: absolute; border-radius: 50%;
+    opacity: 0.08; animation: float 20s ease-in-out infinite;
+  }
+  .hero-deco .shape-1 {
+    width: 240px; height: 240px; background: var(--primary);
+    top: -60px; right: -40px; animation-delay: 0s;
+  }
+  .hero-deco .shape-2 {
+    width: 160px; height: 160px; background: var(--accent);
+    bottom: -30px; left: -20px; animation-delay: -7s;
+  }
+  .hero-deco .shape-3 {
+    width: 80px; height: 80px; background: oklch(0.52 0.10 300);
+    top: 40%; left: 10%; animation-delay: -14s;
+  }
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(12px, -16px) scale(1.05); }
+    66% { transform: translate(-8px, 10px) scale(0.95); }
+  }
+
+  .hero .hero-title-zh {
+    font-family: var(--serif);
+    font-size: clamp(2.6rem, 5.5vw, 3.8rem);
+    font-weight: 700; line-height: 1.05; color: var(--ink);
+    letter-spacing: 0.02em; margin-bottom: var(--space-xs);
+  }
+  .hero .hero-title-zh .hl-accent { color: var(--accent); }
+  .hero .hero-title-en {
+    font-family: var(--sans);
+    font-size: clamp(0.9rem, 1.8vw, 1.2rem);
+    font-weight: 600; color: var(--ink-faint);
+    letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: var(--space-lg);
+  }
+  .hero .hero-desc {
+    font-size: clamp(1rem, 1.5vw, 1.1rem);
+    color: var(--ink-soft); max-width: 520px;
+    margin: 0 auto var(--space-md); line-height: 1.4;
+    letter-spacing: 0.03em;
+  }
+  .hero-stats-label {
+    font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em;
+    color: var(--ink-faint); margin-bottom: var(--space-xs);
+  }
+  .hero .stats-row { display: flex; justify-content: center; gap: var(--space-sm); flex-wrap: wrap; margin-bottom: var(--space-lg); }
+  .hero .stat-pill {
+    display: inline-flex; align-items: center; gap: var(--space-xs);
+    background: var(--raised); border: 1px solid var(--border-light);
+    border-radius: var(--radius-full); padding: 7px 18px;
+    font-size: 0.82rem; color: var(--ink-soft); font-weight: 500;
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.02);
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  }
+  .hero .stat-pill:hover {
+    border-color: var(--primary-light); transform: translateY(-2px);
+    box-shadow: 0 4px 12px oklch(0 0 0 / 0.04);
+  }
+  .hero .stat-pill strong { font-weight: 700; color: var(--ink); }
+
+  .hero .hero-footer {
+    font-size: 0.85rem; color: var(--ink-faint);
+    display: flex; justify-content: center; align-items: center; gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+  .hero .hero-footer .hf-email {
+    color: var(--primary); font-weight: 500;
+    text-decoration: none; border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .hero .hero-footer .hf-email:hover { border-color: var(--primary-light); }
+  .hero .hero-footer .hf-dot { color: var(--border); }
+
+  /* ════════════════════════════════════════════════════════════
+     CONTENT — 下载最多(左) + 最近上传(右)
+     ════════════════════════════════════════════════════════════ */
+  .home-content { padding: var(--space-xl) 0 var(--space-2xl); }
+  .home-grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-xl); }
+
+  .hc-panel { background: var(--raised); border: 1px solid var(--border-light); border-radius: var(--radius-lg); overflow: hidden; }
+  .hc-panel-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: var(--space-md) var(--space-lg); border-bottom: 1px solid var(--border-light);
+  }
+  .hc-panel-header h3 { font-family: var(--serif); font-size: 0.95rem; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: var(--space-sm); }
+  .hc-more { font-size: 0.8rem; font-weight: 500; color: var(--ink-faint); transition: color 0.15s; }
+  .hc-more:hover { color: var(--accent); }
+
+  .hc-item {
+    display: flex; align-items: center; gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid oklch(from var(--border-light) l c h / 0.6);
+    transition: background 0.15s, padding-left 0.15s; cursor: pointer; text-decoration: none;
+  }
+  .hc-item:last-child { border-bottom: none; }
+  .hc-item:hover { background: var(--primary-surface); padding-left: calc(var(--space-lg) + 4px); }
+  .hc-item-left { flex: 1; min-width: 0; }
+  .hc-item-name { font-size: 0.88rem; font-weight: 500; color: var(--ink); }
+  .hc-item-meta { font-size: 0.72rem; color: var(--ink-faint); margin-top: 2px; }
+  .hc-item-tag {
+    font-size: 0.65rem; font-weight: 600; padding: 2px 10px;
+    border-radius: var(--radius-full); flex-shrink: 0;
+  }
+  .hc-tag-general { background: var(--primary-surface); color: var(--primary); }
+  .hc-tag-major { background: var(--accent-light); color: var(--accent-hover); }
+  .hc-item-count { font-size: 0.78rem; color: var(--ink-faint); flex-shrink: 0; font-weight: 500; }
+
+  /* ════════════════════════════════════════════════════════════
+     FOOTER
+     ════════════════════════════════════════════════════════════ */
+  .site-footer {
+    border-top: 1px solid var(--border-light); padding: var(--space-2xl) 0 var(--space-xl);
+    margin-top: var(--space-lg);
+  }
+  .footer-grid {
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--space-xl);
+    margin-bottom: var(--space-xl);
+  }
+  .footer-col h4 {
+    font-family: var(--serif); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink); margin-bottom: var(--space-sm);
+  }
+    .footer-col p { font-size: 0.82rem; color: var(--ink-soft); line-height: 1.6; }
+  .footer-brand .brand-line {
+    display: block; width: 28px; height: 2px;
+    background: var(--accent); border-radius: 1px;
+    margin: 10px 0;
+  }
+  .footer-brand .brand-name {
+    font-family: var(--serif); font-size: 1.1rem; font-weight: 700;
+    color: var(--ink); letter-spacing: 0.06em; line-height: 1.3;
+  }
+  .footer-brand .brand-desc {
+    font-size: 0.82rem; color: var(--ink-soft); line-height: 1.7;
+  }
+  .footer-col a {
+    display: block; font-size: 0.82rem; color: var(--ink-soft);
+    padding: 3px 0; transition: color 0.15s;
+  }
+  .footer-col a:hover { color: var(--primary); }
+  .footer-bottom {
+    border-top: 1px solid var(--border-light); padding-top: var(--space-lg);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-sm);
+  }
+  .footer-bottom p { font-size: 0.8rem; color: var(--ink-faint); }
+  .footer-bottom .footer-social { display: flex; gap: var(--space-sm); }
+  .footer-bottom .footer-social a {
+    width: 32px; height: 32px; border-radius: var(--radius-sm);
+    background: var(--surface); border: 1px solid var(--border-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; color: var(--ink-faint);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .footer-bottom .footer-social a:hover {
+    background: var(--primary-surface); border-color: var(--primary-light); color: var(--primary);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     RESPONSIVE
+     ════════════════════════════════════════════════════════════ */
+  @media (max-width: 900px) {
+    .header-logo-area { display: none; }
+    .menu-toggle { display: flex; border: none; background: transparent; border-radius: 0; width: 44px; height: var(--header-height); }
+    .menu-toggle:hover { background: var(--primary-surface); }
+    .header-login { width: 44px; padding-right: 0; justify-content: center; }
+    .header-login .login-btn { border: none; padding: 6px; background: transparent; }
+    .header-login .login-btn:hover { background: transparent; color: var(--primary); }
+    .header-login .login-text { display: none; }
+    .side-nav { display: none; }
+    .home-grid { grid-template-columns: 1fr; }
+    .hero { padding: var(--space-2xl) 0 var(--space-xl); }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+    .footer-grid .footer-col:first-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 640px) {
+    .search-box { max-width: none; padding: 5px 5px 5px 16px; }
+    .search-box input { font-size: 0.85rem; }
+    .search-box button { width: 30px; height: 30px; font-size: 0.8rem; }
+    .hero .stats-row { flex-direction: column; align-items: center; }
+    .hero .hero-footer { flex-direction: column; gap: var(--space-xs); }
+    .hero .hero-footer .hf-dot { display: none; }
+    .home-grid { gap: var(--space-md); }
+    .container { padding: 0 var(--space-md); }
+    .hc-item { padding: var(--space-sm) var(--space-md); }
+    .footer-grid { grid-template-columns: 1fr; }
+    .footer-bottom { flex-direction: column; text-align: center; }
+  }
+  /* ════════════════════════════════════════════════════════════
+     EXPLORER — 文件管理器风格课程浏览器
+     ════════════════════════════════════════════════════════════ */
+  .view-section { display: none; }
+  .view-section.active { display: block; }
+
+  /* ── Breadcrumb ─────────────────────────── */
+  .breadcrumb {
+    display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+    padding: var(--space-lg) 0 var(--space-sm); font-size: 0.82rem;
+  }
+  .breadcrumb a {
+    padding: 4px 8px; border-radius: var(--radius-sm);
+    color: var(--ink-faint); font-weight: 500;
+    transition: background 0.15s, color 0.15s; cursor: pointer;
+  }
+  .breadcrumb a:hover { background: var(--primary-surface); color: var(--primary); }
+  .breadcrumb .bc-sep { color: var(--border); font-size: 0.7rem; user-select: none; }
+  .breadcrumb .bc-current { color: var(--ink-soft); font-weight: 500; padding: 4px 6px; }
+  .explorer-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: var(--space-xs);
+  }
+  .explorer-header h2 {
+    font-family: var(--serif); font-size: 1.2rem; font-weight: 600; color: var(--ink);
+  }
+  .explorer-header .eh-count { font-size: 0.78rem; color: var(--ink-faint); }
+
+  /* ── Level 1: Square Card Grid ──────────── */
+  .folder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: var(--space-md);
+    padding: var(--space-sm) 0 var(--space-xl);
+  }
+  .folder-card {
+    aspect-ratio: 1;
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: var(--space-sm); cursor: pointer;
+    padding: var(--space-md);
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .folder-card::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, transparent 60%, oklch(from var(--primary) l c h / 0.03));
+    pointer-events: none;
+  }
+  .folder-card:hover {
+    border-color: var(--primary-light);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.05);
+  }
+  .folder-card .fc-icon {
+    font-size: 1.8rem; width: 54px; height: 54px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--primary-surface);
+    border-radius: var(--radius-md);
+    transition: background 0.2s, transform 0.2s;
+  }
+  .folder-card:hover .fc-icon { background: oklch(from var(--primary) l c h / 0.12); transform: scale(1.05); }
+  .folder-card .fc-name {
+    font-size: 0.88rem; font-weight: 600; color: var(--ink);
+    text-align: center; line-height: 1.3;
+  }
+  .folder-card .fc-count {
+    font-size: 0.7rem; color: var(--ink-faint);
+    font-weight: 500;
+  }
+
+  /* ── Level 2+: Bar List ─────────────────── */
+  .folder-list {
+    display: flex; flex-direction: column; gap: 3px;
+    padding: var(--space-sm) 0 var(--space-xl);
+  }
+  .folder-list-item {
+    display: flex; align-items: center; gap: var(--space-md);
+    padding: 12px 18px;
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, padding-left 0.15s, box-shadow 0.15s;
+  }
+  .folder-list-item:hover {
+    border-color: var(--primary-light);
+    background: var(--primary-surface);
+    padding-left: 22px;
+    box-shadow: 0 1px 4px oklch(0 0 0 / 0.03);
+  }
+  .fli-icon {
+    width: 36px; height: 36px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--primary-surface);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    transition: background 0.15s;
+  }
+  .folder-list-item:hover .fli-icon { background: oklch(from var(--primary) l c h / 0.12); }
+  .fli-info { flex: 1; min-width: 0; }
+  .fli-name { font-size: 0.88rem; font-weight: 500; color: var(--ink); }
+  .fli-meta { font-size: 0.72rem; color: var(--ink-faint); margin-top: 2px; }
+  .fli-badge {
+    font-size: 0.64rem; font-weight: 600;
+    padding: 3px 12px; border-radius: var(--radius-full); flex-shrink: 0;
+    letter-spacing: 0.02em;
+  }
+  .fli-badge.has-data { background: var(--success-light); color: oklch(0.35 0.10 150); }
+  .fli-badge.no-data { background: var(--bg); color: var(--ink-faint); }
+
+  /* ── Collapsible No-Data Section ────────── */
+  .nd-toggle {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: 12px 18px; cursor: pointer;
+    font-size: 0.8rem; color: var(--ink-faint); font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: background 0.15s;
+    margin-top: var(--space-sm);
+    border: 1px dashed var(--border-light);
+    user-select: none;
+  }
+  .nd-toggle:hover { background: var(--bg); border-color: var(--border); }
+  .nd-toggle .nd-arrow { transition: transform 0.2s; font-size: 0.7rem; }
+  .nd-toggle.open .nd-arrow { transform: rotate(90deg); }
+  .nd-content { display: none; }
+  .nd-content.open { display: block; }
+  .nd-item {
+    display: flex; align-items: center; gap: var(--space-md);
+    padding: 10px 18px; margin-top: 2px;
+    background: var(--bg); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem; color: var(--ink-soft);
+    opacity: 0.6;
+  }
+  .nd-item .nd-icon { font-size: 0.9rem; width: 30px; text-align: center; flex-shrink: 0; }
+
+  /* ── File Table ─────────────────────────── */
+  .file-area { padding: var(--space-sm) 0 var(--space-xl); }
+  .file-area-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: var(--space-sm);
+  }
+  .file-area-header h3 {
+    font-family: var(--serif); font-size: 1rem; font-weight: 600; color: var(--ink);
+  }
+  .file-area-header .fa-count { font-size: 0.78rem; color: var(--ink-faint); }
+  .file-table { width: 100%; border-collapse: collapse; }
+  .file-table thead th {
+    text-align: left; padding: 10px 16px;
+    font-size: 0.72rem; font-weight: 600; color: var(--ink-faint);
+    border-bottom: 2px solid var(--border-light);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    background: var(--bg);
+  }
+  .file-table thead th:first-child { border-radius: var(--radius-sm) 0 0 0; }
+  .file-table thead th:last-child { border-radius: 0 var(--radius-sm) 0 0; }
+  .file-table tbody td {
+    padding: 11px 16px; font-size: 0.84rem;
+    border-bottom: 1px solid oklch(from var(--border-light) l c h / 0.6);
+    transition: background 0.1s;
+  }
+  .file-table tbody tr:hover td { background: var(--primary-surface); }
+  .file-table .ft-name {
+    font-weight: 500; color: var(--ink); cursor: pointer;
+    display: flex; align-items: center; gap: var(--space-sm);
+  }
+  .file-table .ft-name .ft-file-icon { font-size: 1rem; }
+  .file-table .ft-name:hover { color: var(--primary); }
+  .file-table .ft-type-cell { color: var(--ink-soft); }
+  .file-table .ft-size-cell { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .file-table .ft-empty td {
+    text-align: center; padding: 40px 16px;
+    color: var(--ink-faint); font-size: 0.85rem;
+  }
+
+  /* ── Empty state ────────────────────────── */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--ink-faint);
+  }
+  .empty-state .es-icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.3; }
+  .empty-state .es-text { font-size: 0.95rem; }
+  .empty-state .es-sub { font-size: 0.8rem; margin-top: var(--space-xs); }
+
+  /* ── Mobile responsive ──────────────────── */
+  @media (max-width: 640px) {
+    .folder-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--space-sm); }
+    .folder-card { padding: var(--space-sm); }
+    .folder-card .fc-icon { width: 42px; height: 42px; font-size: 1.4rem; }
+    .folder-card .fc-name { font-size: 0.8rem; }
+    .folder-list-item { padding: 10px 14px; }
+    .file-table thead th,
+    .file-table tbody td { padding: 8px 12px; font-size: 0.78rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ Header ═══ -->
+<header class="site-header" id="siteHeader">
+  <div class="header-inner">
+    <a href="#" class="header-logo-area"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
+    <button class="menu-toggle" id="menuOpen" aria-label="菜单">☰</button>
+    <div class="search-hero-wrap">
+      <div class="search-box"><input type="text" placeholder="搜索课程、资料、课程代码…"><button aria-label="搜索">→</button></div>
+    </div>
+    <div class="header-login">
+      <a href="#" class="login-btn"><span class="login-icon">👤</span><span class="login-text">登录</span></a>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ Mobile Drawer ═══ -->
+<div class="mobile-drawer" id="mobileDrawer">
+  <button class="close-btn" id="menuClose" aria-label="关闭">✕</button>
+  <div class="drawer-brand">
+    <span class="db-mark">✦</span>
+    <span class="db-name">木铎星火</span>
+    <span class="db-sub">BNU Sparks</span>
+  </div>
+  <a href="#" class="active"><span>🏠</span> 首页</a>
+  <a href="#"><span>📖</span> 通识课</a>
+  <a href="#"><span>📚</span> 专业课</a>
+  <a href="#"><span>ℹ️</span> 关于</a>
+</div>
+
+<div class="page-layout">
+
+<nav class="side-nav">
+  <a href="#" class="active" data-view="home"><span class="sn-icon">🏠</span>首页</a>
+  <a href="#" data-view="general"><span class="sn-icon">📖</span>通识课</a>
+  <a href="#" data-view="major"><span class="sn-icon">📚</span>专业课</a>
+  <a href="#" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon">ℹ️</span>关于</a>
+</nav>
+
+<div class="main-content">
+
+<div class="view-section active" id="homeView">
+
+<main>
+  <!-- ═══ Hero ═══ -->
+  <section class="hero">
+    <div class="hero-deco">
+      <div class="shape shape-1"></div>
+      <div class="shape shape-2"></div>
+      <div class="shape shape-3"></div>
+    </div>
+    <div class="container">
+      <h1 class="hero-title-zh">木铎<span class="hl-accent">星火</span></h1>
+      <p class="hero-title-en">BNU Sparks</p>
+      <p class="hero-desc">北京师范大学课程资源共享平台</p>
+      <p class="hero-stats-label">当前已有</p>
+      <div class="stats-row">
+        <span class="stat-pill"><strong>2</strong> 所学院</span>
+        <span class="stat-pill"><strong>14</strong> 门通识课</span>
+        <span class="stat-pill"><strong>24</strong> 门专业课</span>
+      </div>
+      <p class="hero-footer">
+        <span>投稿与建议 / 加入我们</span>
+        <span class="hf-dot">·</span>
+        <a href="mailto:bnusparks@163.com" class="hf-email">bnusparks@163.com</a>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+  <!-- ═══ Home Content ═══ -->
+  <section class="home-content">
+    <div class="container">
+      <div class="home-grid">
+
+        <!-- Left: Most Downloaded -->
+        <div class="hc-panel">
+          <div class="hc-panel-header">
+            <h3>📥 下载最多</h3>
+            <a href="#" class="hc-more">更多 →</a>
+          </div>
+          <div>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">微观经济学原理笔记</div>
+                <div class="hc-item-meta">经济学类 · 2026 春</div>
+              </div>
+              <span class="hc-item-tag hc-tag-general">通识</span>
+              <span class="hc-item-count">238 次</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">民法总论思维导图</div>
+                <div class="hc-item-meta">法学类 · 2026 春</div>
+              </div>
+              <span class="hc-item-tag hc-tag-major">专业</span>
+              <span class="hc-item-count">187 次</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">计量经济学复习提纲</div>
+                <div class="hc-item-meta">经济学类 · 2026 春</div>
+              </div>
+              <span class="hc-item-tag hc-tag-general">通识</span>
+              <span class="hc-item-count">156 次</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">SPSS 操作指南</div>
+                <div class="hc-item-meta">经济学类 · 2026 春</div>
+              </div>
+              <span class="hc-item-tag hc-tag-general">通识</span>
+              <span class="hc-item-count">142 次</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">宪法学案例汇编</div>
+                <div class="hc-item-meta">法学类 · 2026 春</div>
+              </div>
+              <span class="hc-item-tag hc-tag-major">专业</span>
+              <span class="hc-item-count">98 次</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Right: Recent Uploads -->
+        <div class="hc-panel">
+          <div class="hc-panel-header">
+            <h3>🕐 最近上传</h3>
+            <a href="#" class="hc-more">更多 →</a>
+          </div>
+          <div>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">宏观经济学课件（第 7-9 章）</div>
+                <div class="hc-item-meta">07.02 · 经济学类</div>
+              </div>
+              <span class="hc-item-tag hc-tag-general">通识</span>
+              <span class="hc-item-count">课件</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">刑法学复习提纲更新版</div>
+                <div class="hc-item-meta">06.28 · 法学类</div>
+              </div>
+              <span class="hc-item-tag hc-tag-major">专业</span>
+              <span class="hc-item-count">提纲</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">SPSS 数据分析实操指南</div>
+                <div class="hc-item-meta">06.25 · 经济学类</div>
+              </div>
+              <span class="hc-item-tag hc-tag-general">通识</span>
+              <span class="hc-item-count">指南</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">统计学练习题集（含答案）</div>
+                <div class="hc-item-meta">06.22 · 经济学类</div>
+              </div>
+              <span class="hc-item-tag hc-tag-general">通识</span>
+              <span class="hc-item-count">习题</span>
+            </a>
+            <a href="#" class="hc-item">
+              <div class="hc-item-left">
+                <div class="hc-item-name">经济思想史读书笔记</div>
+                <div class="hc-item-meta">06.20 · 经济学类</div>
+              </div>
+              <span class="hc-item-tag hc-tag-major">专业</span>
+              <span class="hc-item-count">笔记</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</div><!-- /homeView -->
+
+<!-- ═══ Explorer View ═══ -->
+<div class="view-section" id="explorerView">
+  <div class="explorer-view">
+    <div class="container">
+      <div class="breadcrumb" id="breadcrumb"></div>
+      <div class="explorer-content" id="explorerContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Footer ═══ -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-col footer-brand">
+        <h4>BNU Sparks</h4>
+        <span class="brand-name">木铎星火</span>
+        <span class="brand-line"></span>
+        <p class="brand-desc">为爱发电的校内资源共享网站，致力于贯彻开源精神，抹平信息差。</p>
+      </div>
+      <div class="footer-col">
+        <h4>开源社区</h4>
+        <a href="#">GitHub 仓库</a>
+        <a href="#">提交 Issue</a>
+        <a href="#">贡献指南</a>
+        <a href="#">更新日志</a>
+        <a href="#" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-light);font-weight:500;color:var(--primary);">✉️ 投稿与建议</a>
+      </div>
+      <div class="footer-col">
+        <h4>关于</h4>
+        <a href="#">平台介绍</a>
+        <a href="#">使用帮助</a>
+        <a href="#">联系我们</a>
+        <a href="#">隐私政策</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2026 BNU Sparks · 木铎星火 · 学术资源共享平台</p>
+      <div class="footer-social">
+        <a href="#" aria-label="GitHub">⌂</a>
+        <a href="#" aria-label="RSS">⊕</a>
+        <a href="#" aria-label="Email">@</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</div><!-- /.main-content -->
+</div><!-- /.page-layout -->
+
+<!-- ═══ Scripts ═══ -->
+<script>
+  // ── Mobile Drawer ──
+  const drawer = document.getElementById('mobileDrawer');
+  document.getElementById('menuOpen').addEventListener('click', () => drawer.classList.add('open'));
+  document.getElementById('menuClose').addEventListener('click', () => drawer.classList.remove('open'));
+  drawer.addEventListener('click', (e) => { if (e.target === drawer) drawer.classList.remove('open'); });
+
+  // ── Header scroll shadow ──
+  const header = document.getElementById('siteHeader');
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        header.classList.toggle('scrolled', window.scrollY > 10);
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+
+  /* ═══════════════════════════════════════════════════════════
+     EXPLORER — 课程浏览器（文件管理器风格）
+     ═══════════════════════════════════════════════════════════ */
+
+  // ── Demo files ──
+  function demoFiles(courseName) {
+    return [
+      { name: courseName + ' 课程笔记（全）.pdf', size: '4.2 MB', type: 'PDF' },
+      { name: courseName + ' 期末复习提纲.pdf',   size: '1.8 MB', type: 'PDF' },
+      { name: courseName + ' 课堂演示课件.pptx',  size: '3.5 MB', type: 'PPTX' },
+      { name: courseName + ' 习题集与参考答案.pdf',size: '2.1 MB', type: 'PDF' },
+    ];
+  }
+
+  // ── Data: 通识课程（按培养方案大类划分）──
+  const TONGKE_CATS = [
+    { name:'思想政治理论类', icon:'📖', children:[
+      { name:'思想道德与法治',                   courseId:'GEN01101', hasFiles:true },
+      { name:'中国近现代史纲要',                  courseId:'GEN01102' },
+      { name:'马克思主义基本原理',                courseId:'GEN01103' },
+      { name:'毛泽东思想和中国特色社会主义理论体系概论', courseId:'GEN01112' },
+      { name:'习近平新时代中国特色社会主义思想概论',   courseId:'GEN01113' },
+      { name:'形势与政策',                        courseId:'GEN09001-GEN09008' },
+    ]},
+    { name:'体育与健康类', icon:'🏃', children:[
+      { name:'女子形体 / 男子健身健美', courseId:'GEN01201' },
+      { name:'三自选项课程（3门）',     courseId:'GEN01203' },
+    ]},
+    { name:'军事理论与军事技能', icon:'⚔️', children:[
+      { name:'军事理论', courseId:'GEN01108' },
+      { name:'军事技能', courseId:'GEN01109' },
+    ]},
+    { name:'大学外语类', icon:'🌐', children:[
+      { name:'通用英语进阶',     courseId:'GEN02122' },
+      { name:'博雅英语听说',     courseId:'GEN02123' },
+      { name:'思辨英语读写',     courseId:'GEN02124' },
+      { name:'学术英语 / 人文通识课程群', courseId:'GEN02***' },
+    ]},
+    { name:'教师素养类', icon:'👨‍🏫', children:[
+      { name:'教育学',            courseId:'GEN06120' },
+      { name:'教育心理学',         courseId:'GEN06121' },
+      { name:'现代教育技术',      courseId:'GEN06122' },
+      { name:'中国教育改革与发展', courseId:'GEN06123' },
+    ]},
+    { name:'家国情怀与价值理想', icon:'❤️', children:[
+      { name:'中国共产党历史', courseId:'GEN01114' },
+      { name:'社会主义发展史', courseId:'GEN01115' },
+      { name:'新中国史',       courseId:'GEN01116' },
+      { name:'改革开放史',     courseId:'GEN01117' },
+    ]},
+    { name:'艺术鉴赏与审美体验', icon:'🎨', children:[
+      { name:'艺术鉴赏与审美体验（模块课程）', courseId:'GEN02***' },
+    ]},
+    { name:'数理基础与科学素养', icon:'🔢', children:[
+      { name:'信息处理技术',            courseId:'GEN04221' },
+      { name:'算法与程序设计（Python）', courseId:'GEN04237', hasFiles:true },
+      { name:'人工智能导论',            courseId:'GEN04251' },
+      { name:'数据科学导论',            courseId:'GEN04252' },
+    ]},
+    { name:'社会发展与公民责任', icon:'🤝', children:[
+      { name:'大学心理Ⅰ',   courseId:'GEN06124' },
+      { name:'大学心理Ⅱ',   courseId:'GEN06125' },
+      { name:'国家安全导论', courseId:'GEN06706' },
+    ]},
+    { name:'经典研读与文化传承', icon:'📜', children:[
+      { name:'经典研读与文化传承（模块课程）', courseId:'GEN03***' },
+    ]},
+  ];
+
+  // ── Data: 专业课程（经济与工商管理学院）──
+  const C = (n, id, hf) => ({ name:n, courseId:id, hasFiles:!!hf });
+
+  // 金融学
+  const FINANCE = {
+    name:'金融学', icon:'📈', children:[
+      { name:'专业必修课', icon:'📁', children:[
+        { name:'专业基础课', icon:'📂', children:[
+          C('微积分I',              'MAT01006', true),
+          C('微积分II',             'MAT01007'),
+          C('线性代数',             'MAT02008'),
+          C('概率论与数理统计',       'STA02001'),
+          C('统计学',               'ECO12032'),
+          C('计量经济学',            'ECO12031', true),
+        ]},
+        { name:'专业核心课', icon:'📂', children:[
+          C('社会主义经济理论',       'ECO11001'),
+          C('微观经济学原理',         'ECO01001', true),
+          C('宏观经济学原理',         'ECO01002'),
+          C('会计学',               'ECO12002'),
+          C('金融学',               'ECO12009', true),
+          C('国际金融',             'ECO12011'),
+          C('金融市场学',            'ECO12033'),
+          C('保险学',               'ECO12034'),
+          C('投资学',               'ECO23037'),
+          C('公司金融',             'ECO12035'),
+          C('财政学',               'ECO23063'),
+        ]},
+      ]},
+      { name:'专业选修课Ⅰ', icon:'📁', children:[
+        { name:'专业方向课', icon:'📂', children:[
+          C('世界金融史',     'ECO21001'),
+          C('管理学',        'ECO11003'),
+          C('政治经济学',     'ECO12003'),
+          C('国际贸易学',     'ECO12008'),
+          C('中级微观经济学',  'ECO12004'),
+          C('中级宏观经济学',  'ECO12005'),
+          C('商业银行学',     'ECO23036'),
+          C('财务分析',       'ECO23006'),
+          C('金融衍生工具',    'ECO23080'),
+        ]},
+      ]},
+      { name:'自由选修课', icon:'📁', children:[
+        { name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]},
+      ]},
+      { name:'实践环节', icon:'📁', children:[
+        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      ]},
+      { name:'拔尖创新人才', icon:'📁', children:[
+        C('金融学新生研讨', 'ECO21002'),
+        C('数字经济导论', 'ECO12030'),
+        C('量化交易基础与实践', 'ECO21003'),
+        C('国家经济安全概论', 'ECO23085'),
+        C('金融科技理论与实践', 'ECO22024'),
+        C('数字金融', 'ECO12036'),
+        C('金融建模', 'ECO23086'),
+        C('实证金融方法', 'ECO23087'),
+        C('数字贸易学', 'ECO23088'),
+        C('金融大数据分析', 'ECO23069'),
+        C('区块链与数字资产', 'ECO23066'),
+        C('创业融资', 'ECO23089'),
+        C('深度学习技术与应用', 'GEN04254'),
+        C('大数据技术及应用', 'GEN04255'),
+        C('金融学术前沿与论文写作', 'ECO23092'),
+      ]},
+    ]
+  };
+
+  // 经济学（励耘项目）
+  const ECONOMICS_LIYUN = {
+    name:'经济学（励耘项目）', icon:'🎯', children:[
+      { name:'专业必修课', icon:'📁', children:[
+        { name:'专业基础课', icon:'📂', children:[
+          C('数学分析I',        'MAT11001', true),
+          C('数学分析II',       'MAT11002'),
+          C('数学分析III',      'MAT12005'),
+          C('高等代数I',        'MAT01004'),
+          C('高等代数II',       'MAT01005'),
+          C('概率论与数理统计',   'STA02001'),
+          C('微观经济学原理',     'ECO01001'),
+          C('宏观经济学原理',     'ECO01002'),
+          C('政治经济学',        'ECO12003'),
+          C('中级微观经济学',     'ECO12004'),
+          C('中级宏观经济学',     'ECO12005'),
+          C('计量经济学',        'ECO12031'),
+        ]},
+        { name:'专业核心课', icon:'📂', children:[
+          C('时间序列分析',     'ECO13005'),
+          C('经济思想史',      'ECO12027', true),
+          C('社会主义经济理论', 'ECO11001'),
+          C('数字经济导论',    'ECO12030'),
+          C('金融学',          'ECO12009'),
+          C('会计学',          'ECO11002'),
+          C('财政学',          'ECO23063'),
+          C('实验经济学',      'ECO22002'),
+          C('博弈论与信息经济学','ECO23025'),
+        ]},
+      ]},
+      { name:'专业选修课Ⅰ', icon:'📁', children:[
+        { name:'专业方向课', icon:'📂', children:[
+          C('管理学',       'ECO11003'),
+          C('国际贸易学',    'ECO12008'),
+          C('国际金融',     'ECO12011'),
+          C('经济史',       'ECO22026'),
+          C('经济增长',     'ECO22001'),
+          C('产业组织理论',  'ECO23024'),
+          C('劳动经济学',    'ECO23027'),
+          C('经济计量方法与应用','ECO23030'),
+        ]},
+      ]},
+      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', icon:'📁', children:[
+        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      ]},
+      { name:'拔尖创新人才', icon:'📁', children:[
+        C('行为经济学（英文）', 'ECO23076'),
+        C('发展经济学（英文）', 'ECO23077'),
+        C('创新经济学（英文）', 'ECO23078'),
+        C('动态经济学方法', 'ECO12029'),
+        C('环境与资源经济学', 'ECO23020'),
+        C('国民经济核算', 'ECO23079'),
+        C('《资本论》研读', 'MAR20020'),
+        C('常微分方程', 'MAT12003'),
+        C('实变函数', 'MAT02002'),
+        C('泛函分析', 'MAT23001'),
+        C('随机过程初步', 'MAT23004'),
+        C('数据结构与算法', 'ECO22018'),
+        C('数据库原理与应用', 'ECO22017'),
+        C('机器学习', 'ECO23071'),
+      ]},
+    ]
+  };
+
+  // 金融科技
+  const FINTECH = {
+    name:'金融科技', icon:'💻', children:[
+      { name:'专业必修课', icon:'📁', children:[
+        { name:'专业基础课', icon:'📂', children:[
+          C('微积分I',          'MAT01006'),
+          C('微积分II',         'MAT01007'),
+          C('线性代数',         'MAT02008'),
+          C('概率论与数理统计',   'STA02001'),
+          C('统计学',           'ECO12032'),
+          C('计量经济学',        'ECO12031'),
+          C('数据结构与算法',    'ECO22018', true),
+        ]},
+        { name:'专业核心课', icon:'📂', children:[
+          C('社会主义经济理论',     'ECO11001'),
+          C('微观经济学原理',       'ECO01001'),
+          C('宏观经济学原理',       'ECO01002'),
+          C('会计学',             'ECO12002'),
+          C('金融学',             'ECO12009'),
+          C('国际金融',           'ECO12011'),
+          C('金融市场学',          'ECO12033'),
+          C('数字金融',           'ECO12036'),
+          C('保险学',             'ECO12034'),
+          C('金融大数据分析',       'ECO23069', true),
+          C('数据库原理与应用',     'ECO22017'),
+          C('区块链与数字资产',     'ECO23066'),
+        ]},
+      ]},
+      { name:'专业选修课Ⅰ', icon:'📁', children:[
+        { name:'专业方向课', icon:'📂', children:[
+          C('世界金融史',     'ECO21001'),
+          C('管理学',        'ECO11003'),
+          C('国际贸易学',     'ECO12008'),
+          C('中级微观经济学',  'ECO12004'),
+          C('中级宏观经济学',  'ECO12005'),
+          C('商业银行学',     'ECO23036'),
+          C('财务分析',       'ECO23006'),
+          C('投资学',         'ECO23037'),
+          C('公司金融',       'ECO12035'),
+          C('金融衍生工具',    'ECO23080'),
+          C('财政学',         'ECO23063'),
+          C('行为金融学',     'ECO23074'),
+          C('投资银行学',     'ECO23038'),
+          C('固定收益证券',    'ECO23081'),
+          C('金融风险管理',    'ECO23082'),
+          C('机器学习',       'ECO23071'),
+          C('金融经济学',     'ECO23084'),
+        ]},
+      ]},
+      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', icon:'📁', children:[
+        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      ]},
+      { name:'拔尖创新人才', icon:'📁', children:[
+        C('金融学新生研讨', 'ECO21002'),
+        C('数字经济导论', 'ECO12030'),
+        C('量化交易基础与实践', 'ECO21003'),
+        C('国家经济安全概论', 'ECO23085'),
+        C('算法与程序设计（C++）', 'GEN04239'),
+        C('金融科技理论与实践', 'ECO22024'),
+        C('金融建模', 'ECO23086'),
+        C('实证金融方法', 'ECO23087'),
+        C('数字贸易学', 'ECO23088'),
+        C('深度学习', 'ECO23072'),
+        C('创业融资', 'ECO23089'),
+        C('深度学习技术与应用', 'GEN04254'),
+        C('大数据技术及应用', 'GEN04255'),
+        C('金融科技学术前沿与论文写作', 'ECO23094'),
+      ]},
+    ]
+  };
+
+  // 工商管理
+  const BIZ_ADMIN = {
+    name:'工商管理', icon:'🏢', children:[
+      { name:'专业必修课', icon:'📁', children:[
+        { name:'专业基础课', icon:'📂', children:[
+          C('微积分I',          'MAT01006'),
+          C('微积分II',         'MAT01007'),
+          C('线性代数',         'MAT02008'),
+          C('概率论与数理统计',   'STA02001'),
+          C('计量经济学',        'ECO12031'),
+          C('统计学',           'ECO12032'),
+          C('微观经济学原理',     'ECO01001'),
+          C('管理学',           'ECO11003'),
+        ]},
+        { name:'专业核心课', icon:'📂', children:[
+          C('数字企业管理原理',   'ECO22022'),
+          C('大数据原理和应用',   'ECO12037'),
+          C('会计学',           'ECO11002'),
+          C('市场营销',         'ECO12038'),
+          C('组织行为学',        'ECO12039'),
+          C('人力资源管理',      'ECO12040', true),
+          C('战略管理',         'ECO12041'),
+          C('财务管理',         'ECO12042'),
+          C('公司治理',         'ECO13004'),
+          C('管理思想史',        'ECO12043'),
+        ]},
+      ]},
+      { name:'专业选修课Ⅰ', icon:'📁', children:[
+        { name:'专业方向课', icon:'📂', children:[
+          C('供应链管理',      'ECO23048'),
+          C('数字商务',        'ECO23106'),
+          C('数字营销',        'ECO23055', true),
+          C('数字化运营管理',   'ECO22023'),
+          C('管理信息系统',     'ECO22009'),
+          C('数字品牌战略',     'ECO23107'),
+          C('商业模式概论',     'ECO22015'),
+          C('项目管理',        'ECO22011'),
+          C('服务管理',        'ECO22010'),
+          C('跨文化管理',      'ECO22008'),
+          C('管理沟通',        'ECO23041'),
+          C('职业生涯规划',    'ECO23108'),
+          C('公共关系学',      'ECO23047'),
+          C('创业学',          'ECO23121'),
+          C('绩效与薪酬管理',  'ECO23109'),
+          C('人力资源管理实证研究','ECO23075'),
+        ]},
+      ]},
+      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', icon:'📁', children:[
+        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      ]},
+      { name:'拔尖创新人才', icon:'📁', children:[
+        C('数字经济导论', 'ECO12030'),
+        C('产业组织', 'ECO23110'),
+        C('数字创新管理', 'ECO23111'),
+        C('Python数据分析与挖掘', 'ECO23112'),
+        C('消费心理学', 'ECO23113'),
+        C('商业伦理与企业社会责任', 'ECO23009'),
+        C('金融科技理论与实践', 'ECO22024'),
+        C('数据结构与算法', 'ECO22018'),
+        C('经济计量方法与应用', 'ECO23030'),
+        C('经济思想史', 'ECO12027'),
+      ]},
+    ]
+  };
+
+  // 会计学
+  const ACCOUNTING = {
+    name:'会计学', icon:'📊', children:[
+      { name:'专业必修课', icon:'📁', children:[
+        { name:'专业基础课', icon:'📂', children:[
+          C('微积分I',          'MAT01006'),
+          C('微积分II',         'MAT01007'),
+          C('线性代数',         'MAT02008'),
+          C('概率论与数理统计',   'STA02001'),
+          C('计量经济学',        'ECO12031'),
+          C('统计学',           'ECO12032'),
+          C('微观经济学原理',     'ECO01001'),
+          C('管理学',           'ECO11003'),
+          C('宏观经济学原理',     'ECO01002'),
+        ]},
+        { name:'专业核心课', icon:'📂', children:[
+          C('会计学原理',               'ECO12001'),
+          C('财务会计',                'ECO12016'),
+          C('财务管理',                'ECO13003'),
+          C('管理会计',                'ECO12015', true),
+          C('会计信息系统',             'ECO13001'),
+          C('审计学',                  'ECO23001'),
+          C('税法',                    'ECO12014', true),
+          C('商业伦理与企业社会责任',     'ECO23009'),
+        ]},
+      ]},
+      { name:'专业选修课Ⅰ', icon:'📁', children:[
+        { name:'专业方向课', icon:'📂', children:[
+          C('成本会计',               'ECO23114'),
+          C('政府与非营利组织会计',     'ECO23005'),
+          C('高级财务会计',            'ECO23115'),
+          C('财务分析',               'ECO23006'),
+          C('国际财务管理',            'ECO23008'),
+          C('战略管理',               'ECO12041'),
+          C('公司治理',               'ECO13004'),
+          C('组织行为学',              'ECO12039'),
+          C('人力资源管理',            'ECO12040'),
+          C('供应链管理',              'ECO23048'),
+          C('金融学',                 'ECO12009'),
+          C('基金管理与证券投资分析',    'ECO23083'),
+          C('金融风险管理',            'ECO23082'),
+          C('财政学',                 'ECO23063'),
+          C('国际贸易学',              'ECO12008'),
+        ]},
+      ]},
+      { name:'自由选修课', icon:'📁', children:[{ name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]}]},
+      { name:'实践环节', icon:'📁', children:[
+        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'ECO33003')]},
+        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'ECO31003')]},
+        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'ECO41001')]},
+      ]},
+      { name:'拔尖创新人才', icon:'📁', children:[
+        C('国际会计（英文）', 'ECO23116'),
+        C('国际商务（英文）', 'ECO23117'),
+        C('行为会计学', 'ECO23118'),
+        C('大数据审计', 'ECO23119'),
+        C('会计前沿专题', 'ECO23120'),
+        C('数字企业管理原理', 'ECO22022'),
+        C('数字经济导论', 'ECO12030'),
+        C('大数据原理和应用', 'ECO12037'),
+        C('金融科技理论与实践', 'ECO22024'),
+        C('经济计量方法与应用', 'ECO23030'),
+      ]},
+    ]
+  };
+
+  // ── 法学（卓越实验班）──
+  const LAW = {
+    name:'法学（卓越实验班）', icon:'⚖️', children:[
+      { name:'专业必修课', icon:'📁', children:[
+        { name:'专业基础课', icon:'📂', children:[
+          C('法理学导论',     'LAW01001'),
+          C('宪法学',         'LAW02002', true),
+          C('习近平法治思想概论','LAW01003'),
+        ]},
+        { name:'专业核心课', icon:'📂', children:[
+          C('法理学专论',        'LAW13001'),
+          C('中国法律史',        'LAW11001'),
+          C('民法总论',          'LAW11002', true),
+          C('债与合同法学',      'LAW11003'),
+          C('刑法总论',          'LAW11004', true),
+          C('刑法分论',          'LAW12001'),
+          C('行政法与行政诉讼法学','LAW12002'),
+          C('民事诉讼法学',      'LAW12003'),
+          C('刑事诉讼法学',      'LAW12004'),
+          C('国际公法学',        'LAW12005'),
+          C('经济法学',          'LAW12006'),
+          C('公司法学',          'LAW12007'),
+          C('知识产权法学',      'LAW13002'),
+          C('环境资源法学',      'LAW13003'),
+          C('国际私法学',        'LAW13004'),
+          C('法律职业伦理',      'LAW13005'),
+        ]},
+      ]},
+      { name:'专业选修课Ⅰ', icon:'📁', children:[
+        { name:'专业方向课', icon:'📂', children:[
+          { name:'基础理论法学模块', icon:'📂', children:[
+            C('外国法制史',     'LAW21001'),
+            C('中国法律思想史',  'LAW22002'),
+            C('西方法律思想史',  'LAW22003'),
+            C('现代法学思潮',    'LAW22004'),
+            C('法学方法论',      'LAW22001'),
+          ]},
+          { name:'宪法与行政法学模块', icon:'📂', children:[
+            C('比较宪法与行政法学',    'LAW23001'),
+            C('公共事业与非政府组织法', 'LAW23002'),
+            C('行政法专题研究',       'LAW22006'),
+            C('国家责任法',           'LAW23003'),
+          ]},
+          { name:'民商事法学模块', icon:'📂', children:[
+            C('物权法学',              'LAW21005'),
+            C('侵权责任法学',          'LAW22005'),
+            C('劳动与社会保障法学',     'LAW23004'),
+            C('婚姻家庭与继承法学',     'LAW22009'),
+            C('罗马私法',              'LAW23005'),
+            C('证券法',                'LAW23006'),
+            C('票据法',                'LAW22010'),
+            C('破产法',                'LAW23007'),
+            C('保险法',                'LAW23008'),
+          ]},
+          { name:'经济法学与环境资源法学模块', icon:'📂', children:[
+            C('财政税收法',          'LAW22007'),
+            C('金融法',              'LAW22008'),
+            C('竞争法',              'LAW23011'),
+            C('消费者权益保护法',     'LAW22011'),
+            C('法与经济学',          'LAW23010'),
+          ]},
+          { name:'刑法学模块', icon:'📂', children:[
+            C('犯罪学',       'LAW22012'),
+            C('英美刑法',      'LAW22013'),
+            C('大陆刑法',      'LAW22014'),
+            C('刑事政策学',    'LAW22015'),
+            C('国际刑法',      'LAW23013'),
+            C('刑法新思维',    'LAW22016'),
+            C('比较刑事法',    'LAW22019'),
+          ]},
+          { name:'诉讼法学模块', icon:'📂', children:[
+            C('强制执行法',    'LAW23015'),
+            C('证据法',        'LAW23016'),
+            C('仲裁法',        'LAW22017'),
+          ]},
+          { name:'国际法学模块', icon:'📂', children:[
+            C('国际经济法学',           'LAW22018'),
+            C('世界贸易组织法',          'LAW23014'),
+            C('海洋法',                'LAW23018'),
+            C('国际人权法',             'LAW23019'),
+            C('英美法案例研读入门',      'LAW22027'),
+          ]},
+          { name:'法律实务模块', icon:'📂', children:[
+            C('法律诊所',              'LAW23801'),
+            C('模拟法庭实验',           'LAW23802'),
+            C('法律文书写作',           'LAW23020'),
+            C('律师法与律师实务',       'LAW23021'),
+            C('法律英语',              'LAW22026'),
+            C('法学论文写作与发表',      'LAW23022'),
+            C('民法案例研讨',           'LAW22801'),
+            C('刑法案例研讨',           'LAW22802'),
+            C('行政法案例研讨',         'LAW22803'),
+            C('商法案例研讨',           'LAW23803'),
+            C('经济法案例研讨',         'LAW23804'),
+            C('涉外经济贸易案例研讨',    'LAW23805'),
+            C('法律实证研究方法导论',    'LAW23023'),
+            C('法学理论前沿问题研究',    'LAW22804'),
+            C('法律实践热点问题研究',    'LAW22805'),
+          ]},
+        ]},
+      ]},
+      { name:'自由选修课', icon:'📁', children:[
+        { name:'个性化发展课', icon:'📂', children:[C('个性化发展选修', 'GEN****')]},
+      ]},
+      { name:'实践环节', icon:'📁', children:[
+        { name:'劳动教育',         icon:'📂', children:[C('大学生劳动教育', 'EDU30001'), C('劳动教育实践活动', 'TLO30801')]},
+        { name:'学术训练与实践',    icon:'📂', children:[C('学术训练与实践', 'LAW33004')]},
+        { name:'专业实习与社会调查', icon:'📂', children:[C('专业实习与社会调查', 'LAW31002')]},
+        { name:'毕业论文（设计）',   icon:'📂', children:[C('毕业论文（设计）', 'LAW32003')]},
+      ]},
+      { name:'拔尖创新人才', icon:'📁', children:[
+        { name:'教育法治微专业', icon:'📂', children:[
+          C('教育法学',               'LAW23024'),
+          C('未成年人法学',            'LAW23025'),
+          C('教育法治与教师法律素养',  'LAW23026'),
+          C('学校法律实务',            'LAW23027'),
+          C('未成年人司法',            'LAW23028'),
+        ]},
+        { name:'网络法治微专业', icon:'📂', children:[
+          C('大数据法治',                'LAW22020'),
+          C('网络与人工智能法',           'LAW23029'),
+          C('比较电子商务法',             'LAW23030'),
+          C('互联网平台治理',             'LAW23031'),
+          C('信息刑法',                  'LAW22021'),
+          C('网络知识产权前沿与案例',      'LAW23032'),
+        ]},
+        { name:'涉外法治微专业', icon:'📂', children:[
+          C('比较法律文化',               'LAW22022'),
+          C('海商法',                     'LAW23033'),
+          C('国际贸易法',                 'LAW23034'),
+          C('国际民事诉讼与商事仲裁法',    'LAW23035'),
+          C('国际刑事司法前沿',            'LAW23036'),
+        ]},
+        { name:'反腐败法治微专业', icon:'📂', children:[
+          C('反腐败法治专题研究',               'LAW22023'),
+          C('国家监察法学',                     'LAW22024'),
+          C('反腐败追逃追赃的理论与实务',       'LAW23037'),
+          C('世界反腐法制比较研究',             'LAW23038'),
+          C('《联合国反腐败公约》与中国刑事法的协调','LAW22025'),
+        ]},
+      ]},
+    ]
+  };
+
+  // ── Compile full tree ──
+  const COURSE_TREE = {
+    '通识课': { icon:'📚', children: TONGKE_CATS },
+    '专业课': { icon:'🎓', children: [
+      { name:'经济与工商管理学院', icon:'🏛️', children:[ FINANCE, ECONOMICS_LIYUN, FINTECH, BIZ_ADMIN, ACCOUNTING ]},
+      { name:'法学院', icon:'⚖️', children:[ LAW ]},
+    ]},
+  };
+
+  // ── State ──
+  let expPath = [];
+
+  function getNode(path) {
+    if (!path.length) return null;
+    let node = COURSE_TREE[path[0]];
+    if (!node) return null;
+    for (let i = 1; i < path.length; i++) {
+      if (!node.children) return null;
+      node = node.children.find(c => c.name === path[i]);
+      if (!node) return null;
+    }
+    return node;
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── Navigation ──
+  function navTo(depth) { expPath = expPath.slice(0, depth); renderExplorer(); }
+  function navIn(name) {
+    const node = getNode(expPath);
+    if (!node || !node.children) return;
+    const child = node.children.find(c => c.name === name);
+    if (!child) return;
+    expPath.push(name);
+    renderExplorer();
+  }
+
+  // ── Breadcrumb ──
+  function renderBC() {
+    const el = document.getElementById('breadcrumb');
+    el.innerHTML = '';
+    const home = document.createElement('a');
+    home.textContent = '首页'; home.onclick = showHome;
+    el.appendChild(home);
+    for (let i = 0; i < expPath.length; i++) {
+      const sep = document.createElement('span');
+      sep.className = 'bc-sep'; sep.textContent = ' / ';
+      el.appendChild(sep);
+      if (i === expPath.length - 1) {
+        const cur = document.createElement('span');
+        cur.className = 'bc-current'; cur.textContent = expPath[i];
+        el.appendChild(cur);
+      } else {
+        const a = document.createElement('a');
+        a.textContent = expPath[i]; a.onclick = () => navTo(i + 1);
+        el.appendChild(a);
+      }
+    }
+  }
+
+  // ── Renderers ──
+  function renderGrid(items) {
+    const parent = document.getElementById('explorerContent');
+    parent.innerHTML = '<div class="folder-grid">' +
+      items.map(item =>
+        '<div class="folder-card" data-n="' + esc(item.name) + '">' +
+          '<div class="fc-icon">' + (item.icon || '📁') + '</div>' +
+          '<div class="fc-name">' + esc(item.name) + '</div>' +
+          '<div class="fc-count">' + (item.children ? item.children.length + ' 项' : '') + '</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+    parent.querySelectorAll('.folder-card').forEach(el => {
+      el.addEventListener('click', () => navIn(el.dataset.n));
+    });
+  }
+
+  function renderList(items) {
+    const parent = document.getElementById('explorerContent');
+    const allLeaves = items.every(c => !c.children);
+    let html = '<div class="folder-list">';
+
+    if (allLeaves) {
+      const hasData = items.filter(c => c.hasFiles);
+      const noData = items.filter(c => !c.hasFiles);
+      hasData.forEach(item => { html += listHtml(item, true); });
+      html += '</div>';
+      if (noData.length) {
+        html += '<div class="nd-toggle" id="ndT"><span class="nd-arrow">▸</span><span>暂无资料的课程（' + noData.length + '）</span></div>' +
+                '<div class="nd-content" id="ndC">' +
+                noData.map(item => '<div class="nd-item"><span class="nd-icon">📒</span><span>' + esc(item.name) + '</span></div>').join('') +
+                '</div>';
+      }
+    } else {
+      items.forEach(item => { html += listHtml(item, !!(item.children && item.children.length)); });
+      html += '</div>';
+    }
+
+    parent.innerHTML = html;
+    parent.querySelectorAll('.folder-list-item').forEach(el => {
+      el.addEventListener('click', () => navIn(el.dataset.n));
+    });
+    const ndT = document.getElementById('ndT'), ndC = document.getElementById('ndC');
+    if (ndT && ndC) ndT.addEventListener('click', () => { ndT.classList.toggle('open'); ndC.classList.toggle('open'); });
+  }
+
+  function listHtml(item, active) {
+    const badge = item.hasFiles
+      ? '<span class="fli-badge has-data">✓ 有资料</span>'
+      : (item.children ? '' : '<span class="fli-badge no-data">暂无资料</span>');
+    const meta = item.courseId ? '课程代码 ' + item.courseId : (item.children ? item.children.length + ' 项' : '');
+    return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
+      '<span class="fli-icon">' + (active ? '📁' : '📒') + '</span>' +
+      '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
+      badge + '</div>';
+  }
+
+  function renderFiles(course) {
+    const files = demoFiles(course.name);
+    document.getElementById('explorerContent').innerHTML =
+      '<div class="file-area">' +
+        '<div class="file-area-header"><h3>📄 ' + esc(course.name) + ' — 资料列表</h3><span class="fa-count">' + files.length + ' 个文件</span></div>' +
+        '<table class="file-table"><thead><tr><th>文件名</th><th>文件类型</th><th>大小</th></tr></thead><tbody>' +
+        files.map(f =>
+          '<tr><td class="ft-name"><span class="ft-file-icon">' + (f.type === 'PDF' ? '📕' : f.type === 'PPTX' ? '📊' : '📦') + '</span>' + esc(f.name) + '</td>' +
+          '<td class="ft-type-cell">' + esc(f.type) + '</td>' +
+          '<td class="ft-size-cell">' + esc(f.size) + '</td></tr>'
+        ).join('') +
+        '</tbody></table></div>';
+  }
+
+  function renderEmpty(course) {
+    document.getElementById('explorerContent').innerHTML =
+      '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">「' + esc(course.name) + '」暂无资料</div><div class="es-sub">可能是课程尚未开始，或资料正在征集中</div></div>';
+  }
+
+  function renderExplorer() {
+    renderBC();
+    const node = getNode(expPath);
+    if (!node) return;
+    if (node.children) {
+      expPath.length === 1 ? renderGrid(node.children) : renderList(node.children);
+    } else if (node.hasFiles) {
+      renderFiles(node);
+    } else {
+      renderEmpty(node);
+    }
+  }
+
+  // ── View Switching ──
+  function switchView(name) {
+    document.getElementById('homeView').classList.toggle('active', name === 'home');
+    document.getElementById('explorerView').classList.toggle('active', name === 'explorer');
+  }
+
+  function showHome() {
+    switchView('home');
+    document.querySelectorAll('.side-nav a').forEach(a => a.classList.remove('active'));
+    document.querySelector('.side-nav a[data-view="home"]').classList.add('active');
+  }
+
+  function showExplorer(type) {
+    expPath = [type];
+    renderExplorer();
+    switchView('explorer');
+  }
+
+  // ── Sidebar ──
+  document.querySelectorAll('.side-nav a').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const view = a.dataset.view;
+      if (!view) return;
+      e.preventDefault();
+      document.querySelectorAll('.side-nav a').forEach(x => x.classList.remove('active'));
+      a.classList.add('active');
+      if (view === 'home') showHome();
+      else if (view === 'general') showExplorer('通识课');
+      else if (view === 'major') showExplorer('专业课');
+    });
+  });
+
+  // ── Mobile Drawer links ──
+  document.querySelectorAll('.mobile-drawer a').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const t = a.textContent.trim();
+      if (t === '首页') showHome();
+      else if (t === '通识课') showExplorer('通识课');
+      else if (t === '专业课') showExplorer('专业课');
+      drawer.classList.remove('open');
+    });
+  });
+</script>
+
+</body>
+</html>
