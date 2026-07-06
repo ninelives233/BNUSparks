@@ -7,8 +7,9 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Claude Code local config (skills, agents — not project code)
+# Claude Code local config (skills, agents, project instructions — not project code)
 .agents/
+CLAUDE.md
 
 # IDE / Editor
 .obsidian/
