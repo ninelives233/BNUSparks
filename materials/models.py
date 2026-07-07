@@ -1,0 +1,100 @@
+from django.db import models
+from django.core.validators import FileExtensionValidator
+
+
+class College(models.Model):
+    name = models.CharField("学院名称", max_length=100)
+    short_name = models.CharField("简称", max_length=20, blank=True)
+    slug = models.SlugField("URL标识", max_length=100, unique=True)
+    description = models.TextField("描述", blank=True)
+    order = models.IntegerField("排序", default=0)
+
+    class Meta:
+        verbose_name = "学院"
+        verbose_name_plural = "学院"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.short_name or self.name
+
+
+class CourseType(models.TextChoices):
+    GENERAL = "general", "通识课"
+    MAJOR = "major", "专业课"
+
+
+class Course(models.Model):
+    college = models.ForeignKey(
+        College, on_delete=models.CASCADE,
+        verbose_name="所属学院", null=True, blank=True,
+        help_text="通识课无需选择学院",
+    )
+    name = models.CharField("课程名称", max_length=200)
+    code = models.CharField("课程代码", max_length=50, blank=True)
+    course_type = models.CharField(
+        "课程类型", max_length=10,
+        choices=CourseType.choices,
+        default=CourseType.MAJOR,
+    )
+    description = models.TextField("课程简介", blank=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    material_count = models.IntegerField("资料数", default=0)
+
+    class Meta:
+        verbose_name = "课程"
+        verbose_name_plural = "课程"
+        ordering = ["-course_type", "college", "name"]
+
+    def __str__(self):
+        prefix = ""
+        if self.course_type == CourseType.GENERAL:
+            prefix = "[通识] "
+        elif self.college:
+            prefix = f"[{self.college.short_name or self.college.name}] "
+        return f"{prefix}{self.name}"
+
+
+class MaterialType(models.Model):
+    name = models.CharField("类型名称", max_length=50)
+    slug = models.SlugField("URL标识", max_length=50, unique=True)
+    icon = models.CharField("图标", max_length=20, blank=True, default="📄")
+
+    class Meta:
+        verbose_name = "资料类型"
+        verbose_name_plural = "资料类型"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.icon} {self.name}"
+
+
+class Material(models.Model):
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE,
+        verbose_name="所属课程", related_name="materials",
+    )
+    title = models.CharField("资料标题", max_length=200)
+    teacher = models.CharField("任课教师", max_length=100, blank=True)
+    material_type = models.ForeignKey(
+        MaterialType, on_delete=models.SET_NULL,
+        verbose_name="资料类型", null=True,
+    )
+    description = models.TextField("描述", blank=True)
+    file_name = models.CharField("原始文件名", max_length=255, blank=True)
+    file_path = models.CharField("存储路径", max_length=500, blank=True,
+                                 help_text="相对于 data/materials/ 的路径")
+    file_size = models.IntegerField("文件大小(字节)", default=0)
+    file_type = models.CharField("文件类型", max_length=20, blank=True,
+                                 help_text="pdf/docx/pptx 等")
+    uploader_name = models.CharField("上传者昵称", max_length=50, blank=True)
+    download_count = models.IntegerField("下载次数", default=0)
+    is_approved = models.BooleanField("已审核", default=True)
+    created_at = models.DateTimeField("上传时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "资料"
+        verbose_name_plural = "资料"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
