@@ -19,3 +19,12 @@ history/
 
 # Server
 *.pid
+
+# Django
+*.sqlite3
+*.sqlite
+__pycache__/
+staticfiles/
+
+# Data (except materials which should be tracked)
+data/*.sqlite3
