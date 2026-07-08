@@ -422,6 +422,11 @@ def _build_tree_node(qs):
                 ).exists()
 
         result.append(node)
+
+    # 纯叶子节点层：有资料的课程浮到顶端
+    if result and not any("children" in r for r in result):
+        result.sort(key=lambda r: (0 if r.get("hasFiles") else 1, r.get("name", "")))
+
     return result
 
 
@@ -441,20 +446,40 @@ def api_course_tree(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_stats(request):
+    limit = request.GET.get("limit", 5)
+    try:
+        limit = int(limit) if limit else None
+    except ValueError:
+        limit = 5
+
     top = Material.objects.filter(is_approved=True).select_related(
         "course"
-    ).order_by("-download_count")[:5]
+    ).order_by("-download_count")[:limit]
     recent = Material.objects.filter(is_approved=True).select_related(
         "course"
-    ).order_by("-created_at")[:5]
+    ).order_by("-created_at")[:limit]
+
+    # 只统计有已获批材料的课程
+    courses_with_materials = Course.objects.filter(
+        materials__is_approved=True
+    ).distinct()
+    colleges_with_materials = College.objects.filter(
+        course__materials__is_approved=True
+    ).distinct()
+    general_with_data = courses_with_materials.filter(course_type="general").count()
+    major_with_data = courses_with_materials.filter(course_type="major").count()
 
     return _ok({
         "course_count": Course.objects.count(),
+        "course_with_data_count": courses_with_materials.count(),
         "general_count": Course.objects.filter(course_type="general").count(),
         "major_count": Course.objects.filter(course_type="major").count(),
+        "general_with_data_count": general_with_data,
+        "major_with_data_count": major_with_data,
         "material_count": Material.objects.filter(is_approved=True).count(),
         "user_count": User.objects.count(),
         "college_count": College.objects.count(),
+        "college_with_data_count": colleges_with_materials.count(),
         "top_downloaded": [
             {"title": m.title,
              "course_name": m.course.name, "course_code": m.course.code,

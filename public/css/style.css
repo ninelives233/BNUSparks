@@ -759,7 +759,7 @@
   }
 
   /* ── About Page ─────────────────────────── */
-  .about-page { padding: var(--space-2xl) 0 var(--space-3xl); }
+  .about-page { padding: var(--space-xl) 0 var(--space-3xl); }
   .about-header { text-align: center; margin-bottom: var(--space-2xl); }
   .about-title {
     font-family: var(--serif); font-size: clamp(1.6rem, 3vw, 2rem);
@@ -833,13 +833,6 @@
     width: 40%; border: none;
     border-top: 1.5px solid var(--border-light);
   }
-  .math-section-wrap {
-    display: flex; justify-content: center;
-    margin-top: var(--space-xs);
-  }
-  .math-card {
-    max-width: 220px; width: 100%;
-  }
 
   /* ═══════════════════════════════════════════
      Same-name sidebar inside file listing
@@ -887,7 +880,9 @@
 
   .file-area { padding: var(--space-sm) 0 var(--space-xl); }
   .file-table {
-    width: 100%; border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
     font-size: 0.85rem;
   }
   .file-table thead th {
@@ -896,27 +891,59 @@
     padding: var(--space-sm) var(--space-sm) var(--space-xs);
     border-bottom: 1.5px solid var(--border-light);
     text-align: left; white-space: nowrap;
+    width: auto;
   }
+  .file-table thead th:nth-child(1) { width: auto; }     /* 文件名 - 自适应 */
+  .file-table thead th:nth-child(2) { width: 60px; }     /* 类型 */
+  .file-table thead th:nth-child(3) { width: 70px; }     /* 大小 */
+  .file-table thead th:nth-child(4) { width: 65px; }     /* 上传者 */
+  .file-table thead th:nth-child(5) { width: 65px; }     /* 任课教师 */
+  .file-table thead th:nth-child(6) { width: 70px; }     /* 下载次数 */
+  .file-table thead th:nth-child(7) { width: 84px; }     /* 下载按钮 */
   .file-table tbody td {
     padding: var(--space-sm);
     border-bottom: 1px solid var(--border-light);
     vertical-align: middle;
+    overflow: hidden;
   }
+  .file-table tbody tr { cursor: pointer; }
   .file-table tbody tr:hover td { background: var(--primary-surface); }
   .file-table tbody .selected td { background: var(--primary-light); }
   .file-table .ft-name {
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .file-table .ft-name .fn-wrap {
-    display: inline-flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 8px;
+    overflow: hidden;
   }
+  .file-table .ft-name .fn-wrap .ext-badge {
+    flex-shrink: 0;
+  }
+  .file-table .ft-name .fn-wrap .fn-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
   .file-table .ft-type-cell,
   .file-table .ft-size-cell,
   .file-table .ft-uploader,
   .file-table .ft-teacher {
     white-space: nowrap; color: var(--ink-soft); font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .file-table .ft-download { text-align: right; }
+  .file-table .ft-dlcount {
+    white-space: nowrap; color: var(--ink-faint); font-size: 0.8rem;
+  }
+  .file-table .ft-download {
+    text-align: right;
+    white-space: nowrap;
+  }
   .file-table .dl-link {
     display: inline-flex; align-items: center;
     padding: 4px 14px; border-radius: 6px;
@@ -924,6 +951,7 @@
     color: var(--primary); text-decoration: none;
     border: 1.5px solid var(--primary);
     transition: all 0.15s;
+    white-space: nowrap;
   }
   .file-table .dl-link:hover {
     background: var(--primary); color: #fff;
@@ -939,12 +967,103 @@
   .fa-upload-btn {
     padding: 8px 20px; border-radius: 8px;
     font-size: 0.85rem; font-weight: 600;
-    background: var(--primary); color: #fff; border: none;
-    cursor: pointer; transition: all 0.15s;
+    background: transparent; color: var(--primary);
+    border: 1.5px solid var(--primary);
+    cursor: pointer; transition: all 0.2s;
   }
   .fa-upload-btn:hover {
-    background: var(--primary-hover);
+    background: var(--primary); color: #fff;
     transform: translateY(-1px);
+  }
+
+  /* ── Pagination ── */
+  .file-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: var(--space-lg) 0 var(--space-xl);
+    flex-wrap: wrap;
+  }
+  .file-pagination .fp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--raised);
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    font-family: inherit;
+    line-height: 1;
+  }
+  .file-pagination .fp-btn:hover:not(.fp-active):not(.fp-disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-surface);
+  }
+  .file-pagination .fp-btn.fp-active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+    cursor: default;
+  }
+  .file-pagination .fp-btn.fp-disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+  }
+  .file-pagination .fp-btn.fp-ellipsis {
+    letter-spacing: 2px;
+    min-width: 32px;
+  }
+
+  /* Jump popup */
+  .fp-jump-popup {
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 24px oklch(0 0 0 / 0.12);
+    padding: 10px;
+    max-height: 280px;
+    overflow-y: auto;
+    min-width: 200px;
+  }
+  .fp-jump-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+  }
+  .fp-jump-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.1s;
+    font-family: inherit;
+  }
+  .fp-jump-num:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-surface);
+  }
+  .fp-jump-num.fp-active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
   }
 
   /* ═══════════════════════════════════════════
@@ -977,3 +1096,285 @@
     transition: background 0.15s;
   }
   .folder-list-item:hover .fli-icon { background: oklch(from var(--primary) l c h / 0.12); }
+
+  /* ═══════════════════════════════════════════
+     Homepage Navigation Cards + Dividers
+     ═══════════════════════════════════════════ */
+
+  .home-divider {
+    border: none;
+    border-top: 1px solid var(--border-light);
+    margin: 0 auto;
+    max-width: 900px;
+  }
+
+  .home-nav-cards {
+    padding: var(--space-xl) 0;
+  }
+
+  .home-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-lg);
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .home-nav-card {
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .home-nav-card:hover {
+    border-color: var(--primary-light);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px oklch(0 0 0 / 0.04);
+  }
+
+  .home-nav-card .hnc-icon {
+    font-size: 2rem;
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-surface);
+    border-radius: var(--radius-md);
+  }
+
+  .home-nav-card .hnc-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .home-nav-card .hnc-desc {
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+  }
+  .home-nav-card .hnc-icon svg {
+    color: var(--primary);
+    opacity: 0.7;
+  }
+
+  /* ═══════════════════════════════════════════
+     Rankings / Recent All View
+     ═══════════════════════════════════════════ */
+
+  .rankings-content {
+    padding: var(--space-md) 0 var(--space-xl);
+  }
+
+  .rankings-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-xs);
+    transition: background 0.15s;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .rankings-item:hover {
+    background: var(--primary-surface);
+  }
+
+  .rankings-item .ri-rank {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ink-faint);
+    width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .rankings-item .ri-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rankings-item .ri-name {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .rankings-item .ri-meta {
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
+
+  .rankings-item .ri-stat {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary);
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* ═══════════════════════════════════════════
+     About sections sub-navigation
+     ═══════════════════════════════════════════ */
+
+  .about-tabs {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+  }
+
+  .about-tab {
+    padding: 8px 18px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-full);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    background: var(--raised);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .about-tab:hover {
+    border-color: var(--primary-light);
+    color: var(--primary);
+  }
+
+  .about-tab.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  /* ═══════════════════════════════════════════
+     Stat pills clickable
+     ═══════════════════════════════════════════ */
+
+  .stat-pill-link {
+    text-decoration: none;
+    display: inline-flex;
+  }
+
+  /* ═══════════════════════════════════════════
+     Mobile responsive for new elements
+     ═══════════════════════════════════════════ */
+
+  @media (max-width: 640px) {
+    .home-nav-grid {
+      grid-template-columns: 1fr;
+      gap: var(--space-md);
+    }
+    .home-nav-card {
+      flex-direction: row;
+      text-align: left;
+      padding: var(--space-md);
+    }
+    .home-nav-card .hnc-icon {
+      width: 48px;
+      height: 48px;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+    .rankings-item {
+      padding: var(--space-sm) var(--space-md);
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     空间不足时折叠次要列
+     ═══════════════════════════════════════════ */
+
+  .file-area-compact .file-table thead th:nth-child(2),
+  .file-area-compact .file-table thead th:nth-child(4),
+  .file-area-compact .file-table thead th:nth-child(5),
+  .file-area-compact .file-table thead th:nth-child(6),
+  .file-area-compact .file-table tbody td.ft-type-cell,
+  .file-area-compact .file-table tbody td.ft-uploader,
+  .file-area-compact .file-table tbody td.ft-teacher,
+  .file-area-compact .file-table tbody td.ft-dlcount {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    .file-area-row {
+      flex-direction: column;
+    }
+    .file-area-side {
+      width: 100%;
+      position: static;
+      order: 1;
+      margin-top: var(--space-md);
+    }
+    .file-table thead th:nth-child(2),
+    .file-table thead th:nth-child(4),
+    .file-table thead th:nth-child(5),
+    .file-table thead th:nth-child(6),
+    .file-table tbody td.ft-type-cell,
+    .file-table tbody td.ft-uploader,
+    .file-table tbody td.ft-teacher,
+    .file-table tbody td.ft-dlcount {
+      display: none;
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     文件简介模态框
+     ═══════════════════════════════════════════ */
+
+  .file-info-content {
+    padding: var(--space-sm) 0;
+  }
+  .file-info-content .fi-row {
+    display: flex;
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.88rem;
+  }
+  .file-info-content .fi-row:last-child {
+    border-bottom: none;
+  }
+  .file-info-content .fi-label {
+    width: 100px;
+    flex-shrink: 0;
+    color: var(--ink-faint);
+    font-weight: 500;
+  }
+  .file-info-content .fi-value {
+    flex: 1;
+    color: var(--ink);
+    word-break: break-all;
+  }
+  .fi-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    margin-top: var(--space-md);
+    transition: background 0.15s;
+  }
+  .fi-download-btn:hover {
+    background: var(--primary-dark);
+  }
