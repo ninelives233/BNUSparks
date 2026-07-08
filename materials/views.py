@@ -21,7 +21,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 from django.db.models import Q, Count
 
-from .models import College, Course, Material, MaterialType
+from .models import College, Course, Material, MaterialType, CourseCategory
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -383,11 +383,64 @@ def api_search(request):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 课程导航树
+# ═══════════════════════════════════════════════════════════════
+
+def _build_tree_node(qs):
+    """递归构建课程树节点"""
+    result = []
+    for cat in qs:
+        if cat.is_divider:
+            result.append({"divider": True})
+            continue
+
+        node = {}
+        if cat.name:
+            node["name"] = cat.name
+        if cat.icon_class:
+            node["iconClass"] = cat.icon_class
+        if cat.is_math_card:
+            node["mathCard"] = True
+
+        children = cat.children.all()
+        if children:
+            node["children"] = _build_tree_node(children)
+        elif cat.course_id:
+            # 叶子节点：关联真实课程
+            node["courseId"] = cat.course.code
+            node["hasFiles"] = Material.objects.filter(
+                course=cat.course, is_approved=True
+            ).exists()
+        elif cat.course_text:
+            # 叶子节点：通配符代码
+            node["courseId"] = cat.course_text
+            # 试试能否匹配实际课程
+            code = cat.course_text.replace("*", "").replace("-", "")
+            if code:
+                node["hasFiles"] = Material.objects.filter(
+                    course__code__startswith=code, is_approved=True
+                ).exists()
+
+        result.append(node)
+    return result
+
+
+def api_course_tree(request):
+    """GET /api/courses/tree — 课程导航树（动态构建，含实时 hasFiles）"""
+    roots = CourseCategory.objects.filter(parent=None).order_by("order")
+    tree = {}
+    for root in roots:
+        children = root.children.all()
+        if children:
+            tree[root.name] = {"children": _build_tree_node(children)}
+    return _ok(tree)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 统计
 # ═══════════════════════════════════════════════════════════════
 
 def api_stats(request):
-    """GET /api/stats"""
     top = Material.objects.filter(is_approved=True).select_related(
         "course"
     ).order_by("-download_count")[:5]

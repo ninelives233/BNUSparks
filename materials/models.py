@@ -98,3 +98,34 @@ class Material(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class CourseCategory(models.Model):
+    """导航树节点 — 自引用无限层级"""
+    name = models.CharField("节点名称", max_length=200, blank=True)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.CASCADE,
+        related_name="children", verbose_name="父节点",
+    )
+    icon_class = models.CharField("图标类名", max_length=50, blank=True)
+    order = models.IntegerField("排序", default=0)
+    is_divider = models.BooleanField("分隔线", default=False)
+    is_math_card = models.BooleanField("数学卡片", default=False)
+
+    # 叶子节点：要么关联实际课程
+    course = models.ForeignKey(
+        Course, null=True, blank=True, on_delete=models.SET_NULL,
+        verbose_name="关联课程",
+    )
+    # 要么是通配符代码（如 "GEN02***"）
+    course_text = models.CharField("通配课程代码", max_length=50, blank=True)
+
+    class Meta:
+        verbose_name = "课程导航节点"
+        verbose_name_plural = "课程导航节点"
+        ordering = ["order"]
+
+    def __str__(self):
+        if self.is_divider:
+            return "─── 分隔线 ───"
+        return self.name or f"<节点 #{self.id}>"

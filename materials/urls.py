@@ -13,6 +13,7 @@ urlpatterns = [
 
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
+    path("courses/tree/", views.api_course_tree, name="api_course_tree"),
     path("courses/<str:course_code>/files/", views.api_course_files, name="api_course_files"),
 
     # 文件
