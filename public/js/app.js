@@ -151,11 +151,17 @@
   async function loadStats() {
     try {
       const s = await api('/api/stats/');
+      document.getElementById('statColleges').textContent = s.college_with_data_count;
+      document.getElementById('statGeneral').textContent = s.general_with_data_count;
+      document.getElementById('statMajor').textContent = s.major_with_data_count;
       const pills = document.querySelectorAll('.stat-pill');
       if (pills.length >= 3) {
-        pills[0].innerHTML = '<strong>' + s.college_count + '</strong> 个学院';
-        pills[1].innerHTML = '<strong>' + s.general_count + '</strong> 门通识课';
-        pills[2].innerHTML = '<strong>' + s.major_count + '</strong> 门专业课';
+        pills[0].style.cursor = 'pointer';
+        pills[0].onclick = function(e) { showExplorer('专业课'); };
+        pills[1].style.cursor = 'pointer';
+        pills[1].onclick = function(e) { showExplorer('通识课'); };
+        pills[2].style.cursor = 'pointer';
+        pills[2].onclick = function(e) { showExplorer('专业课'); };
       }
       // 下载最多（左列）
       const topEl = document.getElementById('topDownloadedList');
@@ -225,6 +231,8 @@
     await loadCourseTree();
     buildSameNameMap();
     checkAuth(); setupSearch(); loadStats(); loadCourseFileCounts();
+    // Show default about section
+    renderAboutContent('introduction');
   });
   /* ═══════════════════════════════════════════════════════════
      上传 / 模态框
@@ -484,10 +492,12 @@
   // ── Renderers ──
   function renderGrid(items) {
     const parent = document.getElementById('explorerContent');
-    const gridItems = items.filter(i => !i.divider && !i.mathCard);
     const mathItem = items.find(i => i.mathCard);
-    let html = '<div class="folder-grid">' +
-      gridItems.map(item =>
+    const regularItems = items.filter(i => !i.divider && !i.mathCard);
+    let html = '';
+
+    html += '<div class="folder-grid">' +
+      regularItems.map(item =>
         '<div class="folder-card" data-n="' + esc(item.name) + '">' +
           '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
           '<div class="fc-name">' + esc(item.name) + '</div>' +
@@ -497,18 +507,15 @@
     '</div>';
 
     // Divider before math section
-    if (items.some(i => i.divider)) {
-      html += '<div class="grid-divider-wrap"><hr class="grid-divider"></div>';
-    }
-
-    // Math card — centered
     if (mathItem) {
-      html += '<div class="math-section-wrap">' +
-        '<div class="folder-card math-card" data-n="数学类">' +
+      html += '<div class="grid-divider-wrap"><hr class="grid-divider"></div>';
+      html += '<div class="folder-grid">' +
+        '<div class="folder-card" data-n="数学类">' +
           '<div class="fc-icon">' + (CARD_ICONS[mathItem.iconClass] || CARD_ICONS['folder']) + '</div>' +
           '<div class="fc-name">数学类</div>' +
           '<div class="fc-count">' + mathItem.children.length + ' 项</div>' +
-        '</div></div>';
+        '</div>' +
+      '</div>';
     }
 
     parent.innerHTML = html;
@@ -580,8 +587,8 @@
         '<div class="file-area-main">' +
           '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span></div>' +
           (code ? '<div class="fa-upload-bar"><button class="fa-upload-btn" onclick="showUploadModal(\'' + esc(code) + '\',\'' + esc(course.name) + '\')">+ 上传资料</button></div>' : '') +
-          '<table class="file-table"><thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>上传者</th><th>任课教师</th><th>下载</th></tr></thead><tbody id="fileTableBody">' +
-          '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
+          '<table class="file-table"><thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>上传者</th><th>任课教师</th><th>下载次数</th><th>下载</th></tr></thead><tbody id="fileTableBody">' +
+          '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
           '</tbody></table>' +
         '</div>' +
         (Object.keys(sameNameGroups).length ? '<div class="file-area-side"><div class="fas-title">同名课程</div>' +
@@ -596,30 +603,210 @@
 
     if (!code) return;
 
-    getFiles(code).then(files => {
-      document.getElementById('fileCount').textContent = files.length + ' 个文件';
-      const tbody = document.getElementById('fileTableBody');
-      if (!files.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
-        return;
-      }
-      tbody.innerHTML = files.map(f =>
-        '<tr><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span>' + esc(f.title) + '</span></span></td>' +
-        '<td class="ft-type-cell">' + esc(f.file_type) + '</td>' +
-        '<td class="ft-size-cell">' + formatSize(f.file_size) + '</td>' +
-        '<td class="ft-uploader">' + esc(f.uploader) + '</td>' +
-        '<td class="ft-teacher">' + esc(f.teacher || '') + '</td>' +
-        '<td class="ft-download"><a href="/api/files/' + f.id + '/download/" class="dl-link">⬇ 下载</a></td></tr>'
-      ).join('');
-      // 点击行高亮
-      Array.from(tbody.children).forEach((tr, idx) => {
-        tr.addEventListener('click', function(e) {
-          if (e.target.closest('.dl-link')) return;
-          Array.from(tbody.children).forEach(r => r.classList.remove('selected'));
-          this.classList.add('selected');
+    getFiles(code).then(allFiles => {
+      const totalFiles = allFiles.length;
+      document.getElementById('fileCount').textContent = totalFiles + ' 个文件';
+
+      const PAGE_SIZE = 20;
+      let currentPage = 1;
+
+      function renderPage() {
+        const tbody = document.getElementById('fileTableBody');
+        if (!allFiles.length) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
+          hidePagination();
+          return;
+        }
+
+        const totalPages = Math.ceil(totalFiles / PAGE_SIZE);
+        if (currentPage > totalPages) currentPage = totalPages;
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const pageFiles = allFiles.slice(start, start + PAGE_SIZE);
+
+        const fileLookup = {};
+        pageFiles.forEach(f => { fileLookup[f.id] = f; });
+        tbody.innerHTML = pageFiles.map(f =>
+          '<tr data-file-id="' + f.id + '"><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span class="fn-text">' + esc(f.title) + '</span></span></td>' +
+          '<td class="ft-type-cell">' + esc(f.file_type) + '</td>' +
+          '<td class="ft-size-cell">' + formatSize(f.file_size) + '</td>' +
+          '<td class="ft-uploader">' + esc(f.uploader) + '</td>' +
+          '<td class="ft-teacher">' + esc(f.teacher || '') + '</td>' +
+          '<td class="ft-dlcount">' + f.download_count + ' 次</td>' +
+          '<td class="ft-download"><a href="/api/files/' + f.id + '/download/" class="dl-link">⬇ 下载</a></td></tr>'
+        ).join('');
+        // 点击行显示文件简介
+        Array.from(tbody.children).forEach(tr => {
+          tr.addEventListener('click', function(e) {
+            if (e.target.closest('.dl-link')) return;
+            const fileId = parseInt(this.dataset.fileId);
+            if (fileLookup[fileId]) showFileInfoModal(fileLookup[fileId]);
+          });
         });
-      });
+        renderPagination(currentPage, totalPages);
+        // 同名课程侧栏存在时折叠次要列
+        const mainArea = document.querySelector('.file-area-main');
+        const sidePanel = document.querySelector('.file-area-side');
+        if (mainArea && sidePanel) mainArea.classList.add('file-area-compact');
+        else if (mainArea) mainArea.classList.remove('file-area-compact');
+      }
+
+      function renderPagination(page, total) {
+        let pag = document.getElementById('filePagination');
+        if (total <= 1) {
+          if (pag) pag.style.display = 'none';
+          return;
+        }
+        if (!pag) {
+          pag = document.createElement('div');
+          pag.id = 'filePagination';
+          pag.className = 'file-pagination';
+          document.querySelector('.file-table').after(pag);
+        }
+
+        const numbers = getPageNumbers(page, total);
+
+        let html = '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" data-page="' + (page - 1) + '">◀</button>';
+
+        numbers.forEach(function(n) {
+          if (n === '…') {
+            html += '<button class="fp-btn fp-ellipsis">⋯</button>';
+          } else {
+            html += '<button class="fp-btn fp-num' + (n === page ? ' fp-active' : '') + '" data-page="' + n + '">' + n + '</button>';
+          }
+        });
+
+        html += '<button class="fp-btn fp-next' + (page >= total ? ' fp-disabled' : '') + '" data-page="' + (page + 1) + '">▶</button>';
+
+        pag.innerHTML = html;
+        pag.style.display = 'flex';
+
+        // Page number / prev / next clicks
+        pag.querySelectorAll('.fp-num, .fp-prev, .fp-next').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const p = parseInt(this.dataset.page);
+            if (p && p >= 1 && p <= total && p !== currentPage) {
+              currentPage = p;
+              renderPage();
+            }
+          });
+        });
+
+        // Ellipsis → show jump popup
+        pag.querySelectorAll('.fp-ellipsis').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            showJumpPopup(e, total);
+          });
+        });
+      }
+
+      function getPageNumbers(current, total) {
+        const pages = [];
+        if (total <= 5) {
+          for (let i = 1; i <= total; i++) pages.push(i);
+          return pages;
+        }
+        pages.push(1);
+        if (current - 1 > 2) pages.push('…');
+        var start = Math.max(2, current - 1);
+        var end = Math.min(total - 1, current + 1);
+        for (let i = start; i <= end; i++) pages.push(i);
+        if (current + 1 < total - 1) pages.push('…');
+        pages.push(total);
+        return pages;
+      }
+
+      function showJumpPopup(event, total) {
+        var existing = document.querySelector('.fp-jump-popup');
+        if (existing) existing.remove();
+
+        var btn = event.currentTarget;
+        var rect = btn.getBoundingClientRect();
+
+        var popup = document.createElement('div');
+        popup.className = 'fp-jump-popup';
+
+        let gridHtml = '<div class="fp-jump-grid">';
+        for (let i = 1; i <= total; i++) {
+          gridHtml += '<button class="fp-jump-num' + (i === currentPage ? ' fp-active' : '') + '" data-page="' + i + '">' + i + '</button>';
+        }
+        gridHtml += '</div>';
+        popup.innerHTML = gridHtml;
+
+        popup.addEventListener('click', function(e) {
+          var targetBtn = e.target.closest('.fp-jump-num');
+          if (targetBtn) {
+            var p = parseInt(targetBtn.dataset.page);
+            if (p && p >= 1 && p <= total && p !== currentPage) {
+              currentPage = p;
+              renderPage();
+            }
+            popup.remove();
+          }
+        });
+
+        // Close on click outside
+        requestAnimationFrame(function() {
+          document.addEventListener('click', function closeHandler(ev) {
+            if (popup && !popup.contains(ev.target) && !btn.contains(ev.target)) {
+              popup.remove();
+              document.removeEventListener('click', closeHandler);
+            }
+          });
+        });
+
+        // Position relative to the ellipsis button
+        popup.style.position = 'fixed';
+        popup.style.zIndex = '1000';
+        document.body.appendChild(popup);
+
+        // Position after append so we can measure
+        var popupRect = popup.getBoundingClientRect();
+        var topPos = rect.bottom + 4;
+        var leftPos = Math.max(8, rect.left + rect.width / 2 - popupRect.width / 2);
+        // Keep within viewport
+        if (leftPos + popupRect.width > window.innerWidth - 8) {
+          leftPos = window.innerWidth - popupRect.width - 8;
+        }
+        popup.style.top = topPos + 'px';
+        popup.style.left = leftPos + 'px';
+      }
+
+      function hidePagination() {
+        const pag = document.getElementById('filePagination');
+        if (pag) pag.style.display = 'none';
+      }
+
+      renderPage();
     });
+  }
+
+  // ── 文件简介模态框 ──
+  function showFileInfoModal(file) {
+    const existing = document.querySelector('.file-info-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay file-info-overlay';
+    overlay.innerHTML =
+      '<div class="modal-card">' +
+        '<button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">✕</button>' +
+        '<h2 class="modal-title">' + esc(file.title) + '</h2>' +
+        '<div class="file-info-content">' +
+          '<div class="fi-row"><span class="fi-label">课程名称</span><span class="fi-value">' + esc(file.course_name || '') + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">文件名称</span><span class="fi-value">' + esc(file.file_name || '') + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">文件类型</span><span class="fi-value">' + esc(file.file_type || '') + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">文件大小</span><span class="fi-value">' + formatSize(file.file_size) + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">上传者</span><span class="fi-value">' + esc(file.uploader || '匿名') + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">任课教师</span><span class="fi-value">' + esc(file.teacher || '未填写') + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">下载次数</span><span class="fi-value">' + file.download_count + ' 次</span></div>' +
+          '<div class="fi-row"><span class="fi-label">上传日期</span><span class="fi-value">' + esc(file.created_at || '') + '</span></div>' +
+          '<div style="text-align:center"><a href="/api/files/' + file.id + '/download/" class="fi-download-btn">⬇ 下载文件</a></div>' +
+        '</div>' +
+      '</div>';
+    overlay.addEventListener('click', function(e) {
+      if (e.target === this) this.remove();
+    });
+    document.body.appendChild(overlay);
   }
 
   function renderEmpty(course) {
@@ -640,29 +827,201 @@
 
   // ── View Switching ──
   function switchView(name) {
-    document.getElementById('homeView').classList.toggle('active', name === 'home');
-    document.getElementById('explorerView').classList.toggle('active', name === 'explorer');
-    document.getElementById('aboutView').classList.toggle('active', name === 'about');
+    const views = [
+      'homeView', 'explorerView', 'aboutView',
+      'tutorialView', 'announcementsView', 'broadView',
+      'rankingsView', 'recentAllView'
+    ];
+    views.forEach(id => {
+      document.getElementById(id).classList.toggle('active', id.replace('View','') === name);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function updateSidebar(viewName) {
+    document.querySelectorAll('.side-nav a').forEach(a => a.classList.remove('active'));
+    const link = document.querySelector('.side-nav a[data-view="' + viewName + '"]');
+    if (link) link.classList.add('active');
+  }
+
+  // ── About Content Data (易编辑) ──
+  const aboutContent = {
+    introduction: {
+      title: '平台介绍',
+      sections: [
+        { heading: '🌟 我们的使命', text: '致力于贯彻开源精神，抹平信息差，让每一位北师大同学都能免费获取优质学习资源。' },
+        { heading: '📚 平台内容', text: '课程笔记、复习资料、考试真题、学术论文、软件教程等一切对学习有帮助的资源。' },
+        { heading: '🤝 贡献方式', text: '任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！' },
+      ]
+    },
+    help: {
+      title: '使用帮助',
+      sections: [
+        { heading: '📖 浏览资料', text: '通过左侧导航栏选择通识课或专业课分类，逐层进入课程页面，即可浏览和下载资料。' },
+        { heading: '🔍 搜索功能', text: '在顶栏搜索框输入课程名、课程代码或资料标题，按回车或点击搜索按钮即可快速查找。' },
+        { heading: '📤 上传资料', text: '登录后在任意课程页面点击"上传资料"按钮，填写信息并选择文件即可分享你的学习资源。' },
+      ]
+    },
+    contact: {
+      title: '联系我们',
+      sections: [
+        { heading: '📬 邮箱', text: 'bnusparks@163.com — 欢迎投稿、建议与合作。' },
+        { heading: '🐙 GitHub', text: '在 <a href="https://github.com/ninelives233/BNUSparks" target="_blank">github.com/ninelives233/BNUSparks</a> 提交 Issue 或 PR。' },
+        { heading: '💬 意见反馈', text: '任何问题或建议都可以通过邮箱或 GitHub 告诉我们。' },
+      ]
+    },
+    privacy: {
+      title: '隐私政策',
+      sections: [
+        { heading: '🔒 信息收集', text: '我们仅收集必要的账号信息（校内邮箱、昵称）用于平台身份识别。' },
+        { heading: '🛡️ 信息使用', text: '收集的信息仅用于平台功能（如资料上传身份标识），不会分享给任何第三方。' },
+        { heading: '🗑️ 数据删除', text: '如你需要删除账号数据，请通过邮箱联系我们，我们将在 7 个工作日内处理。' },
+      ]
+    }
+  };
+
+  function renderAboutContent(sectionKey) {
+    const data = aboutContent[sectionKey] || aboutContent.introduction;
+    const container = document.getElementById('aboutSectionContent');
+    container.innerHTML = data.sections.map(s =>
+      '<section class="about-section"><h3>' + esc(s.heading) + '</h3><p>' + s.text + '</p></section>'
+    ).join('');
+    // Update tabs
+    document.querySelectorAll('.about-tab').forEach(t => t.classList.remove('active'));
+    const tab = document.querySelector('.about-tab[onclick*="' + sectionKey + '"]');
+    if (tab) tab.classList.add('active');
+  }
+
+  function showAbout(section) {
+    switchView('about');
+    updateSidebar('about');
+    renderAboutContent(section || 'introduction');
+  }
+
+  // ── Static Pages Content Data (易编辑) ──
+  const staticPages = {
+    tutorial: {
+      title: '使用教程',
+      sections: [
+        { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks 学术资源共享平台！以下教程将帮助你快速上手。' },
+        { heading: '🔎 搜索资料', text: '在顶栏的搜索框中输入课程名称、课程代码或资料标题，直接回车即可搜索。搜索结果会显示关联的课程和资料文件。' },
+        { heading: '📁 浏览课程', text: '通过左侧导航栏选择"通识课"或"专业课"，逐层进入课程分类，点击课程卡片即可查看该课程的所有资料。' },
+        { heading: '⬆️ 如何上传', text: '登录账号后，进入任意课程页面，点击页面上方的"上传资料"按钮，填写标题、选择文件即可分享你的学习资源。上传需要使用北师大校内邮箱(@mail.bnu.edu.cn)注册。' },
+        { heading: '📱 移动端使用', text: '在手机或平板上，点击左上角的菜单按钮打开导航抽屉，即可像桌面端一样浏览全部功能。' },
+      ]
+    },
+    announcements: {
+      title: '公告',
+      sections: [
+        { heading: '🎉 平台上线', text: 'BNU Sparks 现已正式上线！欢迎访问 bnu.icu，获取和分享学习资料。' },
+        { heading: '📢 招募贡献者', text: '我们正在招募平台维护者和内容贡献者。如果你对开源、教育资源开放感兴趣，欢迎通过邮箱联系我们。' },
+        { heading: '📋 后续规划', text: '平台将持续更新课程数据，逐步覆盖全校所有专业的培养方案课程。同时将开发更多实用功能，如个人收藏、资料评论等。' },
+      ]
+    },
+    broad: {
+      title: '关于大类招生',
+      sections: [
+        { heading: '📋 什么是大类招生', text: '大类招生是高校将相同或相近学科门类（通常是同一学院内的多个专业）合并为一个大类进行招生。学生入学后前 1-2 年学习通识课程和大类基础课程，之后根据学业成绩和个人意愿进行专业分流。' },
+        { heading: '📚 通识课程安排', text: '大类招生下，全校通识教育课程包括思想政治理论类、体育与健康类、军事理论与军事技能、大学外语类、教师素养类、家国情怀与价值理想模块等 11 个类别，所有本科生统一修读。' },
+        { heading: '🧭 专业分流', text: '大一下或大二上，学生根据学业成绩（GPA）和个人意愿，在大类涵盖的专业中选择具体专业方向。分流标准因学院而异，通常包括绩点排名、面试表现等。' },
+        { heading: '🏫 北京师范大学的大类招生', text: 'BNU 目前多个学院实行大类招生，如经济与工商管理学院按"经济学类"招生（含金融学、经济学励耘、金融科技、工商管理、会计学），法学院按"法学"招生等。' },
+      ]
+    }
+  };
+
+  function renderStaticView(viewKey) {
+    const data = staticPages[viewKey];
+    const container = document.getElementById(viewKey + 'Content');
+    if (!container) return;
+    container.innerHTML = data.sections.map(s =>
+      '<section class="about-section"><h3>' + esc(s.heading) + '</h3><p>' + esc(s.text) + '</p></section>'
+    ).join('');
+  }
+
+  function showTutorial() {
+    switchView('tutorial');
+    updateSidebar('home');
+    renderStaticView('tutorial');
+  }
+
+  function showAnnouncements() {
+    switchView('announcements');
+    updateSidebar('home');
+    renderStaticView('announcements');
+  }
+
+  function showBroad() {
+    switchView('broad');
+    updateSidebar('home');
+    renderStaticView('broad');
+  }
+
+  // ── Rankings & Recent All Views ──
+  async function renderTopDownloaded() {
+    const container = document.getElementById('rankingsContent');
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    try {
+      const s = await api('/api/stats/?limit=100');
+      if (!s.top_downloaded || !s.top_downloaded.length) {
+        container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">暂无数据</div>';
+        return;
+      }
+      container.innerHTML = s.top_downloaded.map((m, i) =>
+        '<a href="#" class="rankings-item" onclick="event.preventDefault();showExplorer(\'' +
+            (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+          '<span class="ri-rank">#' + (i+1) + '</span>' +
+          '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + esc(m.course_name) + '</div></div>' +
+          '<span class="ri-stat">' + m.download_count + ' 次下载</span>' +
+        '</a>'
+      ).join('');
+    } catch(e) {
+      container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">加载失败</div>';
+    }
+  }
+
+  async function renderRecentAll() {
+    const container = document.getElementById('recentAllContent');
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    try {
+      const s = await api('/api/stats/?limit=100');
+      if (!s.recent_uploads || !s.recent_uploads.length) {
+        container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">暂无数据</div>';
+        return;
+      }
+      container.innerHTML = s.recent_uploads.map(m =>
+        '<a href="#" class="rankings-item" onclick="event.preventDefault();showExplorer(\'' +
+            (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+          '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
+          '<span class="ri-stat">' + esc(m.uploader) + '</span>' +
+        '</a>'
+      ).join('');
+    } catch(e) {
+      container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">加载失败</div>';
+    }
+  }
+
+  function showTopDownloaded() {
+    switchView('rankings');
+    updateSidebar('home');
+    renderTopDownloaded();
+  }
+
+  function showRecentAll() {
+    switchView('recentAll');
+    updateSidebar('home');
+    renderRecentAll();
   }
 
   function showHome() {
     switchView('home');
-    document.querySelectorAll('.side-nav a').forEach(a => a.classList.remove('active'));
-    const homeLink = document.querySelector('.side-nav a[data-view="home"]');
-    if (homeLink) homeLink.classList.add('active');
+    updateSidebar('home');
   }
 
   function showExplorer(type) {
     expPath = [type];
     renderExplorer();
     switchView('explorer');
-  }
-
-  function showAbout() {
-    switchView('about');
-    document.querySelectorAll('.side-nav a').forEach(a => a.classList.remove('active'));
-    const aboutLink = document.querySelector('.side-nav a[data-view="about"]');
-    if (aboutLink) aboutLink.classList.add('active');
+    updateSidebar(type === '通识课' ? 'general' : 'major');
   }
 
   // ── Sidebar ──
@@ -671,12 +1030,10 @@
       const view = a.dataset.view;
       if (!view) return;
       e.preventDefault();
-      document.querySelectorAll('.side-nav a').forEach(x => x.classList.remove('active'));
-      a.classList.add('active');
       if (view === 'home') showHome();
       else if (view === 'general') showExplorer('通识课');
       else if (view === 'major') showExplorer('专业课');
-      else if (view === 'about') showAbout();
+      else if (view === 'about') showAbout('introduction');
     });
   });
 
@@ -689,7 +1046,7 @@
       if (view === 'home') showHome();
       else if (view === 'general') showExplorer('通识课');
       else if (view === 'major') showExplorer('专业课');
-      else if (view === 'about') showAbout();
+      else if (view === 'about') showAbout('introduction');
       drawer.classList.remove('open');
     });
   });

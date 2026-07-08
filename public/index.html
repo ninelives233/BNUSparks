@@ -11,7 +11,7 @@
 <!-- ═══ Header ═══ -->
 <header class="site-header" id="siteHeader">
   <div class="header-inner">
-    <a href="#" class="header-logo-area"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
+    <a href="javascript:void(0)" class="header-logo-area"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
     <button class="menu-toggle" id="menuOpen" aria-label="菜单">☰</button>
     <div class="search-hero-wrap">
       <div class="search-box"><input type="text" placeholder="搜索课程、资料、课程代码…"><button aria-label="搜索">→</button></div>
@@ -63,9 +63,9 @@
       <p class="hero-desc">北京师范大学课程资源共享平台</p>
       <p class="hero-stats-label">当前已有</p>
       <div class="stats-row">
-        <span class="stat-pill"><strong>2</strong> 所学院</span>
-        <span class="stat-pill"><strong>14</strong> 门通识课</span>
-        <span class="stat-pill"><strong>24</strong> 门专业课</span>
+        <span class="stat-pill"><strong id="statColleges">-</strong> 个学院</span>
+        <span class="stat-pill"><strong id="statGeneral">-</strong> 门通识课</span>
+        <span class="stat-pill"><strong id="statMajor">-</strong> 门专业课</span>
       </div>
       <p class="hero-footer">
         <span>投稿与建议 / 加入我们</span>
@@ -80,6 +80,31 @@
 
 </main>
 
+  <!-- ═══ Home Nav Cards ═══ -->
+  <hr class="home-divider">
+  <section class="home-nav-cards">
+    <div class="container">
+      <div class="home-nav-grid">
+        <div class="home-nav-card" onclick="showTutorial()">
+          <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M8 8h3M8 11h3"/></svg></div>
+          <div class="hnc-title">使用教程</div>
+          <div class="hnc-desc">快速上手</div>
+        </div>
+        <div class="home-nav-card" onclick="showAnnouncements()">
+          <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+          <div class="hnc-title">公告</div>
+          <div class="hnc-desc">最新消息</div>
+        </div>
+        <div class="home-nav-card" onclick="showBroad()">
+          <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M22 10l-10-5-10 5 10 5 10-5z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
+          <div class="hnc-title">关于大类招生</div>
+          <div class="hnc-desc">了解政策</div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <hr class="home-divider">
+
   <!-- ═══ Home Content ═══ -->
   <section class="home-content">
     <div class="container">
@@ -89,7 +114,7 @@
         <div class="hc-panel">
           <div class="hc-panel-header">
             <h3 class="section-accent">下载最多</h3>
-            <a href="#" class="hc-more" onclick="event.preventDefault();showExplorer('通识课')">更多 →</a>
+            <a href="#" class="hc-more" onclick="event.preventDefault();showTopDownloaded()">更多 →</a>
           </div>
           <div id="topDownloadedList"></div>
         </div>
@@ -98,7 +123,7 @@
         <div class="hc-panel">
           <div class="hc-panel-header">
             <h3 class="section-accent">最近上传</h3>
-            <a href="#" class="hc-more" onclick="event.preventDefault();showExplorer('专业课')">更多 →</a>
+            <a href="#" class="hc-more" onclick="event.preventDefault();showRecentAll()">更多 →</a>
           </div>
           <div id="recentUploadsList"></div>
         </div>
@@ -127,25 +152,105 @@
         <h2 class="about-title">关于木铎星火</h2>
         <p class="about-subtitle">BNU Sparks · 为爱发电的校内资源共享平台</p>
       </div>
-      <div class="about-content">
-        <section class="about-section">
-          <h3>🌟 我们的使命</h3>
-          <p>致力于贯彻开源精神，抹平信息差，让每一位北师大同学都能免费获取优质学习资源。</p>
-        </section>
-        <section class="about-section">
-          <h3>📚 平台内容</h3>
-          <p>课程笔记、复习资料、考试真题、学术论文、软件教程等一切对学习有帮助的资源。</p>
-        </section>
-        <section class="about-section">
-          <h3>🤝 贡献方式</h3>
-          <p>任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！</p>
-        </section>
-        <section class="about-section">
-          <h3>📬 联系我们</h3>
-          <p>邮箱：<a href="mailto:bnusparks@163.com">bnusparks@163.com</a></p>
-          <p>GitHub：<a href="https://github.com/ninelives233/BNUSparks" target="_blank">github.com/ninelives233/BNUSparks</a></p>
-        </section>
+      <div class="about-content" id="aboutContent">
+        <div class="about-tabs">
+          <a class="about-tab active" onclick="showAbout('introduction')">平台介绍</a>
+          <a class="about-tab" onclick="showAbout('help')">使用帮助</a>
+          <a class="about-tab" onclick="showAbout('contact')">联系我们</a>
+          <a class="about-tab" onclick="showAbout('privacy')">隐私政策</a>
+        </div>
+        <div id="aboutSectionContent"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Tutorial View ═══ -->
+<div class="view-section" id="tutorialView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">使用教程</span>
+      </div>
+      <div class="about-header">
+        <h2 class="about-title">使用教程</h2>
+        <p class="about-subtitle">快速上手 BNU Sparks</p>
+      </div>
+      <div class="about-content static-content" id="tutorialContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Announcements View ═══ -->
+<div class="view-section" id="announcementsView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">公告</span>
+      </div>
+      <div class="about-header">
+        <h2 class="about-title">公告</h2>
+        <p class="about-subtitle">平台最新动态</p>
+      </div>
+      <div class="about-content static-content" id="announcementsContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Broad Enrollment View ═══ -->
+<div class="view-section" id="broadView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">关于大类招生</span>
+      </div>
+      <div class="about-header">
+        <h2 class="about-title">关于大类招生</h2>
+        <p class="about-subtitle">了解北京师范大学大类招生政策</p>
+      </div>
+      <div class="about-content static-content" id="broadContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Rankings View ═══ -->
+<div class="view-section" id="rankingsView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">下载排行榜</span>
+      </div>
+      <div class="about-header">
+        <h2 class="about-title">下载排行榜</h2>
+        <p class="about-subtitle">最受欢迎的资料</p>
+      </div>
+      <div class="rankings-content" id="rankingsContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Recent All View ═══ -->
+<div class="view-section" id="recentAllView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">最近上传</span>
+      </div>
+      <div class="about-header">
+        <h2 class="about-title">最近上传</h2>
+        <p class="about-subtitle">最新添加的资料</p>
+      </div>
+      <div class="rankings-content" id="recentAllContent"></div>
     </div>
   </div>
 </div>
@@ -165,15 +270,15 @@
         <a href="https://github.com/ninelives233/BNUSparks" target="_blank" rel="noopener">GitHub 仓库</a>
         <a href="https://github.com/ninelives233/BNUSparks/issues" target="_blank" rel="noopener">提交 Issue</a>
         <a href="https://github.com/ninelives233/BNUSparks" target="_blank" rel="noopener">贡献指南</a>
-        <a href="https://github.com/ninelives233/BNUSparks/releases" target="_blank" rel="noopener">更新日志</a>
+        <a href="https://github.com/ninelives233/BNUSparks/commits/main" target="_blank" rel="noopener">更新日志</a>
         <a href="mailto:bnusparks@163.com" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-light);font-weight:500;color:var(--primary);">投稿与建议</a>
       </div>
       <div class="footer-col">
         <h4>关于</h4>
-        <a href="javascript:void(0)" onclick="switchView('about')">平台介绍</a>
-        <a href="javascript:void(0)" onclick="switchView('about')">使用帮助</a>
+        <a href="javascript:void(0)" onclick="showAbout('introduction')">平台介绍</a>
+        <a href="javascript:void(0)" onclick="showAbout('help')">使用帮助</a>
         <a href="mailto:bnusparks@163.com">联系我们</a>
-        <a href="javascript:void(0)" onclick="switchView('about')">隐私政策</a>
+        <a href="javascript:void(0)" onclick="showAbout('privacy')">隐私政策</a>
       </div>
     </div>
     <div class="footer-bottom">
