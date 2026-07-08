@@ -15,7 +15,7 @@ import django
 import os
 import sys
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bnushare.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bnusparks.settings")
 django.setup()
 
 from materials.models import Course, CourseCategory

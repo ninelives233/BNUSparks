@@ -35,7 +35,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'bnushare.urls'
+ROOT_URLCONF = 'bnusparks.urls'
 
 TEMPLATES = [
     {
@@ -52,7 +52,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'bnushare.wsgi.application'
+WSGI_APPLICATION = 'bnusparks.wsgi.application'
 
 # ── 数据库 ──
 DATABASES = {

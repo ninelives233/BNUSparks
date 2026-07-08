@@ -8,7 +8,7 @@ BNU Sparks · 木铎星火 — 种子数据
 """
 
 import os, django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bnushare.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bnusparks.settings")
 django.setup()
 
 from materials.models import College, Course, MaterialType

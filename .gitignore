@@ -17,6 +17,9 @@ CLAUDE.md
 # History (archived design iterations, old Django attempts, reference materials)
 history/
 
+# Python (root-level; subdir ones are auto-ignored by git)
+__pycache__/
+
 # Server
 *.pid
 
@@ -26,7 +29,9 @@ history/
 __pycache__/
 staticfiles/
 
-# Data (except materials which should be tracked)
+# Data — 资料存储
+#   data/materials/   MEDIA_ROOT — 所有资料文件（按课程代码组织，git 跟踪）
+#   data/*.sqlite3    SQLite 数据库（不上传）
 data/*.sqlite3
 
 # Source archives (batch import sources, not repo content)
