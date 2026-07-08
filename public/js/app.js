@@ -336,6 +336,7 @@
     { name:'数理基础与科学素养', iconClass:'graph', children:[
       { name:'信息处理技术',            courseId:'GEN04221' },
       { name:'算法与程序设计（Python）', courseId:'GEN04237', hasFiles:true },
+      { name:'计算思维导论',            courseId:'GEN04238', hasFiles:true },
       { name:'人工智能导论',            courseId:'GEN04251' },
       { name:'数据科学导论',            courseId:'GEN04252' },
     ]},
