@@ -28,3 +28,6 @@ staticfiles/
 
 # Data (except materials which should be tracked)
 data/*.sqlite3
+
+# Source archives (batch import sources, not repo content)
+data/资料的压缩包们/
