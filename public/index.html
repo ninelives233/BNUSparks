@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=3">
+<link rel="stylesheet" href="/static/css/style.css?v=4">
 </head>
 <body>
 
@@ -377,6 +377,33 @@
   </div>
 </div>
 
+<!-- ═══ Reset Password Modal ═══ -->
+<div class="modal-overlay" id="resetPwdModal" style="display:none">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeResetPwdModal()">✕</button>
+    <h2 class="modal-title">重置密码</h2>
+    <form id="resetPwdForm" onsubmit="return handleResetPassword(event)">
+      <div class="mf-group">
+        <label>新密码</label>
+        <input type="password" id="resetNewPwd" class="mf-input" required minlength="8" placeholder="至少 8 位">
+      </div>
+      <div class="mf-group">
+        <label>确认新密码</label>
+        <input type="password" id="resetConfirmPwd" class="mf-input" required minlength="8" placeholder="再次输入新密码">
+      </div>
+      <button type="submit" class="mf-btn">重置密码</button>
+      <p class="mf-switch"><a href="#" onclick="closeResetPwdModal();showLoginModal();return false">返回登录</a></p>
+    </form>
+    <div id="resetPwdError" class="mf-error" style="display:none"></div>
+    <div id="resetPwdSuccess" class="mf-success" style="display:none">
+      <div class="ms-check">✓</div>
+      <p class="ms-title">密码已重置</p>
+      <p class="ms-desc">你的密码已重置成功，请使用新密码登录。</p>
+      <button class="mf-btn ms-btn" onclick="closeResetPwdModal();showLoginModal()">去登录</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Upload Modal ═══ -->
 <div class="modal-overlay" id="uploadModal" style="display:none">
   <div class="modal-card modal-card-wide">
@@ -414,7 +441,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=3"></script>
+<script src="/static/js/app.js?v=4"></script>
 
 </body>
 </html>

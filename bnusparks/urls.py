@@ -20,4 +20,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("materials.urls")),
     path("", frontend, name="frontend"),
+    path("reset-password/", frontend, name="reset-password"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

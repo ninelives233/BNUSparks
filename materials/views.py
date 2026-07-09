@@ -314,7 +314,7 @@ def api_forgot_password(request):
         return _ok({"message": "如果该邮箱已注册，重置链接已发送到你的邮箱"})
 
     token = default_token_generator.make_token(user)
-    link = f"https://bnu.icu/reset-password/?uid={user.id}&token={token}"
+    link = request.build_absolute_uri(f'/reset-password/?uid={user.id}&token={token}')
 
     try:
         send_mail(
