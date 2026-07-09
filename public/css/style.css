@@ -759,7 +759,9 @@
   }
 
   /* ── About Page ─────────────────────────── */
-  .about-page { padding: var(--space-xl) 0 var(--space-3xl); }
+  .about-page { padding: 0 0 var(--space-3xl); }
+  /* 关于页（无面包屑）单独给顶部分距 */
+  #aboutView .about-page { padding-top: var(--space-xl); }
   .about-header { text-align: center; margin-bottom: var(--space-2xl); }
   .about-title {
     font-family: var(--serif); font-size: clamp(1.6rem, 3vw, 2rem);
@@ -909,6 +911,16 @@
   .file-table tbody tr { cursor: pointer; }
   .file-table tbody tr:hover td { background: var(--primary-surface); }
   .file-table tbody .selected td { background: var(--primary-light); }
+
+  /* 高亮闪烁（排行榜/最近上传跳转定位） */
+  @keyframes highlight-fade {
+    0%   { background: var(--accent-light); }
+    70%  { background: var(--accent-light); }
+    100% { background: transparent; }
+  }
+  .file-table tbody tr.highlight-row td {
+    animation: highlight-fade 2.5s ease forwards;
+  }
   .file-table .ft-name {
     font-weight: 500;
     white-space: nowrap;
@@ -957,23 +969,77 @@
     background: var(--primary); color: #fff;
   }
   .file-area-header {
-    display: flex; align-items: baseline; gap: var(--space-sm);
+    display: flex; align-items: center; gap: var(--space-sm);
     margin-bottom: var(--space-sm);
+    justify-content: space-between;
+  }
+  .file-area-header .section-accent {
+    flex-shrink: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin: 0;
   }
   .file-area-header .fa-count {
+    flex-shrink: 0;
     font-size: 0.75rem; color: var(--ink-faint);
   }
-  .fa-upload-bar { margin-bottom: var(--space-md); }
-  .fa-upload-btn {
-    padding: 8px 20px; border-radius: 8px;
-    font-size: 0.85rem; font-weight: 600;
+  .file-area-header .fa-upload-header-btn {
+    flex-shrink: 0;
+  }
+  .fa-upload-header-btn .fa-upload-btn {
+    padding: 6px 16px; border-radius: 6px;
+    font-size: 0.82rem; font-weight: 600;
     background: transparent; color: var(--primary);
     border: 1.5px solid var(--primary);
-    cursor: pointer; transition: all 0.2s;
+    cursor: pointer; transition: all 0.15s;
+    white-space: nowrap;
   }
-  .fa-upload-btn:hover {
+  .fa-upload-header-btn .fa-upload-btn:hover {
     background: var(--primary); color: #fff;
-    transform: translateY(-1px);
+  }
+
+  .fa-per-page {
+    font-size: 0.75rem; color: var(--ink-faint);
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .fa-per-page .ppc-select {
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--raised);
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-family: inherit;
+    outline: none;
+  }
+  .fa-per-page .ppc-select:hover,
+  .fa-per-page .ppc-select:focus {
+    border-color: var(--primary-light);
+  }
+
+  .fa-back-bar {
+    margin-bottom: var(--space-sm);
+    font-size: 0.82rem;
+  }
+  .fa-back-bar a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--ink-faint);
+    text-decoration: none;
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    transition: all 0.15s;
+  }
+  .fa-back-bar a:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: var(--primary-surface);
   }
 
   /* ── Pagination ── */
@@ -1224,6 +1290,41 @@
     color: var(--primary);
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  /* ── Filter Bar (学院分类) ── */
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: var(--space-lg);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .filter-bar .fb-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--raised);
+    color: var(--ink-soft);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .filter-bar .fb-pill:hover {
+    border-color: var(--primary-light);
+    color: var(--primary);
+    background: var(--primary-surface);
+  }
+  .filter-bar .fb-pill.fb-active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
   }
 
   /* ═══════════════════════════════════════════

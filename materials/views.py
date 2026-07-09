@@ -453,10 +453,10 @@ def api_stats(request):
         limit = 5
 
     top = Material.objects.filter(is_approved=True).select_related(
-        "course"
+        "course__college"
     ).order_by("-download_count")[:limit]
     recent = Material.objects.filter(is_approved=True).select_related(
-        "course"
+        "course__college"
     ).order_by("-created_at")[:limit]
 
     # 只统计有已获批材料的课程
@@ -480,15 +480,21 @@ def api_stats(request):
         "user_count": User.objects.count(),
         "college_count": College.objects.count(),
         "college_with_data_count": colleges_with_materials.count(),
+        "colleges_with_data": [
+            {"id": c.id, "name": c.name}
+            for c in colleges_with_materials.order_by("name")
+        ],
         "top_downloaded": [
-            {"title": m.title,
+            {"id": m.id, "title": m.title,
              "course_name": m.course.name, "course_code": m.course.code,
+             "college": m.course.college.name if m.course.college else None,
              "download_count": m.download_count}
             for m in top
         ],
         "recent_uploads": [
-            {"title": m.title,
+            {"id": m.id, "title": m.title,
              "course_name": m.course.name, "course_code": m.course.code,
+             "college": m.course.college.name if m.course.college else None,
              "created_at": m.created_at.strftime("%Y-%m-%d"),
              "uploader": m.uploader_name or "匿名"}
             for m in recent
