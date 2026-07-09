@@ -20,6 +20,12 @@ history/
 # Environment variables (API keys, passwords)
 .env
 
+# Design documents (project planning, not code)
+design-*-user-file-modules.md
+design-*-file-management.md
+design-requirements-*.md
+implementation-plan-*.md
+
 # Python (root-level; subdir ones are auto-ignored by git)
 __pycache__/
 
