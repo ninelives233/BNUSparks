@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=8">
+<link rel="stylesheet" href="/static/css/style.css?v=13">
 </head>
 <body>
 
@@ -31,6 +31,7 @@
   <a href="#" data-view="home" class="active"><span class="gi gi-nav-home" style="width:18px;height:18px"></span> 首页</a>
   <a href="#" data-view="general"><span class="gi gi-nav-general"></span> 通识课</a>
   <a href="#" data-view="major"><span class="gi gi-nav-major"></span> 专业课</a>
+  <a href="#" data-view="admin" id="mobAdminLink" style="display:none"><span>⚙️</span> 管理后台</a>
   <a href="#" data-view="about"><span>ℹ️</span> 关于</a>
 </div>
 
@@ -40,6 +41,7 @@
   <a href="#" class="active" data-view="home"><span class="sn-icon gi gi-nav-home" style="width:22px;height:22px"></span>首页</a>
   <a href="#" data-view="general"><span class="sn-icon gi gi-nav-general"></span>通识课</a>
   <a href="#" data-view="major"><span class="sn-icon gi gi-nav-major"></span>专业课</a>
+  <a href="#" data-view="admin" id="sideAdminLink" style="display:none"><span class="sn-icon gi" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center">⚙️</span>管理后台</a>
   <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon gi" style="width:3px;height:16px;background:currentColor;border-radius:2px;opacity:0.5"></span>关于</a>
 </nav>
 
@@ -345,6 +347,19 @@
   </div>
 </div>
 
+<!-- ═══ 管理后台（Iter 3） ═══ -->
+<div class="view-section" id="adminView">
+  <div class="admin-panel">
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="overview">📊 概览</button>
+      <button class="admin-tab" data-tab="pending">⏳ 待审核</button>
+      <button class="admin-tab" data-tab="history">📋 审核历史</button>
+      <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none">👥 用户管理</button>
+    </div>
+    <div id="adminContent"></div>
+  </div>
+</div>
+
 <!-- ═══ Footer ═══ -->
 <footer class="site-footer">
   <div class="container">
@@ -539,7 +554,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=8"></script>
+<script src="/static/js/app.js?v=13"></script>
 
 </body>
 </html>

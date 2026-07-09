@@ -7,12 +7,14 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Claude Code local config (skills, agents, project instructions — not project code)
+# Claude Code local config (skills, agents, memory, project instructions — not project code)
 .agents/
+.claude/
 CLAUDE.md
 
 # IDE / Editor
 .obsidian/
+.vscode/
 
 # History (archived design iterations, old Django attempts, reference materials)
 history/
@@ -26,8 +28,12 @@ design-*-file-management.md
 design-requirements-*.md
 implementation-plan-*.md
 
-# Python (root-level; subdir ones are auto-ignored by git)
+# Python
 __pycache__/
+*.pyc
+*.pyo
+venv/
+*.egg-info/
 
 # Server
 *.pid
@@ -35,7 +41,6 @@ __pycache__/
 # Django
 *.sqlite3
 *.sqlite
-__pycache__/
 staticfiles/
 
 # Data — 资料存储

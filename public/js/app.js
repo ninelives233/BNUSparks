@@ -22,7 +22,7 @@
      ═══════════════════════════════════════════════════════════ */
 
   async function api(url, opts = {}) {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     const headers = { ...opts.headers };
     if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -59,12 +59,12 @@
             '<span class="dd-arrow">▾</span>' +
           '</button>' +
           '<div class="user-dropdown-menu" id="userDropdown">' +
-            '<a href="#" onclick="showProfile();closeUserDropdown()"><span>👤</span> 个人中心</a>' +
-            '<a href="#" onclick="toggleNotifDrawer();closeUserDropdown()"><span>🔔</span> 通知中心<span class="notif-badge-dot" id="notifDot" style="display:none"></span></a>' +
+            '<a href="javascript:void(0)" onclick="showProfile();closeUserDropdown();event.stopPropagation();return false"><span>👤</span> 个人中心</a>' +
+            '<a href="javascript:void(0)" onclick="toggleNotifDrawer();closeUserDropdown();event.stopPropagation();return false"><span>🔔</span> 通知中心<span class="notif-badge-dot" id="notifDot" style="display:none"></span></a>' +
             '<div class="dd-divider"></div>' +
-            '<a href="#" onclick="showAdminPanel();closeUserDropdown()" id="adminEntry" style="display:' + (currentUser.role !== 'user' ? 'flex' : 'none') + '"><span>⚙️</span> 管理后台</a>' +
+            '<a href="javascript:void(0)" onclick="showAdminPanel();closeUserDropdown();event.stopPropagation();return false" id="adminEntry" style="display:' + (currentUser.role !== 'user' ? 'flex' : 'none') + '"><span>⚙️</span> 管理后台</a>' +
             '<div class="dd-divider"></div>' +
-            '<a href="#" onclick="logout();closeUserDropdown()"><span>🚪</span> 退出登录</a>' +
+            '<a href="javascript:void(0)" onclick="logout();closeUserDropdown();event.stopPropagation();return false"><span>🚪</span> 退出登录</a>' +
           '</div>' +
         '</div>';
     } else {
@@ -73,8 +73,12 @@
           '<span class="login-icon gi gi-login"></span><span class="login-text">登录</span>' +
         '</a>';
     }
+    // 侧边栏管理后台入口显示/隐藏
+    var showAdmin = currentUser && currentUser.role !== 'user';
+    document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
+      link.style.display = showAdmin ? '' : 'none';
+    });
   }
-
   function toggleUserDropdown(e) {
     e && e.stopPropagation();
     const menu = document.getElementById('userDropdown');
@@ -85,7 +89,30 @@
     if (!isOpen) {
       menu.classList.add('open');
       trigger.classList.add('open');
+      // 后台刷新 currentUser，确保角色/昵称最新
+      refreshCurrentUser();
     }
+  }
+
+  // 静默刷新当前用户信息（不阻塞 UI）
+  var _refreshing = false;
+  async function refreshCurrentUser() {
+    if (_refreshing || !currentUser) return;
+    _refreshing = true;
+    try {
+      var fresh = await api('/api/auth/me/');
+      if (!fresh) return;
+      var roleChanged = fresh.role !== currentUser.role;
+      currentUser = fresh;
+      if (roleChanged) {
+        updateAuthUI();
+        // 重新打开下拉（updateAuthUI 重建了 HTML）
+        var menu = document.getElementById('userDropdown');
+        var trigger = document.getElementById('userDdTrigger');
+        if (menu && trigger) { menu.classList.add('open'); trigger.classList.add('open'); }
+      }
+    } catch(e) { /* 静默失败，沿用缓存 */ }
+    _refreshing = false;
   }
 
   function closeUserDropdown() {
@@ -125,18 +152,28 @@
   }
 
   function copyGeneratedPassword() {
-    const pwd = document.getElementById('generatedPassword').textContent;
-    navigator.clipboard.writeText(pwd).then(() => {
+    const el = document.getElementById('generatedPassword');
+    const pwd = el.textContent;
+    // 优先用 Clipboard API（HTTPS），fallback 到传统方法（HTTP 可用）
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(pwd).then(() => done()).catch(() => fallback());
+    } else {
+      fallback();
+    }
+    function done() {
       const btn = document.querySelector('.ms-copy-btn');
-      btn.textContent = '✅ 已复制';
-      setTimeout(() => { btn.textContent = '📋 复制密码'; }, 2000);
-    }).catch(() => {
-      // fallback
-      const range = document.createRange();
-      range.selectNodeContents(document.getElementById('generatedPassword'));
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(range);
-    });
+      if (btn) { btn.textContent = '✅ 已复制'; setTimeout(() => { btn.textContent = '📋 复制密码'; }, 2000); }
+    }
+    function fallback() {
+      // 用 textarea 绕过 input 限制
+      const ta = document.createElement('textarea');
+      ta.value = pwd;
+      ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch(e) {}
+      document.body.removeChild(ta);
+    }
   }
 
   function togglePwdSaveBtn() {
@@ -150,7 +187,7 @@
     try {
       const data = await api('/api/auth/login/', { method: 'POST',
         body: { username: document.getElementById('loginUsername').value, password: document.getElementById('loginPassword').value } });
-      localStorage.setItem('token', data.token);
+      sessionStorage.setItem('token', data.token);
       currentUser = data.user;
       closeAuthModal(); updateAuthUI();
     } catch (err) { el.textContent = err.message; el.style.display = 'block'; }
@@ -274,7 +311,7 @@
       const data = await api('/api/auth/register/', { method: 'POST',
         body: { email: document.getElementById('regEmail').value.trim(),
                 nickname: document.getElementById('regNickname').value.trim() } });
-      localStorage.setItem('token', data.token);
+      sessionStorage.setItem('token', data.token);
       currentUser = data.user;
       document.getElementById('generatedPassword').textContent = data.generated_password;
       // 重置保存确认状态
@@ -291,10 +328,10 @@
     return false;
   }
 
-  function logout() { localStorage.removeItem('token'); currentUser = null; location.reload(); }
+  function logout() { sessionStorage.removeItem('token'); currentUser = null; location.reload(); }
 
   async function checkAuth() {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (!token) return;
     try {
       currentUser = await api('/api/auth/me/');
@@ -302,7 +339,7 @@
       // 异步加载未读通知数
       loadNotifCount();
     }
-    catch { localStorage.removeItem('token'); }
+    catch { sessionStorage.removeItem('token'); }
   }
 
   async function loadNotifCount() {
@@ -320,15 +357,15 @@
 
   // ── 个人资料 ──
   function showProfile() {
-    // 关闭所有视图
+    // 关闭所有视图（直接操作 display 避免 CSS 类冲突）
     document.querySelectorAll('.view-section').forEach(function(v) {
-      v.classList.remove('active');
+      v.style.display = 'none';
     });
     // 显示个人资料
     var pv = document.getElementById('profileView');
-    if (pv) pv.classList.add('active');
+    if (pv) pv.style.display = 'block';
     updateSidebar(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0 });
     pushViewState('profile', {});
     // 加载数据
     loadProfile();
@@ -501,8 +538,279 @@
     } catch (err) { /* ignore */ }
   }
 
-  // ── 占位：管理后台（Iter 3） ──
-  function showAdminPanel() { alert('管理后台功能正在开发中'); }
+  // ── 管理后台（Iter 3） ──
+  function showAdminPanel() {
+    if (!currentUser || currentUser.role === 'user') {
+      if (currentUser) alert('权限不足');
+      return;
+    }
+    // 直接操作 display 避免 CSS 类冲突
+    document.querySelectorAll('.view-section').forEach(function(v) {
+      v.style.display = 'none';
+    });
+    var av = document.getElementById('adminView');
+    if (av) av.style.display = 'block';
+    updateSidebar('admin');
+    window.scrollTo({ top: 0 });
+    pushViewState('admin', {});
+    loadAdminPanel();
+  }
+
+  function loadAdminPanel() {
+    var content = document.getElementById('adminContent');
+    if (!content) return;
+    // 隐藏用户管理 tab（仅 super_admin 可见）
+    var usersTab = document.getElementById('adminUsersTab');
+    if (usersTab) {
+      usersTab.style.display = currentUser && currentUser.role === 'super_admin' ? '' : 'none';
+    }
+    // 绑定 tab 切换
+    document.querySelectorAll('.admin-tab').forEach(function(tab) {
+      tab.onclick = function() {
+        document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        switchAdminTab(tab.getAttribute('data-tab'));
+      };
+    });
+    // 默认加载概览
+    switchAdminTab('overview');
+  }
+
+  function switchAdminTab(tab) {
+    var content = document.getElementById('adminContent');
+    if (!content) return;
+    if (tab === 'overview') renderAdminOverview(content);
+    else if (tab === 'pending') renderAdminPending(content);
+    else if (tab === 'history') renderAdminHistory(content, 1);
+    else if (tab === 'users') renderAdminUsers(content, '');
+  }
+
+  // ── 概览 ──
+  function renderAdminOverview(content) {
+    content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/moderation/stats/').then(function(stats) {
+      var html = '<div class="admin-stats-grid">' +
+        '<div class="admin-stat-card"><div class="stat-number">' + (stats.pending_count || 0) + '</div><div class="stat-label">⏳ 待审核</div></div>' +
+        '<div class="admin-stat-card"><div class="stat-number">' + (stats.total_approved || 0) + '</div><div class="stat-label">✅ 已通过</div></div>' +
+        '<div class="admin-stat-card"><div class="stat-number">' + (stats.approved_today || 0) + '</div><div class="stat-label">📈 今日通过</div></div>' +
+        '<div class="admin-stat-card"><div class="stat-number">' + (stats.total_materials || 0) + '</div><div class="stat-label">📦 管辖范围总数</div></div>' +
+        '</div>';
+      // 待审核快速入口
+      if (stats.pending_count > 0) {
+        html += '<div style="margin-top:12px"><button class="admin-btn admin-btn-primary" onclick="switchAdminTab(\'pending\');document.querySelector(\'[data-tab=pending]\').click()">查看 ' + stats.pending_count + ' 条待审核资料 →</button></div>';
+      }
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+    });
+  }
+
+  // ── 待审核 ──
+  function renderAdminPending(content) {
+    content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/moderation/pending/').then(function(list) {
+      if (!list || list.length === 0) {
+        content.innerHTML = '<div class="admin-empty">🎉 没有待审核的资料</div>';
+        return;
+      }
+      var html = '<div class="admin-pending-list">';
+      list.forEach(function(m) {
+        html += '<div class="admin-pending-card" id="pc-' + m.id + '">' +
+          '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
+          '<div class="pc-meta">' +
+            '<span>📚 ' + escapeHtml(m.course_name) + ' (' + m.course_code + ')</span>' +
+            '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
+            '<span>📅 ' + m.created_at + '</span>' +
+            '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
+          '</div>';
+        if (m.is_own) {
+          html += '<div class="pc-own">你的上传，等待其他审核员处理</div>';
+        } else {
+          html += '<div class="pc-actions">' +
+            '<button class="admin-btn admin-btn-approve" onclick="approveMaterial(' + m.id + ')">✓ 通过</button>' +
+            '<button class="admin-btn admin-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>' +
+          '</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+    });
+  }
+
+  function approveMaterial(id) {
+    if (!confirm('确认通过这条资料？')) return;
+    api('/api/moderation/' + id + '/approve/', { method: 'POST', body: {} }).then(function() {
+      var card = document.getElementById('pc-' + id);
+      if (card) card.style.opacity = '0.4';
+      // 刷新待审核列表
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('操作失败：' + err.message);
+    });
+  }
+
+  function showRejectDialog(id) {
+    // 移除已有弹窗
+    var old = document.querySelector('.admin-reject-overlay');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.className = 'admin-reject-overlay';
+    overlay.innerHTML =
+      '<div class="admin-reject-dialog">' +
+        '<h3>驳回原因</h3>' +
+        '<textarea id="rejectNotes" placeholder="请填写驳回原因（必填）"></textarea>' +
+        '<div class="ar-error" id="rejectError">驳回原因不能为空</div>' +
+        '<div class="ar-actions">' +
+          '<button class="admin-btn admin-btn-reject" onclick="confirmReject(' + id + ')">确认驳回</button>' +
+          '<button class="admin-btn admin-btn-secondary" onclick="this.closest(\'.admin-reject-overlay\').remove()">取消</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    // 自动聚焦
+    setTimeout(function() { document.getElementById('rejectNotes').focus(); }, 100);
+  }
+
+  function confirmReject(id) {
+    var notes = document.getElementById('rejectNotes').value.trim();
+    var errEl = document.getElementById('rejectError');
+    if (!notes) {
+      if (errEl) errEl.style.display = 'block';
+      return;
+    }
+    if (errEl) errEl.style.display = 'none';
+    api('/api/moderation/' + id + '/reject/', { method: 'POST', body: { notes: notes } }).then(function() {
+      var overlay = document.querySelector('.admin-reject-overlay');
+      if (overlay) overlay.remove();
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('操作失败：' + err.message);
+    });
+  }
+
+  // ── 审核历史 ──
+  function renderAdminHistory(content, page) {
+    content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/moderation/history/?page=' + page + '&per_page=20').then(function(data) {
+      if (!data.items || data.items.length === 0) {
+        content.innerHTML = '<div class="admin-empty">暂无审核历史</div>';
+        return;
+      }
+      var html = '<div class="admin-table-wrap"><table class="admin-table">' +
+        '<thead><tr>' +
+          '<th>资料</th><th>课程</th><th>上传者</th><th>审核人</th><th>结果</th><th>备注</th><th>审核时间</th>' +
+        '</tr></thead><tbody>';
+      data.items.forEach(function(m) {
+        var statusClass = m.review_status === 'approved' ? 'status-approved' : 'status-rejected';
+        var statusText = m.review_status === 'approved' ? '✓ 通过' : '✗ 驳回';
+        html += '<tr>' +
+          '<td>' + escapeHtml(m.title) + '</td>' +
+          '<td>' + escapeHtml(m.course_name) + '</td>' +
+          '<td>' + escapeHtml(m.uploader_name) + '</td>' +
+          '<td>' + escapeHtml(m.reviewed_by_name) + '</td>' +
+          '<td><span class="status-tag ' + statusClass + '">' + statusText + '</span></td>' +
+          '<td>' + escapeHtml(m.review_notes || '') + '</td>' +
+          '<td>' + m.reviewed_at + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+      // 分页
+      if (data.total_pages > 1) {
+        html += '<div class="admin-pagination">';
+        if (page > 1) {
+          html += '<button onclick="renderAdminHistory(document.getElementById(\'adminContent\'), ' + (page - 1) + ')">← 上一页</button>';
+        } else {
+          html += '<button disabled>← 上一页</button>';
+        }
+        html += '<span class="page-info">第 ' + page + ' / ' + data.total_pages + ' 页（共 ' + data.total + ' 条）</span>';
+        if (page < data.total_pages) {
+          html += '<button onclick="renderAdminHistory(document.getElementById(\'adminContent\'), ' + (page + 1) + ')">下一页 →</button>';
+        } else {
+          html += '<button disabled>下一页 →</button>';
+        }
+        html += '</div>';
+      }
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+    });
+  }
+
+  // ── 用户管理（仅 super_admin） ──
+  function renderAdminUsers(content, search) {
+    content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    var url = '/api/admin/users/';
+    if (search) url += '?search=' + encodeURIComponent(search);
+    api(url).then(function(users) {
+      if (!users || users.length === 0) {
+        content.innerHTML = '<div class="admin-empty">未找到用户</div>';
+        return;
+      }
+      var html = '<div class="admin-search-box">' +
+        '<input type="text" id="adminUserSearch" placeholder="搜索昵称 / 邮箱…" value="' + escapeHtml(search) + '" onkeydown="if(event.key===\'Enter\')adminSearchUsers()">' +
+        '<button onclick="adminSearchUsers()">搜索</button>' +
+        '</div>';
+      html += '<div class="admin-table-wrap"><table class="admin-table">' +
+        '<thead><tr>' +
+          '<th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th><th>资料数</th><th>注册时间</th>' +
+        '</tr></thead><tbody>';
+      users.forEach(function(u) {
+        var canChange = u.id !== (currentUser ? currentUser.id : -1) && u.role !== 'super_admin';
+        var roleOptions = '<select class="admin-role-select"' + (canChange ? ' onchange="onRoleChange(' + u.id + ', this.value, \'' + escapeHtml(u.nickname) + '\')"' : ' disabled') + '>' +
+          '<option value="user"' + (u.role === 'user' ? ' selected' : '') + '>普通用户</option>' +
+          '<option value="moderator"' + (u.role === 'moderator' ? ' selected' : '') + '>版主</option>';
+        if (u.role === 'super_admin') roleOptions += '<option value="super_admin" selected>总管理员</option>';
+        roleOptions += '</select>';
+        var sections = u.moderated_sections && u.moderated_sections.length > 0 ? '板块 #' + u.moderated_sections.join(', ') : '—';
+        html += '<tr>' +
+          '<td>' + escapeHtml(u.nickname) + '</td>' +
+          '<td style="font-size:0.8rem">' + escapeHtml(u.email) + '</td>' +
+          '<td>' + roleOptions + '</td>' +
+          '<td style="font-size:0.78rem;color:var(--text-muted)">' + sections + '</td>' +
+          '<td>' + (u.file_count || 0) + '</td>' +
+          '<td>' + u.date_joined + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+    });
+  }
+
+  function adminSearchUsers() {
+    var q = document.getElementById('adminUserSearch');
+    renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '');
+  }
+
+  function onRoleChange(uid, newRole, nickname) {
+    if (!confirm('确定将「' + nickname + '」的角色改为「' + (newRole === 'moderator' ? '版主' : '普通用户') + '」？')) return;
+    api('/api/admin/users/' + uid + '/role/', {
+      method: 'POST',
+      body: { role: newRole }
+    }).then(function() {
+      renderAdminUsers(document.getElementById('adminContent'), '');
+    }).catch(function(err) {
+      alert('操作失败：' + err.message);
+      renderAdminUsers(document.getElementById('adminContent'), '');
+    });
+  }
+
+  // ── 工具函数 ──
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes) return '未知';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
 
   /* ═══════════════════════════════════════════════════════════
      搜索
@@ -657,7 +965,11 @@
           case 'rankings': showTopDownloaded(saved.scrollY); break;
           case 'recentAll': showRecentAll(saved.scrollY); break;
           case 'profile': showProfile(); break;
+          case 'admin': showAdminPanel(); break;
           case 'about': showAbout(saved.aboutSection || 'introduction'); break;
+          case 'tutorial': showTutorial(); break;
+          case 'announcements': showAnnouncements(); break;
+          case 'broad': showBroad(); break;
           default: showHome();
         }
         _suppressingPushState = false;
@@ -711,7 +1023,7 @@
       formData.append('description', document.getElementById('uploadDesc').value);
       formData.append('teacher', document.getElementById('uploadTeacher').value);
 
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const resp = await fetch('/api/files/upload/', {
         method: 'POST',
         headers: token ? { 'Authorization': 'Bearer ' + token } : {},
@@ -763,6 +1075,7 @@
 
   // ── 浏览器历史导航 ──
   let _suppressingPushState = false;
+  let _initialNav = true;  // 首次加载用 replaceState 代替 pushState，避免按返回退出网站
 
   function pushViewState(view, extra, replace) {
     if (_suppressingPushState) return;
@@ -1328,10 +1641,14 @@
     const views = [
       'homeView', 'explorerView', 'aboutView',
       'tutorialView', 'announcementsView', 'broadView',
-      'rankingsView', 'recentAllView', 'profileView'
+      'rankingsView', 'recentAllView', 'profileView', 'adminView'
     ];
     views.forEach(id => {
-      document.getElementById(id).classList.toggle('active', id.replace('View','') === name);
+      const el = document.getElementById(id);
+      if (!el) return;
+      // 清除可能残留的 inline display
+      el.style.display = '';
+      el.classList.toggle('active', id.replace('View','') === name);
     });
     if (!skipScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1440,18 +1757,21 @@
   }
 
   function showTutorial() {
+    pushViewState('tutorial', {});
     switchView('tutorial');
     updateSidebar('home');
     renderStaticView('tutorial');
   }
 
   function showAnnouncements() {
+    pushViewState('announcements', {});
     switchView('announcements');
     updateSidebar('home');
     renderStaticView('announcements');
   }
 
   function showBroad() {
+    pushViewState('broad', {});
     switchView('broad');
     updateSidebar('home');
     renderStaticView('broad');
@@ -1605,7 +1925,8 @@
   }
 
   function showHome(restoreScrollY) {
-    pushViewState('home', {});
+    pushViewState('home', {}, _initialNav);
+    _initialNav = false;
     returnState = null;
     if (restoreScrollY) {
       switchView('home', true);
@@ -1634,6 +1955,7 @@
       else if (view === 'general') showExplorer('通识课');
       else if (view === 'major') showExplorer('专业课');
       else if (view === 'about') showAbout('introduction');
+      else if (view === 'admin') showAdminPanel();
     });
   });
 
@@ -1647,6 +1969,7 @@
       else if (view === 'general') showExplorer('通识课');
       else if (view === 'major') showExplorer('专业课');
       else if (view === 'about') showAbout('introduction');
+      else if (view === 'admin') showAdminPanel();
       drawer.classList.remove('open');
     });
   });
@@ -1688,6 +2011,18 @@
         break;
       case 'profile':
         showProfile();
+        break;
+      case 'admin':
+        showAdminPanel();
+        break;
+      case 'tutorial':
+        showTutorial();
+        break;
+      case 'announcements':
+        showAnnouncements();
+        break;
+      case 'broad':
+        showBroad();
         break;
     }
     _suppressingPushState = false;

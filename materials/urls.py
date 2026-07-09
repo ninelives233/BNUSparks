@@ -31,4 +31,15 @@ urlpatterns = [
     # 搜索 & 统计
     path("search/", views.api_search, name="api_search"),
     path("stats/", views.api_stats, name="api_stats"),
+
+    # 审核（Iter 3）
+    path("moderation/pending/", views.api_moderation_pending, name="api_moderation_pending"),
+    path("moderation/<int:file_id>/approve/", views.api_moderation_approve, name="api_moderation_approve"),
+    path("moderation/<int:file_id>/reject/", views.api_moderation_reject, name="api_moderation_reject"),
+    path("moderation/history/", views.api_moderation_history, name="api_moderation_history"),
+    path("moderation/stats/", views.api_moderation_stats, name="api_moderation_stats"),
+
+    # 用户管理（Iter 3 — 仅 super_admin）
+    path("admin/users/", views.api_admin_users, name="api_admin_users"),
+    path("admin/users/<int:uid>/role/", views.api_admin_set_role, name="api_admin_set_role"),
 ]
