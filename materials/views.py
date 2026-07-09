@@ -18,17 +18,28 @@ from django.http import JsonResponse, FileResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 from django.conf import settings
 from django.db.models import Q, Count
+from django.utils import timezone
 
-from .models import College, Course, Material, MaterialType, CourseCategory
+from .models import College, Course, Material, MaterialType, CourseCategory, UserProfile
 
 
 # ═══════════════════════════════════════════════════════════════
 # JWT 工具（纯 Python 实现，不依赖外部库）
 # ═══════════════════════════════════════════════════════════════
 
-def _jwt_encode(payload):
+def _jwt_encode(payload, user=None):
+    """user 参数可选：传了则在 payload 中加入 role"""
+    payload = dict(payload)  # 不修改原字典
+    if user is not None:
+        try:
+            payload["role"] = user.profile.role
+        except UserProfile.DoesNotExist:
+            payload["role"] = UserProfile.Role.USER
+
     header = base64.urlsafe_b64encode(
         json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
     ).rstrip(b"=").decode()
@@ -89,6 +100,31 @@ def require_login(view):
     return wrapper
 
 
+def _get_or_create_profile(user):
+    """获取用户资料，不存在则自动创建（兼容存量用户）"""
+    try:
+        return user.profile
+    except UserProfile.DoesNotExist:
+        return UserProfile.objects.create(user=user, role=UserProfile.Role.USER)
+
+
+def require_role(*roles):
+    """限制视图仅允许指定角色的用户访问（叠加 require_login）"""
+    def decorator(view):
+        @wraps(view)
+        def wrapper(request, *args, **kwargs):
+            user = _get_user(request)
+            if user is None:
+                return _err("请先登录", 401)
+            profile = _get_or_create_profile(user)
+            if profile.role not in roles:
+                return _err("权限不足", 403)
+            request.user = user
+            return view(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
 def _ok(data=None, status=200):
     return JsonResponse({"ok": True, "data": data}, status=status)
 
@@ -131,11 +167,13 @@ def api_register(request):
         username=email, password=password, email=email,
         first_name=nickname,
     )
+    # 自动创建 UserProfile（默认 role = user）
+    _get_or_create_profile(user)
 
     token = _jwt_encode({
         "user_id": user.id,
         "exp": time.time() + 7 * 86400,
-    })
+    }, user=user)
     return _ok({
         "token": token,
         "generated_password": password,
@@ -144,6 +182,7 @@ def api_register(request):
             "username": user.username,
             "nickname": nickname,
             "email": user.email,
+            "role": UserProfile.Role.USER,
         },
     })
 
@@ -180,7 +219,8 @@ def api_login(request):
     token = _jwt_encode({
         "user_id": user.id,
         "exp": time.time() + 7 * 86400,
-    })
+    }, user=user)
+    profile = _get_or_create_profile(user)
     return _ok({
         "token": token,
         "user": {
@@ -188,6 +228,7 @@ def api_login(request):
             "username": user.username,
             "nickname": user.first_name or user.username,
             "email": user.email,
+            "role": profile.role,
         },
     })
 
@@ -197,13 +238,130 @@ def api_me(request):
     user = _get_user(request)
     if user is None:
         return _err("请先登录", 401)
+    profile = _get_or_create_profile(user)
+
+    # 计算今日剩余下载次数
+    from datetime import date
+    today = date.today()
+    remaining = 60  # 版主/管理不限
+    if profile.role == UserProfile.Role.USER:
+        if profile.last_download_date != today:
+            remaining = 60
+        else:
+            remaining = max(0, 60 - profile.daily_download_count)
+
     return _ok({
         "id": user.id,
         "username": user.username,
         "nickname": user.first_name or user.username,
         "email": user.email,
+        "role": profile.role,
+        "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
+        "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# 密码管理 API
+# ═══════════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_login
+def api_change_password(request):
+    """POST /api/auth/change-password/"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    old_password = body.get("old_password", "")
+    new_password = body.get("new_password", "")
+
+    if not old_password or not new_password:
+        return _err("旧密码和新密码不能为空")
+    if len(new_password) < 6:
+        return _err("新密码长度至少 6 位")
+
+    if not request.user.check_password(old_password):
+        return _err("当前密码错误")
+
+    request.user.set_password(new_password)
+    request.user.save()
+    return _ok({"message": "密码已修改，请重新登录"})
+
+
+@csrf_exempt
+def api_forgot_password(request):
+    """POST /api/auth/forgot-password/ 发送重置链接到邮箱"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        return _err("邮箱不能为空")
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        # 不暴露邮箱是否已注册
+        return _ok({"message": "如果该邮箱已注册，重置链接已发送到你的邮箱"})
+
+    token = default_token_generator.make_token(user)
+    link = f"https://bnu.icu/reset-password/?uid={user.id}&token={token}"
+
+    try:
+        send_mail(
+            "BNU Sparks — 密码重置",
+            f"你好 {user.first_name or user.username}，\n\n"
+            f"请点击以下链接重置你的密码（30 分钟内有效）：\n{link}\n\n"
+            f"如果这不是你本人操作，请忽略此邮件。\n\nBNU Sparks · 木铎星火",
+            "bnusparks@163.com",
+            [email],
+            fail_silently=False,
+        )
+    except Exception as e:
+        return _err("邮件发送失败，请稍后重试", 500)
+
+    return _ok({"message": "重置链接已发送到你的邮箱"})
+
+
+@csrf_exempt
+def api_reset_password(request):
+    """POST /api/auth/reset-password/ 通过 token 重置密码"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    uid = body.get("uid")
+    token = body.get("token", "")
+    new_password = body.get("new_password", "")
+
+    if not uid or not token or not new_password:
+        return _err("参数不完整")
+    if len(new_password) < 6:
+        return _err("密码长度至少 6 位")
+
+    try:
+        user = User.objects.get(id=uid)
+    except User.DoesNotExist:
+        return _err("无效的请求")
+
+    if not default_token_generator.check_token(user, token):
+        return _err("链接已过期或无效")
+
+    user.set_password(new_password)
+    user.save()
+    return _ok({"message": "密码已重置，请使用新密码登录"})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -297,14 +455,21 @@ def api_file_upload(request):
 
     file_size = (save_dir / safe_name).stat().st_size
 
+    # 根据用户角色决定审核状态
+    profile = _get_or_create_profile(request.user)
+    is_auto_approved = profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+    review_status = "approved" if is_auto_approved else "pending"
+
     material = Material.objects.create(
         course=course, title=title, description=description,
         teacher=teacher,
         file_name=uploaded_file.name,
         file_path=f"{course_code}/{safe_name}",
         file_size=file_size,
+        uploader=request.user,
         uploader_name=request.user.username,
-        is_approved=True,
+        review_status=review_status,
+        is_approved=is_auto_approved,  # 保持向后兼容
     )
 
     # 尝试 git commit
