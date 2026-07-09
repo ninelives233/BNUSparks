@@ -1,131 +1,156 @@
 # BNU Sparks 部署指南
 
-> 从零到线上 — 完整部署文档
+> 从零到线上 — 国内高校资源共享平台部署方案
+>
+> **目标用户**：北京师范大学在校学生（主要从校园网 / 宿舍宽带访问）
 
 ---
 
 ## 目录
 
-1. [准备工作：域名 & 服务器](#1-准备工作域名--服务器)
-2. [服务器初始化](#2-服务器初始化)
-3. [部署应用](#3-部署应用)
-4. [Nginx 反向代理](#4-nginx-反向代理)
-5. [HTTPS 证书](#5-https-证书)
-6. [进程守护（Supervisor）](#6-进程守护supervisor)
-7. [一键部署脚本](#7-一键部署脚本)
-8. [日常运维](#8-日常运维)
-9. [附录：费用估算](#9-附录费用估算)
+1. [方案选择：三个档位](#1-方案选择三个档位)
+2. [域名注册](#2-域名注册)
+3. [服务器初始化](#3-服务器初始化)
+4. [部署应用](#4-部署应用)
+5. [Nginx 反向代理](#5-nginx-反向代理)
+6. [HTTPS 证书](#6-https-证书)
+7. [进程守护（Supervisor）](#7-进程守护supervisor)
+8. [一键部署脚本](#8-一键部署脚本)
+9. [日常运维](#9-日常运维)
+10. [内容合规与免责说明](#10-内容合规与免责说明)
+11. [附录：费用参考](#11-附录费用参考)
 
 ---
 
-## 1. 准备工作：域名 & 服务器
+## 1. 方案选择：三个档位
 
-### 1.1 域名注册
+面向国内高校用户，核心要求：**国内访问快 + 稳定 + 学生预算友好**。
 
-推荐注册商（按推荐度排序）：
+### 🥇 方案一：腾讯云轻量 + 域名备案（推荐 · 长期运营）
 
-| 注册商 | 价格 | 备案 | 特点 |
-|--------|------|------|------|
-| **Cloudflare** | 成本价（~¥50-80/年） | 可选 | 自带 DNS + CDN + DDoS 防护，管理最好 |
-| **Namesilo** | ~¥60-90/年 | 不可 | 免费隐私保护，老牌稳定 |
-| **阿里云 / 腾讯云** | ~¥40-60/年 | 需备案 | 国内访问最快，但备案需 2-3 周 |
-
-**域名推荐（检查是否可注册）：**
-
-- `bnusparks.cn` — 首选，.cn 在国内解析最好
-- `bnusparks.com` — 国际通用
-- `bnusparks.social` / `bnusparks.org`
-- `木铎星火.cn`（中文域名，但兼容性略差）
-
-> ⚠️ **备案说明**：如果服务器在香港/海外，域名**不需要备案**。如果服务器在 mainland（大陆），域名需要 ICP 备案，耗时约 2-3 周。
-
-### 1.2 服务器选择
-
-#### 方案 A：腾讯云轻量应用服务器（推荐 · 国内线路）
-
-| 配置 | 价格 | 适合 |
-|------|------|------|
-| 2C 2G 40GB SSD | ~¥50/月 | 初期运营 |
-| 2C 4G 80GB SSD | ~¥80/月 | 用户增长后 |
-| 学生优惠 | ~¥15/月 | 学生认证后折扣价 |
-
-- 优点：国内访问速度快，腾讯云管理面板友好
-- 缺点：需要域名备案（若用大陆节点）
-- 操作系统：Ubuntu 22.04 LTS
-
-#### 方案 B：华为云香港节点（免备案）
-
-| 配置 | 价格 |
+| 项目 | 内容 |
 |------|------|
-| 2C 2G 40GB | ~¥60-80/月 |
+| 服务器 | 腾讯云轻量应用服务器 2C2G 40GB SSD |
+| 价格 | **¥50/月**（新用户首年更低） |
+| 域名 | `.cn` 域名 ~¥48/年 |
+| 备案 | 需 ICP 备案（2-3 周） |
+| 速度 | ⭐⭐⭐⭐⭐ 国内任何网络都很快 |
+| 校园网 | ⭐⭐⭐⭐⭐ BNU 校园网直连无压力 |
 
-- 优点：**不需要备案**，国内访问速度尚可
-- 适合：想快速上线、不想走备案流程
+**适合**：打算长期运营、不急这一两周上线。
 
-#### 方案 C：Hetzner（德国 / 芬兰）
+### 🥈 方案二：腾讯云/阿里云香港节点（免备案 · 快速上线）
 
-| 配置 | 价格 |
+| 项目 | 内容 |
 |------|------|
-| CX22 (2C 2G) | €3.99/月 |
+| 服务器 | 腾讯云轻量香港 2C2G 30GB |
+| 价格 | **¥60-80/月** |
+| 域名 | `.com` 或其他国际域名，**不需要备案** |
+| 速度 | ⭐⭐⭐⭐ 国内延迟 ~30-50ms，校园网稍慢但可用 |
+| 上线 | **买好就能上，当天搞定** |
 
-- 优点：极便宜，配置自由
-- 缺点：国内直连慢，需搭配 Cloudflare CDN
-- 适合：预算紧张 + 用户主要在海外
+**适合**：想尽快上线、不想等备案流程。
 
-#### 方案 D：阿里云 ECS 学生优惠
+### 🥉 方案三：阿里云学生机（最省钱）
 
-| 配置 | 价格 |
+| 项目 | 内容 |
 |------|------|
-| 2C 2G 40GB | ~¥10-15/月（学生认证） |
+| 服务器 | 阿里云 ECS 学生认证 2C2G |
+| 价格 | **~¥15/月**（学生优惠限时，通常持续 4 年） |
+| 域名 | `.cn` 域名 ~¥48/年 |
+| 备案 | 需 ICP 备案 |
+| 速度 | ⭐⭐⭐⭐⭐ |
+| 注意 | 学生机通常带宽较小（1-3Mbps），文件下载会慢一些 |
 
-- 优点：最便宜的大陆服务器
-- 缺点：需要备案，学生优惠有时限
+**适合**：预算紧张、不介意备案周期的学生。
 
-### 1.3 我的推荐
+### ❌ 不推荐的方案
+
+| 方案 | 原因 |
+|------|------|
+| Hetzner / 海外廉价 VPS | 国内直连慢，经 CDN 后首次加载仍需 ~1-2s，校园网不稳定 |
+| 直接用 IP 不配域名 | 无法上 HTTPS，浏览器报不安全；校园网可能屏蔽非标端口 |
+| 局域网 NAS / 树莓派 | BNU 校园网 AP 隔离，同一设备间无法直连（已确认此问题） |
+
+### 我的推荐
+
+> **首选方案一（腾讯云轻量大陆节点 + `.cn` 域名 + 备案）**，备案期间先在香港节点临时跑着，备完案再迁回来。
+
+---
+
+## 2. 域名注册
+
+### 2.1 域名选择
+
+国内高校平台，`.cn` 域名是最优选择：
+
+| 域名 | 价格 | 推荐度 | 说明 |
+|------|------|--------|------|
+| `bnusparks.cn` | ~¥48/年 | ⭐⭐⭐⭐⭐ | 首选，.cn 国内解析最好 |
+| `bnusparks.com` | ~¥66/年 | ⭐⭐⭐⭐ | 国际化友好，但国内略逊 .cn |
+| `sparks.bnu.edu.cn` | 免费 | ⭐⭐⭐⭐⭐ | **如果能申请到 BNU 二级域名，最理想** |
+
+> **关于 `sparks.bnu.edu.cn`**：可以联系北师大信息网络中心或团委，申请一个 edu.cn 二级域名。这不仅免费、免备案、可信度高，而且对校内用户来说天然可信。如果你们平台有学校官方或学生会的支持背景，这条路最值得争取。
+
+### 2.2 注册商推荐
+
+| 注册商 | 适合 | 特点 |
+|--------|------|------|
+| **腾讯云** | 方案一（大陆服务器） | 域名 + 服务器 + 备案一站完成 |
+| **阿里云** | 方案三（阿里云学生机） | 同样一站完成 |
+| **Cloudflare** | 方案二（香港节点） | 成本价、自带 DNS + CDN + DDoS 防护 |
+| **Namesilo** | 通用 | 老牌稳定，免费隐私保护 |
+
+> **如果你的服务器在腾讯云/阿里云，建议在同平台注册域名**，备案、DNS 解析都能自动处理，省心很多。
+
+### 2.3 注册步骤（以腾讯云为例）
 
 ```
-首选：腾讯云轻量 2C2G + Cloudflare 域名 (免备案用香港节点，备案用大陆节点)
-次选：Hetzner + Cloudflare CDN (¥28/月，性价比最高但国内慢)
-``` 
+1. 打开 cloud.tencent.com → 注册/登录
+2. 搜索「域名注册」→ 输入 bnusparks.cn 查询
+3. 加入购物车 → 结算（~¥48/年）
+4. 提交域名实名认证资料（身份证）
+5. 等待审核（1-3 个工作日）
+6. 审核通过后在控制台 → 域名解析 → 添加记录指向服务器 IP
+```
 
 ---
 
-## 2. 服务器初始化
+## 3. 服务器初始化
 
-> 以下所有步骤在服务器上以 root 用户执行。
+> 以下步骤在服务器上以 root 用户执行。所有命令兼容 Ubuntu 22.04/24.04 LTS。
 
-### 2.1 连接服务器
+### 3.1 连接服务器
 
 ```bash
-ssh root@<服务器 IP>
+ssh root<服务器 IP>
 ```
 
-### 2.2 系统更新 & 安装依赖
+### 3.2 系统更新 & 安装依赖
 
 ```bash
 apt update && apt upgrade -y
 apt install -y python3 python3-pip python3-venv nginx git supervisor certbot python3-certbot-nginx
 ```
 
-### 2.3 创建非 root 用户（安全）
+### 3.3 创建非 root 用户
 
 ```bash
-adduser deploy          # 设置密码，其他一路回车
+adduser deploy          # 设置密码（如 bnusparks2026），其他一路回车
 usermod -aG sudo deploy
 su - deploy
 ```
 
-### 2.4 配置防火墙
+### 3.4 配置防火墙
 
 ```bash
-# 如果服务器有 ufw
 sudo ufw allow 22/tcp      # SSH
 sudo ufw allow 80/tcp      # HTTP
 sudo ufw allow 443/tcp     # HTTPS
 sudo ufw enable
 ```
 
-### 2.5 配置 Git
+### 3.5 配置 Git
 
 ```bash
 git config --global user.name "BNU Sparks"
@@ -134,39 +159,33 @@ git config --global user.email "bnusparks@163.com"
 
 ---
 
-## 3. 部署应用
+## 4. 部署应用
 
-### 3.1 克隆代码
+### 4.1 克隆代码
 
 ```bash
 cd /home/deploy
-git clone git@github.com:ninelives233/BNUSparks.git bnusparks
+git clone https://github.com/ninelives233/BNUSparks.git bnusparks
 cd bnusparks
 ```
 
-> 如果 SSH 密钥未配置，改用 HTTPS：
-> ```bash
-> git clone https://github.com/ninelives233/BNUSparks.git bnusparks
-> ```
+> 使用 HTTPS 克隆（免 SSH 密钥配置），后续拉取代码同样用 HTTPS。
 
-### 3.2 创建 Python 虚拟环境
+### 4.2 创建 Python 虚拟环境
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install django gunicorn
+# 用 pip 安装，不依赖 requirements.txt
 ```
 
-### 3.3 配置 Django 生产设置
-
-创建生产配置文件：
+### 4.3 创建生产配置
 
 ```bash
 nano bnusparks/settings_prod.py
 ```
-
-写入：
 
 ```python
 """
@@ -176,73 +195,92 @@ from .settings import *
 
 DEBUG = False
 ALLOWED_HOSTS = [
-    "你的域名",           # 如 "bnusparks.com"
+    "你的域名",           # 如 "bnusparks.cn"
     "www.你的域名",
-    "服务器公网IP",         # 如 "1.2.3.4"
+    "服务器公网IP",
 ]
 
-# 安全密钥 — 生产环境必须重新生成！
-# 用以下命令生成： python3 -c "import secrets; print(secrets.token_urlsafe(50))"
-SECRET_KEY = "粘贴上面生成的密钥"
+# 生成新密钥：python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+SECRET_KEY = "粘贴上面命令生成的密钥"
 
-# 静态文件收集目录
+# 静态文件
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# 媒体文件（上传的资料）
+# 媒体文件
 MEDIA_ROOT = BASE_DIR / "data" / "materials"
 
-# 安全配置
-SECURE_SSL_REDIRECT = True     # HTTP → HTTPS 自动跳转
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# 安全配置（配好 HTTPS 后启用）
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+
+# 日志
+import logging
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "file": {
+            "level": "WARNING",
+            "class": "logging.FileHandler",
+            "filename": BASE_DIR / "logs" / "django.log",
+        },
+    },
+    "root": {
+        "handlers": ["file"],
+        "level": "WARNING",
+    },
+}
 ```
 
-测试配置是否正确：
+测试配置：
 
 ```bash
 python3 manage.py check --settings=bnusparks.settings_prod
 ```
 
-### 3.4 迁移数据库 & 收集静态文件
+### 4.4 迁移数据库 & 收集静态文件
 
 ```bash
-# 数据库迁移
+mkdir -p logs
+
 python3 manage.py migrate --settings=bnusparks.settings_prod
-
-# 收集静态文件（Django Admin 等）
 python3 manage.py collectstatic --settings=bnusparks.settings_prod --noinput
-
-# 创建管理员账号
 python3 manage.py createsuperuser --settings=bnusparks.settings_prod
 ```
 
-### 3.5 导入课程数据
+### 4.5 导入课程数据
 
 ```bash
-# 先 seed 课程结构（如果数据库为空）
+# 导入课程结构
 python3 seed.py
 
-# seed 导航树
+# 导入导航树
 python3 seed_tree.py
-
-# 导入已有资料（如果有的话）
-# python3 manage.py import_pyfa --settings=bnusparks.settings_prod
 ```
 
-### 3.6 迁移已有数据库文件（可选）
+### 4.6 迁移已有数据（从本地）
 
-如果你在本地已有 `data/db.sqlite3` 和 `data/materials/`，用 scp 传到服务器：
+如果你的本地已经有数据，先压缩再传：
 
 ```bash
-# 在本地执行
-scp data/db.sqlite3 deploy@<服务器IP>:/home/deploy/bnusparks/data/
-scp -r data/materials/* deploy@<服务器IP>:/home/deploy/bnusparks/data/materials/
+# 在本地 Mac 上执行
+cd /Users/neun/AI/myweb
+tar czf data_backup.tar.gz data/db.sqlite3 data/materials/
+scp data_backup.tar.gz deploy@<服务器IP>:/home/deploy/
 ```
 
-### 3.7 测试 Gunicorn 启动
-
 ```bash
+# 在服务器上解压
 cd /home/deploy/bnusparks
+tar xzf ../data_backup.tar.gz
+```
+
+> **⚠️ 重要**：上传的资料文件是项目核心资产，务必先迁移再上线。
+
+### 4.7 测试 Gunicorn
+
+```bash
 source venv/bin/activate
 gunicorn bnusparks.wsgi:application \
   --env DJANGO_SETTINGS_MODULE=bnusparks.settings_prod \
@@ -251,25 +289,22 @@ gunicorn bnusparks.wsgi:application \
   --timeout 120
 ```
 
-打开浏览器访问 `http://<服务器IP>:8000` 确认站点正常。
-按 `Ctrl+C` 停止，接下来配置 Nginx + Supervisor 持久运行。
+浏览器访问 `http://<服务器IP>:8000` 确认正常。`Ctrl+C` 停止。
 
 ---
 
-## 4. Nginx 反向代理
+## 5. Nginx 反向代理
 
-### 4.1 创建 Nginx 配置
+### 5.1 创建配置
 
 ```bash
 sudo nano /etc/nginx/sites-available/bnusparks
 ```
 
-写入：
-
 ```nginx
 server {
     listen 80;
-    server_name 你的域名 www.你的域名 服务器IP;
+    server_name 你的域名 www.你的域名;
 
     # 前端 SPA 主入口
     location / {
@@ -280,73 +315,78 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # 上传文件大小限制（最大 50MB）
+    # 上传限制
     client_max_body_size 60M;
 
-    # Django 静态文件（Admin 界面等）
+    # 静态文件（Admin 界面等）
     location /static/ {
         alias /home/deploy/bnusparks/staticfiles/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
-
-    # 资料文件下载（避免直接暴露存储路径）
-    location /data/ {
-        internal;
-        alias /home/deploy/bnusparks/data/;
-    }
 }
 ```
 
-### 4.2 启用配置
+> **注意**：这里没有 `listen 443`，HTTPS 在下一步配置。
+
+### 5.2 启用
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/bnusparks /etc/nginx/sites-enabled/
-sudo nginx -t              # 测试配置
+sudo rm -f /etc/nginx/sites-enabled/default   # 删除默认站点
+sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-### 4.3 如果遇到 502 错误
+### 5.3 验证
 
-检查 Gunicorn 是否运行，确认 `proxy_pass` 地址一致。
+浏览器访问 `http://<服务器IP>`，如果可以正常显示页面，Nginx 配置成功。
 
 ---
 
-## 5. HTTPS 证书
+## 6. HTTPS 证书
 
-### 方案 A：Certbot（Let's Encrypt，推荐）
+> **国内平台必须上 HTTPS**，否则浏览器标记「不安全」，用户不敢用。
+
+### 6.1 确保域名已解析到服务器
+
+在域名注册商的控制台添加 A 记录，指向服务器 IP。
+
+### 6.2 Certbot 申请证书
 
 ```bash
-# 安装 certbot（前面已装）
 sudo certbot --nginx -d 你的域名 -d www.你的域名
+```
 
-# 按照提示输入邮箱，同意条款
-# 证书会自动续期（检查续期服务）
+按提示：
+1. 输入邮箱（用于续期提醒）
+2. 同意服务条款
+3. 选择是否重定向 HTTP → HTTPS（建议选「是」）
+
+### 6.3 验证自动续期
+
+```bash
 sudo certbot renew --dry-run
 ```
 
-### 方案 B：Cloudflare（如果使用 Cloudflare DNS）
+> Let's Encrypt 证书有效期 90 天，certbot 会自动续期，无需手动操作。
 
-1. 在 Cloudflare 添加域名
-2. 将 DNS 指向你的服务器 IP（代理状态选「Proxied」橙色云朵）
-3. SSL/TLS 设置为「Full (strict)」
-4. Nginx 配置同上，certbot 不需要
+### 6.4 如果使用 Cloudflare
 
-所有配置完成后，Nginx 中 80 端口配置会自动加上 SSL 重定向。
+如果 DNS 托管在 Cloudflare 且开启了 CDN 代理（橙色云朵）：
+- 在 Cloudflare SSL/TLS 设置为 **Full (strict)**
+- Nginx 配置 `listen 443 ssl`，证书用 Cloudflare Origin CA 证书
+- 这样 Cloudflare 会帮你管理 HTTPS，且自带 DDoS 防护
 
 ---
 
-## 6. 进程守护（Supervisor）
+## 7. 进程守护（Supervisor）
 
-保证 Gunicorn 始终运行、开机自启。
-
-### 6.1 创建 Supervisor 配置
+### 7.1 创建配置
 
 ```bash
 sudo nano /etc/supervisor/conf.d/bnusparks.conf
 ```
-
-写入：
 
 ```ini
 [program:bnusparks]
@@ -367,146 +407,181 @@ stdout_logfile=/home/deploy/bnusparks/logs/supervisor_out.log
 stderr_logfile=/home/deploy/bnusparks/logs/supervisor_err.log
 ```
 
-### 6.2 创建日志目录
-
-```bash
-mkdir -p /home/deploy/bnusparks/logs
-```
-
-### 6.3 启动
+### 7.2 启动
 
 ```bash
 sudo supervisorctl reread
 sudo supervisorctl update
 sudo supervisorctl status bnusparks
-# 应该显示：bnusparks RUNNING pid XXXX uptime X:XX:XX
+# 输出：bnusparks RUNNING pid XXXX uptime X:XX:XX
 ```
 
-### 6.4 常用管理命令
+### 7.3 常用命令
 
 ```bash
-sudo supervisorctl stop bnusparks       # 停止
-sudo supervisorctl start bnusparks      # 启动
-sudo supervisorctl restart bnusparks    # 重启
-sudo supervisorctl tail bnusparks       # 看日志
+sudo supervisorctl restart bnusparks   # 最常用：重启应用
+sudo supervisorctl tail bnusparks      # 看日志
 ```
 
 ---
 
-## 7. 一键部署脚本
+## 8. 一键部署脚本
 
-首次配置完成后，日常更新只需要三步：
+日常代码更新只需要三步：
 
-将以下内容保存为 `deploy.sh`（已存在于项目根目录 `scripts/deploy.sh`）：
+将以下内容保存为 `scripts/deploy.sh`：
 
 ```bash
 #!/usr/bin/env bash
 set -e
-
-echo "=== BNU Sparks 部署脚本 ==="
+echo "=== BNU Sparks 部署 ==="
 
 cd /home/deploy/bnusparks
 
-# 1. 拉取最新代码
-echo "[1/4] 拉取最新代码..."
 git pull origin main
-
-# 2. 更新依赖
-echo "[2/4] 更新 Python 依赖..."
 source venv/bin/activate
-pip install -r requirements.txt 2>/dev/null || true
-# 如果没有 requirements.txt，上面的命令跳过即可
-
-# 3. 数据库迁移
-echo "[3/4] 数据库迁移..."
+pip install django gunicorn 2>/dev/null || true
 python3 manage.py migrate --settings=bnusparks.settings_prod
+python3 manage.py collectstatic --settings=bnusparks.settings_prod --noinput
 
-# 4. 重启服务
-echo "[4/4] 重启服务..."
 sudo supervisorctl restart bnusparks
 
-echo "=== 部署完成！==="
+echo "=== 完成 ==="
 ```
 
-> 也可以配合 Git Webhook 实现推送代码自动部署（后续可配置）。
+使用方式：
+
+```bash
+# 本地修改 → git push 之后
+ssh deploy@服务器IP 'bash /home/deploy/bnusparks/scripts/deploy.sh'
+```
 
 ---
 
-## 8. 日常运维
+## 9. 日常运维
 
-### 8.1 查看日志
+### 9.1 更新代码
 
 ```bash
-# 应用日志
-sudo supervisorctl tail bnusparks
-sudo supervisorctl tail bnusparks stderr
-
-# Nginx 日志
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-
-# Gunicorn 日志
-tail -f /home/deploy/bnusparks/logs/gunicorn_error.log
+ssh deploy@服务器IP
+cd /home/deploy/bnusparks
+git pull
+sudo supervisorctl restart bnusparks
 ```
 
-### 8.2 备份数据库
+### 9.2 查看日志
+
+```bash
+sudo supervisorctl tail bnusparks          # 最近输出
+sudo supervisorctl tail bnusparks stderr   # 错误日志
+sudo tail -f /var/log/nginx/access.log    # Nginx 访问日志
+```
+
+### 9.3 备份数据库
 
 ```bash
 # 手动备份
 cp /home/deploy/bnusparks/data/db.sqlite3 /home/deploy/backups/db_$(date +%Y%m%d).sqlite3
 
-# 建议添加到 crontab，每天自动备份
+# 设置自动备份（每天凌晨 3 点）
 crontab -e
-# 添加一行（每天凌晨 3 点备份，保留最近 30 天）：
-# 0 3 * * * cp /home/deploy/bnusparks/data/db.sqlite3 /home/deploy/backups/db_$(date +\%Y\%m\%d).sqlite3 && find /home/deploy/backups -name "db_*.sqlite3" -mtime +30 -delete
+# 添加：
+0 3 * * * cp /home/deploy/bnusparks/data/db.sqlite3 /home/deploy/backups/db_$(date +\%Y\%m\%d).sqlite3 && find /home/deploy/backups -name "db_*.sqlite3" -mtime +30 -delete
 ```
 
-### 8.3 更新内容
+### 9.4 管理后台
 
-```bash
-# 方式一：本地编辑 → git push
-# 登录服务器运行：
-cd /home/deploy/bnusparks && git pull && sudo supervisorctl restart bnusparks
+浏览器访问 `https://你的域名/admin/`，用 `createsuperuser` 创建的账号登录，可以：
+- 增删改课程和分类
+- 审核和管理上传的资料
+- 管理导航树结构
+- 查看用户数据
 
-# 方式二：直接在 Django Admin 后台管理
-# 浏览器访问 https://你的域名/admin/
-```
+### 9.5 安全提醒
 
-### 8.4 安全提醒
-
-- 定期更新系统：`sudo apt update && sudo apt upgrade -y`
-- 定期检查日志异常
-- 不要将 `.git` 目录暴露到公网（Nginx 配置已避免）
-- 生产环境 `DEBUG = False`
+- 定期 `sudo apt update && sudo apt upgrade -y`
+- 生产环境不允许 `DEBUG = True`
+- `.git` 目录不应通过 Nginx 暴露（当前配置已避免）
+- `SECRET_KEY` 使用独立生成的密钥，不要用默认值
+- 如有条件，限制 Django Admin 仅允许校内 IP 访问
 
 ---
 
-## 9. 附录：费用估算
+## 10. 内容合规与免责说明
 
-### 最低成本方案（Hetzner + Cloudflare）
+作为国内高校资源共享平台，需要注意以下几点：
 
-| 项目 | 月费 |
-|------|------|
-| Hetzner CX22 | €3.99 (~¥31) |
-| 域名 .com | ¥5.5/月 (¥66/年) |
-| **合计** | **~¥36/月** |
+### 10.1 侵权风险防范
 
-### 推荐方案（腾讯云轻量 + 域名）
+- 上传的资料应是**学生自己的笔记、整理、总结**，或**已获得授权**的资源
+- 不建议上传整本教材扫描版（出版社版权问题）
+- 考试真题建议做脱敏处理（隐去学生姓名、学号）
 
-| 项目 | 月费 |
-|------|------|
-| 腾讯云轻量 2C2G | ¥50 |
-| 域名 .cn | ¥4/月 (¥48/年) |
-| **合计** | **~¥54/月** |
+### 10.2 建议在 About 页面增加免责声明
 
-### 学生优惠方案（阿里云 + 域名）
+在 `app.js` 的 `aboutContent` 中添加：
 
-| 项目 | 月费 |
-|------|------|
-| 阿里云 ECS 学生机 | ~¥15 |
-| 域名 .cn | ¥4/月 |
-| **合计** | **~¥19/月**（需备案） |
+```javascript
+disclaimer: {
+  title: '免责声明',
+  sections: [
+    { heading: '📜 内容责任', text: '本平台所有资料均由用户上传，平台不承担内容版权责任。如发现侵权内容，请联系 bnusparks@163.com，我们将在 48 小时内删除。' },
+    { heading: '⚖️ 合法使用', text: '本平台资源仅供学习交流使用，请勿用于商业用途。下载后请在 24 小时内删除。' },
+  ]
+}
+```
+
+### 10.3 备案相关（大陆服务器）
+
+备案期间需要：
+- 在网站底部注明 **ICP 备案号**（如 `京ICP备XXXXXXXX号`）
+- 链接到工信部备案查询页面
+- 放置 **公安备案号**（如有）
+
+示例：
+
+```html
+<div class="footer-icp">
+  <a href="https://beian.miit.gov.cn/" target="_blank">京ICP备XXXXXXXX号-1</a>
+</div>
+```
 
 ---
 
-> **下一步**：告诉我你选好了服务器和域名，我帮你按这个指南一步步搭建。
+## 11. 附录：费用参考
+
+### 方案对比总表
+
+| 项目 | 🥇 腾讯云大陆 | 🥈 香港节点 | 🥉 阿里云学生机 |
+|------|:---:|:---:|:---:|
+| 服务器费用 | ¥50/月 | ¥60-80/月 | ~¥15/月 |
+| 域名费用 | ¥4/月 | ¥5.5/月 | ¥4/月 |
+| 备案需要 | 2-3 周 | 不需要 | 2-3 周 |
+| 校园网速度 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 首月投入 | ~¥250 | ~¥200 | ~¥80 |
+| 长期稳定 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐（学生机有时限） |
+
+> **首年最低成本方案**：阿里云学生认证 + `.cn` 域名 ≈ **¥228/年**（¥19/月）
+
+---
+
+## 快速决策流程
+
+```
+你想选哪条路？
+│
+├─ 有学生认证 + 不着急上线
+│   └─ 阿里云学生机 + .cn 域名 → 去备案 → 部署
+│
+├─ 能接受 ¥50/月 + 不着急上线
+│   └─ 腾讯云轻量 + .cn 域名 → 去备案 → 部署
+│
+├─ 想今天就上线
+│   └─ 腾讯云香港轻量 + .com 域名 → 部署（免备案）
+│
+└─ 能联系到学校
+    └─ 申请 sparks.bnu.edu.cn → 省域名费 + 免备案 + 更有公信力
+```
+
+> **当前进度**：代码已推送 GitHub + 部署文档已准备就绪。
+> **下一步你决定**：选好服务器方案和域名，我指导你一步步操作。
