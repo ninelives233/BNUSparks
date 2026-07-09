@@ -54,13 +54,13 @@
       container.innerHTML =
         '<div class="user-dropdown-wrap">' +
           '<button class="user-dropdown-trigger" id="userDdTrigger" onclick="toggleUserDropdown(event)">' +
-            '<span class="notif-bell">🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span></span>' +
+            '<span class="notif-bell" onclick="event.stopPropagation();toggleNotifDrawer()">🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span></span>' +
             '<span class="user-name">' + esc(currentUser.nickname || currentUser.username) + '</span>' +
             '<span class="dd-arrow">▾</span>' +
           '</button>' +
           '<div class="user-dropdown-menu" id="userDropdown">' +
-            '<a href="#" onclick="showProfileView();closeUserDropdown()"><span>👤</span> 个人中心</a>' +
-            '<a href="#" onclick="showNotifView();closeUserDropdown()"><span>🔔</span> 通知中心</a>' +
+            '<a href="#" onclick="showProfile();closeUserDropdown()"><span>👤</span> 个人中心</a>' +
+            '<a href="#" onclick="toggleNotifDrawer();closeUserDropdown()"><span>🔔</span> 通知中心<span class="notif-badge-dot" id="notifDot" style="display:none"></span></a>' +
             '<div class="dd-divider"></div>' +
             '<a href="#" onclick="showAdminPanel();closeUserDropdown()" id="adminEntry" style="display:' + (currentUser.role !== 'user' ? 'flex' : 'none') + '"><span>⚙️</span> 管理后台</a>' +
             '<div class="dd-divider"></div>' +
@@ -296,13 +296,204 @@
   async function checkAuth() {
     const token = localStorage.getItem('token');
     if (!token) return;
-    try { currentUser = await api('/api/auth/me/'); updateAuthUI(); }
+    try {
+      currentUser = await api('/api/auth/me/');
+      updateAuthUI();
+      // 异步加载未读通知数
+      loadNotifCount();
+    }
     catch { localStorage.removeItem('token'); }
   }
 
-  // ── 占位：个人中心 / 通知中心 / 管理后台（Iter 2 实现） ──
-  function showProfileView() { alert('个人中心功能正在开发中'); }
-  function showNotifView() { alert('通知中心功能正在开发中'); }
+  async function loadNotifCount() {
+    try {
+      const data = await api('/api/auth/notifications/?unread_only=1');
+      const badge = document.getElementById('notifBadge');
+      const dot = document.getElementById('notifDot');
+      if (data.unread_count > 0) {
+        badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+        badge.style.display = '';
+        if (dot) dot.style.display = '';
+      }
+    } catch(e) { /* ignore */ }
+  }
+
+  // ── 个人资料 ──
+  function showProfile() {
+    pushViewState('profile', {});
+    switchView('profile');
+    updateSidebar(null);
+    loadProfile();
+  }
+
+  async function loadProfile() {
+    const emailEl = document.getElementById('profileEmail');
+    const nickEl = document.getElementById('profileNickname');
+    const roleEl = document.getElementById('profileRole');
+    const joinedEl = document.getElementById('profileJoined');
+    const quotaEl = document.getElementById('profileQuota');
+    const avatarEl = document.getElementById('profileAvatar');
+    if (!emailEl) return;
+    try {
+      const data = await api('/api/auth/profile/');
+      emailEl.textContent = data.email;
+      nickEl.textContent = data.nickname;
+      roleEl.textContent = data.role_label;
+      joinedEl.textContent = data.date_joined;
+      avatarEl.textContent = data.nickname.charAt(0) || '🧑';
+      quotaEl.textContent = data.daily_download_remaining < 0 ? '不限' : data.daily_download_remaining + ' / 60 次';
+    } catch (err) {
+      emailEl.textContent = '加载失败';
+    }
+  }
+
+  function editNickname() {
+    const input = document.getElementById('nicknameInput');
+    const current = document.getElementById('profileNickname').textContent;
+    if (input) input.value = current;
+    document.getElementById('nicknameEditor').style.display = 'flex';
+    document.getElementById('nicknameError').style.display = 'none';
+    if (input) input.focus();
+  }
+
+  function cancelEditNickname() {
+    document.getElementById('nicknameEditor').style.display = 'none';
+  }
+
+  async function saveNickname() {
+    const input = document.getElementById('nicknameInput');
+    const name = input.value.trim();
+    const errEl = document.getElementById('nicknameError');
+    if (!name) { errEl.textContent = '昵称不能为空'; errEl.style.display = 'block'; return; }
+    if (name.length > 50) { errEl.textContent = '昵称不能超过 50 字'; errEl.style.display = 'block'; return; }
+    try {
+      const data = await api('/api/auth/profile/', { method: 'PATCH', body: { nickname: name } });
+      document.getElementById('profileNickname').textContent = data.nickname;
+      document.getElementById('profileAvatar').textContent = data.nickname.charAt(0) || '🧑';
+      cancelEditNickname();
+      // 更新全局 currentUser 和头部显示
+      if (currentUser) { currentUser.nickname = data.nickname; }
+      updateAuthUI();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  function showChangePwdOverlay() {
+    document.getElementById('changePwdEditor').style.display = 'flex';
+    document.getElementById('changePwdError').style.display = 'none';
+    document.getElementById('changePwdSuccess').style.display = 'none';
+    document.getElementById('cpOldPwd').value = '';
+    document.getElementById('cpNewPwd').value = '';
+    document.getElementById('cpConfirmPwd').value = '';
+  }
+
+  function closeChangePwdOverlay() {
+    document.getElementById('changePwdEditor').style.display = 'none';
+  }
+
+  async function saveChangePwd() {
+    const errEl = document.getElementById('changePwdError');
+    const successEl = document.getElementById('changePwdSuccess');
+    const oldPwd = document.getElementById('cpOldPwd').value;
+    const newPwd = document.getElementById('cpNewPwd').value;
+    const confirmPwd = document.getElementById('cpConfirmPwd').value;
+
+    if (!oldPwd) { errEl.textContent = '请输入当前密码'; errEl.style.display = 'block'; return; }
+    if (newPwd.length < 6) { errEl.textContent = '新密码长度至少 6 位'; errEl.style.display = 'block'; return; }
+    if (newPwd !== confirmPwd) { errEl.textContent = '两次输入的新密码不一致'; errEl.style.display = 'block'; return; }
+
+    try {
+      await api('/api/auth/change-password/', { method: 'POST', body: { old_password: oldPwd, new_password: newPwd } });
+      errEl.style.display = 'none';
+      successEl.style.display = 'block';
+      setTimeout(function() { closeChangePwdOverlay(); }, 1500);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  // ── 通知抽屉 ──
+  let _notifLoaded = false;
+
+  function toggleNotifDrawer() {
+    const drawer = document.getElementById('notifDrawer');
+    if (drawer.style.display === 'flex') {
+      closeNotifDrawer();
+    } else {
+      drawer.style.display = 'flex';
+      if (!_notifLoaded) { loadNotifications(); _notifLoaded = true; }
+    }
+  }
+
+  function closeNotifDrawer(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('notifDrawer').style.display = 'none';
+  }
+
+  async function loadNotifications() {
+    const list = document.getElementById('notifList');
+    const badge = document.getElementById('notifBadge');
+    const dot = document.getElementById('notifDot');
+    try {
+      const data = await api('/api/auth/notifications/');
+      // 更新未读标记
+      if (data.unread_count > 0) {
+        badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+        badge.style.display = '';
+        if (dot) dot.style.display = '';
+      } else {
+        badge.style.display = 'none';
+        if (dot) dot.style.display = 'none';
+      }
+
+      if (!data.list || !data.list.length) {
+        list.innerHTML = '<p class="notif-empty">暂无通知</p>';
+        return;
+      }
+      list.innerHTML = data.list.map(function(n) {
+        var unreadClass = n.is_read ? 'notif-item-read' : 'notif-item-unread';
+        return '<div class="notif-item ' + unreadClass + '" onclick="markOneNotifRead(' + n.id + ',this)" data-nid="' + n.id + '">' +
+          '<div class="notif-item-dot"></div>' +
+          '<div class="notif-item-content">' +
+            '<div class="notif-item-title">' + esc(n.title) + '</div>' +
+            (n.message ? '<div class="notif-item-msg">' + esc(n.message) + '</div>' : '') +
+          '</div>' +
+          '<div class="notif-item-time">' + esc(n.created_at) + '</div>' +
+        '</div>';
+      }).join('');
+    } catch (err) {
+      list.innerHTML = '<p class="notif-empty">加载失败</p>';
+    }
+  }
+
+  async function markOneNotifRead(nid, el) {
+    try {
+      await api('/api/auth/notifications/' + nid + '/read/', { method: 'POST' });
+      if (el) {
+        el.classList.remove('notif-item-unread');
+        el.classList.add('notif-item-read');
+      }
+      // 更新未读计数
+      await loadNotifications();
+    } catch (err) { /* ignore */ }
+  }
+
+  async function markAllNotifRead() {
+    try {
+      await api('/api/auth/notifications/', { method: 'POST' });
+      document.querySelectorAll('.notif-item-unread').forEach(function(el) {
+        el.classList.remove('notif-item-unread');
+        el.classList.add('notif-item-read');
+      });
+      document.getElementById('notifBadge').style.display = 'none';
+      if (document.getElementById('notifDot')) document.getElementById('notifDot').style.display = 'none';
+    } catch (err) { /* ignore */ }
+  }
+
+  // ── 占位：管理后台（Iter 3） ──
   function showAdminPanel() { alert('管理后台功能正在开发中'); }
 
   /* ═══════════════════════════════════════════════════════════
@@ -331,7 +522,13 @@
       }
       if (results.materials.length) {
         html += '<div class="search-section"><h4>资料 ' + results.materials.length + '</h4>';
-        results.materials.forEach(m => { html += '<a href="/api/files/' + m.id + '/download/" class="search-item" style="text-decoration:none" onclick="this.closest(\'.search-overlay\').remove()"><span class="si-name">' + esc(m.title) + '</span> <span class="si-code">' + esc(m.course_name) + '</span></a>'; });
+        results.materials.forEach(function(m) {
+          var badgeHtml = '';
+          if (m.review_status && m.review_status !== 'approved') {
+            badgeHtml = ' <span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
+          }
+          html += '<a href="/api/files/' + m.id + '/download/" class="search-item" style="text-decoration:none" onclick="this.closest(\'.search-overlay\').remove()"><span class="si-name">' + esc(m.title) + badgeHtml + '</span> <span class="si-code">' + esc(m.course_name) + '</span></a>';
+        });
         html += '</div>';
       }
       if (!results.courses.length && !results.materials.length) html += '<p class="search-empty">没有找到相关结果</p>';
@@ -375,12 +572,16 @@
       // 最近上传（右列）
       const recentEl = document.getElementById('recentUploadsList');
       if (recentEl && s.recent_uploads && s.recent_uploads.length) {
-        recentEl.innerHTML = s.recent_uploads.map(m =>
-          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
-            '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
+        recentEl.innerHTML = s.recent_uploads.map(function(m) {
+          var badge = '';
+          if (m.review_status && m.review_status !== 'approved') {
+            badge = '<span class="review-badge review-badge-' + m.review_status + '" style="margin-left:6px;font-size:0.7rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
+          }
+          return '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+            '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + badge + '</div><div class="hc-item-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + esc(m.uploader) + '</span>' +
-          '</a>'
-        ).join('');
+          '</a>';
+        }).join('');
       } else {
         recentEl.innerHTML = '<div class="hc-empty">暂无上传记录，快来上传第一份资料！</div>';
       }
@@ -447,6 +648,7 @@
             break;
           case 'rankings': showTopDownloaded(saved.scrollY); break;
           case 'recentAll': showRecentAll(saved.scrollY); break;
+          case 'profile': showProfile(); break;
           case 'about': showAbout(saved.aboutSection || 'introduction'); break;
           default: showHome();
         }
@@ -889,15 +1091,24 @@
 
         const fileLookup = {};
         pageFiles.forEach(f => { fileLookup[f.id] = f; });
-        tbody.innerHTML = pageFiles.map(f =>
-          '<tr data-file-id="' + f.id + '"><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span class="fn-text">' + esc(f.title) + '</span></span></td>' +
-          '<td class="ft-type-cell">' + esc(f.file_type) + '</td>' +
-          '<td class="ft-size-cell">' + formatSize(f.file_size) + '</td>' +
-          '<td class="ft-uploader">' + esc(f.uploader) + '</td>' +
-          '<td class="ft-teacher">' + esc(f.teacher || '') + '</td>' +
-          '<td class="ft-dlcount">' + f.download_count + ' 次</td>' +
-          '<td class="ft-download"><a href="/api/files/' + f.id + '/download/" class="dl-link">⬇ 下载</a></td></tr>'
-        ).join('');
+        tbody.innerHTML = pageFiles.map(function(f) {
+          var badgeHtml = '';
+          if (f.is_uploader && f.review_status !== 'approved') {
+            var badgeLabel = f.review_status === 'pending' ? '审核中' : '已驳回';
+            var badgeClass = f.review_status === 'pending' ? 'review-badge-pending' : 'review-badge-rejected';
+            badgeHtml = '<span class="review-badge ' + badgeClass + '">' + badgeLabel + '</span>';
+          }
+          var dlLink = f.can_download !== false
+            ? '<a href="/api/files/' + f.id + '/download/" class="dl-link">⬇ 下载</a>'
+            : '<span class="dl-link dl-disabled" title="审核通过后可下载">⏳ 待审核</span>';
+          return '<tr data-file-id="' + f.id + '"><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span class="fn-text">' + esc(f.title) + '</span>' + badgeHtml + '</span></td>' +
+            '<td class="ft-type-cell">' + esc(f.file_type) + '</td>' +
+            '<td class="ft-size-cell">' + formatSize(f.file_size) + '</td>' +
+            '<td class="ft-uploader">' + esc(f.uploader) + '</td>' +
+            '<td class="ft-teacher">' + esc(f.teacher || '') + '</td>' +
+            '<td class="ft-dlcount">' + f.download_count + ' 次</td>' +
+            '<td class="ft-download">' + dlLink + '</td></tr>';
+        }).join('');
         // 点击行显示文件简介
         Array.from(tbody.children).forEach(tr => {
           tr.addEventListener('click', function(e) {
@@ -1466,6 +1677,9 @@
         break;
       case 'about':
         showAbout(s.aboutSection || 'introduction');
+        break;
+      case 'profile':
+        showProfile();
         break;
     }
     _suppressingPushState = false;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=4">
+<link rel="stylesheet" href="/static/css/style.css?v=6">
 </head>
 <body>
 
@@ -253,6 +253,98 @@
   </div>
 </div>
 
+<!-- ═══ Notification Drawer ═══ -->
+<div class="notif-drawer-overlay" id="notifDrawer" style="display:none" onclick="closeNotifDrawer(event)">
+  <div class="notif-drawer" onclick="event.stopPropagation()">
+    <div class="notif-drawer-header">
+      <h3>通知</h3>
+      <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
+    </div>
+    <div class="notif-drawer-actions">
+      <button class="notif-mark-all-btn" onclick="markAllNotifRead()">全部标为已读</button>
+    </div>
+    <div class="notif-drawer-body" id="notifList">
+      <p class="notif-empty">暂无通知</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Profile View ═══ -->
+<div class="view-section" id="profileView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">个人资料</span>
+      </div>
+      <div class="profile-card">
+        <div class="profile-avatar">
+          <div class="profile-avatar-circle" id="profileAvatar">🧑</div>
+        </div>
+        <div class="profile-info">
+          <div class="profile-row">
+            <span class="profile-label">邮箱</span>
+            <span class="profile-value" id="profileEmail">-</span>
+          </div>
+          <div class="profile-row">
+            <span class="profile-label">昵称</span>
+            <span class="profile-value" id="profileNickname">-</span>
+            <button class="profile-edit-btn" onclick="editNickname()">✎ 编辑</button>
+          </div>
+          <div class="profile-row">
+            <span class="profile-label">角色</span>
+            <span class="profile-value" id="profileRole">-</span>
+          </div>
+          <div class="profile-row">
+            <span class="profile-label">注册时间</span>
+            <span class="profile-value" id="profileJoined">-</span>
+          </div>
+          <div class="profile-row">
+            <span class="profile-label">今日下载</span>
+            <span class="profile-value" id="profileQuota">-</span>
+          </div>
+          <div class="profile-actions">
+            <button class="profile-action-btn" onclick="showChangePwdOverlay()">修改密码</button>
+          </div>
+
+          <!-- 修改密码内联弹窗 -->
+          <div class="profile-edit-overlay" id="changePwdEditor" style="display:none">
+            <div class="profile-edit-dialog">
+              <h3>修改密码</h3>
+              <input type="password" id="cpOldPwd" class="mf-input" style="margin-bottom:10px" placeholder="当前密码">
+              <input type="password" id="cpNewPwd" class="mf-input" style="margin-bottom:10px" minlength="6" placeholder="新密码（至少 6 位）">
+              <input type="password" id="cpConfirmPwd" class="mf-input" placeholder="确认新密码">
+              <div class="pe-actions">
+                <button class="mf-btn" onclick="saveChangePwd()">确认修改</button>
+                <button class="mf-btn mf-btn-secondary" onclick="closeChangePwdOverlay()">取消</button>
+              </div>
+              <div id="changePwdError" class="mf-error" style="display:none"></div>
+              <div id="changePwdSuccess" class="mf-success" style="display:none;margin-top:12px">
+                <div class="ms-check" style="width:32px;height:32px;font-size:16px">✓</div>
+                <p class="ms-desc">密码修改成功</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 昵称编辑内联模态 -->
+        <div class="profile-edit-overlay" id="nicknameEditor" style="display:none">
+          <div class="profile-edit-dialog">
+            <h3>修改昵称</h3>
+            <input type="text" id="nicknameInput" class="mf-input" maxlength="50" placeholder="输入新昵称">
+            <div class="pe-actions">
+              <button class="mf-btn" onclick="saveNickname()">保存</button>
+              <button class="mf-btn mf-btn-secondary" onclick="cancelEditNickname()">取消</button>
+            </div>
+            <div id="nicknameError" class="mf-error" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Footer ═══ -->
 <footer class="site-footer">
   <div class="container">
@@ -385,11 +477,17 @@
     <form id="resetPwdForm" onsubmit="return handleResetPassword(event)">
       <div class="mf-group">
         <label>新密码</label>
-        <input type="password" id="resetNewPwd" class="mf-input" required minlength="8" placeholder="至少 8 位">
+        <div class="mf-pwd-wrap">
+          <input type="password" id="resetNewPwd" class="mf-input mf-pwd-input" required minlength="8" placeholder="至少 8 位">
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetNewPwd',this)" aria-label="显示密码">👁️</button>
+        </div>
       </div>
       <div class="mf-group">
         <label>确认新密码</label>
-        <input type="password" id="resetConfirmPwd" class="mf-input" required minlength="8" placeholder="再次输入新密码">
+        <div class="mf-pwd-wrap">
+          <input type="password" id="resetConfirmPwd" class="mf-input mf-pwd-input" required minlength="8" placeholder="再次输入新密码">
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetConfirmPwd',this)" aria-label="显示密码">👁️</button>
+        </div>
       </div>
       <button type="submit" class="mf-btn">重置密码</button>
       <p class="mf-switch"><a href="#" onclick="closeResetPwdModal();showLoginModal();return false">返回登录</a></p>
@@ -441,7 +539,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=4"></script>
+<script src="/static/js/app.js?v=6"></script>
 
 </body>
 </html>

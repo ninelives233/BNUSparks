@@ -23,6 +23,11 @@ urlpatterns = [
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
     path("files/<int:file_id>/download/", views.api_file_download, name="api_file_download"),
 
+    # 通知 & 个人资料
+    path("auth/notifications/", views.api_notifications, name="api_notifications"),
+    path("auth/notifications/<int:nid>/read/", views.api_notification_read, name="api_notification_read"),
+    path("auth/profile/", views.api_profile, name="api_profile"),
+
     # 搜索 & 统计
     path("search/", views.api_search, name="api_search"),
     path("stats/", views.api_stats, name="api_stats"),
