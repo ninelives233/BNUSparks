@@ -17,6 +17,9 @@ CLAUDE.md
 # History (archived design iterations, old Django attempts, reference materials)
 history/
 
+# Environment variables (API keys, passwords)
+.env
+
 # Python (root-level; subdir ones are auto-ignored by git)
 __pycache__/
 

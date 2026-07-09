@@ -95,3 +95,19 @@ CORS_ALLOW_CREDENTIALS = True
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 
 LOGIN_URL = '/admin/login/'
+
+# ── 邮件服务（用于密码重置等） ──
+import os
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.163.com'
+EMAIL_PORT = 465
+EMAIL_USE_SSL = True
+EMAIL_HOST_USER = 'bnusparks@163.com'
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
+# 也尝试从 .env 文件读取
+_env_file = BASE_DIR / '.env'
+if not EMAIL_HOST_PASSWORD and _env_file.exists():
+    import re
+    _match = re.search(r'EMAIL_PASSWORD\s*=\s*"([^"]*)"', _env_file.read_text(encoding='utf-8'))
+    if _match:
+        EMAIL_HOST_PASSWORD = _match.group(1)

@@ -1436,17 +1436,12 @@
     .file-table tbody td.ft-teacher,
     .file-table tbody td.ft-dlcount {
       display: none;
+      width: 0;
     }
     .file-table-scroll {
-      margin-left: calc(-1 * var(--space-lg));
-      margin-right: calc(-1 * var(--space-lg));
-    }
-    .file-table-scroll .file-table thead th:first-child,
-    .file-table-scroll .file-table tbody td:first-child {
-      padding-left: var(--space-lg);
-    }
-    .file-table-scroll .file-table .ft-download {
-      padding-right: var(--space-lg);
+      overflow-x: visible;
+      margin-left: 0;
+      margin-right: 0;
     }
   }
 
@@ -1467,15 +1462,9 @@
     }
     .fa-back-bar { font-size: 0.78rem; }
     .file-table-scroll {
-      margin-left: calc(-1 * var(--space-md));
-      margin-right: calc(-1 * var(--space-md));
-    }
-    .file-table-scroll .file-table thead th:first-child,
-    .file-table-scroll .file-table tbody td:first-child {
-      padding-left: var(--space-md);
-    }
-    .file-table-scroll .file-table .ft-download {
-      padding-right: var(--space-md);
+      overflow-x: visible;
+      margin-left: 0;
+      margin-right: 0;
     }
     .file-table thead th,
     .file-table tbody td {
@@ -1486,8 +1475,9 @@
       padding: 3px 8px;
       font-size: 0.7rem;
     }
-    .file-table thead th:nth-child(3) { width: 46px; }
-    .file-table thead th:nth-child(7) { width: 60px; }
+    .file-table thead th,
+    .file-table tbody td { white-space: nowrap; }
+    .file-table tbody td.ft-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
 
   /* ═══════════════════════════════════════════
