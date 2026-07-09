@@ -1060,6 +1060,15 @@
   .file-table .dl-link:hover {
     background: var(--primary); color: #fff;
   }
+  .file-table .dl-disabled {
+    display: inline-flex; align-items: center;
+    padding: 4px 14px; border-radius: 6px;
+    font-size: 0.78rem; font-weight: 600;
+    color: var(--ink-light, oklch(0.5 0 0));
+    border: 1.5px solid var(--border);
+    white-space: nowrap;
+    cursor: default;
+  }
   .file-area-header {
     display: flex; align-items: center; gap: var(--space-sm);
     margin-bottom: var(--space-sm);
@@ -1618,3 +1627,247 @@
   .fi-download-btn:hover {
     background: var(--primary-dark);
   }
+
+
+/* ═══════════════════════════════════════════
+   Iter 2 — 个人资料、通知、审核标签
+   ═══════════════════════════════════════════ */
+
+/* ── 个人资料页 ── */
+.profile-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  margin-top: var(--space-lg);
+  display: flex;
+  gap: var(--space-xl);
+  align-items: flex-start;
+}
+.profile-avatar {
+  flex-shrink: 0;
+}
+.profile-avatar-circle {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: var(--primary-surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.2rem;
+  border: 2px solid var(--border-light);
+}
+.profile-info {
+  flex: 1;
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.profile-row {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.profile-row:last-of-type { border-bottom: none; }
+.profile-label {
+  min-width: 80px;
+  font-size: 0.85rem;
+  color: var(--ink-light, oklch(0.5 0.02 250));
+  font-weight: 500;
+}
+.profile-value {
+  font-size: 1rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+.profile-edit-btn {
+  margin-left: auto;
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.profile-edit-btn:hover {
+  background: var(--primary-surface);
+  border-color: var(--primary);
+}
+.profile-actions {
+  margin-top: var(--space-sm);
+  display: flex; gap: var(--space-sm);
+}
+.profile-action-btn {
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.profile-action-btn:hover {
+  background: var(--primary-surface);
+}
+
+/* ── 昵称编辑内联弹窗 ── */
+.profile-edit-overlay {
+  position: fixed;
+  inset: 0;
+  background: oklch(0 0 0 / 0.3);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.profile-edit-dialog {
+  background: #fff;
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  min-width: 320px;
+  box-shadow: 0 8px 40px oklch(0 0 0 / 0.12);
+}
+.profile-edit-dialog h3 {
+  margin: 0 0 var(--space-md);
+  font-size: 1.1rem;
+}
+.pe-actions {
+  display: flex; gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.pe-actions .mf-btn-secondary {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+.pe-actions .mf-btn-secondary:hover {
+  background: var(--border-light);
+}
+
+/* ── 通知抽屉 ── */
+.notif-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: oklch(0 0 0 / 0.25);
+  z-index: 999;
+}
+.notif-drawer {
+  position: fixed;
+  top: 0; right: 0;
+  width: 380px; max-width: 90vw;
+  height: 100vh;
+  background: #fff;
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 24px oklch(0 0 0 / 0.08);
+  display: flex; flex-direction: column;
+  z-index: 1000;
+  animation: notifSlideIn 0.2s ease-out;
+}
+@keyframes notifSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.notif-drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-light);
+}
+.notif-drawer-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.notif-drawer-close {
+  background: none; border: none;
+  font-size: 1.2rem; cursor: pointer;
+  color: var(--ink-light, oklch(0.5 0 0));
+  padding: 4px;
+}
+.notif-drawer-close:hover { color: var(--ink); }
+.notif-drawer-actions {
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border-light);
+}
+.notif-mark-all-btn {
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.notif-mark-all-btn:hover {
+  background: var(--primary-surface);
+}
+.notif-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+.notif-item {
+  display: flex; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.notif-item:hover { background: var(--primary-surface); }
+.notif-item-unread { background: oklch(0.97 0.01 250 / 0.4); }
+.notif-item-unread:hover { background: oklch(0.94 0.02 250 / 0.4); }
+.notif-item-dot {
+  width: 8px; height: 8px; min-width: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: 6px;
+}
+.notif-item-read .notif-item-dot { background: transparent; }
+.notif-item-content { flex: 1; min-width: 0; }
+.notif-item-title {
+  font-size: 0.9rem; font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+.notif-item-msg {
+  font-size: 0.8rem;
+  color: var(--ink-light, oklch(0.5 0 0));
+  display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notif-item-time {
+  font-size: 0.75rem;
+  color: var(--ink-light, oklch(0.5 0 0));
+  white-space: nowrap;
+}
+.notif-empty {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--ink-light, oklch(0.5 0 0));
+}
+
+/* ── 审核状态标签 ── */
+.review-badge {
+  display: inline-flex; align-items: center;
+  font-size: 0.75rem; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  gap: 4px;
+  line-height: 1.4;
+}
+.review-badge-pending {
+  background: oklch(0.92 0.06 80);
+  color: oklch(0.5 0.12 80);
+}
+.review-badge-approved {
+  background: oklch(0.9 0.08 145);
+  color: oklch(0.4 0.12 145);
+}
+.review-badge-rejected {
+  background: oklch(0.92 0.06 25);
+  color: oklch(0.5 0.12 25);
+}
+
+/* ── 用户下拉菜单未读标记 ── */
+.notif-badge-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: super;
+  margin-left: 2px;
+}

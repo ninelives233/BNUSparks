@@ -24,7 +24,7 @@ from django.conf import settings
 from django.db.models import Q, Count
 from django.utils import timezone
 
-from .models import College, Course, Material, MaterialType, CourseCategory, UserProfile
+from .models import College, Course, Material, MaterialType, CourseCategory, UserProfile, Notification
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -131,6 +131,39 @@ def _ok(data=None, status=200):
 
 def _err(msg, status=400):
     return JsonResponse({"ok": False, "error": msg}, status=status)
+
+
+def _create_notification(recipient, type, title, message="", material=None, triggered_by=None):
+    """创建通知的便捷方法"""
+    return Notification.objects.create(
+        recipient=recipient,
+        type=type,
+        title=title,
+        message=message,
+        material=material,
+        triggered_by=triggered_by,
+    )
+
+
+def _check_download_quota(user):
+    """检查并扣除下载配额，返回 (allowed, remaining, message)"""
+    profile = _get_or_create_profile(user)
+    if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN):
+        return True, -1, ""  # 管理员不限
+
+    from datetime import date
+    today = date.today()
+    if profile.last_download_date != today:
+        profile.daily_download_count = 0
+        profile.last_download_date = today
+
+    if profile.daily_download_count >= 60:
+        return False, 0, "今日下载次数已达上限（60 次）"
+
+    profile.daily_download_count += 1
+    profile.save(update_fields=["daily_download_count", "last_download_date"])
+    remaining = 60 - profile.daily_download_count
+    return True, remaining, ""
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -365,6 +398,106 @@ def api_reset_password(request):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 通知 API
+# ═══════════════════════════════════════════════════════════════
+
+@require_login
+def api_notifications(request):
+    """GET /api/auth/notifications/ — 通知列表
+       POST /api/auth/notifications/ — 全部标为已读"""
+    if request.method == "GET":
+        unread_only = request.GET.get("unread_only")
+        qs = Notification.objects.filter(recipient=request.user).select_related("material")
+        if unread_only:
+            qs = qs.filter(is_read=False)
+
+        return _ok({
+            "unread_count": Notification.objects.filter(recipient=request.user, is_read=False).count(),
+            "list": [
+                {
+                    "id": n.id,
+                    "type": n.type,
+                    "title": n.title,
+                    "message": n.message,
+                    "is_read": n.is_read,
+                    "material_id": n.material_id,
+                    "material_title": n.material.title if n.material else None,
+                    "created_at": n.created_at.strftime("%Y-%m-%d %H:%M"),
+                }
+                for n in qs[:100]
+            ],
+        })
+
+    elif request.method == "POST":
+        Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+        return _ok({"message": "全部标为已读"})
+
+    return _err("仅支持 GET/POST", 405)
+
+
+@require_login
+def api_notification_read(request, nid):
+    """POST /api/auth/notifications/<id>/read/"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    notif = get_object_or_404(Notification, id=nid, recipient=request.user)
+    notif.is_read = True
+    notif.save(update_fields=["is_read"])
+    return _ok({"message": "已标为已读"})
+
+
+# ═══════════════════════════════════════════════════════════════
+# 个人资料 API
+# ═══════════════════════════════════════════════════════════════
+
+@csrf_exempt
+@require_login
+def api_profile(request):
+    """GET/PATCH /api/auth/profile/"""
+    if request.method == "GET":
+        profile = _get_or_create_profile(request.user)
+        from datetime import date
+        today = date.today()
+        remaining = -1
+        if profile.role == UserProfile.Role.USER:
+            if profile.last_download_date != today:
+                remaining = 60
+            else:
+                remaining = max(0, 60 - profile.daily_download_count)
+
+        return _ok({
+            "id": request.user.id,
+            "username": request.user.username,
+            "nickname": request.user.first_name or request.user.username,
+            "email": request.user.email,
+            "role": profile.role,
+            "role_label": profile.get_role_display(),
+            "daily_download_remaining": remaining,
+            "date_joined": request.user.date_joined.strftime("%Y-%m-%d"),
+        })
+
+    elif request.method == "PATCH":
+        try:
+            body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return _err("请求格式错误")
+
+        nickname = (body.get("nickname") or "").strip()
+        if nickname:
+            if len(nickname) > 50:
+                return _err("昵称不能超过 50 字")
+            request.user.first_name = nickname
+            request.user.save(update_fields=["first_name"])
+
+        return _ok({
+            "nickname": request.user.first_name or request.user.username,
+            "message": "资料已更新",
+        })
+
+    return _err("仅支持 GET/PATCH", 405)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 课程 API
 # ═══════════════════════════════════════════════════════════════
 
@@ -400,19 +533,29 @@ def api_courses(request):
 def api_course_files(request, course_code):
     """GET /api/courses/<code>/files"""
     course = get_object_or_404(Course, code=course_code)
-    materials = Material.objects.filter(
-        course=course, is_approved=True
-    ).select_related("material_type").order_by("-created_at")
+    user = _get_user(request)
+
+    # 普通用户只能看到已通过的资料，上传者可看到自己的待审/驳回资料
+    q_filter = Q(course=course, is_approved=True)
+    if user is not None:
+        q_filter |= Q(course=course, uploader=user)
+
+    materials = Material.objects.filter(q_filter).select_related(
+        "material_type"
+    ).order_by("-created_at")
 
     return _ok([
         {
             "id": m.id, "title": m.title,
             "file_name": m.file_name, "file_size": m.file_size,
             "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
-            "uploader": m.uploader_name or "匿名",
+            "uploader": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
             "teacher": m.teacher,
             "download_count": m.download_count,
             "created_at": m.created_at.strftime("%Y-%m-%d"),
+            "review_status": m.review_status,
+            "is_uploader": user is not None and m.uploader_id == user.id,
+            "can_download": m.is_approved or (user is not None and m.uploader_id == user.id),
         }
         for m in materials
     ])
@@ -479,6 +622,24 @@ def api_file_upload(request):
     except Exception:
         pass
 
+    # 发送通知：审核中 / 已通过
+    if review_status == "pending":
+        _create_notification(
+            recipient=request.user,
+            type=Notification.Type.REPORT,  # 暂用 report 类型
+            title="资料已提交，等待审核",
+            message=f"你的资料「{title}」已提交，审核通过后即可被其他同学下载。",
+            material=material,
+        )
+    else:
+        _create_notification(
+            recipient=request.user,
+            type=Notification.Type.APPROVED,
+            title="资料已自动通过审核",
+            message=f"你的资料「{title}」已自动通过审核，现在可以下载了。",
+            material=material,
+        )
+
     return _ok({
         "id": material.id, "title": material.title,
         "file_name": uploaded_file.name, "file_size": file_size,
@@ -493,6 +654,13 @@ def api_file_download(request, file_id):
 
     if not file_path.exists():
         return _err("文件不存在", 404)
+
+    # 下载配额校验
+    user = _get_user(request)
+    if user is not None:
+        allowed, remaining, msg = _check_download_quota(user)
+        if not allowed:
+            return _err(msg, 429)
 
     Material.objects.filter(id=file_id).update(
         download_count=material.download_count + 1
@@ -539,8 +707,9 @@ def api_search(request):
             {"id": m.id, "title": m.title,
              "course_name": m.course.name, "course_code": m.course.code,
              "file_name": m.file_name, "file_size": m.file_size,
-             "uploader": m.uploader_name or "匿名",
+             "uploader": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
              "teacher": m.teacher,
+             "review_status": m.review_status,
              "created_at": m.created_at.strftime("%Y-%m-%d")}
             for m in materials
         ],
@@ -661,7 +830,8 @@ def api_stats(request):
              "course_name": m.course.name, "course_code": m.course.code,
              "college": m.course.college.name if m.course.college else None,
              "created_at": m.created_at.strftime("%Y-%m-%d"),
-             "uploader": m.uploader_name or "匿名"}
+             "uploader": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
+             "review_status": m.review_status}
             for m in recent
         ],
     })
