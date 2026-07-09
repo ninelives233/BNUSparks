@@ -215,6 +215,7 @@
     const path = findPathByCourseId(code);
     if (!path) return;
     expPath = path;
+    pushViewState('explorer', { expPath: [...expPath] }, true);
     renderExplorer();
   }
 
@@ -327,6 +328,19 @@
   let courseTree = null;  // 从 API 动态加载
   let highlightFileId = null;  // 从排行榜/最近上传跳转时高亮目标文件
   var returnState = null;      // { view:'home'|'rankings'|'recentAll', scrollY } 供"返回"按钮使用
+
+  // ── 浏览器历史导航 ──
+  let _suppressingPushState = false;
+
+  function pushViewState(view, extra, replace) {
+    if (_suppressingPushState) return;
+    const state = { _bnusparks: true, view, scrollY: window.scrollY, ...extra };
+    if (replace) {
+      history.replaceState(state, '');
+    } else {
+      history.pushState(state, '');
+    }
+  }
 
   // ── 从后端加载课程导航树 ──
   async function loadCourseTree() {
@@ -458,13 +472,14 @@
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   // ── Navigation ──
-  function navTo(depth) { expPath = expPath.slice(0, depth); renderExplorer(); }
+  function navTo(depth) { expPath = expPath.slice(0, depth); pushViewState('explorer', { expPath: [...expPath] }); renderExplorer(); }
   function navIn(name) {
     const node = getNode(expPath);
     if (!node || !node.children) return;
     const child = node.children.find(c => c.name === name);
     if (!child) return;
     expPath.push(name);
+    pushViewState('explorer', { expPath: [...expPath] });
     renderExplorer();
   }
 
@@ -589,9 +604,9 @@
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
           '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span>' + (code ? '<div class="fa-upload-header-btn"><button class="fa-upload-btn" onclick="showUploadModal(\'" + esc(code) + "\',\'" + esc(course.name) + "\')">+ 上传资料</button></div>' : '') + '</div>' +
-          '<table class="file-table"><thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>上传者</th><th>任课教师</th><th>下载次数</th><th>下载</th></tr></thead><tbody id="fileTableBody">' +
+          '<div class="file-table-scroll"><table class="file-table"><thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>上传者</th><th>任课教师</th><th>下载次数</th><th>下载</th></tr></thead><tbody id="fileTableBody">' +
           '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
-          '</tbody></table>' +
+          '</tbody></table></div>' +
         '</div>' +
         (Object.keys(sameNameGroups).length ? '<div class="file-area-side"><div class="fas-title">同名课程</div>' +
           Object.values(sameNameGroups).map(g =>
@@ -700,7 +715,7 @@
           pag = document.createElement('div');
           pag.id = 'filePagination';
           pag.className = 'file-pagination';
-          document.querySelector('.file-table').after(pag);
+          document.querySelector('.file-table-scroll').after(pag);
         }
 
         const numbers = getPageNumbers(page, total);
@@ -935,6 +950,7 @@
   }
 
   function showAbout(section) {
+    pushViewState('about', { aboutSection: section || 'introduction' });
     switchView('about');
     updateSidebar('about');
     renderAboutContent(section || 'introduction');
@@ -1122,12 +1138,14 @@
   }
 
   function showTopDownloaded(restoreScrollY) {
+    pushViewState('rankings', {});
     switchView('rankings', !!restoreScrollY);
     updateSidebar('home');
     renderTopDownloaded(restoreScrollY);
   }
 
   function showRecentAll(restoreScrollY) {
+    pushViewState('recentAll', {});
     switchView('recentAll', !!restoreScrollY);
     updateSidebar('home');
     renderRecentAll(restoreScrollY);
@@ -1144,6 +1162,7 @@
   }
 
   function showHome(restoreScrollY) {
+    pushViewState('home', {});
     returnState = null;
     if (restoreScrollY) {
       switchView('home', true);
@@ -1156,6 +1175,7 @@
 
   function showExplorer(type) {
     expPath = [type];
+    pushViewState('explorer', { expPath: [type] });
     renderExplorer();
     switchView('explorer');
     updateSidebar(type === '通识课' ? 'general' : 'major');
@@ -1186,6 +1206,45 @@
       else if (view === 'about') showAbout('introduction');
       drawer.classList.remove('open');
     });
+  });
+
+  // ── Browser Back/Forward Navigation ──
+  window.addEventListener('popstate', function(e) {
+    var s = e.state;
+    _suppressingPushState = true;
+
+    if (!s || !s._bnusparks) {
+      // 无历史状态 → 回首页
+      returnState = null;
+      switchView('home');
+      updateSidebar('home');
+      _suppressingPushState = false;
+      return;
+    }
+
+    switch (s.view) {
+      case 'home':
+        showHome(s.scrollY);
+        break;
+      case 'explorer':
+        returnState = null;
+        expPath = s.expPath || [];
+        renderExplorer();
+        switchView('explorer', true);
+        updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
+        if (s.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: s.scrollY}); });
+        break;
+      case 'rankings':
+        showTopDownloaded(s.scrollY);
+        break;
+      case 'recentAll':
+        showRecentAll(s.scrollY);
+        break;
+      case 'about':
+        showAbout(s.aboutSection || 'introduction');
+        break;
+    }
+    _suppressingPushState = false;
   });
 
   // ── Init ──

@@ -1396,6 +1396,12 @@
     }
   }
 
+  /* ── 文件表格水平滚动包裹层 ────────── */
+  .file-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   /* ═══════════════════════════════════════════
      空间不足时折叠次要列
      ═══════════════════════════════════════════ */
@@ -1431,6 +1437,57 @@
     .file-table tbody td.ft-dlcount {
       display: none;
     }
+    .file-table-scroll {
+      margin-left: calc(-1 * var(--space-lg));
+      margin-right: calc(-1 * var(--space-lg));
+    }
+    .file-table-scroll .file-table thead th:first-child,
+    .file-table-scroll .file-table tbody td:first-child {
+      padding-left: var(--space-lg);
+    }
+    .file-table-scroll .file-table .ft-download {
+      padding-right: var(--space-lg);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .file-area-header {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .file-area-header .section-accent {
+      font-size: 0.8rem;
+    }
+    .file-area-header .fa-count {
+      font-size: 0.7rem;
+    }
+    .fa-upload-header-btn .fa-upload-btn {
+      padding: 3px 8px;
+      font-size: 0.7rem;
+    }
+    .fa-back-bar { font-size: 0.78rem; }
+    .file-table-scroll {
+      margin-left: calc(-1 * var(--space-md));
+      margin-right: calc(-1 * var(--space-md));
+    }
+    .file-table-scroll .file-table thead th:first-child,
+    .file-table-scroll .file-table tbody td:first-child {
+      padding-left: var(--space-md);
+    }
+    .file-table-scroll .file-table .ft-download {
+      padding-right: var(--space-md);
+    }
+    .file-table thead th,
+    .file-table tbody td {
+      padding: 6px 8px;
+      font-size: 0.72rem;
+    }
+    .file-table .dl-link {
+      padding: 3px 8px;
+      font-size: 0.7rem;
+    }
+    .file-table thead th:nth-child(3) { width: 46px; }
+    .file-table thead th:nth-child(7) { width: 60px; }
   }
 
   /* ═══════════════════════════════════════════
