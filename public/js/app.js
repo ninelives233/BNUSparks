@@ -98,6 +98,18 @@
     if (!e.target.closest('.user-dropdown-wrap')) closeUserDropdown();
   });
 
+  function togglePwdVisibility(inputId, btn) {
+    const inp = document.getElementById(inputId);
+    if (!inp) return;
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      btn.textContent = '🙈';
+    } else {
+      inp.type = 'password';
+      btn.textContent = '👁️';
+    }
+  }
+
   function showLoginModal() { document.getElementById('loginModal').style.display = 'flex'; }
   function showRegister() { document.getElementById('loginModal').style.display = 'none'; document.getElementById('registerModal').style.display = 'flex'; }
   function showLogin() { document.getElementById('registerModal').style.display = 'none'; document.getElementById('loginModal').style.display = 'flex'; }

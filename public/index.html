@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2">
+<link rel="stylesheet" href="/static/css/style.css?v=3">
 </head>
 <body>
 
@@ -305,7 +305,10 @@
       </div>
       <div class="mf-group">
         <label>密码</label>
-        <input type="password" id="loginPassword" class="mf-input" required placeholder="输入密码">
+        <div class="mf-pwd-wrap">
+          <input type="password" id="loginPassword" class="mf-input mf-pwd-input" required placeholder="输入密码">
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('loginPassword',this)" aria-label="显示密码">👁️</button>
+        </div>
       </div>
       <button type="submit" class="mf-btn">登录</button>
       <p class="mf-switch">还没有账号？<a href="#" onclick="showRegister();return false">注册</a> · <a href="#" onclick="showForgotPassword();return false">忘记密码？</a></p>
@@ -411,7 +414,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=2"></script>
+<script src="/static/js/app.js?v=3"></script>
 
 </body>
 </html>
