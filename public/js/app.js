@@ -189,6 +189,81 @@
     return false;
   }
 
+  // ── 重置密码 ──
+  let _resetUid = null, _resetToken = null;
+
+  function showResetPassword(uid, token) {
+    _resetUid = uid;
+    _resetToken = token;
+    document.getElementById('forgotPwdModal').style.display = 'none';
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('resetPwdModal').style.display = 'flex';
+    document.getElementById('resetPwdForm').style.display = 'block';
+    document.getElementById('resetPwdSuccess').style.display = 'none';
+    document.getElementById('resetPwdError').style.display = 'none';
+    document.getElementById('resetNewPwd').value = '';
+    document.getElementById('resetConfirmPwd').value = '';
+  }
+
+  function closeResetPwdModal() {
+    document.getElementById('resetPwdModal').style.display = 'none';
+    document.getElementById('resetPwdForm').style.display = 'block';
+    document.getElementById('resetPwdSuccess').style.display = 'none';
+    document.getElementById('resetPwdError').style.display = 'none';
+    _resetUid = null; _resetToken = null;
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    const el = document.getElementById('resetPwdError');
+    const success = document.getElementById('resetPwdSuccess');
+    const form = document.getElementById('resetPwdForm');
+    const newPwd = document.getElementById('resetNewPwd').value;
+    const confirmPwd = document.getElementById('resetConfirmPwd').value;
+
+    if (newPwd !== confirmPwd) {
+      el.textContent = '两次输入的密码不一致';
+      el.style.display = 'block';
+      return false;
+    }
+    if (newPwd.length < 8) {
+      el.textContent = '密码长度至少 8 位';
+      el.style.display = 'block';
+      return false;
+    }
+
+    try {
+      const data = await api('/api/auth/reset-password/', { method: 'POST',
+        body: { uid: _resetUid, token: _resetToken, new_password: newPwd } });
+      el.style.display = 'none';
+      form.style.display = 'none';
+      success.style.display = 'block';
+      // 清理 URL 参数
+      const url = new URL(window.location);
+      url.searchParams.delete('uid');
+      url.searchParams.delete('token');
+      window.history.replaceState({}, '', url);
+    } catch (err) { el.textContent = err.message; el.style.display = 'block'; }
+    return false;
+  }
+
+  // 页面加载时检测 URL 参数 (reset-password 链接)
+  (function checkResetParams() {
+    const params = new URLSearchParams(window.location.search);
+    const uid = params.get('uid');
+    const token = params.get('token');
+    if (uid && token) {
+      // 等 DOM 加载完毕再显示
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(function() { showResetPassword(uid, token); }, 100);
+        });
+      } else {
+        setTimeout(function() { showResetPassword(uid, token); }, 100);
+      }
+    }
+  })();
+
   async function handleRegister(e) {
     e.preventDefault();
     const el = document.getElementById('registerError');
