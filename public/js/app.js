@@ -320,9 +320,17 @@
 
   // ── 个人资料 ──
   function showProfile() {
-    pushViewState('profile', {});
-    switchView('profile');
+    // 关闭所有视图
+    document.querySelectorAll('.view-section').forEach(function(v) {
+      v.classList.remove('active');
+    });
+    // 显示个人资料
+    var pv = document.getElementById('profileView');
+    if (pv) pv.classList.add('active');
     updateSidebar(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    pushViewState('profile', {});
+    // 加载数据
     loadProfile();
   }
 
@@ -1320,7 +1328,7 @@
     const views = [
       'homeView', 'explorerView', 'aboutView',
       'tutorialView', 'announcementsView', 'broadView',
-      'rankingsView', 'recentAllView'
+      'rankingsView', 'recentAllView', 'profileView'
     ];
     views.forEach(id => {
       document.getElementById(id).classList.toggle('active', id.replace('View','') === name);
