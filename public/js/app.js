@@ -47,16 +47,56 @@
   let currentUser = null;
 
   function updateAuthUI() {
-    const btn = document.querySelector('.login-btn');
-    if (!btn) return;
+    const container = document.getElementById('headerLogin');
+    if (!container) return;
     if (currentUser) {
-      btn.innerHTML = '<span class="login-icon">👤</span><span class="login-text">' + esc(currentUser.nickname || currentUser.username) + '</span>';
-      btn.onclick = (e) => { e.preventDefault(); if (confirm('退出登录？')) logout(); };
+      const roleLabel = currentUser.role === 'super_admin' ? ' 总管理' : currentUser.role === 'moderator' ? ' 版主' : '';
+      container.innerHTML =
+        '<div class="user-dropdown-wrap">' +
+          '<button class="user-dropdown-trigger" id="userDdTrigger" onclick="toggleUserDropdown(event)">' +
+            '<span class="notif-bell">🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span></span>' +
+            '<span class="user-name">' + esc(currentUser.nickname || currentUser.username) + '</span>' +
+            '<span class="dd-arrow">▾</span>' +
+          '</button>' +
+          '<div class="user-dropdown-menu" id="userDropdown">' +
+            '<a href="#" onclick="showProfileView();closeUserDropdown()"><span>👤</span> 个人中心</a>' +
+            '<a href="#" onclick="showNotifView();closeUserDropdown()"><span>🔔</span> 通知中心</a>' +
+            '<div class="dd-divider"></div>' +
+            '<a href="#" onclick="showAdminPanel();closeUserDropdown()" id="adminEntry" style="display:' + (currentUser.role !== 'user' ? 'flex' : 'none') + '"><span>⚙️</span> 管理后台</a>' +
+            '<div class="dd-divider"></div>' +
+            '<a href="#" onclick="logout();closeUserDropdown()"><span>🚪</span> 退出登录</a>' +
+          '</div>' +
+        '</div>';
     } else {
-      btn.innerHTML = '<span class="login-icon gi gi-login"></span><span class="login-text">登录</span>';
-      btn.onclick = (e) => { e.preventDefault(); showLoginModal(); };
+      container.innerHTML =
+        '<a href="#" class="login-btn" onclick="event.preventDefault();showLoginModal()">' +
+          '<span class="login-icon gi gi-login"></span><span class="login-text">登录</span>' +
+        '</a>';
     }
   }
+
+  function toggleUserDropdown(e) {
+    e && e.stopPropagation();
+    const menu = document.getElementById('userDropdown');
+    const trigger = document.getElementById('userDdTrigger');
+    if (!menu) return;
+    const isOpen = menu.classList.contains('open');
+    closeUserDropdown();
+    if (!isOpen) {
+      menu.classList.add('open');
+      trigger.classList.add('open');
+    }
+  }
+
+  function closeUserDropdown() {
+    document.querySelectorAll('.user-dropdown-menu').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.user-dropdown-trigger').forEach(t => t.classList.remove('open'));
+  }
+
+  // 点击页面其他地方关闭下拉菜单
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.user-dropdown-wrap')) closeUserDropdown();
+  });
 
   function showLoginModal() { document.getElementById('loginModal').style.display = 'flex'; }
   function showRegister() { document.getElementById('loginModal').style.display = 'none'; document.getElementById('registerModal').style.display = 'flex'; }
@@ -67,6 +107,29 @@
     document.getElementById('loginError').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
     document.getElementById('registerSuccess').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'block';
+    document.querySelector('#registerModal .modal-close').style.display = '';
+    document.querySelector('#registerModal .modal-card').style.pointerEvents = '';
+  }
+
+  function copyGeneratedPassword() {
+    const pwd = document.getElementById('generatedPassword').textContent;
+    navigator.clipboard.writeText(pwd).then(() => {
+      const btn = document.querySelector('.ms-copy-btn');
+      btn.textContent = '✅ 已复制';
+      setTimeout(() => { btn.textContent = '📋 复制密码'; }, 2000);
+    }).catch(() => {
+      // fallback
+      const range = document.createRange();
+      range.selectNodeContents(document.getElementById('generatedPassword'));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+    });
+  }
+
+  function togglePwdSaveBtn() {
+    const checked = document.getElementById('pwdSaveCheck').checked;
+    document.getElementById('pwdConfirmBtn').disabled = !checked;
   }
 
   async function handleLogin(e) {
@@ -82,10 +145,44 @@
     return false;
   }
 
+  // ── 忘记密码 ──
+  function showForgotPassword() {
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('forgotPwdModal').style.display = 'flex';
+    document.getElementById('forgotPwdForm').style.display = 'block';
+    document.getElementById('forgotPwdSuccess').style.display = 'none';
+    document.getElementById('forgotPwdError').style.display = 'none';
+  }
+
+  function closeForgotPwdModal() {
+    document.getElementById('forgotPwdModal').style.display = 'none';
+    document.getElementById('forgotPwdForm').style.display = 'block';
+    document.getElementById('forgotPwdSuccess').style.display = 'none';
+    document.getElementById('forgotPwdError').style.display = 'none';
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    const el = document.getElementById('forgotPwdError');
+    const success = document.getElementById('forgotPwdSuccess');
+    const form = document.getElementById('forgotPwdForm');
+    try {
+      const data = await api('/api/auth/forgot-password/', { method: 'POST',
+        body: { email: document.getElementById('forgotEmail').value.trim() } });
+      document.getElementById('forgotPwdMsg').textContent = data.message;
+      el.style.display = 'none';
+      form.style.display = 'none';
+      success.style.display = 'block';
+    } catch (err) { el.textContent = err.message; el.style.display = 'block'; }
+    return false;
+  }
+
   async function handleRegister(e) {
     e.preventDefault();
     const el = document.getElementById('registerError');
+    const form = document.getElementById('registerForm');
     const success = document.getElementById('registerSuccess');
+    const closeBtn = document.querySelector('#registerModal .modal-close');
     try {
       const data = await api('/api/auth/register/', { method: 'POST',
         body: { email: document.getElementById('regEmail').value.trim(),
@@ -93,8 +190,16 @@
       localStorage.setItem('token', data.token);
       currentUser = data.user;
       document.getElementById('generatedPassword').textContent = data.generated_password;
+      // 重置保存确认状态
+      document.getElementById('pwdSaveCheck').checked = false;
+      document.getElementById('pwdConfirmBtn').disabled = true;
       el.style.display = 'none';
+      form.style.display = 'none';
       success.style.display = 'block';
+      // 禁用关闭按钮和外部点击
+      closeBtn.style.display = 'none';
+      document.querySelector('#registerModal .modal-card').style.pointerEvents = 'none';
+      document.querySelector('#registerModal .modal-card .mf-success').style.pointerEvents = 'auto';
     } catch (err) { el.textContent = err.message; el.style.display = 'block'; success.style.display = 'none'; }
     return false;
   }
@@ -107,6 +212,11 @@
     try { currentUser = await api('/api/auth/me/'); updateAuthUI(); }
     catch { localStorage.removeItem('token'); }
   }
+
+  // ── 占位：个人中心 / 通知中心 / 管理后台（Iter 2 实现） ──
+  function showProfileView() { alert('个人中心功能正在开发中'); }
+  function showNotifView() { alert('通知中心功能正在开发中'); }
+  function showAdminPanel() { alert('管理后台功能正在开发中'); }
 
   /* ═══════════════════════════════════════════════════════════
      搜索

@@ -1,5 +1,30 @@
 from django.db import models
 from django.core.validators import FileExtensionValidator
+from django.contrib.auth.models import User
+
+
+class UserProfile(models.Model):
+    class Role(models.TextChoices):
+        USER = "user", "普通用户"
+        MODERATOR = "moderator", "版主"
+        SUPER_ADMIN = "super_admin", "总管理员"
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.USER)
+    moderated_sections = models.ManyToManyField(
+        "CourseCategory", blank=True,
+        verbose_name="主责板块",
+    )
+    daily_download_count = models.IntegerField("今日已下载", default=0)
+    last_download_date = models.DateField("最后下载日期", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "用户资料"
+        verbose_name_plural = "用户资料"
+
+    def __str__(self):
+        return f"{self.user.username} ({self.get_role_display()})"
 
 
 class College(models.Model):
@@ -89,6 +114,25 @@ class Material(models.Model):
     uploader_name = models.CharField("上传者昵称", max_length=50, blank=True)
     download_count = models.IntegerField("下载次数", default=0)
     is_approved = models.BooleanField("已审核", default=True)
+
+    # ── 用户模块扩展字段 ──
+    uploader = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="上传者", related_name="uploads",
+    )
+    review_status = models.CharField(
+        max_length=20,
+        choices=[("pending", "待审核"), ("approved", "已通过"), ("rejected", "已驳回")],
+        default="approved",
+        verbose_name="审核状态",
+    )
+    review_notes = models.TextField("审核备注", blank=True)
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="审核人", related_name="reviews",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField("上传时间", auto_now_add=True)
 
     class Meta:
@@ -129,3 +173,37 @@ class CourseCategory(models.Model):
         if self.is_divider:
             return "─── 分隔线 ───"
         return self.name or f"<节点 #{self.id}>"
+
+
+class Notification(models.Model):
+    class Type(models.TextChoices):
+        APPROVED = "approved", "审核通过"
+        REJECTED = "rejected", "审核驳回"
+        DISAGREE = "disagree", "审核异议"
+        REPORT = "report", "举报通知"
+
+    recipient = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="notifications",
+        verbose_name="接收人",
+    )
+    type = models.CharField(max_length=20, choices=Type.choices, verbose_name="通知类型")
+    title = models.CharField("标题", max_length=200)
+    message = models.TextField("消息内容", blank=True)
+    is_read = models.BooleanField("已读", default=False)
+    material = models.ForeignKey(
+        Material, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="关联资料",
+    )
+    triggered_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="触发人", related_name="triggered_notifications",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "通知"
+        verbose_name_plural = "通知"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.get_type_display()}] {self.title}"

@@ -10,6 +10,9 @@ urlpatterns = [
     path("auth/register/", views.api_register, name="api_register"),
     path("auth/login/", views.api_login, name="api_login"),
     path("auth/me/", views.api_me, name="api_me"),
+    path("auth/change-password/", views.api_change_password, name="api_change_password"),
+    path("auth/forgot-password/", views.api_forgot_password, name="api_forgot_password"),
+    path("auth/reset-password/", views.api_reset_password, name="api_reset_password"),
 
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
