@@ -13,7 +13,7 @@ from pathlib import Path
 def frontend(request):
     """服务前端 index.html"""
     html = (Path(__file__).resolve().parent.parent / "public" / "index.html").read_text(encoding="utf-8")
-    return HttpResponse(html)
+    return HttpResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 urlpatterns = [
