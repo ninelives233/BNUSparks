@@ -232,8 +232,33 @@
     await loadCourseTree();
     buildSameNameMap();
     checkAuth(); setupSearch(); loadStats(); loadCourseFileCounts();
-    // Show default about section
-    renderAboutContent('introduction');
+    // 尝试从 sessionStorage 恢复刷新前的视图
+    try {
+      var saved = JSON.parse(sessionStorage.getItem('bnusparks_view'));
+      if (saved && saved._bnusparks) {
+        _suppressingPushState = true;
+        // 替换当前历史状态（不新增条目）
+        history.replaceState(saved, '');
+        switch (saved.view) {
+          case 'home': showHome(saved.scrollY); break;
+          case 'explorer':
+            expPath = saved.expPath || ['专业课'];
+            renderExplorer();
+            switchView('explorer', true);
+            updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
+            if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
+            break;
+          case 'rankings': showTopDownloaded(saved.scrollY); break;
+          case 'recentAll': showRecentAll(saved.scrollY); break;
+          case 'about': showAbout(saved.aboutSection || 'introduction'); break;
+          default: showHome();
+        }
+        _suppressingPushState = false;
+        return;
+      }
+    } catch(e) {}
+    // 默认首页
+    showHome();
   });
   /* ═══════════════════════════════════════════════════════════
      上传 / 模态框
@@ -340,6 +365,8 @@
     } else {
       history.pushState(state, '');
     }
+    // 同时写入 sessionStorage，刷新后可恢复
+    try { sessionStorage.setItem('bnusparks_view', JSON.stringify(state)); } catch(e) {}
   }
 
   // ── 从后端加载课程导航树 ──
