@@ -167,7 +167,7 @@
       const topEl = document.getElementById('topDownloadedList');
       if (topEl && s.top_downloaded && s.top_downloaded.length) {
         topEl.innerHTML = s.top_downloaded.map(m =>
-          '<a href="#" class="hc-item" onclick="event.preventDefault();showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + m.download_count + ' 次</span>' +
           '</a>'
@@ -179,7 +179,7 @@
       const recentEl = document.getElementById('recentUploadsList');
       if (recentEl && s.recent_uploads && s.recent_uploads.length) {
         recentEl.innerHTML = s.recent_uploads.map(m =>
-          '<a href="#" class="hc-item" onclick="event.preventDefault();showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + esc(m.uploader) + '</span>' +
           '</a>'
@@ -325,6 +325,8 @@
   let expPath = [];
   let courseFileCounts = {};
   let courseTree = null;  // 从 API 动态加载
+  let highlightFileId = null;  // 从排行榜/最近上传跳转时高亮目标文件
+  var returnState = null;      // { view:'home'|'rankings'|'recentAll', scrollY } 供"返回"按钮使用
 
   // ── 从后端加载课程导航树 ──
   async function loadCourseTree() {
@@ -585,8 +587,8 @@
     container.innerHTML =
       '<div class="file-area-row">' +
         '<div class="file-area-main">' +
-          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span></div>' +
-          (code ? '<div class="fa-upload-bar"><button class="fa-upload-btn" onclick="showUploadModal(\'' + esc(code) + '\',\'' + esc(course.name) + '\')">+ 上传资料</button></div>' : '') +
+          (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
+          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span>' + (code ? '<div class="fa-upload-header-btn"><button class="fa-upload-btn" onclick="showUploadModal(\'" + esc(code) + "\',\'" + esc(course.name) + "\')">+ 上传资料</button></div>' : '') + '</div>' +
           '<table class="file-table"><thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>上传者</th><th>任课教师</th><th>下载次数</th><th>下载</th></tr></thead><tbody id="fileTableBody">' +
           '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
           '</tbody></table>' +
@@ -607,8 +609,31 @@
       const totalFiles = allFiles.length;
       document.getElementById('fileCount').textContent = totalFiles + ' 个文件';
 
-      const PAGE_SIZE = 20;
+      // 初始化每页条数选择器
+      var ppc = document.getElementById('perPageControl');
+      if (ppc) {
+        ppc.innerHTML = ' 每页 <select class="ppc-select" id="ppcSelect"><option value="10">10</option><option value="15">15</option><option value="20">20</option></select> 条';
+        ppc.style.display = '';
+        document.getElementById('ppcSelect').addEventListener('change', function() {
+          pageSize = parseInt(this.value);
+          currentPage = 1;
+          renderPage();
+        });
+      }
+
+      let pageSize = 10;
       let currentPage = 1;
+
+      // 从排行榜/最近上传跳转 → 定位到目标文件所在页
+      let firstHighlight = true;
+      if (highlightFileId) {
+        const targetIdx = allFiles.findIndex(f => f.id === highlightFileId);
+        if (targetIdx >= 0) {
+          currentPage = Math.floor(targetIdx / pageSize) + 1;
+        }
+      }
+      const targetHighlightFileId = highlightFileId;
+      highlightFileId = null;
 
       function renderPage() {
         const tbody = document.getElementById('fileTableBody');
@@ -618,10 +643,10 @@
           return;
         }
 
-        const totalPages = Math.ceil(totalFiles / PAGE_SIZE);
+        const totalPages = Math.ceil(totalFiles / pageSize);
         if (currentPage > totalPages) currentPage = totalPages;
-        const start = (currentPage - 1) * PAGE_SIZE;
-        const pageFiles = allFiles.slice(start, start + PAGE_SIZE);
+        const start = (currentPage - 1) * pageSize;
+        const pageFiles = allFiles.slice(start, start + pageSize);
 
         const fileLookup = {};
         pageFiles.forEach(f => { fileLookup[f.id] = f; });
@@ -648,6 +673,21 @@
         const sidePanel = document.querySelector('.file-area-side');
         if (mainArea && sidePanel) mainArea.classList.add('file-area-compact');
         else if (mainArea) mainArea.classList.remove('file-area-compact');
+
+        // 来自排行榜/最近上传 → 高亮并滚动到目标行
+        if (firstHighlight && targetHighlightFileId) {
+          firstHighlight = false;
+          requestAnimationFrame(function() {
+            const row = tbody.querySelector('tr[data-file-id="' + targetHighlightFileId + '"]');
+            if (row) {
+              row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              row.classList.add('highlight-row');
+              setTimeout(function() {
+                row.classList.remove('highlight-row');
+              }, 2500);
+            }
+          });
+        }
       }
 
       function renderPagination(page, total) {
@@ -826,7 +866,7 @@
   }
 
   // ── View Switching ──
-  function switchView(name) {
+  function switchView(name, skipScroll) {
     const views = [
       'homeView', 'explorerView', 'aboutView',
       'tutorialView', 'announcementsView', 'broadView',
@@ -835,7 +875,9 @@
     views.forEach(id => {
       document.getElementById(id).classList.toggle('active', id.replace('View','') === name);
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!skipScroll) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   function updateSidebar(viewName) {
@@ -957,63 +999,158 @@
   }
 
   // ── Rankings & Recent All Views ──
-  async function renderTopDownloaded() {
+  async function renderTopDownloaded(restoreScrollY) {
     const container = document.getElementById('rankingsContent');
     container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
     try {
       const s = await api('/api/stats/?limit=100');
-      if (!s.top_downloaded || !s.top_downloaded.length) {
-        container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">暂无数据</div>';
-        return;
+      const allItems = s.top_downloaded || [];
+
+      function renderList(filterCollege, filterType) {
+        var filtered = allItems;
+        if (filterType === 'general') {
+          filtered = filtered.filter(function(m){ return m.course_code.startsWith('GEN'); });
+        }
+        if (filterCollege) {
+          filtered = filtered.filter(function(m){ return m.college === filterCollege; });
+        }
+        if (!filterType && !filterCollege) {
+          filtered = allItems;
+        }
+
+        var colleges = [];
+        allItems.forEach(function(m){
+          if (m.college && colleges.indexOf(m.college) === -1) colleges.push(m.college);
+        });
+        colleges.sort();
+
+        var html = '<div class="filter-bar">';
+        html += '<button class="fb-pill' + (!filterCollege && !filterType ? ' fb-active' : '') + '" data-filter-college="" data-filter-type="">全部</button>';
+        html += '<button class="fb-pill' + (filterType === 'general' ? ' fb-active' : '') + '" data-filter-college="" data-filter-type="general">通识课</button>';
+        colleges.forEach(function(c){
+          html += '<button class="fb-pill' + (c === filterCollege && !filterType ? ' fb-active' : '') + '" data-filter-college="' + esc(c) + '" data-filter-type="">' + esc(c) + '</button>';
+        });
+        html += '</div>';
+
+        if (!filtered.length) {
+          html += '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint);border:none;background:none">暂无该学院的资料</div>';
+        } else {
+          html += filtered.map(function(m, i){
+            var idx = allItems.indexOf(m) + 1;
+            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'rankings\',scrollY:pageYOffset};showExplorer(\'' +
+                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+              '<span class="ri-rank">#' + idx + '</span>' +
+              '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + esc(m.course_name) + '</div></div>' +
+              '<span class="ri-stat">' + m.download_count + ' 次下载</span>' +
+            '</a>';
+          }).join('');
+        }
+
+        container.innerHTML = html;
+        container.querySelectorAll('.fb-pill').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            renderList(this.dataset.filterCollege, this.dataset.filterType);
+          });
+        });
+        if (restoreScrollY) requestAnimationFrame(function(){ window.scrollTo({top:restoreScrollY}); });
       }
-      container.innerHTML = s.top_downloaded.map((m, i) =>
-        '<a href="#" class="rankings-item" onclick="event.preventDefault();showExplorer(\'' +
-            (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
-          '<span class="ri-rank">#' + (i+1) + '</span>' +
-          '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + esc(m.course_name) + '</div></div>' +
-          '<span class="ri-stat">' + m.download_count + ' 次下载</span>' +
-        '</a>'
-      ).join('');
+
+      renderList(null, null);
     } catch(e) {
       container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">加载失败</div>';
     }
   }
 
-  async function renderRecentAll() {
+  async function renderRecentAll(restoreScrollY) {
     const container = document.getElementById('recentAllContent');
     container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
     try {
       const s = await api('/api/stats/?limit=100');
-      if (!s.recent_uploads || !s.recent_uploads.length) {
-        container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">暂无数据</div>';
-        return;
+      const allItems = s.recent_uploads || [];
+
+      function renderList(filterCollege, filterType) {
+        var filtered = allItems;
+        if (filterType === 'general') {
+          filtered = filtered.filter(function(m){ return m.course_code.startsWith('GEN'); });
+        }
+        if (filterCollege) {
+          filtered = filtered.filter(function(m){ return m.college === filterCollege; });
+        }
+        if (!filterType && !filterCollege) {
+          filtered = allItems;
+        }
+
+        var colleges = [];
+        allItems.forEach(function(m){
+          if (m.college && colleges.indexOf(m.college) === -1) colleges.push(m.college);
+        });
+        colleges.sort();
+
+        var html = '<div class="filter-bar">';
+        html += '<button class="fb-pill' + (!filterCollege && !filterType ? ' fb-active' : '') + '" data-filter-college="" data-filter-type="">全部</button>';
+        html += '<button class="fb-pill' + (filterType === 'general' ? ' fb-active' : '') + '" data-filter-college="" data-filter-type="general">通识课</button>';
+        colleges.forEach(function(c){
+          html += '<button class="fb-pill' + (c === filterCollege && !filterType ? ' fb-active' : '') + '" data-filter-college="' + esc(c) + '" data-filter-type="">' + esc(c) + '</button>';
+        });
+        html += '</div>';
+
+        if (!filtered.length) {
+          html += '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint);border:none;background:none">暂无该学院的资料</div>';
+        } else {
+          html += filtered.map(function(m){
+            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'recentAll\',scrollY:pageYOffset};showExplorer(\'' +
+                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+              '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
+              '<span class="ri-stat">' + esc(m.uploader) + '</span>' +
+            '</a>';
+          }).join('');
+        }
+
+        container.innerHTML = html;
+        container.querySelectorAll('.fb-pill').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            renderList(this.dataset.filterCollege, this.dataset.filterType);
+          });
+        });
+        if (restoreScrollY) requestAnimationFrame(function(){ window.scrollTo({top:restoreScrollY}); });
       }
-      container.innerHTML = s.recent_uploads.map(m =>
-        '<a href="#" class="rankings-item" onclick="event.preventDefault();showExplorer(\'' +
-            (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
-          '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
-          '<span class="ri-stat">' + esc(m.uploader) + '</span>' +
-        '</a>'
-      ).join('');
+
+      renderList(null, null);
     } catch(e) {
       container.innerHTML = '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint)">加载失败</div>';
     }
   }
 
-  function showTopDownloaded() {
-    switchView('rankings');
+  function showTopDownloaded(restoreScrollY) {
+    switchView('rankings', !!restoreScrollY);
     updateSidebar('home');
-    renderTopDownloaded();
+    renderTopDownloaded(restoreScrollY);
   }
 
-  function showRecentAll() {
-    switchView('recentAll');
+  function showRecentAll(restoreScrollY) {
+    switchView('recentAll', !!restoreScrollY);
     updateSidebar('home');
-    renderRecentAll();
+    renderRecentAll(restoreScrollY);
   }
 
-  function showHome() {
-    switchView('home');
+  function returnToPreviousView() {
+    if (!returnState) return;
+    const sv = returnState.scrollY;
+    const view = returnState.view;
+    returnState = null;
+    if (view === 'rankings') showTopDownloaded(sv);
+    else if (view === 'recentAll') showRecentAll(sv);
+    else showHome(sv);
+  }
+
+  function showHome(restoreScrollY) {
+    returnState = null;
+    if (restoreScrollY) {
+      switchView('home', true);
+      requestAnimationFrame(function(){ window.scrollTo({top: restoreScrollY}); });
+    } else {
+      switchView('home');
+    }
     updateSidebar('home');
   }
 
