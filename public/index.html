@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=15">
+<link rel="stylesheet" href="/static/css/style.css?v=23">
 </head>
 <body>
 
@@ -298,6 +298,10 @@
             <span class="profile-label">角色</span>
             <span class="profile-value" id="profileRole">-</span>
           </div>
+          <div class="profile-row" id="profileSectionsRow" style="display:none">
+            <span class="profile-label">管辖板块</span>
+            <span class="profile-value" id="profileSections">-</span>
+          </div>
           <div class="profile-row">
             <span class="profile-label">注册时间</span>
             <span class="profile-value" id="profileJoined">-</span>
@@ -423,16 +427,20 @@
     <h2 class="modal-title">登录</h2>
     <form id="loginForm" onsubmit="return handleLogin(event)">
       <div class="mf-group">
-        <label>邮箱 / 用户名</label>
-        <input type="text" id="loginUsername" class="mf-input" required placeholder="you@mail.bnu.edu.cn">
+        <label>学号</label>
+        <div class="mf-email-wrap">
+          <input type="text" id="loginSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
+          <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
+        </div>
       </div>
       <div class="mf-group">
         <label>密码</label>
         <div class="mf-pwd-wrap">
-          <input type="password" id="loginPassword" class="mf-input mf-pwd-input" required placeholder="输入密码">
+          <input type="password" id="loginPassword" class="mf-input mf-pwd-input" required placeholder="输入密码" autocomplete="current-password">
           <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('loginPassword',this)" aria-label="显示密码">👁️</button>
         </div>
       </div>
+      <label class="mf-remember"><input type="checkbox" id="loginRemember"> <span>记住我（30天免登录）</span></label>
       <button type="submit" class="mf-btn">登录</button>
       <p class="mf-switch">还没有账号？<a href="#" onclick="showRegister();return false">注册</a> · <a href="#" onclick="showForgotPassword();return false">忘记密码？</a></p>
     </form>
@@ -447,8 +455,11 @@
     <h2 class="modal-title">注册</h2>
     <form id="registerForm" onsubmit="return handleRegister(event)">
       <div class="mf-group">
-        <label>校内邮箱</label>
-        <input type="email" id="regEmail" class="mf-input" required placeholder="yourname@mail.bnu.edu.cn">
+        <label>学号</label>
+        <div class="mf-email-wrap">
+          <input type="text" id="regSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
+          <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
+        </div>
       </div>
       <div class="mf-group">
         <label>昵称</label>
@@ -484,8 +495,11 @@
     <h2 class="modal-title">忘记密码</h2>
     <form id="forgotPwdForm" onsubmit="return handleForgotPassword(event)">
       <div class="mf-group">
-        <label>注册邮箱</label>
-        <input type="email" id="forgotEmail" class="mf-input" required placeholder="yourname@mail.bnu.edu.cn">
+        <label>学号</label>
+        <div class="mf-email-wrap">
+          <input type="text" id="forgotSid" class="mf-input mf-email-prefix" required placeholder="请输入学号">
+          <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
+        </div>
       </div>
       <button type="submit" class="mf-btn">发送重置链接</button>
       <p class="mf-switch"><a href="#" onclick="closeForgotPwdModal();showLoginModal();return false">返回登录</a></p>
@@ -494,7 +508,7 @@
     <div id="forgotPwdSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
       <p class="ms-title">邮件已发送</p>
-      <p class="ms-desc" id="forgotPwdMsg">如果该邮箱已注册，重置链接已发送到你的邮箱，请查收。</p>
+      <p class="ms-desc" id="forgotPwdMsg">如果该学号已注册，重置链接已发送到你的邮箱，请查收。</p>
       <button class="mf-btn ms-btn" onclick="closeForgotPwdModal()">知道了</button>
     </div>
   </div>
@@ -570,7 +584,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=15"></script>
+<script src="/static/js/app.js?v=23"></script>
 
 </body>
 </html>

@@ -47,4 +47,6 @@ urlpatterns = [
     # 用户管理（Iter 3 — 仅 super_admin）
     path("admin/users/", views.api_admin_users, name="api_admin_users"),
     path("admin/users/<int:uid>/role/", views.api_admin_set_role, name="api_admin_set_role"),
+    path("admin/sections/", views.api_admin_sections, name="api_admin_sections"),
+    path("admin/users/<int:uid>/auto-approve/", views.api_admin_auto_approve_toggle, name="api_admin_auto_approve_toggle"),
 ]
