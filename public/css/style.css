@@ -993,10 +993,10 @@
   }
   .file-table thead th:nth-child(1) { width: auto; }     /* 文件名 - 自适应 */
   .file-table thead th:nth-child(2) { width: 60px; }     /* 类型 */
-  .file-table thead th:nth-child(3) { width: 70px; }     /* 大小 */
-  .file-table thead th:nth-child(4) { width: 65px; }     /* 上传者 */
-  .file-table thead th:nth-child(5) { width: 65px; }     /* 任课教师 */
-  .file-table thead th:nth-child(6) { width: 70px; }     /* 下载次数 */
+  .file-table thead th:nth-child(3) { width: 85px; }     /* 大小 */
+  .file-table thead th:nth-child(4) { width: 90px; }     /* 上传者 */
+  .file-table thead th:nth-child(5) { width: 90px; }     /* 任课教师 */
+  .file-table thead th:nth-child(6) { width: 72px; }     /* 下载次数 */
   .file-table thead th:nth-child(7) { width: 84px; }     /* 下载按钮 */
   .file-table tbody td {
     padding: var(--space-sm);
@@ -1072,6 +1072,21 @@
     border: 1.5px solid var(--border);
     white-space: nowrap;
     cursor: default;
+  }
+  .file-table .dl-login-prompt {
+    display: inline-flex; align-items: center;
+    padding: 4px 14px; border-radius: 6px;
+    font-size: 0.78rem; font-weight: 600;
+    color: var(--ink-faint);
+    border: 1.5px dashed var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .file-table .dl-login-prompt:hover {
+    color: var(--primary);
+    border-color: var(--primary-light);
   }
   .file-area-header {
     display: flex; align-items: center; gap: var(--space-sm);
@@ -1711,6 +1726,47 @@
   background: var(--primary-surface);
 }
 
+/* ── 个人资料移动端响应式 ── */
+@media (max-width: 640px) {
+  .profile-card {
+    flex-direction: column;
+    gap: var(--space-md);
+    padding: var(--space-md);
+  }
+  .profile-avatar-circle {
+    width: 60px;
+    height: 60px;
+    font-size: 1.6rem;
+  }
+  .profile-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .profile-label {
+    min-width: 60px;
+    font-size: 0.78rem;
+  }
+  .profile-value {
+    font-size: 0.88rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .profile-edit-btn {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .profile-actions {
+    flex-wrap: wrap;
+  }
+  .profile-edit-dialog {
+    min-width: 0;
+    width: 90vw;
+  }
+}
+
 /* ── 昵称编辑内联弹窗 ── */
 .profile-edit-overlay {
   position: fixed;
@@ -1922,12 +1978,29 @@
   gap: 16px;
   margin-bottom: 32px;
 }
+@media (max-width: 500px) {
+  .admin-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+}
 .admin-stat-card {
   background: oklch(1 0 0 / 0.6);
   border-radius: 12px;
   padding: 20px 24px;
   border: 1px solid oklch(0.85 0.02 250 / 0.2);
   backdrop-filter: blur(4px);
+}
+@media (max-width: 500px) {
+  .admin-stat-card {
+    padding: 14px 16px;
+  }
+  .admin-stat-card .stat-number {
+    font-size: 1.5rem;
+  }
+  .admin-stat-card .stat-label {
+    font-size: 0.75rem;
+  }
 }
 .admin-stat-card .stat-number {
   font-size: 2rem;
@@ -2206,3 +2279,43 @@
   padding: 32px;
   color: var(--text-muted);
 }
+
+/* ── 文件管理模式 ── */
+.fm-header { margin-bottom: 16px; }
+.fm-header h3 { margin: 0 0 4px; }
+.fm-root { margin-bottom: 12px; }
+.fm-root-title { font-weight: 700; font-size: 0.95rem; padding: 8px 0; color: var(--primary); border-bottom: 1px solid var(--border-light); margin-bottom: 4px; }
+.fm-children { padding-left: 20px; }
+.fm-node { display: flex; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; gap: 8px; }
+.fm-node:hover { background: var(--primary-surface); }
+.fm-node-icon { flex-shrink: 0; font-size: 1rem; width: 20px; text-align: center; }
+.fm-node-name { flex: 1; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-node-actions { flex-shrink: 0; display: flex; gap: 4px; }
+.fm-action-btn { padding: 3px 10px; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--border-light); background: transparent; cursor: pointer; color: var(--primary); transition: all 0.12s; }
+.fm-action-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ── 审核异议 ── */
+.pc-comments-section { border-top: 1px solid var(--border-light); margin-top: 8px; padding-top: 6px; }
+.pc-comments-toggle { background: none; border: none; cursor: pointer; font-size: 0.78rem; color: var(--text-muted); padding: 4px 0; }
+.pc-comments-toggle:hover { color: var(--primary); }
+.pc-comments { padding: 8px; background: oklch(0.98 0.005 60); border-radius: 6px; margin-top: 6px; }
+.pc-comment-item { padding: 6px 0; border-bottom: 1px solid oklch(0.93 0.005 65); }
+.pc-comment-item:last-child { border-bottom: none; }
+.pcc-name { font-weight: 600; font-size: 0.78rem; color: var(--primary); }
+.pcc-time { font-size: 0.7rem; color: var(--ink-faint); margin-left: 8px; }
+.pcc-content { font-size: 0.82rem; margin-top: 2px; }
+.pc-comment-empty { font-size: 0.78rem; color: var(--ink-faint); padding: 8px 0; text-align: center; }
+.pc-comment-form { display: flex; gap: 6px; margin-top: 8px; align-items: flex-start; }
+.pc-comment-input { flex: 1; padding: 6px 8px; border: 1px solid var(--border-light); border-radius: 4px; font-size: 0.8rem; resize: vertical; min-height: 36px; font-family: var(--sans); }
+.pc-comment-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px oklch(from var(--primary) l c h / 0.1); }
+.pc-comment-form .admin-btn { padding: 6px 12px; font-size: 0.78rem; white-space: nowrap; }
+.pc-comments-loading { text-align: center; padding: 12px; color: var(--ink-faint); font-size: 0.8rem; }
+
+/* ── 专业选择（小版主指派） ── */
+.college-check-list { max-height: 240px; overflow-y: auto; }
+.college-check-item { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 0.85rem; cursor: pointer; border-radius: 4px; }
+.college-check-item:hover { background: var(--primary-surface); }
+.college-check-item input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+/* ── admin-role-select 宽度适应新角色名 ── */
+.admin-role-select { max-width: 120px; font-size: 0.78rem; }

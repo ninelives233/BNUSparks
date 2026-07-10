@@ -22,20 +22,25 @@ urlpatterns = [
     # 文件
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
     path("files/<int:file_id>/download/", views.api_file_download, name="api_file_download"),
+    path("files/<int:file_id>/delete/", views.api_file_delete, name="api_file_delete"),
 
     # 通知 & 个人资料
     path("auth/notifications/", views.api_notifications, name="api_notifications"),
     path("auth/notifications/<int:nid>/read/", views.api_notification_read, name="api_notification_read"),
     path("auth/profile/", views.api_profile, name="api_profile"),
+    path("user/uploads/", views.api_my_uploads, name="api_my_uploads"),
 
     # 搜索 & 统计
     path("search/", views.api_search, name="api_search"),
     path("stats/", views.api_stats, name="api_stats"),
+    path("colleges/", views.api_colleges, name="api_colleges"),
 
     # 审核（Iter 3）
     path("moderation/pending/", views.api_moderation_pending, name="api_moderation_pending"),
     path("moderation/<int:file_id>/approve/", views.api_moderation_approve, name="api_moderation_approve"),
     path("moderation/<int:file_id>/reject/", views.api_moderation_reject, name="api_moderation_reject"),
+    path("moderation/<int:file_id>/reassign/", views.api_moderation_reassign, name="api_moderation_reassign"),
+    path("moderation/<int:file_id>/comments/", views.api_review_comments, name="api_review_comments"),
     path("moderation/history/", views.api_moderation_history, name="api_moderation_history"),
     path("moderation/stats/", views.api_moderation_stats, name="api_moderation_stats"),
 

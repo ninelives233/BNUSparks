@@ -25,7 +25,7 @@ from django.db.models import Q, Count
 from django.utils import timezone
 from datetime import date, timedelta
 
-from .models import College, Course, Material, MaterialType, CourseCategory, UserProfile, Notification
+from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -286,6 +286,7 @@ def api_me(request):
         "email": user.email,
         "role": profile.role,
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
+        "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
     })
@@ -494,6 +495,37 @@ def api_profile(request):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 用户个人 API
+# ═══════════════════════════════════════════════════════════════
+
+@require_login
+def api_my_uploads(request):
+    """GET /api/user/uploads/ — 自己的上传记录"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+
+    qs = Material.objects.filter(uploader=request.user).select_related(
+        "course", "material_type"
+    ).order_by("-created_at")[:100]
+
+    return _ok([
+        {
+            "id": m.id, "title": m.title,
+            "file_name": m.file_name, "file_size": m.file_size,
+            "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
+            "course_name": m.course.name, "course_code": m.course.code,
+            "teacher": m.teacher,
+            "review_status": m.review_status,
+            "is_approved": m.is_approved,
+            "review_notes": m.review_notes,
+            "download_count": m.download_count,
+            "created_at": m.created_at.strftime("%Y-%m-%d"),
+        }
+        for m in qs
+    ])
+
+
+# ═══════════════════════════════════════════════════════════════
 # 课程 API
 # ═══════════════════════════════════════════════════════════════
 
@@ -552,6 +584,17 @@ def api_course_files(request, course_code):
             "review_status": m.review_status,
             "is_uploader": user is not None and m.uploader_id == user.id,
             "can_download": m.is_approved or (user is not None and m.uploader_id == user.id),
+            "can_delete": user is not None and (
+                m.uploader_id == user.id
+                or _get_or_create_profile(user).role == UserProfile.Role.SUPER_ADMIN
+                or _get_or_create_profile(user).role == UserProfile.Role.MODERATOR
+                or (
+                    _get_or_create_profile(user).role == UserProfile.Role.SUB_MODERATOR
+                    and m.course.college_id in set(
+                        _get_or_create_profile(user).managed_majors.values_list("id", flat=True)
+                    )
+                )
+            ),
         }
         for m in materials
     ])
@@ -596,7 +639,9 @@ def api_file_upload(request):
 
     # 根据用户角色决定审核状态
     profile = _get_or_create_profile(request.user)
-    is_auto_approved = profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+    is_auto_approved = profile.role in (
+        UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN, UserProfile.Role.SUB_MODERATOR,
+    )
     review_status = "approved" if is_auto_approved else "pending"
 
     material = Material.objects.create(
@@ -620,6 +665,12 @@ def api_file_upload(request):
 
     # 发送通知：审核中 / 已通过
     if review_status == "pending":
+        # 自动路由计算
+        assigned = _calculate_review_assignment(material)
+        if assigned:
+            material.assigned_moderator = assigned
+            material.save(update_fields=["assigned_moderator"])
+
         _create_notification(
             recipient=request.user,
             type=Notification.Type.REPORT,  # 暂用 report 类型
@@ -640,6 +691,11 @@ def api_file_upload(request):
         "id": material.id, "title": material.title,
         "file_name": uploaded_file.name, "file_size": file_size,
         "created_at": material.created_at.strftime("%Y-%m-%d"),
+        "review_status": material.review_status,
+        "is_approved": material.is_approved,
+        "assigned_moderator": material.assigned_moderator_id,
+        "assigned_moderator_name": material.assigned_moderator.first_name or material.assigned_moderator.username
+            if material.assigned_moderator else None,
     })
 
 
@@ -651,12 +707,15 @@ def api_file_download(request, file_id):
     if not file_path.exists():
         return _err("文件不存在", 404)
 
-    # 下载配额校验
+    # 下载权限校验：未登录访客不可下载
     user = _get_user(request)
-    if user is not None:
-        allowed, remaining, msg = _check_download_quota(user)
-        if not allowed:
-            return _err(msg, 429)
+    if user is None:
+        return _err("请先登录后再下载", 401)
+
+    # 下载配额校验
+    allowed, remaining, msg = _check_download_quota(user)
+    if not allowed:
+        return _err(msg, 429)
 
     Material.objects.filter(id=file_id).update(
         download_count=material.download_count + 1
@@ -667,6 +726,41 @@ def api_file_download(request, file_id):
         as_attachment=True,
         filename=material.file_name or material.title,
     )
+
+
+@csrf_exempt
+@require_login
+def api_file_delete(request, file_id):
+    """DELETE /api/files/<id>/delete/ — 删除文件"""
+    if request.method != "DELETE":
+        return _err("仅支持 DELETE", 405)
+
+    material = get_object_or_404(Material, id=file_id)
+
+    # 权限校验：上传者可删自己的文件，版主可删主责板块下的，总管理员可删任意
+    profile = _get_or_create_profile(request.user)
+    if profile.role == UserProfile.Role.SUPER_ADMIN:
+        pass  # 总管理员可删任意
+    elif material.uploader_id == request.user.id:
+        pass  # 上传者本人可删
+    elif profile.role == UserProfile.Role.MODERATOR:
+        # 版主检查是否在管辖板块内
+        try:
+            _check_moderator_access(request.user, material)
+        except Exception:
+            return _err("无权删除该资料", 403)
+    else:
+        return _err("无权删除该资料", 403)
+
+    # 删除磁盘文件
+    file_path = Path(settings.MEDIA_ROOT) / material.file_path
+    if file_path.exists():
+        file_path.unlink()
+
+    # 删除数据库记录
+    material.delete()
+
+    return _ok({"message": "文件已删除"})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -833,9 +927,66 @@ def api_stats(request):
     })
 
 
+def api_colleges(request):
+    """GET /api/colleges/ — 学院列表（供小版主角色分配使用）"""
+    colleges = College.objects.all().order_by("order", "name")
+    return _ok([
+        {"id": c.id, "name": c.short_name or c.name}
+        for c in colleges
+    ])
+
+
 # ═══════════════════════════════════════════════════════════════
 # 审核 API（Iter 3）
 # ═══════════════════════════════════════════════════════════════
+
+def _find_moderators_for_course(course):
+    """查找管辖该课程的版主（通过 moderated_sections 递归匹配）"""
+    mods = UserProfile.objects.filter(
+        role=UserProfile.Role.MODERATOR,
+    ).prefetch_related("moderated_sections")
+    result = []
+    for mp in mods:
+        for cat in mp.moderated_sections.all():
+            courses = _get_courses_in_category(cat)
+            if course in courses:
+                result.append(mp)
+                break
+    return result
+
+
+def _calculate_review_assignment(material):
+    """
+    审核路由逻辑：
+    专业课 → 有小版主？→ 推给小版主
+           → 无小版主？→ 推给版主（板块版主）
+           → 无版主？→ 不指派（所有版主/总管理员可见）
+    通识课 → 推给板块对应的版主
+           → 无对应督学？→ 不指派（所有版主/总管理员可见）
+    返回 User 或 None
+    """
+    course = material.course
+    if course.course_type == CourseType.MAJOR and course.college_id:
+        # 查找管理该专业的小版主
+        sub_mods = UserProfile.objects.filter(
+            role=UserProfile.Role.SUB_MODERATOR,
+            managed_majors=course.college,
+        ).select_related('user')[:1]
+        if sub_mods.exists():
+            return sub_mods[0].user
+
+        # 无小版主，找版主
+        mods = _find_moderators_for_course(course)
+        if mods:
+            return mods[0].user
+    else:
+        # 通识课：找板块对应的版主
+        mods = _find_moderators_for_course(course)
+        if mods:
+            return mods[0].user
+
+    return None  # 无人指派，对所有管理可见
+
 
 def _get_courses_in_category(cat):
     """递归获取分类节点下所有 Course 实例"""
@@ -851,24 +1002,39 @@ def _get_courses_in_category(cat):
     return courses
 
 
-def _get_moderated_material_qs(user):
-    """获取用户权限范围内的 Material QuerySet"""
+def _get_moderated_material_qs(user, include_assigned=True):
+    """获取用户权限范围内的 Material QuerySet
+
+    Args:
+        user: 当前用户
+        include_assigned: 是否包含通过路由指派（assigned_moderator）给该用户的待审核资料
+    """
     profile = _get_or_create_profile(user)
     if profile.role == UserProfile.Role.SUPER_ADMIN:
-        return Material.objects.select_related("course", "uploader")
+        qs = Material.objects.select_related("course", "uploader")
+        if include_assigned:
+            return qs
+        return qs
 
-    # moderator：从管辖板块递归出所有课程
+    if profile.role == UserProfile.Role.SUB_MODERATOR:
+        # 小版主：仅能看到管辖专业内的资料 + 指派给自己的
+        colleges = profile.managed_majors.all()
+        q = Q(course__college__in=colleges) if colleges else Q(pk__in=[])
+        if include_assigned:
+            q |= Q(assigned_moderator=user)
+        return Material.objects.filter(q).select_related("course", "uploader")
+
+    # moderator（版主）：从管辖板块递归出所有课程 + 指派给自己的
     all_courses = []
     for cat in profile.moderated_sections.all():
         all_courses.extend(_get_courses_in_category(cat))
-    if not all_courses:
-        return Material.objects.none()
-    return Material.objects.filter(
-        course__in=set(all_courses)
-    ).select_related("course", "uploader")
+    q = Q(course__in=set(all_courses)) if all_courses else Q(pk__in=[])
+    if include_assigned:
+        q |= Q(assigned_moderator=user)
+    return Material.objects.filter(q).select_related("course", "uploader")
 
 
-@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_pending(request):
     """GET /api/moderation/pending/ — 待审核列表"""
     qs = _get_moderated_material_qs(request.user).filter(review_status="pending")
@@ -891,7 +1057,7 @@ def api_moderation_pending(request):
 
 
 @csrf_exempt
-@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_approve(request, file_id):
     """POST /api/moderation/<id>/approve/ — 批准"""
     if request.method != "POST":
@@ -904,6 +1070,9 @@ def api_moderation_approve(request, file_id):
 
     material = get_object_or_404(Material, id=file_id)
     _check_moderator_access(request.user, material)
+
+    if material.review_status != "pending":
+        return _err("该资料已审核，不可重复操作")
 
     notes = (body.get("notes") or "").strip()
     material.review_status = "approved"
@@ -928,7 +1097,7 @@ def api_moderation_approve(request, file_id):
 
 
 @csrf_exempt
-@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_reject(request, file_id):
     """POST /api/moderation/<id>/reject/ — 驳回"""
     if request.method != "POST":
@@ -945,6 +1114,9 @@ def api_moderation_reject(request, file_id):
 
     material = get_object_or_404(Material, id=file_id)
     _check_moderator_access(request.user, material)
+
+    if material.review_status != "pending":
+        return _err("该资料已审核，不可重复操作")
 
     material.review_status = "rejected"
     material.is_approved = False
@@ -967,12 +1139,82 @@ def api_moderation_reject(request, file_id):
     return _ok({"message": "已驳回"})
 
 
+@csrf_exempt
+@require_role(UserProfile.Role.SUPER_ADMIN)
+def api_moderation_reassign(request, file_id):
+    """POST /api/moderation/<id>/reassign/ — 手动指派审核人（手动分流）"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+
+    material = get_object_or_404(Material, id=file_id, review_status="pending")
+
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    new_mod_id = body.get("assigned_moderator")
+    if new_mod_id is not None:
+        material.assigned_moderator = get_object_or_404(User, id=new_mod_id)
+    else:
+        material.assigned_moderator = None  # 清除指派，回归自动路由
+    material.save(update_fields=["assigned_moderator"])
+
+    return _ok({"message": "已重新指派"})
+
+
+@csrf_exempt
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_review_comments(request, file_id):
+    """GET/POST /api/moderation/<id>/comments/ — 审核异议/评论"""
+    material = get_object_or_404(Material, id=file_id)
+    try:
+        _check_moderator_access(request.user, material)
+    except Exception:
+        return _err("无权查看该资料的评论", 403)
+
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return _err("请求格式错误")
+        content = (body.get("content") or "").strip()
+        if not content:
+            return _err("内容不能为空")
+        ReviewComment.objects.create(
+            material=material,
+            commenter=request.user,
+            content=content,
+        )
+
+    comments = ReviewComment.objects.filter(material=material).select_related("commenter")
+    return _ok({
+        "comments": [
+            {
+                "id": c.id,
+                "commenter_name": c.commenter.first_name or c.commenter.username,
+                "content": c.content,
+                "created_at": c.created_at.strftime("%Y-%m-%d %H:%M"),
+            }
+            for c in comments
+        ],
+        "count": comments.count(),
+    })
+
+
 def _check_moderator_access(user, material):
-    """校验 moderator 是否有权操作该资料"""
+    """校验 moderator / sub_moderator 是否有权操作该资料"""
     profile = _get_or_create_profile(user)
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         return  # super_admin 有权操作一切
-    # moderator：必须管辖该资料所在课程
+    if profile.role == UserProfile.Role.SUB_MODERATOR:
+        # 小版主：必须管辖该资料所在课程所属的专业
+        colleges = set(profile.managed_majors.values_list("id", flat=True))
+        if material.course.college_id not in colleges and material.assigned_moderator_id != user.id:
+            from django.http import Http404
+            raise Http404("无权操作该资料")
+        return
+    # moderator（版主）：必须管辖该资料所在课程
     cat_ids = set(profile.moderated_sections.values_list("id", flat=True))
     all_courses = []
     for cat_id in cat_ids:
@@ -981,12 +1223,12 @@ def _check_moderator_access(user, material):
             all_courses.extend(_get_courses_in_category(cat))
         except CourseCategory.DoesNotExist:
             continue
-    if material.course not in set(all_courses):
+    if material.course not in set(all_courses) and material.assigned_moderator_id != user.id:
         from django.http import Http404
         raise Http404("无权操作该资料")
 
 
-@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_history(request):
     """GET /api/moderation/history/ — 审核历史"""
     qs = _get_moderated_material_qs(request.user).filter(
@@ -1035,7 +1277,7 @@ def api_moderation_history(request):
     })
 
 
-@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_stats(request):
     """GET /api/moderation/stats/ — 审核统计概览"""
     qs = _get_moderated_material_qs(request.user)
@@ -1089,6 +1331,7 @@ def api_admin_users(request):
             "role": profile.role,
             "role_label": profile.get_role_display(),
             "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
+            "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
             "date_joined": u.date_joined.strftime("%Y-%m-%d"),
             "file_count": Material.objects.filter(uploader=u).count(),
         })
@@ -1111,7 +1354,7 @@ def api_admin_set_role(request, uid):
         return _err("请求格式错误")
 
     new_role = body.get("role", "")
-    if new_role not in (UserProfile.Role.USER, UserProfile.Role.MODERATOR):
+    if new_role not in (UserProfile.Role.USER, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
         return _err("无效的角色")
 
     target_user = get_object_or_404(User, id=uid)
@@ -1120,11 +1363,20 @@ def api_admin_set_role(request, uid):
 
     if new_role == UserProfile.Role.USER:
         profile.moderated_sections.clear()
+        profile.managed_majors.clear()
     elif new_role == UserProfile.Role.MODERATOR:
+        profile.managed_majors.clear()
         section_ids = body.get("moderated_sections", [])
         if section_ids:
             profile.moderated_sections.set(
                 CourseCategory.objects.filter(id__in=section_ids)
+            )
+    elif new_role == UserProfile.Role.SUB_MODERATOR:
+        profile.moderated_sections.clear()
+        major_ids = body.get("managed_majors", [])
+        if major_ids:
+            profile.managed_majors.set(
+                College.objects.filter(id__in=major_ids)
             )
 
     profile.save()

@@ -55,3 +55,6 @@ data/资料的压缩包们/
 data/major_course_map.json
 docs/worklog-*.md
 docs/SESSION_HANDOFF.md
+
+# Test artifacts (upload testing files)
+test_data/

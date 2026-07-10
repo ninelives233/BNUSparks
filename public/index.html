@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=13">
+<link rel="stylesheet" href="/static/css/style.css?v=15">
 </head>
 <body>
 
@@ -347,6 +347,21 @@
   </div>
 </div>
 
+<!-- ═══ 我的上传（个人中心子区） ═══ -->
+<div id="myUploadsSection" style="display:none;margin-top:16px">
+  <div class="container">
+    <div class="hc-panel">
+      <div class="hc-panel-header">
+        <h3 class="section-accent">我的上传</h3>
+        <span id="myUploadsCount" style="font-size:0.75rem;color:var(--ink-faint)"></span>
+      </div>
+      <div id="myUploadsList">
+        <div class="hc-empty">加载中…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ 管理后台（Iter 3） ═══ -->
 <div class="view-section" id="adminView">
   <div class="admin-panel">
@@ -355,6 +370,7 @@
       <button class="admin-tab" data-tab="pending">⏳ 待审核</button>
       <button class="admin-tab" data-tab="history">📋 审核历史</button>
       <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none">👥 用户管理</button>
+      <button class="admin-tab" data-tab="fileman" style="display:none">📁 文件管理</button>
     </div>
     <div id="adminContent"></div>
   </div>
@@ -554,7 +570,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=13"></script>
+<script src="/static/js/app.js?v=15"></script>
 
 </body>
 </html>

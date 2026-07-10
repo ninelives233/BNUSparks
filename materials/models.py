@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 class UserProfile(models.Model):
     class Role(models.TextChoices):
         USER = "user", "普通用户"
+        SUB_MODERATOR = "sub_moderator", "小版主"
         MODERATOR = "moderator", "版主"
         SUPER_ADMIN = "super_admin", "总管理员"
 
@@ -14,6 +15,11 @@ class UserProfile(models.Model):
     moderated_sections = models.ManyToManyField(
         "CourseCategory", blank=True,
         verbose_name="主责板块",
+    )
+    managed_majors = models.ManyToManyField(
+        "College", blank=True,
+        verbose_name="管辖专业",
+        help_text="小版主仅管理这些专业（学院）对应的课程资料审核",
     )
     daily_download_count = models.IntegerField("今日已下载", default=0)
     last_download_date = models.DateField("最后下载日期", null=True, blank=True)
@@ -120,6 +126,11 @@ class Material(models.Model):
         User, on_delete=models.SET_NULL, null=True, blank=True,
         verbose_name="上传者", related_name="uploads",
     )
+    assigned_moderator = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="指派审核人", related_name="assigned_reviews",
+        help_text="总管理员手动指派，覆盖自动路由。null=按规则路由",
+    )
     review_status = models.CharField(
         max_length=20,
         choices=[("pending", "待审核"), ("approved", "已通过"), ("rejected", "已驳回")],
@@ -207,3 +218,24 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"[{self.get_type_display()}] {self.title}"
+
+
+class ReviewComment(models.Model):
+    """审核异议/评论——同一条待审核资料的可被多方看到时的讨论"""
+    material = models.ForeignKey(
+        Material, on_delete=models.CASCADE, related_name="review_comments",
+        verbose_name="关联资料",
+    )
+    commenter = models.ForeignKey(
+        User, on_delete=models.CASCADE, verbose_name="评论者",
+    )
+    content = models.TextField("异议内容")
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "审核评论"
+        verbose_name_plural = "审核评论"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"[{self.commenter.first_name or self.commenter.username}] {self.content[:40]}"
