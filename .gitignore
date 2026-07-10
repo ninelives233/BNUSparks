@@ -56,5 +56,8 @@ data/major_course_map.json
 docs/worklog-*.md
 docs/SESSION_HANDOFF.md
 
+# Deployment script (contains SSH credentials — DO NOT COMMIT)
+deploy.sh
+
 # Test artifacts (upload testing files)
 test_data/
