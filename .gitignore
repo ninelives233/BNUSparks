@@ -61,3 +61,20 @@ deploy.sh
 
 # Test artifacts (upload testing files)
 test_data/
+
+# Deployment scripts (contain SSH credentials — never commit)
+deploy.sh
+scripts/deploy.sh
+scripts/deploy.py
+
+# One-time helper scripts (not needed for production)
+seed.py
+seed_tree.py
+import_archives.py
+git_storage.py
+scripts/clean_stale_data.py
+scripts/test_api.py
+scripts/test_setup.py
+
+# Deployment docs (contains server info)
+DEPLOY.md
