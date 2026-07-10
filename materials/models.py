@@ -21,6 +21,11 @@ class UserProfile(models.Model):
         verbose_name="管辖专业",
         help_text="小版主仅管理这些专业（学院）对应的课程资料审核",
     )
+    can_moderate_general = models.BooleanField("可审核通识课", default=False)
+    auto_approve = models.BooleanField("自动托管审核", default=False,
+        help_text="开启后自动通过管辖板块内所有新上传的资料")
+    can_auto_approve = models.BooleanField("允许自动托管", default=False,
+        help_text="总管理员设置：该用户是否可以开启自动托管")
     daily_download_count = models.IntegerField("今日已下载", default=0)
     last_download_date = models.DateField("最后下载日期", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
