@@ -1,0 +1,29 @@
+#!/bin/bash
+# BNU Sparks 一键部署脚本（模板）
+# 复制为 deploy.sh 并填入 SSH 密码后使用
+# 用法: bash deploy.sh
+
+set -e
+H="root@62.234.182.156"
+O="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+R="/opt/bnusparks"
+P="在此填入SSH密码"
+
+echo "📦 正在部署 v=24..."
+
+# 1. 上传文件
+sshpass -p$P scp $O materials/views.py $H:$R/materials/views.py
+sshpass -p$P scp $O public/js/app.js $H:$R/public/js/app.js
+sshpass -p$P scp $O public/index.html $H:$R/public/index.html
+sshpass -p$P scp $O public/css/style.css $H:$R/public/css/style.css
+
+# 2. 迁移 + 静态文件 + 重启
+sshpass -p$P ssh $O $H "source $R/venv/bin/activate && cd $R && \
+  python3 manage.py migrate --settings=bnusparks.settings_prod && \
+  python3 manage.py collectstatic --settings=bnusparks.settings_prod --clear --noinput && \
+  supervisorctl restart bnusparks && echo DONE"
+
+# 3. 验证版本
+sleep 3
+V=$(curl -s http://62.234.182.156/ | grep -o 'v=[0-9]*' | head -1)
+echo "✅ 部署完成 — $V"
