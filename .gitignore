@@ -6,8 +6,10 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+venv/
+*.egg-info/
 
-# Claude Code local config (skills, agents, memory, project instructions — not project code)
+# Claude Code local config (skills, agents, memory — not project code)
 .agents/
 .claude/
 CLAUDE.md
@@ -16,7 +18,7 @@ CLAUDE.md
 .obsidian/
 .vscode/
 
-# History (archived design iterations, old Django attempts, reference materials)
+# History (archived design iterations, old Django attempts)
 history/
 
 # Environment variables (API keys, passwords)
@@ -28,13 +30,6 @@ design-*-file-management.md
 design-requirements-*.md
 implementation-plan-*.md
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-venv/
-*.egg-info/
-
 # Server
 *.pid
 
@@ -43,9 +38,7 @@ venv/
 *.sqlite
 staticfiles/
 
-# Data — 资料存储
-#   data/materials/   MEDIA_ROOT — 所有资料文件（按课程代码组织，git 跟踪）
-#   data/*.sqlite3    SQLite 数据库（不上传）
+# Data — 资料文件（git 跟踪），但数据库不上传
 data/*.sqlite3
 
 # Source archives (batch import sources, not repo content)
@@ -53,19 +46,16 @@ data/资料的压缩包们/
 
 # 培养方案 JSON 存档（11MB，按需通过 import_pyfa 命令导入）
 data/major_course_map.json
+
+# Documentation worklogs
 docs/worklog-*.md
 docs/SESSION_HANDOFF.md
 
-# Deployment script (contains SSH credentials — DO NOT COMMIT)
-deploy.sh
-
-# Test artifacts (upload testing files)
-test_data/
-
-# Deployment scripts (contain SSH credentials — never commit)
+# Deployment scripts (contain SSH credentials — NEVER COMMIT)
 deploy.sh
 scripts/deploy.sh
 scripts/deploy.py
+DEPLOY.md
 
 # One-time helper scripts (not needed for production)
 seed.py
@@ -73,8 +63,10 @@ seed_tree.py
 import_archives.py
 git_storage.py
 scripts/clean_stale_data.py
+scripts/cleanup_repo.sh
 scripts/test_api.py
 scripts/test_setup.py
+scripts/__pycache__/
 
-# Deployment docs (contains server info)
-DEPLOY.md
+# Test artifacts
+test_data/

@@ -421,6 +421,8 @@ def api_notifications(request):
                     "is_read": n.is_read,
                     "material_id": n.material_id,
                     "material_title": n.material.title if n.material else None,
+                    "course_code": n.material.course.code if n.material and hasattr(n.material, "course") and n.material.course else None,
+                    "course_name": n.material.course.name if n.material and hasattr(n.material, "course") and n.material.course else None,
                     "created_at": n.created_at.strftime("%Y-%m-%d %H:%M"),
                 }
                 for n in qs[:100]
@@ -515,21 +517,49 @@ def api_my_uploads(request):
         "course", "material_type"
     ).order_by("-created_at")[:100]
 
-    return _ok([
-        {
+    from datetime import timedelta
+    delay_boundary = timezone.now() - timedelta(minutes=1)
+
+    def _serialize_upload(m):
+        # 自动托管延迟：被自动批准 < 1 分钟的文件，对上传者仍显示"待审核"
+        rs = m.review_status
+        is_delayed = (rs == "approved"
+                      and m.uploader_id == request.user.id
+                      and m.reviewed_by_id is not None
+                      and m.reviewed_by_id != request.user.id
+                      and m.created_at > delay_boundary)
+        if is_delayed:
+            rs = "pending"
+        elif (rs == "approved"
+              and m.uploader_id == request.user.id
+              and m.reviewed_by_id is not None
+              and m.reviewed_by_id != request.user.id
+              and not Notification.objects.filter(
+                  recipient=request.user, material=m,
+                  type=Notification.Type.APPROVED,
+              ).exists()):
+            # 1 分钟延迟已过，创建一条和人工审核完全一样的通知
+            _create_notification(
+                recipient=request.user,
+                type=Notification.Type.APPROVED,
+                title="你的资料已通过审核",
+                message=f"你的资料「{m.title}」已通过审核，现在可以下载了。",
+                material=m,
+            )
+        return {
             "id": m.id, "title": m.title,
             "file_name": m.file_name, "file_size": m.file_size,
             "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
             "course_name": m.course.name, "course_code": m.course.code,
             "teacher": m.teacher,
-            "review_status": m.review_status,
+            "review_status": rs,
             "is_approved": m.is_approved,
             "review_notes": m.review_notes,
             "download_count": m.download_count,
             "created_at": m.created_at.strftime("%Y-%m-%d"),
         }
-        for m in qs
-    ])
+
+    return _ok([_serialize_upload(m) for m in qs])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -579,8 +609,38 @@ def api_course_files(request, course_code):
         "material_type"
     ).order_by("-created_at")
 
-    return _ok([
-        {
+    from datetime import timedelta
+    delay_boundary = timezone.now() - timedelta(minutes=1)
+    user_id = user.id if user is not None else None
+
+    def _serialize_file(m):
+        # 自动托管延迟：被自动批准 < 1 分钟的文件，对上传者仍显示"待审核"
+        rs = m.review_status
+        if (rs == "approved"
+                and user is not None
+                and m.uploader_id == user.id
+                and m.reviewed_by_id is not None
+                and m.reviewed_by_id != user.id
+                and m.created_at > delay_boundary):
+            rs = "pending"
+        elif (rs == "approved"
+              and user is not None
+              and m.uploader_id == user.id
+              and m.reviewed_by_id is not None
+              and m.reviewed_by_id != user.id
+              and not Notification.objects.filter(
+                  recipient=user, material=m,
+                  type=Notification.Type.APPROVED,
+              ).exists()):
+            # 1 分钟延迟已过，创建一条和人工审核完全一样的通知
+            _create_notification(
+                recipient=user,
+                type=Notification.Type.APPROVED,
+                title="你的资料已通过审核",
+                message=f"你的资料「{m.title}」已通过审核，现在可以下载了。",
+                material=m,
+            )
+        return {
             "id": m.id, "title": m.title,
             "file_name": m.file_name, "file_size": m.file_size,
             "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
@@ -588,7 +648,7 @@ def api_course_files(request, course_code):
             "teacher": m.teacher,
             "download_count": m.download_count,
             "created_at": m.created_at.strftime("%Y-%m-%d"),
-            "review_status": m.review_status,
+            "review_status": rs,
             "is_uploader": user is not None and m.uploader_id == user.id,
             "can_download": m.is_approved or (user is not None and m.uploader_id == user.id),
             "can_delete": user is not None and (
@@ -603,8 +663,8 @@ def api_course_files(request, course_code):
                 )
             ),
         }
-        for m in materials
-    ])
+
+    return _ok([_serialize_file(m) for m in materials])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -738,14 +798,12 @@ def api_file_upload(request):
             message=f"你的资料「{title}」已提交，审核通过后即可被其他同学下载。",
             material=material,
         )
+    elif auto_approved_by:
+        # 自动托管：不发送通知，上传者端延迟 1 分钟才显示"已通过"
+        pass
     else:
-        _create_notification(
-            recipient=request.user,
-            type=Notification.Type.APPROVED,
-            title="资料已自动通过审核",
-            message=f"你的资料「{title}」已自动通过审核，现在可以下载了。",
-            material=material,
-        )
+        # 管理员自身上传，直接通过
+        pass
 
     return _ok({
         "id": material.id, "title": material.title,
@@ -1118,9 +1176,11 @@ def _get_moderated_material_qs(user, include_assigned=True):
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_pending(request):
-    """GET /api/moderation/pending/ — 待审核列表（含 24h 内同僚已通过资料 + 下级分流标记）"""
+    """GET /api/moderation/pending/ — 待审核列表
+    ?include_subordinate=1  — 包含下级版主辖区的待审核（用于上级越级管辖）"""
     from datetime import timedelta
     recently = timezone.now() - timedelta(hours=24)
+    include_subordinate = request.GET.get("include_subordinate") == "1"
     qs = _get_moderated_material_qs(request.user).filter(
         Q(review_status="pending") |
         (Q(review_status="approved", reviewed_at__gte=recently) & ~Q(reviewed_by=request.user))
@@ -1142,6 +1202,13 @@ def api_moderation_pending(request):
     # 预计算被下级版主覆盖的课程 ID（仅 moderator+super_admin 需要），
     # 用于在 UI 中标记"此内容有下级版主在处理"，但不阻止上级操作。
     subordinate_course_ids = _get_subordinate_covered_course_ids(request.user)
+
+    # 默认过滤掉已有下级版主处理的待审核（上级仍可通过 include_subordinate=1 查看）
+    if not include_subordinate and subordinate_course_ids:
+        qs = qs.filter(
+            Q(review_status="approved") |  # 同僚已通过的始终显示
+            ~(Q(review_status="pending") & Q(course_id__in=subordinate_course_ids))
+        )
 
     def _serialize(m):
         is_peer_approved = m.review_status == "approved" and m.reviewed_by_id != request.user.id
@@ -1166,6 +1233,26 @@ def api_moderation_pending(request):
             "review_status": m.review_status,
         }
     return _ok([_serialize(m) for m in qs])
+
+
+@csrf_exempt
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_moderation_batch_approve(request):
+    """POST /api/moderation/batch-approve/ — 一键通过全部待审核"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    qs = _get_moderated_material_qs(request.user).filter(
+        review_status="pending"
+    ).exclude(uploader=request.user)
+    count = qs.count()
+    now = timezone.now()
+    qs.update(
+        is_approved=True,
+        review_status="approved",
+        reviewed_by=request.user,
+        reviewed_at=now,
+    )
+    return _ok({"approved_count": count})
 
 
 @csrf_exempt
@@ -1464,6 +1551,7 @@ def api_moderation_history(request):
                 "reviewed_at": m.reviewed_at.strftime("%Y-%m-%d %H:%M") if m.reviewed_at else "",
                 "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
                 "can_object": m.review_status == "approved" and m.reviewed_at and m.reviewed_at >= recently and m.reviewed_by_id != request.user.id,
+                "is_admin_uploaded": m.reviewed_by is None and m.review_status == "approved",
             }
             for m in items
         ],
