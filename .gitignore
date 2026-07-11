@@ -53,6 +53,7 @@ docs/SESSION_HANDOFF.md
 
 # Deployment scripts (contain SSH credentials — NEVER COMMIT)
 deploy.sh
+deploy.sh.template
 scripts/deploy.sh
 scripts/deploy.py
 DEPLOY.md
