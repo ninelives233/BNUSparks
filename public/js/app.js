@@ -55,9 +55,9 @@
       }
     }
 
-    // 乐观递增前端下载计数
-    var c = el.closest('tr').querySelector('.ft-dlcount');
-    if (c) { var m = c.textContent.match(/(\d+)/); if (m) { c.textContent = (parseInt(m[1]) + 1) + ' 次'; } }
+    // 乐观递增前端下载计数（仅在文件表格内有效）
+    var tr = el.closest('tr');
+    if (tr) { var c = tr.querySelector('.ft-dlcount'); if (c) { var m = c.textContent.match(/(\d+)/); if (m) { c.textContent = (parseInt(m[1]) + 1) + ' 次'; } } }
 
     // 用 fetch+token 下载（比 window.location.href 能携带 Auth 头）
     downloadFetch(fileId);
@@ -107,13 +107,13 @@
       container.innerHTML =
         '<div class="user-dropdown-wrap">' +
           '<button class="user-dropdown-trigger" id="userDdTrigger" onclick="toggleUserDropdown(event)">' +
-            '<span class="notif-bell" onclick="event.stopPropagation();toggleNotifDrawer()">🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span></span>' +
+            '<span class="notif-bell" onclick="event.stopPropagation();toggleNotifDrawer()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:block"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" id="notifBadge" style="display:none">0</span></span>' +
             '<span class="user-name">' + esc(currentUser.nickname || currentUser.username) + '</span>' +
             '<span class="dd-arrow">▾</span>' +
           '</button>' +
           '<div class="user-dropdown-menu" id="userDropdown">' +
             '<a href="javascript:void(0)" onclick="showProfile();closeUserDropdown();event.stopPropagation();return false"><span>👤</span> 个人中心</a>' +
-            '<a href="javascript:void(0)" onclick="toggleNotifDrawer();closeUserDropdown();event.stopPropagation();return false"><span>🔔</span> 通知中心<span class="notif-badge-dot" id="notifDot" style="display:none"></span></a>' +
+            '<a href="javascript:void(0)" onclick="toggleNotifDrawer();closeUserDropdown();event.stopPropagation();return false"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:middle"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> 通知中心<span class="notif-badge-dot" id="notifDot" style="display:none"></span></a>' +
             '<div class="dd-divider"></div>' +
             '<a href="javascript:void(0)" onclick="showAdminPanel();closeUserDropdown();event.stopPropagation();return false" id="adminEntry" style="display:' + (currentUser.role !== 'user' ? 'flex' : 'none') + '"><span>⚙️</span> 管理后台</a>' +
             '<div class="dd-divider"></div>' +
@@ -676,7 +676,7 @@
         list.innerHTML = '<p class="notif-empty">暂无通知</p>';
         return;
       }
-      list.innerHTML = data.list.map(function(n) {
+      var html = data.list.map(function(n) {
         var isRead = n.is_read || readSet.has(n.id);
         var unreadClass = isRead ? 'notif-item-read' : 'notif-item-unread';
         var msgPreview = n.message ? (n.message.length > 40 ? esc(n.message).slice(0, 40) + '…' : esc(n.message)) : '';
@@ -692,11 +692,15 @@
           '</div>' +
           '<div class="notif-item-body" style="display:none" data-body="' + n.id + '">' +
             '<div class="notif-item-fullmsg">' + (n.message ? esc(n.message) : '') + '</div>' +
-            (n.material_id ? '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ')">查看相关资料 →</a></div>' : '') +
+            (n.material_id ? '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>' : '') +
             (isRead ? '' : '<button class="notif-mark-btn" onclick="markOneNotifRead(' + n.id + ', this.closest(\'.notif-item\'), event)">标为已读</button>') +
           '</div>' +
         '</div>';
       }).join('');
+      if (data.list.length > 0) {
+        html += '<div style="padding:8px;text-align:center"><a href="javascript:void(0)" onclick="closeNotifDrawer();showNotifFull()" class="notif-view-all">📋 查看全部通知</a></div>';
+      }
+      list.innerHTML = html;
     } catch (err) {
       list.innerHTML = '<p class="notif-empty">加载失败</p>';
     }
@@ -736,12 +740,15 @@
     }
   }
 
-  function navToMaterial(materialId) {
-    // 关闭通知抽屉
+  function navToMaterial(materialId, courseCode, courseName) {
     closeNotifDrawer();
-    // 通知关联的资料可能在 explorer 中，尝试导航
-    // 先切到首页，再尝试匹配 (目前没有直接跳转，留作后续增强)
-    showHome();
+    if (courseCode) {
+      var type = courseCode.startsWith('GEN') ? '通识课' : '专业课';
+      showExplorer(type);
+      setTimeout(function() { navToLast(courseCode); }, 80);
+    } else {
+      showHome();
+    }
   }
 
   async function markOneNotifRead(nid, el, event) {
@@ -780,6 +787,97 @@
     loadNotifications();
   }
 
+  // ── 通知中心完整页 ──
+  function showNotifFull() {
+    document.querySelectorAll('.view-section').forEach(function(v) { v.style.display = 'none'; });
+    var v = document.getElementById('notifView');
+    if (v) v.style.display = 'block';
+    switchView('notif');
+    updateSidebar('home');
+    window.scrollTo({ top: 0 });
+    pushViewState('notif', {});
+    renderNotifFull();
+  }
+
+  function renderNotifFull() {
+    var el = document.getElementById('notifFullContent');
+    if (!el) return;
+    el.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/auth/notifications/').then(function(data) {
+      var readSet = _getReadNotifSet();
+      var realUnread = 0;
+      if (data.list) {
+        data.list.forEach(function(n) { if (!n.is_read && !readSet.has(n.id)) realUnread++; });
+      }
+      var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+        '<span style="font-size:0.85rem;color:var(--text-muted)">共 ' + (data.list ? data.list.length : 0) + ' 条' + (realUnread > 0 ? '，' + realUnread + ' 条未读' : '') + '</span>' +
+        (realUnread > 0 ? '<button class="admin-btn admin-btn-sm" onclick="markAllNotifFullRead()">全部标为已读</button>' : '') +
+        '</div>';
+      if (!data.list || !data.list.length) {
+        html += '<div class="admin-empty">暂无通知</div>';
+        el.innerHTML = html;
+        return;
+      }
+      html += '<div class="notif-full-list">';
+      data.list.forEach(function(n) {
+        var isRead = n.is_read || readSet.has(n.id);
+        html += '<div class="notif-full-item' + (isRead ? '' : ' notif-full-item-unread') + '" data-nid="' + n.id + '">' +
+          '<div class="notif-full-header" onclick="toggleFullNotif(' + n.id + ', this)">' +
+            '<div class="notif-full-dot' + (isRead ? '' : ' unread') + '"></div>' +
+            '<div class="notif-full-info">' +
+              '<div class="notif-full-title">' + esc(n.title) + '</div>' +
+              '<div class="notif-full-meta">' + esc(n.created_at) + ' · ' + esc(n.type || '通知') + '</div>' +
+            '</div>' +
+            '<span class="notif-expand-icon">▾</span>' +
+          '</div>' +
+          '<div class="notif-full-body" style="display:none">' +
+            '<div class="notif-full-msg">' + (n.message ? esc(n.message) : '') + '</div>' +
+            (n.material_id ? '<div class="notif-full-link"><a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>' : '') +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    }).catch(function(err) {
+      el.innerHTML = '<div class="admin-empty">加载失败</div>';
+    });
+  }
+
+  function toggleFullNotif(nid, headerEl) {
+    var item = headerEl.closest('.notif-full-item');
+    var body = item ? item.querySelector('.notif-full-body') : null;
+    if (!body) return;
+    var isOpen = body.style.display === 'block';
+    body.style.display = isOpen ? 'none' : 'block';
+    headerEl.querySelector('.notif-expand-icon').classList.toggle('expanded', !isOpen);
+    // 未读自动标记已读
+    if (!isOpen && item && item.classList.contains('notif-full-item-unread')) {
+      _addReadNotif(nid);
+      api('/api/auth/notifications/' + nid + '/read/', { method: 'POST' }).catch(function(){});
+      item.classList.remove('notif-full-item-unread');
+      // 通知抽屉同步更新
+      var drawerItem = document.querySelector('.notif-item[data-nid="' + nid + '"]');
+      if (drawerItem) { drawerItem.classList.remove('notif-item-unread'); drawerItem.classList.add('notif-item-read'); }
+    }
+  }
+
+  function markAllNotifFullRead() {
+    var ids = [];
+    document.querySelectorAll('.notif-full-item').forEach(function(el) {
+      var nid = parseInt(el.getAttribute('data-nid'));
+      if (nid) ids.push(nid);
+    });
+    _addAllReadNotifs(ids);
+    api('/api/auth/notifications/', { method: 'POST' }).catch(function(){});
+    document.querySelectorAll('.notif-full-item').forEach(function(el) { el.classList.remove('notif-full-item-unread'); });
+    document.querySelectorAll('.notif-item').forEach(function(el) { el.classList.remove('notif-item-unread'); el.classList.add('notif-item-read'); });
+    renderNotifFull();
+    var badge = document.getElementById('notifBadge');
+    if (badge) badge.style.display = 'none';
+    var dot = document.getElementById('notifDot');
+    if (dot) dot.style.display = 'none';
+  }
+
   // ── 管理后台（Iter 3） ──
   function showAdminPanel() {
     if (!currentUser || (currentUser.role !== 'moderator' && currentUser.role !== 'super_admin' && currentUser.role !== 'sub_moderator')) {
@@ -795,6 +893,9 @@
     updateSidebar('admin');
     window.scrollTo({ top: 0 });
     pushViewState('admin', {});
+    // 确保"我的上传"区域被隐藏（不在 .view-section 中）
+    var uploadsSec = document.getElementById('myUploadsSection');
+    if (uploadsSec) uploadsSec.style.display = 'none';
     loadAdminPanel();
   }
 
@@ -936,7 +1037,12 @@
   // ── 概览 ──
   function renderAdminOverview(content) {
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
-    api('/api/moderation/stats/').then(function(stats) {
+    Promise.all([
+      api('/api/moderation/stats/'),
+      api('/api/auth/profile/')
+    ]).then(function(results) {
+      var stats = results[0];
+      var profile = results[1];
       var html = '<div class="admin-stats-grid">' +
         '<div class="admin-stat-card"><div class="stat-number">' + (stats.pending_count || 0) + '</div><div class="stat-label">⏳ 待审核</div></div>' +
         '<div class="admin-stat-card"><div class="stat-number">' + (stats.total_approved || 0) + '</div><div class="stat-label">✅ 已通过</div></div>' +
@@ -947,6 +1053,14 @@
       if (stats.pending_count > 0) {
         html += '<div style="margin-top:12px"><button class="admin-btn admin-btn-primary" onclick="switchAdminTab(\'pending\');document.querySelector(\'[data-tab=pending]\').click()">查看 ' + stats.pending_count + ' 条待审核资料 →</button></div>';
       }
+      // 自动托管开关（仅版主/小版主有 can_auto_approve 时显示）
+      if (profile.can_auto_approve) {
+        var isOn = profile.auto_approve;
+        html += '<div style="margin-top:16px;padding:10px 14px;background:var(--card-bg);border-radius:8px;display:flex;align-items:center;justify-content:space-between">' +
+          '<span><strong>🤖 自动托管审核</strong><br><span style="font-size:0.75rem;color:var(--text-muted)">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
+          '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + (isOn ? '✅ 已开启' : '⏸ 已关闭') + '</button>' +
+        '</div>';
+      }
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
@@ -954,31 +1068,55 @@
   }
 
   // ── 待审核 ──
+  var _pendingIncludeSub = false;
+
   function renderAdminPending(content) {
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    var url = '/api/moderation/pending/';
+    if (_pendingIncludeSub) url += '?include_subordinate=1';
     // 同时加载待审核数据和当前用户资料（自动托管状态）
     Promise.all([
-      api('/api/moderation/pending/'),
+      api(url),
       api('/api/auth/profile/')
     ]).then(function(results) {
       var list = results[0];
       var profile = results[1];
-      if (!list || list.length === 0) {
-        content.innerHTML = '<div class="admin-empty">🎉 没有待审核的资料</div>';
-        return;
-      }
+
+      var html = '';
 
       // 自动托管开关（仅版主/小版主有 can_auto_approve 时显示）
-      var autoHtml = '';
       if (profile.can_auto_approve) {
         var isOn = profile.auto_approve;
-        autoHtml = '<div style="margin-bottom:12px;padding:10px 14px;background:var(--card-bg);border-radius:8px;display:flex;align-items:center;justify-content:space-between">' +
+        html += '<div style="margin-bottom:12px;padding:10px 14px;background:var(--card-bg);border-radius:8px;display:flex;align-items:center;justify-content:space-between">' +
           '<span><strong>🤖 自动托管审核</strong><br><span style="font-size:0.75rem;color:var(--text-muted)">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
           '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + (isOn ? '✅ 已开启' : '⏸ 已关闭') + '</button>' +
         '</div>';
       }
 
-      var html = autoHtml;
+      // 工具条：下级板块切换 + 一键过审
+      var isMod = currentUser && (currentUser.role === 'moderator' || currentUser.role === 'super_admin');
+      var hasSubItems = list && list.some(function(m) { return m.is_subordinate_handled; });
+      html += '<div class="pc-toolbar">';
+      if (isMod) {
+        html += '<label class="pc-toolbar-toggle" title="启用后显示下级版主管辖板块的待审核资料">' +
+          '<input type="checkbox" ' + (_pendingIncludeSub ? 'checked' : '') + ' onchange="togglePendingIncludeSub(this.checked)"> 显示下级板块' +
+        '</label>';
+      } else {
+        html += '<span></span>';
+      }
+      // 一键过审（仅当有待审核且非自己的上传时显示）
+      var hasApprovable = list && list.some(function(m) { return !m.is_peer_approved && !m.is_own; });
+      if (hasApprovable) {
+        html += '<button class="admin-btn admin-btn-approve" onclick="batchApprovePending(this)">⚡ 一键通过全部</button>';
+      }
+      html += '</div>';
+
+      if (!list || list.length === 0) {
+        html += '<div class="admin-empty">🎉 没有待审核的资料</div>';
+        content.innerHTML = html;
+        return;
+      }
+
       html += '<div class="admin-pending-list">';
 
       var hasPeerApproved = list.some(function(m) { return m.is_peer_approved; });
@@ -1041,6 +1179,21 @@
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+    });
+  }
+
+  function togglePendingIncludeSub(checked) {
+    _pendingIncludeSub = checked;
+    renderAdminPending(document.getElementById('adminContent'));
+  }
+
+  function batchApprovePending(btn) {
+    if (btn) { btn.textContent = '⏳ 处理中…'; btn.disabled = true; }
+    api('/api/moderation/batch-approve/', { method: 'POST' }).then(function(result) {
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('批量过审失败：' + err.message);
+      renderAdminPending(document.getElementById('adminContent'));
     });
   }
 
@@ -1150,6 +1303,8 @@
       data.items.forEach(function(m) {
         var statusClass = m.review_status === 'approved' ? 'status-approved' : 'status-rejected';
         var statusText = m.review_status === 'approved' ? '✓ 通过' : '✗ 驳回';
+        var adminBadge = m.is_admin_uploaded ? '<span class="admin-uploaded-badge">🛡️ 管理员自传</span>' : '';
+        var reviewerName = m.is_admin_uploaded ? escapeHtml(m.uploader_name) + ' (自传)' : escapeHtml(m.reviewed_by_name);
         var objHtml = '';
         if (m.can_object && m.review_status === 'approved') {
           objHtml = '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escapeHtml(m.title) + '\')">💬 异议</button>';
@@ -1157,13 +1312,13 @@
           objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">💬</button>';
         }
         html += '<tr>' +
-          '<td>' + escapeHtml(m.title) + '</td>' +
+          '<td>' + escapeHtml(m.title) + adminBadge + '</td>' +
           '<td>' + escapeHtml(m.course_name) + '</td>' +
           '<td>' + escapeHtml(m.uploader_name) + '</td>' +
-          '<td>' + escapeHtml(m.reviewed_by_name) + '</td>' +
+          '<td>' + reviewerName + '</td>' +
           '<td><span class="status-tag ' + statusClass + '">' + statusText + '</span></td>' +
           '<td>' + escapeHtml(m.review_notes || '') + '</td>' +
-          '<td>' + m.reviewed_at + '</td>' +
+          '<td>' + (m.is_admin_uploaded ? m.created_at : m.reviewed_at) + '</td>' +
           '<td>' + objHtml + '</td>' +
         '</tr>';
         // 异议详情行（隐藏，展开时显示）
@@ -1474,11 +1629,13 @@
       body: { role: 'sub_moderator', moderated_sections: catIds }
     }).then(function() {
       if (overlay) overlay.remove();
-      renderAdminUsers(document.getElementById('adminContent'), '');
+      var si = document.getElementById('adminUserSearch');
+      renderAdminUsers(document.getElementById('adminContent'), si ? si.value.trim() : '');
     }).catch(function(err) {
       alert('操作失败：' + err.message);
       if (overlay) overlay.remove();
-      renderAdminUsers(document.getElementById('adminContent'), '');
+      var si = document.getElementById('adminUserSearch');
+      renderAdminUsers(document.getElementById('adminContent'), si ? si.value.trim() : '');
     });
   }
 
@@ -1504,11 +1661,13 @@
       body: { role: 'moderator', managed_majors: collegeIds, can_moderate_general: canGen, moderated_sections: sectionIds }
     }).then(function() {
       if (overlay) overlay.remove();
-      renderAdminUsers(document.getElementById('adminContent'), '');
+      var si = document.getElementById('adminUserSearch');
+      renderAdminUsers(document.getElementById('adminContent'), si ? si.value.trim() : '');
     }).catch(function(err) {
       alert('操作失败：' + err.message);
       if (overlay) overlay.remove();
-      renderAdminUsers(document.getElementById('adminContent'), '');
+      var si = document.getElementById('adminUserSearch');
+      renderAdminUsers(document.getElementById('adminContent'), si ? si.value.trim() : '');
     });
   }
 
@@ -1634,14 +1793,27 @@
 
   // ── 自动托管管理（super_admin 切换 can_auto_approve） ──
   function toggleAdminAutoApprove(uid, btn) {
-    // 从按钮 data-caa 属性直接读取当前状态，无需额外 API 请求
+    // 从按钮 data-caa 属性直接读取当前状态
     var currentOn = btn && btn.getAttribute('data-caa') === '1';
+    var newVal = !currentOn;
     api('/api/admin/users/' + uid + '/auto-approve/', {
       method: 'POST',
-      body: { can_auto_approve: !currentOn }
-    }).then(function() {
-      renderAdminUsers(document.getElementById('adminContent'), '');
+      body: { can_auto_approve: newVal, auto_approve: newVal }
+    }).then(function(result) {
+      // 直接修改所在 <td> 的 DOM，无需重渲染
+      if (!btn) return;
+      var td = btn.closest('td');
+      if (td) {
+        // 更新 🟢🔴 标识
+        var span = td.querySelector('span');
+        if (span) span.textContent = result.auto_approve ? '🟢 开' : '🔴 关';
+      }
+      // 更新按钮本身
+      btn.textContent = result.can_auto_approve ? '允许' : '禁止';
+      btn.setAttribute('data-caa', result.can_auto_approve ? '1' : '0');
     }).catch(function(err) {
+      btn.textContent = currentOn ? '允许' : '禁止';
+      btn.setAttribute('data-caa', currentOn ? '1' : '0');
       alert('操作失败：' + err.message);
     });
   }
@@ -1821,6 +1993,7 @@
           case 'rankings': showTopDownloaded(saved.scrollY); break;
           case 'recentAll': showRecentAll(saved.scrollY); break;
           case 'profile': showProfile(); break;
+          case 'notif': showNotifFull(); break;
           case 'admin': showAdminPanel(); break;
           case 'about': showAbout(saved.aboutSection || 'introduction'); break;
           case 'tutorial': showTutorial(); break;
@@ -2075,7 +2248,7 @@
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   // ── Navigation ──
-  function navTo(depth) { expPath = expPath.slice(0, depth); pushViewState('explorer', { expPath: [...expPath] }); renderExplorer(); }
+  function navTo(depth) { expPath = expPath.slice(0, depth); pushViewState('explorer', { expPath: [...expPath] }); renderExplorer(); window.scrollTo({ top: 0 }); }
   function navIn(name) {
     const node = getNode(expPath);
     if (!node || !node.children) return;
@@ -2084,6 +2257,7 @@
     expPath.push(name);
     pushViewState('explorer', { expPath: [...expPath] });
     renderExplorer();
+    window.scrollTo({ top: 0 });
   }
 
   // ── Breadcrumb ──
@@ -2161,9 +2335,16 @@
     const fCount = cId && courseFileCounts[cId] !== undefined ? courseFileCounts[cId] : null;
     let badge = '';
     if (cId) {
-      badge = fCount > 0
-        ? '<span class="fli-badge has-data">' + fCount + ' 个文件</span>'
-        : '<span class="fli-badge no-data">暂无资料</span>';
+      if (fCount !== null) {
+        badge = fCount > 0
+          ? '<span class="fli-badge has-data">' + fCount + ' 个文件</span>'
+          : '<span class="fli-badge no-data">暂无资料</span>';
+      } else {
+        // courseFileCounts 尚未加载完毕，使用 tree 中的 hasFiles 布尔值
+        badge = item.hasFiles
+          ? '<span class="fli-badge has-data">有文件</span>'
+          : '<span class="fli-badge no-data">暂无资料</span>';
+      }
     } else if (hasSub) {
       badge = '<span class="fli-badge has-data">' + item.children.length + ' 项</span>';
     }
@@ -2464,12 +2645,16 @@
     const existing = document.querySelector('.file-info-overlay');
     if (existing) existing.remove();
 
+    // 根据文件名长度决定标题字号
+    var titleLen = (file.title || '').length;
+    var titleFontSize = titleLen > 20 ? '1.0rem' : (titleLen > 10 ? '1.15rem' : '1.3rem');
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay file-info-overlay';
     overlay.innerHTML =
-      '<div class="modal-card">' +
-        '<button class="modal-close" onclick="this.closest(\'.modal-overlay\').remove()">✕</button>' +
-        '<h2 class="modal-title">' + esc(file.title) + '</h2>' +
+      '<div class="modal-card file-info-card">' +
+        '<button class="modal-close" onclick="closeFileInfoModal(event)">✕</button>' +
+        '<h2 class="modal-title" style="font-size:' + titleFontSize + ';padding-right:28px;word-break:break-word">' + esc(file.title) + '</h2>' +
         '<div class="file-info-content">' +
           '<div class="fi-row"><span class="fi-label">课程名称</span><span class="fi-value">' + esc(file.course_name || '') + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">文件名称</span><span class="fi-value">' + esc(file.file_name || '') + '</span></div>' +
@@ -2479,14 +2664,24 @@
           '<div class="fi-row"><span class="fi-label">任课教师</span><span class="fi-value">' + esc(file.teacher || '未填写') + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">下载次数</span><span class="fi-value">' + file.download_count + ' 次</span></div>' +
           '<div class="fi-row"><span class="fi-label">上传日期</span><span class="fi-value">' + esc(file.created_at || '') + '</span></div>' +
-          '<div style="text-align:center">' + (currentUser ? '<a href="/api/files/' + file.id + '/download/" class="fi-download-btn">⬇ 下载文件</a>' : '<a href="javascript:void(0)" class="fi-download-btn" onclick="event.stopPropagation();showLoginModal()" style="opacity:0.6">🔒 登录后下载</a>') + '</div>' +
+          '<div style="text-align:center;margin-top:12px">' + (currentUser ? '<button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>' : '<a href="javascript:void(0)" class="fi-download-btn" onclick="event.stopPropagation();showLoginModal()" style="opacity:0.6">🔒 登录后下载</a>') + '</div>' +
           (file.can_delete ? '<div style="text-align:center;margin-top:10px"><button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">🗑️ 删除此资料</button></div>' : '') +
         '</div>' +
       '</div>';
     overlay.addEventListener('click', function(e) {
-      if (e.target === this) this.remove();
+      if (e.target === this) closeFileInfoModal(e);
     });
     document.body.appendChild(overlay);
+
+    // 推入历史状态：浏览器返回时关闭弹窗而非导航
+    history.pushState({ _bnusparks: true, _modal: true }, '');
+  }
+
+  // ── 关闭文件简介弹窗 ──
+  function closeFileInfoModal(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    var overlay = document.querySelector('.file-info-overlay');
+    if (overlay) overlay.remove();
   }
 
   function renderEmpty(course) {
@@ -2510,7 +2705,7 @@
     const views = [
       'homeView', 'explorerView', 'aboutView',
       'tutorialView', 'announcementsView', 'broadView',
-      'rankingsView', 'recentAllView', 'profileView', 'adminView'
+      'rankingsView', 'recentAllView', 'profileView', 'notifView', 'adminView'
     ];
     views.forEach(id => {
       const el = document.getElementById(id);
@@ -2856,6 +3051,14 @@
     var s = e.state;
     _suppressingPushState = true;
 
+    // 如果有打开的弹窗，关闭弹窗并阻止页面导航
+    var openOverlay = document.querySelector('.file-info-overlay, .admin-reject-overlay, .search-overlay');
+    if (openOverlay) {
+      openOverlay.remove();
+      _suppressingPushState = false;
+      return;
+    }
+
     if (!s || !s._bnusparks) {
       // 无历史状态 → 回首页
       returnState = null;
@@ -2875,7 +3078,8 @@
         renderExplorer();
         switchView('explorer', true);
         updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
-        if (s.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: s.scrollY}); });
+        // 不要恢复旧的 scrollY — 页面高度已变，恢复反而导致位置错乱
+        window.scrollTo({ top: 0 });
         break;
       case 'rankings':
         showTopDownloaded(s.scrollY);
@@ -2888,6 +3092,9 @@
         break;
       case 'profile':
         showProfile();
+        break;
+      case 'notif':
+        showNotifFull();
         break;
       case 'admin':
         showAdminPanel();

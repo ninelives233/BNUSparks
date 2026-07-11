@@ -37,6 +37,7 @@ urlpatterns = [
 
     # 审核（Iter 3）
     path("moderation/pending/", views.api_moderation_pending, name="api_moderation_pending"),
+    path("moderation/batch-approve/", views.api_moderation_batch_approve, name="api_moderation_batch_approve"),
     path("moderation/<int:file_id>/approve/", views.api_moderation_approve, name="api_moderation_approve"),
     path("moderation/<int:file_id>/reject/", views.api_moderation_reject, name="api_moderation_reject"),
     path("moderation/<int:file_id>/reassign/", views.api_moderation_reassign, name="api_moderation_reassign"),
