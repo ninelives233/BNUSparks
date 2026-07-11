@@ -38,7 +38,8 @@ implementation-plan-*.md
 *.sqlite
 staticfiles/
 
-# Data — 资料文件（git 跟踪），但数据库不上传
+# Data
+data/materials/
 data/*.sqlite3
 
 # Source archives (batch import sources, not repo content)
