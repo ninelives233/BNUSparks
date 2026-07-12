@@ -7,7 +7,20 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── 安全 ──
-SECRET_KEY = 'SECRET_KEY_PLACEHOLDER_REPLACED_BY_FILTER_REPO'
+import os
+import re
+
+_env_file = BASE_DIR / '.env'
+_env_vars = {}
+if _env_file.exists():
+    _text = _env_file.read_text(encoding='utf-8')
+    for _m in re.finditer(r'^(\w+)\s*=\s*"([^"]*)"', _text, re.MULTILINE):
+        _env_vars[_m.group(1)] = _m.group(2)
+
+SECRET_KEY = os.environ.get('SECRET_KEY') or _env_vars.get('SECRET_KEY', '')
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY 未设置！请写入 .env 或环境变量")
+
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
@@ -88,8 +101,16 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'data' / 'materials'
 
 # ── CORS ──
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://bnusparks.cn",
+    "http://www.bnusparks.cn",
+    "https://bnusparks.cn",
+    "https://www.bnusparks.cn",
+]
 
 # ── 文件上传限制（50MB） ──
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
@@ -97,17 +118,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 LOGIN_URL = '/admin/login/'
 
 # ── 邮件服务（用于密码重置等） ──
-import os
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.163.com'
 EMAIL_PORT = 465
 EMAIL_USE_SSL = True
 EMAIL_HOST_USER = 'bnusparks@163.com'
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
-# 也尝试从 .env 文件读取
-_env_file = BASE_DIR / '.env'
-if not EMAIL_HOST_PASSWORD and _env_file.exists():
-    import re
-    _match = re.search(r'EMAIL_PASSWORD\s*=\s*"([^"]*)"', _env_file.read_text(encoding='utf-8'))
-    if _match:
-        EMAIL_HOST_PASSWORD = _match.group(1)
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASSWORD') or _env_vars.get('EMAIL_PASSWORD', '')
