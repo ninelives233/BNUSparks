@@ -51,10 +51,8 @@ data/资料的压缩包们/
 # 培养方案 JSON 存档（11MB，按需通过 import_pyfa 命令导入）
 data/major_course_map.json
 
-# Documentation worklogs
-docs/worklog-*.md
-docs/SESSION_HANDOFF.md
-docs/SECURITY_INCIDENT_*.md
+# Documentation (project planning, worklogs — not code)
+docs/
 
 # Deployment scripts (contain SSH credentials — NEVER COMMIT)
 deploy.sh
