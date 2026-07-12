@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=24">
+<link rel="stylesheet" href="/static/css/style.css?v=25">
 </head>
 <body>
 
@@ -297,6 +297,8 @@
       <div class="profile-card">
         <div class="profile-avatar">
           <div class="profile-avatar-circle" id="profileAvatar">🧑</div>
+          <div class="profile-avatar-upload" onclick="triggerAvatarUpload()" title="更换头像">📷</div>
+          <input type="file" id="avatarUploadInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none" onchange="handleAvatarUpload(event)">
         </div>
         <div class="profile-info">
           <div class="profile-row">
@@ -585,7 +587,7 @@
       </div>
       <div class="mf-group">
         <label>文件</label>
-        <input type="file" id="uploadFile" class="mf-input" required>
+        <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg">
       </div>
       <div class="mf-group">
         <label>任课教师（选填）</label>
@@ -606,7 +608,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=24"></script>
+<script src="/static/js/app.js?v=25"></script>
 
 </body>
 </html>

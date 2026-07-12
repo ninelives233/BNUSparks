@@ -40,6 +40,32 @@
     return (bytes/1024/1024).toFixed(1) + ' MB';
   }
 
+  // ── 弹窗滚动锁定 ──
+  let _scrollPos = 0;
+  let _scrollLockCount = 0;
+
+  function lockScroll() {
+    if (_scrollLockCount === 0) {
+      _scrollPos = window.pageYOffset;
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = -_scrollPos + 'px';
+      document.body.style.width = '100%';
+    }
+    _scrollLockCount++;
+  }
+
+  function unlockScroll() {
+    if (_scrollLockCount > 0) _scrollLockCount--;
+    if (_scrollLockCount === 0) {
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('position');
+      document.body.style.removeProperty('top');
+      document.body.style.removeProperty('width');
+      window.scrollTo(0, _scrollPos);
+    }
+  }
+
   // ── 下载处理（含限额梯度提醒） ──
   function handleDownloadClick(fileId, el, event) {
     event.preventDefault();
@@ -93,6 +119,48 @@
     });
   }
 
+  // ── 批量下载辅助 ──
+  function updateBatchDlBar() {
+    var checked = document.querySelectorAll('.dl-chk:checked').length;
+    var countEl = document.getElementById('selectedCount');
+    if (countEl) countEl.textContent = '已选 ' + checked + ' 个';
+    var btn = document.getElementById('batchDlBtn');
+    if (btn) btn.disabled = checked === 0;
+  }
+
+  function toggleSelectAll(source) {
+    var checked = source.checked;
+    document.querySelectorAll('.dl-chk').forEach(function(c) { c.checked = checked; });
+    updateBatchDlBar();
+  }
+
+  function batchDownloadSelected() {
+    var selected = [];
+    document.querySelectorAll('.dl-chk:checked').forEach(function(c) {
+      var fid = parseInt(c.getAttribute('data-fid'));
+      if (fid) selected.push(fid);
+    });
+    if (!selected.length) { alert('请先选择文件'); return; }
+    var btn = document.getElementById('batchDlBtn');
+    if (btn) { btn.textContent = '⏳ 下载中 0/' + selected.length; btn.disabled = true; }
+    var done = 0;
+    selected.reduce(function(promise, fid, idx) {
+      return promise.then(function() {
+        return new Promise(function(resolve) {
+          downloadFetch(fid);
+          done++;
+          if (btn) btn.textContent = '⏳ 下载中 ' + done + '/' + selected.length;
+          // 每个文件下载间隔 500ms，避免浏览器拦截
+          setTimeout(resolve, 500);
+        });
+      });
+    }, Promise.resolve()).then(function() {
+      if (btn) { btn.textContent = '⬇ 下载选中'; btn.disabled = false; }
+    }).catch(function() {
+      if (btn) { btn.textContent = '⬇ 下载选中'; btn.disabled = false; }
+    });
+  }
+
   /* ═══════════════════════════════════════════════════════════
      用户认证
      ═══════════════════════════════════════════════════════════ */
@@ -105,9 +173,12 @@
     if (currentUser) {
       const roleLabel = currentUser.role === 'super_admin' ? ' 总管理' : currentUser.role === 'moderator' ? ' 版主' : currentUser.role === 'sub_moderator' ? ' 小版主' : '';
       var initial = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
+      var avatarHtml = currentUser.avatar_url
+        ? '<img src="' + esc(currentUser.avatar_url) + '" class="user-avatar-img" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover">'
+        : '<span class="user-avatar-circle" id="userAvatarCircle">' + esc(initial) + '</span>';
       container.innerHTML =
         '<button class="user-avatar-trigger" id="userAvatarTrigger" onclick="toggleNotifDrawer()" title="通知 / 个人中心">' +
-          '<span class="user-avatar-circle" id="userAvatarCircle">' + esc(initial) + '</span>' +
+          avatarHtml +
           '<span class="notif-badge" id="notifBadge" style="display:none">0</span>' +
         '</button>';
     } else {
@@ -166,7 +237,7 @@
     }
   }
 
-  function showLoginModal() { document.getElementById('loginModal').style.display = 'flex'; }
+  function showLoginModal() { document.getElementById('loginModal').style.display = 'flex'; lockScroll(); }
   function showRegister() { document.getElementById('loginModal').style.display = 'none'; document.getElementById('registerModal').style.display = 'flex'; }
   function showLogin() { document.getElementById('registerModal').style.display = 'none'; document.getElementById('loginModal').style.display = 'flex'; }
   function closeAuthModal() {
@@ -178,6 +249,7 @@
     document.getElementById('registerForm').style.display = 'block';
     document.querySelector('#registerModal .modal-close').style.display = '';
     document.querySelector('#registerModal .modal-card').style.pointerEvents = '';
+    unlockScroll();
   }
 
   function copyGeneratedPassword() {
@@ -235,6 +307,7 @@
     document.getElementById('forgotPwdForm').style.display = 'block';
     document.getElementById('forgotPwdSuccess').style.display = 'none';
     document.getElementById('forgotPwdError').style.display = 'none';
+    lockScroll();
   }
 
   function closeForgotPwdModal() {
@@ -242,6 +315,7 @@
     document.getElementById('forgotPwdForm').style.display = 'block';
     document.getElementById('forgotPwdSuccess').style.display = 'none';
     document.getElementById('forgotPwdError').style.display = 'none';
+    unlockScroll();
   }
 
   async function handleForgotPassword(e) {
@@ -277,6 +351,7 @@
     document.getElementById('resetPwdError').style.display = 'none';
     document.getElementById('resetNewPwd').value = '';
     document.getElementById('resetConfirmPwd').value = '';
+    lockScroll();
   }
 
   function closeResetPwdModal() {
@@ -285,6 +360,7 @@
     document.getElementById('resetPwdSuccess').style.display = 'none';
     document.getElementById('resetPwdError').style.display = 'none';
     _resetUid = null; _resetToken = null;
+    unlockScroll();
   }
 
   async function handleResetPassword(e) {
@@ -446,7 +522,13 @@
       nickEl.textContent = data.nickname;
       roleEl.textContent = data.role_label;
       joinedEl.textContent = data.date_joined;
-      avatarEl.textContent = data.nickname.charAt(0) || '🧑';
+      // 头像：有真实图片则显示 img，否则首字母
+      var initial = data.nickname.charAt(0) || '🧑';
+      if (data.avatar_url) {
+        avatarEl.innerHTML = '<img src="' + esc(data.avatar_url) + '" alt="avatar" style="width:80px;height:80px;border-radius:50%;object-fit:cover">';
+      } else {
+        avatarEl.textContent = initial;
+      }
       quotaEl.textContent = data.daily_download_limit < 0 ? '不限' : (data.daily_download_used || 0) + ' / ' + data.daily_download_limit + ' 次';
       // 管辖板块
       var sectionsRow = document.getElementById('profileSectionsRow');
@@ -462,6 +544,41 @@
     } catch (err) {
       emailEl.textContent = '加载失败';
     }
+  }
+
+  // ── 头像上传 ──
+  function triggerAvatarUpload() {
+    var input = document.getElementById('avatarUploadInput');
+    if (input) input.click();
+  }
+
+  async function handleAvatarUpload(e) {
+    var file = e.target && e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('图片不能超过 2MB');
+      return;
+    }
+    var fd = new FormData();
+    fd.append('avatar', file);
+    try {
+      var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      var resp = await fetch('/api/auth/avatar/', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd,
+      });
+      var data = await resp.json();
+      if (!data.ok) throw new Error(data.error || '上传失败');
+      // 刷新头像显示
+      if (currentUser) currentUser.avatar_url = data.data.avatar_url;
+      loadProfile();
+      updateAuthUI();
+      alert('头像已更新');
+    } catch (err) {
+      alert('头像上传失败：' + err.message);
+    }
+    e.target.value = ''; // 重置 input 可重复选同一文件
   }
 
   async function loadMyUploads() {
@@ -486,7 +603,7 @@
         else { badgeLabel = '已通过'; badgeClass = 'review-badge-approved'; }
         var badgeHtml = '<span class="review-badge ' + badgeClass + '">' + badgeLabel + '</span>';
         var reuploadBtn = m.review_status === 'rejected'
-          ? '<button class="reupload-btn" onclick="showReUploadDialog(\'' + esc(m.course_code) + '\',\'' + esc(m.course_name) + '\',\'' + esc(m.title) + '\',\'' + esc(m.review_notes||'') + '\',\'' + esc(m.teacher||'') + '\')">↻ 重新上传</button>'
+          ? '<button class="reupload-btn" onclick="showReUploadDialog(' + m.id + ',\'' + esc(m.course_code) + '\',\'' + esc(m.course_name) + '\',\'' + esc(m.title) + '\',\'' + esc(m.review_notes||'') + '\',\'' + esc(m.teacher||'') + '\')">↻ 重新上传</button>'
           : '';
         return '<div class="hc-item">' +
           '<div class="hc-item-left">' +
@@ -494,7 +611,7 @@
             '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + formatSize(m.file_size) + ' · ' + m.download_count + ' 次下载' +
               (m.review_status === 'rejected' && m.review_notes ? ' · 驳回原因: ' + esc(m.review_notes) : '') +
             '</div>' +
-            (m.review_status === 'rejected' ? '<div class="hc-item-actions">' + reuploadBtn + '</div>' : '') +
+            (m.review_status === 'rejected' ? '<div class="hc-item-actions">' + reuploadBtn + '<button class="delete-rejected-btn" onclick="deleteRejected(' + m.id + ', this)">🗑 删除记录</button></div>' : '') +
           '</div>' +
           '<span class="hc-item-count">' + m.created_at + '</span>' +
         '</div>';
@@ -505,9 +622,28 @@
     }
   }
 
+  // ── 删除驳回记录 ──
+  async function deleteRejected(materialId, btn) {
+    if (!confirm('确定删除这条已驳回的记录？删除后不可恢复。')) return;
+    if (btn) btn.disabled = true;
+    try {
+      await api('/api/files/' + materialId + '/delete/', { method: 'DELETE' });
+      // 从 DOM 移除整条记录
+      var item = btn ? btn.closest('.hc-item') : null;
+      if (item) item.remove();
+      loadMyUploads(); // 刷新列表
+    } catch (err) {
+      alert('删除失败：' + err.message);
+      if (btn) btn.disabled = false;
+    }
+  }
+
   // ── 驳回重新上传 ──
-  function showReUploadDialog(courseCode, courseName, title, reviewNotes, teacher) {
+  let _reuploadOldId = null;
+
+  function showReUploadDialog(materialId, courseCode, courseName, title, reviewNotes, teacher) {
     if (!currentUser) { showLoginModal(); return; }
+    _reuploadOldId = materialId;
     showUploadModal(courseCode, courseName);
     document.getElementById('uploadTitle').value = title;
     if (teacher) document.getElementById('uploadTeacher').value = teacher;
@@ -519,7 +655,7 @@
       notesEl.className = 'reupload-info';
       document.querySelector('#uploadForm .mf-group').before(notesEl);
     }
-    notesEl.innerHTML = '📌 上次驳回原因：' + esc(reviewNotes) + '<br><small>修改后重新提交，将重新进入审核流程。</small>';
+    notesEl.innerHTML = '📌 上次驳回原因：' + esc(reviewNotes) + '<br><small>修改后重新提交，将重新进入审核流程。旧驳回记录将自动删除。</small>';
     notesEl.style.display = 'block';
   }
 
@@ -530,10 +666,12 @@
     document.getElementById('nicknameEditor').style.display = 'flex';
     document.getElementById('nicknameError').style.display = 'none';
     if (input) input.focus();
+    lockScroll();
   }
 
   function cancelEditNickname() {
     document.getElementById('nicknameEditor').style.display = 'none';
+    unlockScroll();
   }
 
   async function saveNickname() {
@@ -563,10 +701,12 @@
     document.getElementById('cpOldPwd').value = '';
     document.getElementById('cpNewPwd').value = '';
     document.getElementById('cpConfirmPwd').value = '';
+    lockScroll();
   }
 
   function closeChangePwdOverlay() {
     document.getElementById('changePwdEditor').style.display = 'none';
+    unlockScroll();
   }
 
   async function saveChangePwd() {
@@ -618,12 +758,18 @@
       showDrawerMenu();
       renderDrawerMenu();
       if (currentUser) refreshCurrentUser();
+      lockScroll();
     }
   }
 
   function showDrawerMenu() {
     document.getElementById('drawerMenu').style.display = '';
     document.getElementById('drawerNotif').style.display = 'none';
+    // 重置标题和动作栏（可能被 showDrawerDownloads 修改过）
+    var header = document.querySelector('#drawerNotif .notif-drawer-header h3');
+    if (header) header.textContent = '通知';
+    var actions = document.querySelector('#drawerNotif .notif-drawer-actions');
+    if (actions) actions.style.display = '';
     renderDrawerMenu(); // 刷新未读计数
   }
 
@@ -633,10 +779,45 @@
     if (!_notifLoaded) { loadNotifications(); _notifLoaded = true; }
   }
 
+  async function showDrawerDownloads() {
+    document.getElementById('drawerMenu').style.display = 'none';
+    document.getElementById('drawerNotif').style.display = '';
+    // 换标题 + 隐藏默认的 notif 动作栏
+    var header = document.querySelector('#drawerNotif .notif-drawer-header h3');
+    if (header) header.textContent = '我的下载';
+    var actions = document.querySelector('#drawerNotif .notif-drawer-actions');
+    if (actions) actions.style.display = 'none';
+    var list = document.getElementById('notifList');
+    if (!list) return;
+    list.innerHTML = '<div class="notif-empty">加载中…</div>';
+    try {
+      var data = await api('/api/user/downloads/');
+      if (!data || !data.length) {
+        list.innerHTML = '<div class="notif-empty">暂无下载记录</div>';
+        return;
+      }
+      list.innerHTML = data.map(function(r) {
+        return '<div class="notif-item notif-item-read" style="cursor:pointer" onclick="closeNotifDrawer();navToMaterial(' + r.material_id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+          '<div class="notif-item-header">' +
+            '<div class="notif-item-content">' +
+              '<div class="notif-item-title">' + esc(r.material_title) + '</div>' +
+              '<div class="notif-item-preview" style="color:var(--text-muted);font-size:0.75rem">' + esc(r.course_name) + ' · ' + esc(r.created_at) + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    } catch(e) {
+      list.innerHTML = '<div class="notif-empty">加载失败</div>';
+    }
+  }
+
   function renderDrawerMenu() {
     var body = document.getElementById('drawerMenuBody');
     if (!body || !currentUser) return;
     var initial = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
+    var avatarHtml = currentUser.avatar_url
+      ? '<img src="' + esc(currentUser.avatar_url) + '" class="dm-avatar-img" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover">'
+      : '<div class="dm-avatar">' + esc(initial) + '</div>';
     var roleLabel = currentUser.role === 'super_admin' ? '总管理' : currentUser.role === 'moderator' ? '版主' : currentUser.role === 'sub_moderator' ? '小版主' : '用户';
     var readSet = _getReadNotifSet();
     // 从未读计数（减掉本地已读缓存）
@@ -657,7 +838,7 @@
     var showAdmin = currentUser.role !== 'user';
     body.innerHTML =
       '<div class="dm-user">' +
-        '<div class="dm-avatar">' + esc(initial) + '</div>' +
+        avatarHtml +
         '<div class="dm-info">' +
           '<div class="dm-name">' + esc(currentUser.nickname || currentUser.username) + '</div>' +
           '<div class="dm-role">' + roleLabel + '</div>' +
@@ -666,6 +847,7 @@
       '<div class="dm-divider"></div>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span>👤</span> 个人中心</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span>🔔</span> 通知中心' + notifBadgeHtml + '</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerDownloads()"><span>📥</span> 我的下载</a>' +
       (showAdmin ? '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showAdminPanel()"><span>⚙️</span> 管理后台</a>' : '') +
       '<div class="dm-divider"></div>' +
       '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span>🚪</span> 退出登录</a>';
@@ -674,6 +856,7 @@
   function closeNotifDrawer(e) {
     if (e && e.target !== e.currentTarget) return;
     document.getElementById('notifDrawer').style.display = 'none';
+    unlockScroll();
   }
 
   async function loadNotifications() {
@@ -787,7 +970,12 @@
     if (courseCode) {
       var type = courseCode.startsWith('GEN') ? '通识课' : '专业课';
       showExplorer(type);
-      setTimeout(function() { navToLast(courseCode); }, 80);
+      // 用 rAF 替代脆弱的 setTimeout，在下一个渲染帧执行导航
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          navToLast(courseCode);
+        });
+      });
     } else {
       showHome();
     }
@@ -1312,6 +1500,10 @@
     });
   }
 
+  function _removeOverlay(el) {
+    if (el) { el.remove(); unlockScroll(); }
+  }
+
   function showRejectDialog(id) {
     // 移除已有弹窗
     var old = document.querySelector('.admin-reject-overlay');
@@ -1325,11 +1517,12 @@
         '<div class="ar-error" id="rejectError">驳回原因不能为空</div>' +
         '<div class="ar-actions">' +
           '<button class="admin-btn admin-btn-reject" onclick="confirmReject(' + id + ')">确认驳回</button>' +
-          '<button class="admin-btn admin-btn-secondary" onclick="this.closest(\'.admin-reject-overlay\').remove()">取消</button>' +
+          '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
-    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
+    lockScroll();
     // 自动聚焦
     setTimeout(function() { document.getElementById('rejectNotes').focus(); }, 100);
   }
@@ -1344,7 +1537,7 @@
     if (errEl) errEl.style.display = 'none';
     api('/api/moderation/' + id + '/reject/', { method: 'POST', body: { notes: notes } }).then(function() {
       var overlay = document.querySelector('.admin-reject-overlay');
-      if (overlay) overlay.remove();
+      _removeOverlay(overlay);
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert('操作失败：' + err.message);
@@ -1367,7 +1560,7 @@
         if (fc) { var fm = fc.textContent.match(/(\d+)/); if (fm) { fc.textContent = (parseInt(fm[1]) - 1) + ' 个文件'; } }
         // 如果表为空，显示空提示
         if (!tbody.querySelector('tr[data-file-id]')) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料</td></tr>';
           var pag = document.getElementById('filePagination');
           if (pag) pag.style.display = 'none';
         }
@@ -1795,11 +1988,12 @@
         '<div class="ar-error" id="objError" style="display:none">请填写异议原因</div>' +
         '<div class="ar-actions" style="margin-top:10px">' +
           '<button class="admin-btn admin-btn-primary" onclick="submitObjection(' + fileId + ')">提交异议</button>' +
-          '<button class="admin-btn admin-btn-secondary" onclick="this.closest(\'.admin-reject-overlay\').remove()">取消</button>' +
+          '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
-    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+    overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
+    lockScroll();
     setTimeout(function() { document.getElementById('objInput').focus(); }, 100);
   }
 
@@ -1814,7 +2008,7 @@
     document.getElementById('objError').style.display = 'none';
     var overlay = document.querySelector('.objection-overlay');
     api('/api/moderation/' + fileId + '/comments/', { method: 'POST', body: { content: content } }).then(function() {
-      if (overlay) overlay.remove();
+      _removeOverlay(overlay);
       alert('异议已提交，原审核人将收到通知。');
     }).catch(function(err) {
       alert('提交失败：' + err.message);
@@ -1837,8 +2031,28 @@
     api('/api/moderation/' + fileId + '/comments/').then(function(data) {
       var html = '';
       if (data.comments && data.comments.length) {
+        // 先渲染顶层评论，再按 parent_id 挂子评论
+        var topLevel = data.comments.filter(function(c) { return !c.parent_id; });
+        var replies = {};
         data.comments.forEach(function(c) {
-          html += '<div class="pc-comment-item"><span class="pcc-name">' + esc(c.commenter_name) + '</span><span class="pcc-time">' + esc(c.created_at) + '</span><div class="pcc-content">' + esc(c.content) + '</div></div>';
+          if (c.parent_id) {
+            if (!replies[c.parent_id]) replies[c.parent_id] = [];
+            replies[c.parent_id].push(c);
+          }
+        });
+        topLevel.forEach(function(c) {
+          html += '<div class="pc-comment-item">' +
+            '<span class="pcc-name">' + esc(c.commenter_name) + '</span>' +
+            '<span class="pcc-time">' + esc(c.created_at) + '</span>' +
+            '<div class="pcc-content">' + esc(c.content) + '</div>' +
+            '<button class="pcc-reply-btn" onclick="showReplyForm(' + fileId + ', ' + c.id + ', this)">↩ 回复</button>' +
+            '</div>';
+          // 渲染子评论（回复）
+          if (replies[c.id]) {
+            replies[c.id].forEach(function(r) {
+              html += '<div class="pc-comment-item pc-comment-reply"><span class="pcc-name">' + esc(r.commenter_name) + '</span><span class="pcc-time">' + esc(r.created_at) + '</span><div class="pcc-content">' + esc(r.content) + '</div></div>';
+            });
+          }
         });
       } else {
         html += '<div class="pc-comment-empty">暂无异议</div>';
@@ -1846,6 +2060,47 @@
       commentsDiv.innerHTML = html;
     }).catch(function() {
       commentsDiv.innerHTML = '<div class="pc-comment-empty">加载失败</div>';
+    });
+  }
+
+  // ── 回复异议 ──
+  function showReplyForm(fileId, parentId, btn) {
+    // 移除已有的回复输入框
+    var existingForm = document.querySelector('.pcc-reply-form');
+    if (existingForm) existingForm.remove();
+    var form = document.createElement('div');
+    form.className = 'pcc-reply-form';
+    form.style.cssText = 'margin:8px 0 8px 32px;padding:8px;background:var(--surface);border-radius:6px';
+    form.innerHTML =
+      '<textarea rows="2" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--border-light);resize:vertical;font-size:0.82rem;box-sizing:border-box" placeholder="输入回复…"></textarea>' +
+      '<div style="display:flex;gap:6px;margin-top:6px">' +
+        '<button class="admin-btn admin-btn-sm admin-btn-primary" onclick="submitReply(' + fileId + ', ' + parentId + ', this)">发送</button>' +
+        '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="this.closest(\'.pcc-reply-form\').remove()">取消</button>' +
+      '</div>';
+    // 插入到按钮后面
+    if (btn && btn.parentNode) {
+      btn.parentNode.insertAdjacentElement('afterend', form);
+    }
+    form.querySelector('textarea').focus();
+  }
+
+  function submitReply(fileId, parentId, btn) {
+    var form = btn.closest('.pcc-reply-form');
+    var textarea = form ? form.querySelector('textarea') : null;
+    if (!textarea) return;
+    var content = textarea.value.trim();
+    if (!content) { alert('回复内容不能为空'); return; }
+    var overlay = document.querySelector('.admin-reject-overlay');
+    api('/api/moderation/' + fileId + '/comments/', {
+      method: 'POST',
+      body: { content: content, parent_id: parentId }
+    }).then(function() {
+      // 刷新评论列表
+      var commentsDiv = document.getElementById('hc-comments-' + fileId);
+      if (commentsDiv) toggleComments(fileId, null, true);
+      textarea.value = '';
+    }).catch(function(err) {
+      alert('回复失败：' + err.message);
     });
   }
 
@@ -1870,14 +2125,15 @@
       html += '</select>';
       html += '<div class="ar-actions" style="margin-top:12px">' +
         '<button class="admin-btn admin-btn-primary" onclick="confirmReassign(' + fileId + ')">确认指派</button>' +
-        '<button class="admin-btn admin-btn-secondary" onclick="this.closest(\'.admin-reject-overlay\').remove()">取消</button>' +
+        '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
       '</div></div>';
 
       var overlay = document.createElement('div');
       overlay.className = 'admin-reject-overlay reassign-overlay';
       overlay.innerHTML = html;
       document.body.appendChild(overlay);
-      overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+      overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
+      lockScroll();
     }).catch(function() {
       alert('加载用户列表失败');
     });
@@ -1892,7 +2148,7 @@
       method: 'POST',
       body: { assigned_moderator: assignedMod }
     }).then(function() {
-      if (overlay) overlay.remove();
+      _removeOverlay(overlay);
       // 刷新待审核列表
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
@@ -2128,6 +2384,7 @@
     uploadCourseCode = code;
     document.getElementById('uploadCourse').value = name + ' (' + code + ')';
     document.getElementById('uploadModal').style.display = 'flex';
+    lockScroll();
   }
 
   function closeUploadModal() {
@@ -2135,6 +2392,7 @@
     document.getElementById('uploadForm').reset();
     document.getElementById('uploadError').style.display = 'none';
     document.getElementById('uploadProgress').style.display = 'none';
+    unlockScroll();
   }
 
   async function handleUpload(e) {
@@ -2144,40 +2402,68 @@
     const fill = document.getElementById('uploadProgressFill');
     const text = document.getElementById('uploadProgressText');
 
-    const file = document.getElementById('uploadFile').files[0];
-    if (!file) { el.textContent = '请选择文件'; el.style.display = 'block'; return false; }
-    if (file.size > 50 * 1024 * 1024) { el.textContent = '文件大小不能超过 50MB'; el.style.display = 'block'; return false; }
+    const files = document.getElementById('uploadFile').files;
+    if (!files || !files.length) { el.textContent = '请选择文件'; el.style.display = 'block'; return false; }
 
     el.style.display = 'none';
     progress.style.display = 'flex';
-    fill.style.width = '10%';
-    text.textContent = '上传中...';
 
-    try {
-      const formData = new FormData();
-      formData.append('course_code', uploadCourseCode);
-      formData.append('title', document.getElementById('uploadTitle').value);
-      formData.append('file', file);
-      formData.append('description', document.getElementById('uploadDesc').value);
-      formData.append('teacher', document.getElementById('uploadTeacher').value);
+    var successCount = 0, failCount = 0;
+    var title = document.getElementById('uploadTitle').value;
+    var description = document.getElementById('uploadDesc').value;
+    var teacher = document.getElementById('uploadTeacher').value;
+    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
 
-      const token = sessionStorage.getItem('token');
-      const resp = await fetch('/api/files/upload/', {
-        method: 'POST',
-        headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-        body: formData,
-      });
-      const data = await resp.json();
-      if (!data.ok) throw new Error(data.error || '上传失败');
+    // 单标题模式：用相同标题上传多个文件（会在文件名后追加序号）
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      // 检查大小
+      if (file.size > 50 * 1024 * 1024) {
+        failCount++;
+        text.textContent = (i + 1) + '/' + files.length + ' ' + file.name + ' 超过 50MB，跳过';
+        continue;
+      }
 
-      fill.style.width = '100%';
-      text.textContent = '上传成功！';
-      setTimeout(() => { closeUploadModal(); renderExplorer(); }, 1000);
-    } catch (err) {
-      el.textContent = err.message;
-      el.style.display = 'block';
-      progress.style.display = 'none';
+      var fileTitle = title || file.name.replace(/\.[^.]+$/, '');
+      if (files.length > 1) fileTitle += ' (' + (i + 1) + ')';
+      var pct = Math.round(((i + 1) / files.length) * 70) + 5;
+      fill.style.width = pct + '%';
+      text.textContent = (i + 1) + '/' + files.length + ' 上传中: ' + file.name;
+
+      try {
+        const formData = new FormData();
+        formData.append('course_code', uploadCourseCode);
+        formData.append('title', fileTitle);
+        formData.append('file', file);
+        formData.append('description', description);
+        formData.append('teacher', teacher);
+
+        const resp = await fetch('/api/files/upload/', {
+          method: 'POST',
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+          body: formData,
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || '上传失败');
+        successCount++;
+      } catch (err) {
+        failCount++;
+        text.textContent = (i + 1) + '/' + files.length + ' ' + file.name + ' 失败: ' + err.message;
+        await new Promise(r => setTimeout(r, 500)); // 短暂停顿，让用户看到错误
+      }
     }
+
+    // 如果是重传，自动删除旧驳回记录
+    if (successCount > 0 && _reuploadOldId) {
+      try {
+        await api('/api/files/' + _reuploadOldId + '/delete/', { method: 'DELETE' });
+      } catch(e) { /* 静默失败 */ }
+      _reuploadOldId = null;
+    }
+
+    fill.style.width = '100%';
+    text.textContent = '完成！成功 ' + successCount + ' 个' + (failCount > 0 ? '，失败 ' + failCount + ' 个' : '');
+    setTimeout(function() { closeUploadModal(); renderExplorer(); }, 1500);
     return false;
   }
 
@@ -2507,8 +2793,9 @@
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
           '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + esc(code) + '\',\'' + esc(course.name) + '\')">+ 上传资料</button>' : '<button class="fa-upload-btn dl-login-prompt" onclick="event.stopPropagation();showLoginModal()" style="border-style:dashed">🔒 登录后上传</button>') + '</div>' : '') + '</div>' +
+          '<div class="batch-dl-bar" id="batchDlBar" style="display:none"><label><input type="checkbox" id="selectAllChkHead" onchange="toggleSelectAll(this)"> 全选</label><span id="selectedCount">已选 0 个</span><button class="admin-btn admin-btn-sm" onclick="batchDownloadSelected()" id="batchDlBtn" style="margin-left:auto">⬇ 下载选中</button></div>' +
           '<div class="file-table-scroll"><table class="file-table"><thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>上传者</th><th>任课教师</th><th>下载次数</th><th>下载</th></tr></thead><tbody id="fileTableBody">' +
-          '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
+          '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
           '</tbody></table></div>' +
         '</div>' +
         (Object.keys(sameNameGroups).length ? '<div class="file-area-side"><div class="fas-title">同名课程</div>' +
@@ -2556,7 +2843,7 @@
       function renderPage() {
         const tbody = document.getElementById('fileTableBody');
         if (!allFiles.length) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
           hidePagination();
           return;
         }
@@ -2602,6 +2889,35 @@
         const sidePanel = document.querySelector('.file-area-side');
         if (mainArea && sidePanel) mainArea.classList.add('file-area-compact');
         else if (mainArea) mainArea.classList.remove('file-area-compact');
+
+        // ── 批量下载：注入 checkbox + 工具栏 ──
+        var batchBar = document.getElementById('batchDlBar');
+        if (batchBar) {
+          if (currentUser && allFiles.length > 0) {
+            batchBar.style.display = 'flex';
+            // 每行注入 checkbox
+            tbody.querySelectorAll('tr[data-file-id]').forEach(function(tr) {
+              var chk = document.createElement('td');
+              chk.className = 'ft-chk-col';
+              chk.innerHTML = '<input type="checkbox" class="dl-chk" data-fid="' + tr.dataset.fileId + '" onchange="updateBatchDlBar()">';
+              tr.insertBefore(chk, tr.firstChild);
+              chk.addEventListener('click', function(e) { e.stopPropagation(); });
+            });
+            // 表头注入 checkbox
+            var headerRow = tbody.closest('table').querySelector('thead tr');
+            if (headerRow) {
+              var hChk = document.createElement('th');
+              hChk.className = 'ft-chk-col';
+              hChk.innerHTML = '<input type="checkbox" id="selectAllChkHead" onchange="toggleSelectAll(this)">';
+              headerRow.insertBefore(hChk, headerRow.firstChild);
+            }
+            // 更新 colspan（多了 checkbox 列）
+            var emptyRow = tbody.querySelector('tr td[colspan]');
+            if (emptyRow) emptyRow.setAttribute('colspan', '8');
+          } else {
+            batchBar.style.display = 'none';
+          }
+        }
 
         // 来自排行榜/最近上传 → 高亮并滚动到目标行
         if (firstHighlight && targetHighlightFileId) {
@@ -2781,6 +3097,7 @@
       if (e.target === this) closeFileInfoModal(e);
     });
     document.body.appendChild(overlay);
+    lockScroll();
 
     // 推入历史状态：浏览器返回时关闭弹窗而非导航
     history.pushState({ _bnusparks: true, _modal: true }, '');
@@ -2791,6 +3108,7 @@
     if (e) { e.preventDefault(); e.stopPropagation(); }
     var overlay = document.querySelector('.file-info-overlay');
     if (overlay) overlay.remove();
+    unlockScroll();
   }
 
   function renderEmpty(course) {
