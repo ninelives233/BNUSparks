@@ -104,22 +104,12 @@
     if (!container) return;
     if (currentUser) {
       const roleLabel = currentUser.role === 'super_admin' ? ' 总管理' : currentUser.role === 'moderator' ? ' 版主' : currentUser.role === 'sub_moderator' ? ' 小版主' : '';
+      var initial = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
       container.innerHTML =
-        '<div class="user-dropdown-wrap">' +
-          '<button class="user-dropdown-trigger" id="userDdTrigger" onclick="toggleUserDropdown(event)">' +
-            '<span class="notif-bell" onclick="event.stopPropagation();toggleNotifDrawer()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:block"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge" id="notifBadge" style="display:none">0</span></span>' +
-            '<span class="user-name">' + esc(currentUser.nickname || currentUser.username) + '</span>' +
-            '<span class="dd-arrow">▾</span>' +
-          '</button>' +
-          '<div class="user-dropdown-menu" id="userDropdown">' +
-            '<a href="javascript:void(0)" onclick="showProfile();closeUserDropdown();event.stopPropagation();return false"><span>👤</span> 个人中心</a>' +
-            '<a href="javascript:void(0)" onclick="toggleNotifDrawer();closeUserDropdown();event.stopPropagation();return false"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:middle"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span> 通知中心<span class="notif-badge-dot" id="notifDot" style="display:none"></span></a>' +
-            '<div class="dd-divider"></div>' +
-            '<a href="javascript:void(0)" onclick="showAdminPanel();closeUserDropdown();event.stopPropagation();return false" id="adminEntry" style="display:' + (currentUser.role !== 'user' ? 'flex' : 'none') + '"><span>⚙️</span> 管理后台</a>' +
-            '<div class="dd-divider"></div>' +
-            '<a href="javascript:void(0)" onclick="logout();closeUserDropdown();event.stopPropagation();return false"><span>🚪</span> 退出登录</a>' +
-          '</div>' +
-        '</div>';
+        '<button class="user-avatar-trigger" id="userAvatarTrigger" onclick="toggleNotifDrawer()" title="通知 / 个人中心">' +
+          '<span class="user-avatar-circle" id="userAvatarCircle">' + esc(initial) + '</span>' +
+          '<span class="notif-badge" id="notifBadge" style="display:none">0</span>' +
+        '</button>';
     } else {
       container.innerHTML =
         '<a href="#" class="login-btn" onclick="event.preventDefault();showLoginModal()">' +
@@ -132,20 +122,7 @@
       link.style.display = showAdmin ? '' : 'none';
     });
   }
-  function toggleUserDropdown(e) {
-    e && e.stopPropagation();
-    const menu = document.getElementById('userDropdown');
-    const trigger = document.getElementById('userDdTrigger');
-    if (!menu) return;
-    const isOpen = menu.classList.contains('open');
-    closeUserDropdown();
-    if (!isOpen) {
-      menu.classList.add('open');
-      trigger.classList.add('open');
-      // 后台刷新 currentUser，确保角色/昵称最新
-      refreshCurrentUser();
-    }
-  }
+
 
   // 静默刷新当前用户信息（不阻塞 UI）
   var _refreshing = false;
@@ -159,23 +136,22 @@
       currentUser = fresh;
       if (roleChanged) {
         updateAuthUI();
-        // 重新打开下拉（updateAuthUI 重建了 HTML）
-        var menu = document.getElementById('userDropdown');
-        var trigger = document.getElementById('userDdTrigger');
-        if (menu && trigger) { menu.classList.add('open'); trigger.classList.add('open'); }
+        // 角色变化时刷新头像首字母
+        var circle = document.getElementById('userAvatarCircle');
+        if (circle) circle.textContent = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
       }
+      // 更新头像（即使角色没变，昵称可能变了）
+      var circle = document.getElementById('userAvatarCircle');
+      if (circle) circle.textContent = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
     } catch(e) { /* 静默失败，沿用缓存 */ }
     _refreshing = false;
   }
 
-  function closeUserDropdown() {
-    document.querySelectorAll('.user-dropdown-menu').forEach(m => m.classList.remove('open'));
-    document.querySelectorAll('.user-dropdown-trigger').forEach(t => t.classList.remove('open'));
-  }
-
-  // 点击页面其他地方关闭下拉菜单
+  // 点击页面其他地方关闭抽屉
   document.addEventListener('click', function(e) {
-    if (!e.target.closest('.user-dropdown-wrap')) closeUserDropdown();
+    if (e.target.closest('#notifDrawer') || e.target.closest('#userAvatarTrigger')) return;
+    var drawer = document.getElementById('notifDrawer');
+    if (drawer && drawer.style.display === 'flex') closeNotifDrawer();
   });
 
   function togglePwdVisibility(inputId, btn) {
@@ -419,7 +395,6 @@
     try {
       const data = await api('/api/auth/notifications/?unread_only=1');
       const badge = document.getElementById('notifBadge');
-      const dot = document.getElementById('notifDot');
       if (data.unread_count > 0) {
         // 减去本地已读缓存中仍在 server 未读列表里的
         var readSet = _getReadNotifSet();
@@ -432,10 +407,8 @@
         if (actual > 0) {
           badge.textContent = actual > 99 ? '99+' : actual;
           badge.style.display = '';
-          if (dot) dot.style.display = '';
         } else {
           badge.style.display = 'none';
-          if (dot) dot.style.display = 'none';
         }
       }
     } catch(e) { /* ignore */ }
@@ -453,6 +426,8 @@
     updateSidebar(null);
     window.scrollTo({ top: 0 });
     pushViewState('profile', {});
+    // 显示我的上传
+    switchView('profile', true);
     // 加载数据
     loadProfile();
   }
@@ -631,7 +606,7 @@
     localStorage.setItem('readNotifs', JSON.stringify(Array.from(set)));
   }
 
-  // ── 通知抽屉 ──
+  // ── 用户抽屉（菜单 + 通知子视图） ──
   let _notifLoaded = false;
 
   function toggleNotifDrawer() {
@@ -640,8 +615,60 @@
       closeNotifDrawer();
     } else {
       drawer.style.display = 'flex';
-      if (!_notifLoaded) { loadNotifications(); _notifLoaded = true; }
+      showDrawerMenu();
+      renderDrawerMenu();
+      if (currentUser) refreshCurrentUser();
     }
+  }
+
+  function showDrawerMenu() {
+    document.getElementById('drawerMenu').style.display = '';
+    document.getElementById('drawerNotif').style.display = 'none';
+    renderDrawerMenu(); // 刷新未读计数
+  }
+
+  function showDrawerNotif() {
+    document.getElementById('drawerMenu').style.display = 'none';
+    document.getElementById('drawerNotif').style.display = '';
+    if (!_notifLoaded) { loadNotifications(); _notifLoaded = true; }
+  }
+
+  function renderDrawerMenu() {
+    var body = document.getElementById('drawerMenuBody');
+    if (!body || !currentUser) return;
+    var initial = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
+    var roleLabel = currentUser.role === 'super_admin' ? '总管理' : currentUser.role === 'moderator' ? '版主' : currentUser.role === 'sub_moderator' ? '小版主' : '用户';
+    var readSet = _getReadNotifSet();
+    // 从未读计数（减掉本地已读缓存）
+    var unreadCount = 0;
+    var notifItems = document.querySelectorAll('.notif-item[data-nid]');
+    if (notifItems.length) {
+      notifItems.forEach(function(el) {
+        var nid = parseInt(el.getAttribute('data-nid'));
+        if (nid && !readSet.has(nid)) unreadCount++;
+      });
+    } else {
+      var badgeEl = document.getElementById('notifBadge');
+      if (badgeEl && badgeEl.style.display !== 'none' && badgeEl.textContent) {
+        unreadCount = parseInt(badgeEl.textContent) || 0;
+      }
+    }
+    var notifBadgeHtml = unreadCount > 0 ? '<span class="dm-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '';
+    var showAdmin = currentUser.role !== 'user';
+    body.innerHTML =
+      '<div class="dm-user">' +
+        '<div class="dm-avatar">' + esc(initial) + '</div>' +
+        '<div class="dm-info">' +
+          '<div class="dm-name">' + esc(currentUser.nickname || currentUser.username) + '</div>' +
+          '<div class="dm-role">' + roleLabel + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dm-divider"></div>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span>👤</span> 个人中心</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span>🔔</span> 通知中心' + notifBadgeHtml + '</a>' +
+      (showAdmin ? '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showAdminPanel()"><span>⚙️</span> 管理后台</a>' : '') +
+      '<div class="dm-divider"></div>' +
+      '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span>🚪</span> 退出登录</a>';
   }
 
   function closeNotifDrawer(e) {
@@ -652,7 +679,6 @@
   async function loadNotifications() {
     const list = document.getElementById('notifList');
     const badge = document.getElementById('notifBadge');
-    const dot = document.getElementById('notifDot');
     try {
       const data = await api('/api/auth/notifications/');
       // 合并本地已读缓存与服务器数据
@@ -666,10 +692,8 @@
       if (realUnread > 0) {
         badge.textContent = realUnread > 99 ? '99+' : realUnread;
         badge.style.display = '';
-        if (dot) dot.style.display = '';
       } else {
         badge.style.display = 'none';
-        if (dot) dot.style.display = 'none';
       }
 
       if (!data.list || !data.list.length) {
@@ -680,6 +704,15 @@
         var isRead = n.is_read || readSet.has(n.id);
         var unreadClass = isRead ? 'notif-item-read' : 'notif-item-unread';
         var msgPreview = n.message ? (n.message.length > 40 ? esc(n.message).slice(0, 40) + '…' : esc(n.message)) : '';
+        // 审核异议链接到管理后台
+        var linkHtml = '';
+        if (n.material_id) {
+          if (n.type === 'disagree') {
+            linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a></div>';
+          } else {
+            linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>';
+          }
+        }
         return '<div class="notif-item ' + unreadClass + '" data-nid="' + n.id + '">' +
           '<div class="notif-item-header" onclick="toggleNotifExpand(' + n.id + ', ' + (isRead ? 'true' : 'false') + ', this)">' +
             '<div class="notif-item-dot"></div>' +
@@ -692,13 +725,16 @@
           '</div>' +
           '<div class="notif-item-body" style="display:none" data-body="' + n.id + '">' +
             '<div class="notif-item-fullmsg">' + (n.message ? esc(n.message) : '') + '</div>' +
-            (n.material_id ? '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>' : '') +
-            (isRead ? '' : '<button class="notif-mark-btn" onclick="markOneNotifRead(' + n.id + ', this.closest(\'.notif-item\'), event)">标为已读</button>') +
+            linkHtml +
+            '<div style="margin-top:8px;display:flex;gap:6px">' +
+              (isRead ? '' : '<button class="notif-mark-btn" onclick="markOneNotifRead(' + n.id + ', this.closest(\'.notif-item\'), event)">标为已读</button>') +
+              '<button class="notif-mark-btn" onclick="deleteOneNotif(' + n.id + ', this.closest(\'.notif-item\'), event)" style="color:var(--accent)">🗑 删除</button>' +
+            '</div>' +
           '</div>' +
         '</div>';
       }).join('');
       if (data.list.length > 0) {
-        html += '<div style="padding:8px;text-align:center"><a href="javascript:void(0)" onclick="closeNotifDrawer();showNotifFull()" class="notif-view-all">📋 查看全部通知</a></div>';
+        html += '<div style="padding:8px;text-align:center;display:flex;justify-content:center;gap:12px;font-size:0.78rem"><a href="javascript:void(0)" onclick="closeNotifDrawer();showNotifFull()" class="notif-view-all">📋 查看全部通知</a><a href="javascript:void(0)" onclick="clearAllNotifs()" style="color:var(--accent);text-decoration:none">🗑 清空通知</a></div>';
       }
       list.innerHTML = html;
     } catch (err) {
@@ -715,6 +751,14 @@
       body.style.display = 'none';
       headerEl.querySelector('.notif-expand-icon').classList.remove('expanded');
     } else {
+      // 自动折叠其他打开的项
+      document.querySelectorAll('.notif-item-body').forEach(function(b) {
+        if (b !== body && b.style.display === 'block') {
+          b.style.display = 'none';
+          var h = b.closest('.notif-item');
+          if (h) { var icon = h.querySelector('.notif-expand-icon'); if (icon) icon.classList.remove('expanded'); }
+        }
+      });
       body.style.display = 'block';
       headerEl.querySelector('.notif-expand-icon').classList.add('expanded');
       // 未读通知展开时自动标为已读
@@ -731,8 +775,6 @@
           if (c > 1) badge.textContent = c - 1;
           else badge.style.display = 'none';
         }
-        var dot = document.getElementById('notifDot');
-        if (dot) dot.style.display = 'none';
         // 隐藏 body 内的标为已读按钮
         var markBtn = body.querySelector('.notif-mark-btn');
         if (markBtn) markBtn.style.display = 'none';
@@ -787,6 +829,41 @@
     loadNotifications();
   }
 
+  async function deleteOneNotif(nid, el, event) {
+    if (event) event.stopPropagation();
+    if (!confirm('确认删除此通知？')) return;
+    try {
+      await api('/api/auth/notifications/' + nid + '/read/', { method: 'DELETE' });
+      if (el) el.remove();
+      await loadNotifCount();
+    } catch (err) { console.warn('删除通知失败:', err); }
+  }
+
+  async function clearAllNotifs() {
+    if (!confirm('确认清空所有通知？此操作不可撤销。')) return false;
+    try {
+      await api('/api/auth/notifications/', { method: 'DELETE' });
+      _notifLoaded = false;
+      loadNotifications();
+      await loadNotifCount();
+      return true;
+    } catch (err) { console.warn('清空通知失败:', err); return false; }
+  }
+
+  function clearAllNotifsFull() {
+    clearAllNotifs().then(function(ok) { if (ok) renderNotifFull(); });
+  }
+
+  function navToReviewDispute(materialId) {
+    if (!currentUser || currentUser.role === 'user') {
+      alert('仅管理员可查看审核异议详情');
+      return;
+    }
+    showAdminPanel();
+    _highlightDisputeMaterialId = materialId;
+    switchAdminTab('history');
+  }
+
   // ── 通知中心完整页 ──
   function showNotifFull() {
     document.querySelectorAll('.view-section').forEach(function(v) { v.style.display = 'none'; });
@@ -811,7 +888,10 @@
       }
       var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
         '<span style="font-size:0.85rem;color:var(--text-muted)">共 ' + (data.list ? data.list.length : 0) + ' 条' + (realUnread > 0 ? '，' + realUnread + ' 条未读' : '') + '</span>' +
-        (realUnread > 0 ? '<button class="admin-btn admin-btn-sm" onclick="markAllNotifFullRead()">全部标为已读</button>' : '') +
+        '<div style="display:flex;gap:6px">' +
+          (realUnread > 0 ? '<button class="admin-btn admin-btn-sm" onclick="markAllNotifFullRead()">全部标为已读</button>' : '') +
+          '<button class="admin-btn admin-btn-sm" onclick="clearAllNotifsFull()" style="color:var(--accent)">🗑 清空通知</button>' +
+        '</div>' +
         '</div>';
       if (!data.list || !data.list.length) {
         html += '<div class="admin-empty">暂无通知</div>';
@@ -832,7 +912,7 @@
           '</div>' +
           '<div class="notif-full-body" style="display:none">' +
             '<div class="notif-full-msg">' + (n.message ? esc(n.message) : '') + '</div>' +
-            (n.material_id ? '<div class="notif-full-link"><a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>' : '') +
+            (n.material_id ? '<div class="notif-full-link">' + (n.type === 'disagree' ? '<a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a>' : '<a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a>') + '</div>' : '') +
           '</div>' +
         '</div>';
       });
@@ -848,6 +928,16 @@
     var body = item ? item.querySelector('.notif-full-body') : null;
     if (!body) return;
     var isOpen = body.style.display === 'block';
+    // 自动折叠其他打开的项
+    if (!isOpen) {
+      document.querySelectorAll('.notif-full-body').forEach(function(b) {
+        if (b !== body && b.style.display === 'block') {
+          b.style.display = 'none';
+          var h = b.closest('.notif-full-item');
+          if (h) { var icon = h.querySelector('.notif-expand-icon'); if (icon) icon.classList.remove('expanded'); }
+        }
+      });
+    }
     body.style.display = isOpen ? 'none' : 'block';
     headerEl.querySelector('.notif-expand-icon').classList.toggle('expanded', !isOpen);
     // 未读自动标记已读
@@ -874,8 +964,6 @@
     renderNotifFull();
     var badge = document.getElementById('notifBadge');
     if (badge) badge.style.display = 'none';
-    var dot = document.getElementById('notifDot');
-    if (dot) dot.style.display = 'none';
   }
 
   // ── 管理后台（Iter 3） ──
@@ -1069,6 +1157,7 @@
 
   // ── 待审核 ──
   var _pendingIncludeSub = false;
+  var _highlightDisputeMaterialId = null;
 
   function renderAdminPending(content) {
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
@@ -1342,6 +1431,26 @@
         html += '</div>';
       }
       content.innerHTML = html;
+      // 自动展开指定的异议高亮
+      if (_highlightDisputeMaterialId) {
+        var targetId = _highlightDisputeMaterialId;
+        _highlightDisputeMaterialId = null; // 只触发一次
+        var targetRow = document.getElementById('hc-comments-row-' + targetId);
+        if (targetRow) {
+          targetRow.style.display = 'table-row';
+          var div = document.getElementById('hc-comments-' + targetId);
+          if (div) {
+            toggleComments(targetId, null, true);
+            setTimeout(function() {
+              targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 200);
+          }
+        } else {
+          if (data.total_pages > 1) {
+            alert('高亮异议未在当前页找到，请手动翻页查找');
+          }
+        }
+      }
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
     });

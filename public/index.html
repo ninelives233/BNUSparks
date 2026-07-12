@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=23">
+<link rel="stylesheet" href="/static/css/style.css?v=24">
 </head>
 <body>
 
@@ -255,19 +255,33 @@
   </div>
 </div>
 
-<!-- ═══ Notification Drawer ═══ -->
+<!-- ═══ User Drawer (avatar menu + notifications as sub-view) ═══ -->
 <div class="notif-drawer-overlay" id="notifDrawer" style="display:none" onclick="closeNotifDrawer(event)">
   <div class="notif-drawer" onclick="event.stopPropagation()">
-    <div class="notif-drawer-header">
-      <h3>通知</h3>
-      <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
+
+    <!-- ─── Page: Menu ─── -->
+    <div id="drawerMenu">
+      <div class="notif-drawer-header" style="justify-content:flex-end">
+        <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
+      </div>
+      <div class="drawer-menu-body" id="drawerMenuBody"></div>
     </div>
-    <div class="notif-drawer-actions">
-      <button class="notif-mark-all-btn" onclick="markAllNotifRead()">全部标为已读</button>
+
+    <!-- ─── Page: Notifications ─── -->
+    <div id="drawerNotif" style="display:none">
+      <div class="notif-drawer-header">
+        <button class="notif-nav-back" onclick="showDrawerMenu()">← 返回</button>
+        <h3>通知</h3>
+        <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
+      </div>
+      <div class="notif-drawer-actions">
+        <button class="notif-mark-all-btn" onclick="markAllNotifRead()">全部标为已读</button>
+      </div>
+      <div class="notif-drawer-body" id="notifList">
+        <p class="notif-empty">暂无通知</p>
+      </div>
     </div>
-    <div class="notif-drawer-body" id="notifList">
-      <p class="notif-empty">暂无通知</p>
-    </div>
+
   </div>
 </div>
 
@@ -592,7 +606,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=23"></script>
+<script src="/static/js/app.js?v=24"></script>
 
 </body>
 </html>

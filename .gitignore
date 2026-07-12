@@ -38,6 +38,9 @@ implementation-plan-*.md
 *.sqlite
 staticfiles/
 
+# Production settings (contains server IP/domain)
+bnusparks/settings_prod.py
+
 # Data
 data/materials/
 data/*.sqlite3
@@ -51,10 +54,12 @@ data/major_course_map.json
 # Documentation worklogs
 docs/worklog-*.md
 docs/SESSION_HANDOFF.md
+docs/SECURITY_INCIDENT_*.md
 
 # Deployment scripts (contain SSH credentials — NEVER COMMIT)
 deploy.sh
 deploy.sh.template
+setup-new-server.sh
 scripts/deploy.sh
 scripts/deploy.py
 DEPLOY.md
@@ -69,6 +74,9 @@ scripts/cleanup_repo.sh
 scripts/test_api.py
 scripts/test_setup.py
 scripts/__pycache__/
+
+# Backup (database dump, .env — local only)
+backup/
 
 # Test artifacts
 test_data/
