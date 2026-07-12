@@ -62,16 +62,8 @@ scripts/deploy.sh
 scripts/deploy.py
 DEPLOY.md
 
-# One-time helper scripts (not needed for production)
-seed.py
-seed_tree.py
-import_archives.py
-git_storage.py
-scripts/clean_stale_data.py
-scripts/cleanup_repo.sh
-scripts/test_api.py
-scripts/test_setup.py
-scripts/__pycache__/
+# One-time helper scripts / 自动化脚本（不用于生产环境，含内部信息）
+scripts/
 
 # Backup (database dump, .env — local only)
 backup/
