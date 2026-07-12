@@ -70,3 +70,17 @@ backup/
 
 # Test artifacts
 test_data/
+
+# Django dead code (old template era, SPA 已废弃)
+materials/templates/
+materials/static/
+
+# One-time import tools（不用于生产）
+materials/management/
+
+# 空测试模板（不用于生产）
+materials/tests.py
+
+# 项目元信息（不用于运行网站）
+LICENSE
+README.md
