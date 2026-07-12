@@ -25,7 +25,7 @@ from django.db.models import Q, Count
 from django.utils import timezone
 from datetime import date, timedelta
 
-from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment
+from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment, DownloadRecord
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -130,13 +130,23 @@ def _err(msg, status=400):
 
 
 def _create_notification(recipient, type, title, message="", material=None, triggered_by=None):
-    """创建通知的便捷方法"""
+    """创建通知的便捷方法，自动从 material 冗余存储 course_code/course_name"""
+    course_code = ""
+    course_name = ""
+    if material and material.course_id:
+        try:
+            course_code = material.course.code
+            course_name = material.course.name
+        except Exception:
+            pass
     return Notification.objects.create(
         recipient=recipient,
         type=type,
         title=title,
         message=message,
         material=material,
+        course_code=course_code,
+        course_name=course_name,
         triggered_by=triggered_by,
     )
 
@@ -422,8 +432,8 @@ def api_notifications(request):
                     "is_read": n.is_read,
                     "material_id": n.material_id,
                     "material_title": n.material.title if n.material else None,
-                    "course_code": n.material.course.code if n.material and hasattr(n.material, "course") and n.material.course else None,
-                    "course_name": n.material.course.name if n.material and hasattr(n.material, "course") and n.material.course else None,
+                    "course_code": n.course_code or (n.material.course.code if n.material and hasattr(n.material, "course") and n.material.course else None),
+                    "course_name": n.course_name or (n.material.course.name if n.material and hasattr(n.material, "course") and n.material.course else None),
                     "created_at": n.created_at.strftime("%Y-%m-%d %H:%M"),
                 }
                 for n in qs[:100]
@@ -479,6 +489,13 @@ def api_profile(request):
         else:
             download_limit = -1  # 管理员不限
 
+        avatar_url = ""
+        if profile.avatar:
+            try:
+                avatar_url = profile.avatar.url
+            except Exception:
+                avatar_url = ""
+
         return _ok({
             "id": request.user.id,
             "username": request.user.username,
@@ -486,6 +503,7 @@ def api_profile(request):
             "email": request.user.email,
             "role": profile.role,
             "role_label": profile.get_role_display(),
+            "avatar_url": avatar_url,
             "daily_download_used": daily_download_used,
             "daily_download_limit": download_limit,
             "date_joined": request.user.date_joined.strftime("%Y-%m-%d"),
@@ -513,6 +531,69 @@ def api_profile(request):
         })
 
     return _err("仅支持 GET/PATCH", 405)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 头像上传
+# ═══════════════════════════════════════════════════════════════
+
+import os
+from PIL import Image as PILImage
+
+@csrf_exempt
+@require_login
+def api_avatar_upload(request):
+    """POST /api/auth/avatar/ — 上传/更换头像"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+
+    if "avatar" not in request.FILES:
+        return _err("请选择图片文件")
+
+    img_file = request.FILES["avatar"]
+
+    # 文件类型校验
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if img_file.content_type not in allowed_types:
+        return _err("仅支持 JPG/PNG/GIF/WebP 格式")
+
+    # 文件大小校验（2MB）
+    if img_file.size > 2 * 1024 * 1024:
+        return _err("图片不能超过 2MB")
+
+    profile = _get_or_create_profile(request.user)
+    ext = os.path.splitext(img_file.name)[1] or ".jpg"
+    safe_name = f"avatar_{request.user.id}{ext}"
+    dest_dir = Path(settings.MEDIA_ROOT) / "avatars"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / safe_name
+
+    # 用 PIL 缩放到 200×200 居中裁剪
+    try:
+        img = PILImage.open(img_file)
+        img = img.convert("RGB")
+        size = min(img.size)
+        left = (img.size[0] - size) // 2
+        top = (img.size[1] - size) // 2
+        img = img.crop((left, top, left + size, top + size))
+        img = img.resize((200, 200), PILImage.LANCZOS)
+        img.save(dest_path, "JPEG", quality=85)
+    except Exception as e:
+        return _err(f"图片处理失败: {str(e)}")
+
+    # 删除旧头像（不同格式）
+    if profile.avatar:
+        old_path = Path(settings.MEDIA_ROOT) / profile.avatar.name
+        if old_path.exists() and str(old_path) != str(dest_path):
+            old_path.unlink()
+
+    profile.avatar = f"avatars/{safe_name}"
+    profile.save(update_fields=["avatar"])
+
+    return _ok({
+        "avatar_url": profile.avatar.url if profile.avatar else "",
+        "message": "头像已更新",
+    })
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -572,6 +653,34 @@ def api_my_uploads(request):
         }
 
     return _ok([_serialize_upload(m) for m in qs])
+
+
+# ═══════════════════════════════════════════════════════════════
+# 我的下载
+# ═══════════════════════════════════════════════════════════════
+
+@require_login
+def api_my_downloads(request):
+    """GET /api/user/downloads/ — 自己的下载记录"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+
+    qs = DownloadRecord.objects.filter(user=request.user).select_related(
+        "material"
+    ).order_by("-created_at")[:100]
+
+    return _ok([
+        {
+            "id": r.id,
+            "material_id": r.material_id,
+            "course_code": r.course_code,
+            "course_name": r.course_name,
+            "material_title": r.material_title,
+            "file_name": r.file_name,
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M"),
+        }
+        for r in qs
+    ])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -858,6 +967,19 @@ def api_file_download(request, file_id):
         download_count=material.download_count + 1
     )
 
+    # 记录下载历史
+    try:
+        DownloadRecord.objects.create(
+            user=user,
+            material=material,
+            course_code=material.course.code if material.course_id else "",
+            course_name=material.course.name if material.course_id else "",
+            material_title=material.title,
+            file_name=material.file_name,
+        )
+    except Exception:
+        pass  # 记录失败不影响下载
+
     return FileResponse(
         open(file_path, "rb"),
         as_attachment=True,
@@ -874,14 +996,16 @@ def api_file_delete(request, file_id):
 
     material = get_object_or_404(Material, id=file_id)
 
-    # 权限校验：上传者可删自己的文件，版主可删主责板块下的，总管理员可删任意
+    # 权限校验
     profile = _get_or_create_profile(request.user)
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         pass  # 总管理员可删任意
     elif material.uploader_id == request.user.id:
-        pass  # 上传者本人可删
-    elif profile.role == UserProfile.Role.MODERATOR:
-        # 版主检查是否在管辖板块内
+        # 上传者本人只可删除已驳回或被拒状态的资料，防止误删已通过
+        if material.review_status not in ("rejected",):
+            return _err("仅可删除已被驳回的资料", 403)
+    elif profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+        # 版主/小版主检查是否在管辖板块内
         try:
             _check_moderator_access(request.user, material)
         except Exception:
@@ -1399,13 +1523,32 @@ def api_review_comments(request, file_id):
         content = (body.get("content") or "").strip()
         if not content:
             return _err("内容不能为空")
-        ReviewComment.objects.create(
+
+        parent_id = body.get("parent_id")
+        parent_comment = None
+        if parent_id is not None:
+            parent_comment = get_object_or_404(ReviewComment, id=parent_id, material=material)
+
+        comment = ReviewComment.objects.create(
             material=material,
             commenter=request.user,
             content=content,
+            parent=parent_comment,
         )
-        # 通知原审核人
-        if material.reviewed_by and material.reviewed_by != request.user:
+
+        # 通知：如果是回复，通知被回复者；否则通知原审核人
+        if parent_comment:
+            notify_user = parent_comment.commenter
+            if notify_user != request.user:
+                _create_notification(
+                    recipient=notify_user,
+                    type=Notification.Type.DISAGREE,
+                    title="你的异议被回复",
+                    message=f"{request.user.first_name or request.user.username} 回复了你的异议：\n{content}",
+                    material=material,
+                    triggered_by=request.user,
+                )
+        elif material.reviewed_by and material.reviewed_by != request.user:
             _create_notification(
                 recipient=material.reviewed_by,
                 type=Notification.Type.DISAGREE,
@@ -1420,6 +1563,7 @@ def api_review_comments(request, file_id):
         "comments": [
             {
                 "id": c.id,
+                "parent_id": c.parent_id,
                 "commenter_name": c.commenter.first_name or c.commenter.username,
                 "content": c.content,
                 "created_at": c.created_at.strftime("%Y-%m-%d %H:%M"),
