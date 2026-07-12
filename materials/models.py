@@ -28,6 +28,7 @@ class UserProfile(models.Model):
         help_text="总管理员设置：该用户是否可以开启自动托管")
     daily_download_count = models.IntegerField("今日已下载", default=0)
     last_download_date = models.DateField("最后下载日期", null=True, blank=True)
+    avatar = models.ImageField("头像", upload_to="avatars/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -210,6 +211,8 @@ class Notification(models.Model):
         Material, on_delete=models.SET_NULL, null=True, blank=True,
         verbose_name="关联资料",
     )
+    course_code = models.CharField("课程代码", max_length=50, blank=True, help_text="通知创建时冗余存储，material 删除后仍可导航")
+    course_name = models.CharField("课程名称", max_length=200, blank=True)
     triggered_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         verbose_name="触发人", related_name="triggered_notifications",
@@ -235,6 +238,10 @@ class ReviewComment(models.Model):
         User, on_delete=models.CASCADE, verbose_name="评论者",
     )
     content = models.TextField("异议内容")
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.CASCADE,
+        related_name="replies", verbose_name="父评论",
+    )
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
     class Meta:
@@ -244,3 +251,27 @@ class ReviewComment(models.Model):
 
     def __str__(self):
         return f"[{self.commenter.first_name or self.commenter.username}] {self.content[:40]}"
+
+
+class DownloadRecord(models.Model):
+    """下载记录——用户每次下载留痕"""
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="download_records",
+        verbose_name="下载用户",
+    )
+    material = models.ForeignKey(
+        Material, on_delete=models.CASCADE, verbose_name="关联资料",
+    )
+    course_code = models.CharField("课程代码", max_length=50, blank=True)
+    course_name = models.CharField("课程名称", max_length=200, blank=True)
+    material_title = models.CharField("资料标题", max_length=200, blank=True)
+    file_name = models.CharField("文件名", max_length=255, blank=True)
+    created_at = models.DateTimeField("下载时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "下载记录"
+        verbose_name_plural = "下载记录"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} → {self.material_title}"

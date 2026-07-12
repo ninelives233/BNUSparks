@@ -28,7 +28,9 @@ urlpatterns = [
     path("auth/notifications/", views.api_notifications, name="api_notifications"),
     path("auth/notifications/<int:nid>/read/", views.api_notification_read, name="api_notification_read"),
     path("auth/profile/", views.api_profile, name="api_profile"),
+    path("auth/avatar/", views.api_avatar_upload, name="api_avatar_upload"),
     path("user/uploads/", views.api_my_uploads, name="api_my_uploads"),
+    path("user/downloads/", views.api_my_downloads, name="api_my_downloads"),
 
     # 搜索 & 统计
     path("search/", views.api_search, name="api_search"),
