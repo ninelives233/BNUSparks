@@ -403,7 +403,8 @@ def api_reset_password(request):
 @require_login
 def api_notifications(request):
     """GET /api/auth/notifications/ — 通知列表
-       POST /api/auth/notifications/ — 全部标为已读"""
+       POST /api/auth/notifications/ — 全部标为已读
+       DELETE /api/auth/notifications/ — 清空所有通知"""
     if request.method == "GET":
         unread_only = request.GET.get("unread_only")
         qs = Notification.objects.filter(recipient=request.user).select_related("material")
@@ -433,18 +434,29 @@ def api_notifications(request):
         Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
         return _ok({"message": "全部标为已读"})
 
-    return _err("仅支持 GET/POST", 405)
+    elif request.method == "DELETE":
+        Notification.objects.filter(recipient=request.user).delete()
+        return _ok({"message": "已清空所有通知"})
+
+    return _err("仅支持 GET/POST/DELETE", 405)
 
 
 @require_login
 def api_notification_read(request, nid):
-    """POST /api/auth/notifications/<id>/read/"""
-    if request.method != "POST":
-        return _err("仅支持 POST", 405)
-    notif = get_object_or_404(Notification, id=nid, recipient=request.user)
-    notif.is_read = True
-    notif.save(update_fields=["is_read"])
-    return _ok({"message": "已标为已读"})
+    """POST /api/auth/notifications/<id>/read/ — 标为已读
+       DELETE /api/auth/notifications/<id>/read/ — 删除单条通知"""
+    if request.method == "POST":
+        notif = get_object_or_404(Notification, id=nid, recipient=request.user)
+        notif.is_read = True
+        notif.save(update_fields=["is_read"])
+        return _ok({"message": "已标为已读"})
+
+    elif request.method == "DELETE":
+        notif = get_object_or_404(Notification, id=nid, recipient=request.user)
+        notif.delete()
+        return _ok({"message": "已删除"})
+
+    return _err("仅支持 POST/DELETE", 405)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1398,7 +1410,7 @@ def api_review_comments(request, file_id):
                 recipient=material.reviewed_by,
                 type=Notification.Type.DISAGREE,
                 title="你的审核被提出异议",
-                message=f"{request.user.first_name or request.user.username} 对资料「{material.title}」提出了审核异议。",
+                message=f"{request.user.first_name or request.user.username} 对资料「{material.title}」提出了审核异议：\n{content}",
                 material=material,
                 triggered_by=request.user,
             )

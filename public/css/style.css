@@ -176,55 +176,36 @@
   }
   .header-login .login-icon { font-size: 0.9rem; }
 
-  /* ── User Dropdown ────────────────────── */
-  .user-dropdown-wrap { position: relative; }
-  .user-dropdown-trigger {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 0.85rem; font-weight: 500; color: var(--ink-soft);
-    padding: 6px 14px; border-radius: var(--radius-full);
-    border: 1px solid var(--border-light); background: transparent;
-    cursor: pointer; font-family: inherit;
-    transition: border-color 0.18s, background 0.18s, color 0.18s;
-    text-decoration: none; white-space: nowrap;
+  /* ── User Avatar (replaces old bell + dropdown) ── */
+  .user-avatar-trigger {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; padding: 0; margin: 0;
+    border: none; background: transparent; cursor: pointer;
+    border-radius: 50%;
+    transition: box-shadow 0.18s;
   }
-  .user-dropdown-trigger:hover {
-    border-color: var(--primary-light); background: var(--primary-surface); color: var(--primary);
+  .user-avatar-trigger:hover {
+    box-shadow: 0 0 0 3px var(--primary-surface);
   }
-  .user-dropdown-trigger .dd-arrow { font-size: 0.6rem; transition: transform 0.2s; }
-  .user-dropdown-trigger.open .dd-arrow { transform: rotate(180deg); }
-
-  .notif-bell { position: relative; font-size: 0.9rem; line-height: 1; }
+  .user-avatar-circle {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(0.55 0.12 280), oklch(0.45 0.15 320));
+    color: #fff; font-size: 0.85rem; font-weight: 700;
+    font-family: inherit; line-height: 1; user-select: none;
+    transition: transform 0.15s;
+  }
+  .user-avatar-trigger:hover .user-avatar-circle {
+    transform: scale(1.08);
+  }
   .notif-badge {
-    position: absolute; top: -5px; right: -6px;
+    position: absolute; top: -3px; right: -3px;
     min-width: 16px; height: 16px;
     background: oklch(0.5 0.15 30);
     color: #fff; font-size: 0.55rem; font-weight: 700;
     border-radius: 8px; display: flex; align-items: center; justify-content: center;
     padding: 0 4px; line-height: 1; pointer-events: none;
-  }
-
-  .user-dropdown-menu {
-    position: absolute; right: 0; top: calc(100% + 6px);
-    min-width: 180px;
-    background: var(--raised); border: 1px solid var(--border-light);
-    border-radius: var(--radius-md); box-shadow: 0 8px 32px oklch(0 0 0 / 0.1);
-    padding: 6px; display: none; z-index: 200;
-    animation: ddIn 0.15s ease-out;
-  }
-  .user-dropdown-menu.open { display: block; }
-  @keyframes ddIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .user-dropdown-menu a {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 12px; border-radius: var(--radius-sm);
-    font-size: 0.82rem; color: var(--ink-soft); text-decoration: none;
-    transition: background 0.15s, color 0.15s;
-  }
-  .user-dropdown-menu a:hover { background: var(--primary-surface); color: var(--primary); }
-  .user-dropdown-menu .dd-divider {
-    height: 1px; background: var(--border-light); margin: 4px 8px;
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.2);
   }
 
   /* ════════════════════════════════════════════════════════════
@@ -517,10 +498,8 @@
     .header-login .login-btn { border: none; padding: 6px; background: transparent; }
     .header-login .login-btn:hover { background: transparent; color: var(--primary); }
     .header-login .login-text { display: none; }
-    .header-login .user-name { display: none; }
-    .header-login .dd-arrow { display: none; }
-    .header-login .user-dropdown-trigger { padding: 0 8px; gap: 0; justify-content: center; }
-    .header-login .user-dropdown-trigger .notif-bell { font-size: 1.2rem; }
+    .header-login .user-avatar-trigger { width: 32px; height: 32px; }
+    .header-login .user-avatar-circle { width: 30px; height: 30px; font-size: 0.75rem; }
     .side-nav { display: none; }
     .home-grid { grid-template-columns: 1fr; }
     .hero { padding: var(--space-2xl) 0 var(--space-xl); }
@@ -2066,6 +2045,55 @@
   color: var(--ink-light, oklch(0.5 0 0));
 }
 
+/* ── Drawer Menu (replaces old footer) ── */
+.drawer-menu-body {
+  flex: 1; overflow-y: auto; padding: 8px 12px;
+}
+.dm-user {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 8px; margin-bottom: 4px;
+}
+.dm-avatar {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, oklch(0.55 0.12 280), oklch(0.45 0.15 320));
+  color: #fff; font-size: 1.1rem; font-weight: 700;
+  flex-shrink: 0; user-select: none;
+}
+.dm-info { flex: 1; min-width: 0; }
+.dm-name { font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+.dm-role { font-size: 0.75rem; color: var(--ink-faint); margin-top: 1px; }
+.dm-divider {
+  height: 1px; background: var(--border-light); margin: 4px 8px;
+}
+.dm-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 12px; border-radius: var(--radius-sm);
+  font-size: 0.88rem; color: var(--ink-soft); text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+.dm-item:hover { background: var(--primary-surface); color: var(--primary); }
+.dm-item span:first-child { font-size: 1.1rem; }
+.dm-badge {
+  margin-left: auto;
+  min-width: 18px; height: 18px;
+  background: oklch(0.5 0.15 30); color: #fff;
+  font-size: 0.6rem; font-weight: 700;
+  border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  padding: 0 5px; line-height: 1;
+}
+.dm-logout { color: var(--ink-faint); margin-top: 4px; }
+
+.notif-nav-back {
+  background: none; border: none; font-size: 0.85rem;
+  color: var(--primary); cursor: pointer; padding: 4px 8px;
+  font-family: inherit; border-radius: var(--radius-sm);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.notif-nav-back:hover { background: var(--primary-surface); }
+
 /* ── 审核状态标签 ── */
 .review-badge {
   display: inline-flex; align-items: center;
@@ -2088,15 +2116,6 @@
   color: oklch(0.5 0.12 25);
 }
 
-/* ── 用户下拉菜单未读标记 ── */
-.notif-badge-dot {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  vertical-align: super;
-  margin-left: 2px;
-}
 
 /* ═══════════════════════════════════════════════════════════════
    Iter 3 — 管理后台
