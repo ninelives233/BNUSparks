@@ -264,6 +264,11 @@
   let currentUser = null;
   let _mgmtMode = localStorage.getItem('bnusparks_mgmt') === '1';
   let _civilianMode = localStorage.getItem('bnusparks_civilian') === '1';
+  // 防止旧版本遗留数据导致两者同时为真
+  if (_mgmtMode && _civilianMode) {
+    _civilianMode = false;
+    localStorage.setItem('bnusparks_civilian', '0');
+  }
 
   function updateAuthUI() {
     const container = document.getElementById('headerLogin');
@@ -1086,15 +1091,32 @@
   // ── 模式切换（Iter 6） ──
   function toggleMgmtMode() {
     _mgmtMode = !_mgmtMode;
+    if (_mgmtMode) {
+      // 打开管理模式 → 自动关闭平民模式
+      _civilianMode = false;
+      localStorage.setItem('bnusparks_civilian', '0');
+    }
     localStorage.setItem('bnusparks_mgmt', _mgmtMode ? '1' : '0');
     renderDrawerMenu();
     // 如果当前在 explorer 视图，立刻刷新
     var exp = document.getElementById('explorerView');
     if (exp && exp.style.display !== 'none') renderExplorer();
+    // 平民模式：显示侧边栏管理入口
+    document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
+      link.style.display = (currentUser && currentUser.role !== 'user') ? '' : 'none';
+    });
   }
 
   function toggleCivilianMode() {
     _civilianMode = !_civilianMode;
+    if (_civilianMode) {
+      // 打开平民模式 → 自动关闭管理模式
+      _mgmtMode = false;
+      localStorage.setItem('bnusparks_mgmt', '0');
+      // 刷新 explorer（去掉管理模式 UI）
+      var exp = document.getElementById('explorerView');
+      if (exp && exp.style.display !== 'none') renderExplorer();
+    }
     localStorage.setItem('bnusparks_civilian', _civilianMode ? '1' : '0');
     renderDrawerMenu();
     // 平民模式：隐藏侧边栏管理入口
@@ -2941,6 +2963,10 @@
     if (!currentUser) { showLoginModal(); return; }
     uploadCourseCode = code;
     document.getElementById('uploadCourse').value = name + ' (' + code + ')';
+    // 普通上传时隐藏重传驳回提示（避免残留）
+    var ri = document.getElementById('reuploadInfo');
+    if (ri) ri.style.display = 'none';
+    _reuploadOldId = null;
     document.getElementById('uploadModal').style.display = 'flex';
     lockScroll();
     _pushModalHistory();
@@ -2951,6 +2977,10 @@
     document.getElementById('uploadForm').reset();
     document.getElementById('uploadError').style.display = 'none';
     document.getElementById('uploadProgress').style.display = 'none';
+    // 清除重传相关的状态，防止残留到下一次打开弹窗
+    var ri = document.getElementById('reuploadInfo');
+    if (ri) ri.style.display = 'none';
+    _reuploadOldId = null;
     unlockScroll();
     _popModalHistory();
   }
