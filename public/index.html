@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=25">
+<link rel="stylesheet" href="/static/css/style.css?v=45">
 </head>
 <body>
 
@@ -397,10 +397,29 @@
       <button class="admin-tab active" data-tab="overview">📊 概览</button>
       <button class="admin-tab" data-tab="pending">⏳ 待审核</button>
       <button class="admin-tab" data-tab="history">📋 审核历史</button>
+      <button class="admin-tab" data-tab="deletions">🗑️ 删除记录</button>
       <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none">👥 用户管理</button>
-      <button class="admin-tab" data-tab="fileman" style="display:none">📁 文件管理</button>
+      <button class="admin-tab" data-tab="operations" style="display:none">📋 操作记录</button>
     </div>
     <div id="adminContent"></div>
+  </div>
+</div>
+
+<!-- ═══ 我的上传独立页面（Iter 6） ═══ -->
+<div class="view-section" id="myUploadsView" style="display:none">
+  <div class="container" style="max-width:800px;margin:0 auto;padding:20px 16px">
+    <div class="breadcrumb" id="muBreadcrumb" style="margin-bottom:12px">
+      <a href="#" onclick="showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">我的上传</span>
+    </div>
+    <div class="mu-tabs" style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="mu-tab active" data-tab="approved" onclick="switchMyUploadsTab('approved')">✅ 已发布</button>
+      <button class="mu-tab" data-tab="pending" onclick="switchMyUploadsTab('pending')">⏳ 审核中</button>
+      <button class="mu-tab" data-tab="rejected" onclick="switchMyUploadsTab('rejected')">❌ 已驳回</button>
+      <button class="mu-tab" data-tab="deleted" onclick="switchMyUploadsTab('deleted')">🗑️ 已删除</button>
+    </div>
+    <div id="myUploadsPageList"></div>
   </div>
 </div>
 
@@ -479,7 +498,7 @@
     <h2 class="modal-title">注册</h2>
     <form id="registerForm" onsubmit="return handleRegister(event)">
       <div class="mf-group">
-        <label>学号</label>
+        <label>北师大邮箱</label>
         <div class="mf-email-wrap">
           <input type="text" id="regSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
           <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
@@ -489,6 +508,20 @@
         <label>昵称</label>
         <input type="text" id="regNickname" class="mf-input" required placeholder="如：木铎新生">
       </div>
+      <div class="mf-group">
+        <label>密码（至少 8 位）</label>
+        <div class="mf-pwd-wrap">
+          <input type="password" id="regPassword" class="mf-input mf-pwd-input" required minlength="8" placeholder="设置你的登录密码" autocomplete="new-password">
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPassword',this)" aria-label="显示密码">👁️</button>
+        </div>
+      </div>
+      <div class="mf-group">
+        <label>确认密码</label>
+        <div class="mf-pwd-wrap">
+          <input type="password" id="regPasswordConfirm" class="mf-input mf-pwd-input" required placeholder="再次输入密码" autocomplete="new-password">
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPasswordConfirm',this)" aria-label="显示密码">👁️</button>
+        </div>
+      </div>
       <button type="submit" class="mf-btn">注册</button>
       <p class="mf-switch">已有账号？<a href="#" onclick="showLogin();return false">登录</a></p>
     </form>
@@ -496,15 +529,9 @@
     <div id="registerSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
       <p class="ms-title">注册成功！</p>
-      <p class="ms-desc">你的初始密码为：</p>
-      <p class="ms-secure-hint">系统已为你生成一个随机安全密码。BNU Sparks 不会保存你的明文密码，<strong>复制密码后请立即妥善保管</strong>。为保护账户安全，请不要使用与校园系列账号相同的密码。</p>
-      <div class="ms-pwd" id="generatedPassword"></div>
-      <button class="ms-copy-btn" onclick="copyGeneratedPassword()">📋 复制密码</button>
-      <label class="ms-save-check">
-        <input type="checkbox" id="pwdSaveCheck" onchange="togglePwdSaveBtn()">
-        <span>我已妥善保存密码，不会泄露给他人</span>
-      </label>
-      <button class="mf-btn ms-btn" id="pwdConfirmBtn" onclick="closeAuthModal();updateAuthUI()" disabled>知道了</button>
+      <p class="ms-desc">验证邮件已发送到你的校园邮箱，请点击邮件中的链接完成注册。</p>
+      <p class="ms-secure-hint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">可能需要检查垃圾邮件箱。验证通过后即可使用你设置的密码登录。</p>
+      <button class="mf-btn ms-btn" onclick="closeAuthModal()">知道了</button>
     </div>
     <div class="external-access">
       <a href="mailto:bnusparks@163.com?subject=校外人员访问申请" class="external-access-btn">校外人员访问申请 →</a>
@@ -582,16 +609,17 @@
         <input type="text" id="uploadCourse" class="mf-input" readonly placeholder="选择课程后自动填充">
       </div>
       <div class="mf-group">
-        <label>资料标题</label>
-        <input type="text" id="uploadTitle" class="mf-input" required placeholder="如：民法总论期末笔记">
-      </div>
-      <div class="mf-group">
         <label>文件</label>
-        <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg">
+        <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg" onchange="autoFillUploadTitle()">
+        <div class="mf-hint">单个文件大小不超过 50MB</div>
       </div>
       <div class="mf-group">
-        <label>任课教师（选填）</label>
-        <input type="text" id="uploadTeacher" class="mf-input" placeholder="如：张老师">
+        <label>资料标题</label>
+        <input type="text" id="uploadTitle" class="mf-input" placeholder="留空则自动使用文件原始名称">
+      </div>
+      <div class="mf-group">
+        <label>任课教师</label>
+        <input type="text" id="uploadTeacher" class="mf-input" required placeholder="如：张老师">
       </div>
       <div class="mf-group">
         <label>描述（选填）</label>
@@ -608,7 +636,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=25"></script>
+<script src="/static/js/app.js?v=45"></script>
 
 </body>
 </html>

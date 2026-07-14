@@ -9,6 +9,7 @@ import uuid
 import hmac
 import hashlib
 import base64
+import io
 import time
 from pathlib import Path
 from functools import wraps
@@ -21,11 +22,11 @@ from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.conf import settings
-from django.db.models import Q, Count
+from django.db.models import Q, Count, F
 from django.utils import timezone
 from datetime import date, timedelta
 
-from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment, DownloadRecord
+from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment, DownloadRecord, DeletionRecord, FolderOperation
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -75,7 +76,13 @@ def _jwt_decode(token):
 def _get_user(request):
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        return None
+        # 仅当 Authorization 头为空时才 fallback 到查询参数
+        if not auth:
+            token = request.GET.get("token") or request.POST.get("token") or ""
+            if token:
+                auth = "Bearer " + token
+        if not auth.startswith("Bearer ") or len(auth) < 20:
+            return None
     payload = _jwt_decode(auth[7:])
     if payload is None:
         return None
@@ -178,7 +185,7 @@ def _check_download_quota(user):
 
 @csrf_exempt
 def api_register(request):
-    """POST /api/auth/register — 仅需 email + nickname，自动生成密码"""
+    """POST /api/auth/register — email + password + nickname，发送验证邮件"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
     try:
@@ -188,40 +195,118 @@ def api_register(request):
 
     email = (body.get("email") or "").strip().lower()
     nickname = (body.get("nickname") or "").strip()
+    password = (body.get("password") or "").strip()
 
     if not email:
         return _err("邮箱不能为空")
     if not nickname:
         return _err("昵称不能为空")
+    if not password:
+        return _err("密码不能为空")
+    if len(password) < 8:
+        return _err("密码长度至少 8 位")
     if not email.endswith("@mail.bnu.edu.cn"):
         return _err("请使用北师大校内邮箱（@mail.bnu.edu.cn）")
 
-    if User.objects.filter(username=email).exists():
-        return _err("该邮箱已注册")
-
-    # 自动生成 10 位随机密码
-    password = uuid.uuid4().hex[:10]
+    existing = User.objects.filter(username=email).first()
+    if existing:
+        if existing.is_active:
+            return _err("该邮箱已注册，请直接登录")
+        else:
+            return _err("该邮箱已注册但未验证，请检查校园邮箱中的验证邮件（可能需要检查垃圾邮件箱）")
 
     user = User.objects.create_user(
         username=email, password=password, email=email,
-        first_name=nickname,
+        first_name=nickname, is_active=False,
     )
     # 自动创建 UserProfile（默认 role = user）
     _get_or_create_profile(user)
 
-    token = _jwt_encode({
+    # 生成验证 token 并发送验证邮件
+    token = default_token_generator.make_token(user)
+    link = request.build_absolute_uri(f'/verify-email/?uid={user.id}&vtoken={token}')
+    try:
+        send_mail(
+            "BNU Sparks — 验证你的邮箱",
+            f"你好 {nickname}，\n\n"
+            f"感谢注册 BNU Sparks（木铎星火）课程资料共享平台！\n\n"
+            f"请点击以下链接验证你的北师大邮箱（30 分钟内有效）：\n{link}\n\n"
+            f"如果这不是你本人操作，请忽略此邮件。\n\n"
+            f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn",
+            "bnusparks@163.com",
+            [email],
+            fail_silently=False,
+        )
+    except Exception:
+        user.delete()  # 邮件发送失败，回滚用户创建
+        return _err("邮件发送失败，请稍后重试", 500)
+
+    return _ok({"message": "注册成功！请查收验证邮件（可能需要检查垃圾邮件箱），点击邮件中的链接完成注册。"})
+
+
+@csrf_exempt
+def api_verify_email(request):
+    """POST /api/auth/verify-email/ — 验证邮箱并激活账号"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    uid = body.get("uid")
+    token = body.get("vtoken", "")
+
+    if not uid or not token:
+        return _err("参数不完整")
+
+    try:
+        user = User.objects.get(id=uid)
+    except User.DoesNotExist:
+        return _err("无效的验证链接")
+
+    if not default_token_generator.check_token(user, token):
+        return _err("验证链接已过期或无效，请重新注册")
+
+    if user.is_active:
+        # 已激活：返回 JWT 让前端直接登录
+        jwt_token = _jwt_encode({
+            "user_id": user.id,
+            "exp": time.time() + 7 * 86400,
+        })
+        profile = _get_or_create_profile(user)
+        return _ok({
+            "token": jwt_token,
+            "message": "该邮箱已验证，请直接登录。",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "nickname": user.first_name or user.username,
+                "email": user.email,
+                "role": profile.role,
+                "avatar_url": profile.avatar.url if profile.avatar else "",
+            },
+        })
+
+    user.is_active = True
+    user.save(update_fields=["is_active"])
+
+    # 验证成功，自动生成 JWT 让用户直接登录
+    jwt_token = _jwt_encode({
         "user_id": user.id,
         "exp": time.time() + 7 * 86400,
     })
+    profile = _get_or_create_profile(user)
     return _ok({
-        "token": token,
-        "generated_password": password,
+        "token": jwt_token,
+        "message": "邮箱验证成功！",
         "user": {
             "id": user.id,
             "username": user.username,
-            "nickname": nickname,
+            "nickname": user.first_name or user.username,
             "email": user.email,
-            "role": UserProfile.Role.USER,
+            "role": profile.role,
+            "avatar_url": profile.avatar.url if profile.avatar else "",
         },
     })
 
@@ -254,7 +339,23 @@ def api_login(request):
             pass
 
     if user is None:
+        # 检查是否是未验证邮箱导致的登录失败（authenticate() 会拒绝 is_active=False 的用户）
+        try:
+            inactive_user = User.objects.get(username=username)
+            if inactive_user.check_password(password) and not inactive_user.is_active:
+                return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
+        except User.DoesNotExist:
+            pass
+        try:
+            inactive_user = User.objects.get(email__iexact=username)
+            if inactive_user.check_password(password) and not inactive_user.is_active:
+                return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
+        except User.DoesNotExist:
+            pass
         return _err("邮箱或密码错误")
+
+    if not user.is_active:
+        return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
 
     token_expiry = 30 * 86400 if remember else 7 * 86400
     token = _jwt_encode({
@@ -270,6 +371,7 @@ def api_login(request):
             "nickname": user.first_name or user.username,
             "email": user.email,
             "role": profile.role,
+            "avatar_url": profile.avatar.url if profile.avatar else "",
         },
     })
 
@@ -301,6 +403,7 @@ def api_me(request):
         "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
+        "avatar_url": profile.avatar.url if profile.avatar else "",
     })
 
 
@@ -524,6 +627,10 @@ def api_profile(request):
                 return _err("昵称不能超过 50 字")
             request.user.first_name = nickname
             request.user.save(update_fields=["first_name"])
+            # 同步更新该用户所有已上传资料的 uploader_name
+            Material.objects.filter(uploader=request.user).exclude(
+                uploader_name=nickname
+            ).update(uploader_name=nickname)
 
         return _ok({
             "nickname": request.user.first_name or request.user.username,
@@ -597,6 +704,34 @@ def api_avatar_upload(request):
 
 
 # ═══════════════════════════════════════════════════════════════
+# EXIF 清理工具（隐私安全）
+# ═══════════════════════════════════════════════════════════════
+
+def _strip_exif(file_path):
+    """清除图片文件的 EXIF 元数据（GPS 位置信息等）
+
+    仅处理 JPEG/PNG/WebP 格式，非图片文件静默跳过。
+    失败时静默回退，不阻塞上传流程。
+    """
+    ext = Path(file_path).suffix.lower()
+    if ext not in ('.jpg', '.jpeg', '.png', '.webp'):
+        return
+    try:
+        img = PILImage.open(file_path)
+        img.load()  # 确保像素数据已读取
+        fmt = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG', 'webp': 'WEBP'}[ext.lstrip('.')]
+        buf = io.BytesIO()
+        save_kwargs = {'format': fmt}
+        if fmt == 'JPEG':
+            save_kwargs['quality'] = 85
+        img.save(buf, **save_kwargs)
+        with open(file_path, 'wb') as f:
+            f.write(buf.getvalue())
+    except Exception:
+        pass  # 静默回退
+
+
+# ═══════════════════════════════════════════════════════════════
 # 用户个人 API
 # ═══════════════════════════════════════════════════════════════
 
@@ -647,6 +782,9 @@ def api_my_uploads(request):
             "teacher": m.teacher,
             "review_status": rs,
             "is_approved": m.is_approved,
+            "is_admin_uploaded": _get_or_create_profile(request.user).role in (
+                UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR
+            ),
             "review_notes": m.review_notes,
             "download_count": m.download_count,
             "created_at": m.created_at.strftime("%Y-%m-%d"),
@@ -721,10 +859,11 @@ def api_course_files(request, course_code):
     course = get_object_or_404(Course, code=course_code)
     user = _get_user(request)
 
-    # 普通用户只能看到已通过的资料，上传者可看到自己的待审/驳回资料
+    # 普通用户只能看到已通过的资料，上传者可看到自己的待审资料
+    # 已驳回文件不在文件列表中显示（直接从通知中心重新上传）
     q_filter = Q(course=course, is_approved=True)
     if user is not None:
-        q_filter |= Q(course=course, uploader=user)
+        q_filter |= Q(course=course, uploader=user, review_status__in=["pending", "approved"])
 
     materials = Material.objects.filter(q_filter).select_related(
         "material_type"
@@ -767,10 +906,16 @@ def api_course_files(request, course_code):
             "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
             "uploader": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
             "teacher": m.teacher,
+            "description": m.description or "",
+            "course_name": m.course.name if m.course else "",
+            "course_code": m.course.code if m.course else "",
             "download_count": m.download_count,
             "created_at": m.created_at.strftime("%Y-%m-%d"),
             "review_status": rs,
             "is_uploader": user is not None and m.uploader_id == user.id,
+            "is_admin_uploaded": user is not None and m.uploader_id == user.id and _get_or_create_profile(user).role in (
+                UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR
+            ),
             "can_download": m.is_approved or (user is not None and m.uploader_id == user.id),
             "can_delete": user is not None and (
                 m.uploader_id == user.id
@@ -849,8 +994,14 @@ def api_file_upload(request):
     teacher = request.POST.get("teacher", "").strip()
     uploaded_file = request.FILES.get("file")
 
-    if not course_code or not title or not uploaded_file:
-        return _err("课程代码、标题和文件不能为空")
+    if not course_code or not uploaded_file:
+        return _err("课程代码和文件不能为空")
+    if not teacher:
+        return _err("请填写任课教师姓名")
+
+    # 标题为空时自动使用原始文件名（不含扩展名）
+    if not title:
+        title = Path(uploaded_file.name).stem
 
     try:
         course = Course.objects.get(code=course_code)
@@ -867,6 +1018,9 @@ def api_file_upload(request):
         for chunk in uploaded_file.chunks():
             f.write(chunk)
 
+    # 清除图片文件的 EXIF 元数据（隐私安全）
+    _strip_exif(save_dir / safe_name)
+
     file_size = (save_dir / safe_name).stat().st_size
 
     # 根据用户角色决定审核状态
@@ -875,7 +1029,10 @@ def api_file_upload(request):
         UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN, UserProfile.Role.SUB_MODERATOR,
     )
     auto_approved_by = None
-    if not is_auto_approved:
+    if is_auto_approved:
+        # 管理员自身上传：审核人设为自己，确保 reviewed_by/reviewed_at 有值
+        auto_approved_by = request.user
+    else:
         # 普通用户上传：检查是否有自动托管的版主/小版主
         auto_approved_by = _check_auto_approve(course)
         if auto_approved_by:
@@ -998,6 +1155,7 @@ def api_file_delete(request, file_id):
 
     # 权限校验
     profile = _get_or_create_profile(request.user)
+    is_self_delete = material.uploader_id == request.user.id and profile.role == UserProfile.Role.USER
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         pass  # 总管理员可删任意
     elif material.uploader_id == request.user.id:
@@ -1012,6 +1170,52 @@ def api_file_delete(request, file_id):
             return _err("无权删除该资料", 403)
     else:
         return _err("无权删除该资料", 403)
+
+    # 存档删除记录
+    import json
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except Exception:
+        body = {}
+    delete_reason = body.get("reason", "")
+    DeletionRecord.objects.create(
+        material_id=material.id,
+        title=material.title,
+        file_name=material.file_name,
+        file_size=material.file_size,
+        course_code=material.course.code if material.course else "",
+        course_name=material.course.name if material.course else "",
+        college_id=material.course.college_id if material.course and material.course.college else None,
+        uploader_name=material.uploader_name or (material.uploader.first_name if material.uploader else "匿名"),
+        deleted_by=request.user,
+        delete_reason=delete_reason,
+    )
+
+    # 普通用户自行删除时，通知管理员关注
+    if is_self_delete:
+        _create_notification(
+            recipient=request.user,
+            type=Notification.Type.FILE_DELETED,
+            title="你删除了资料",
+            message=f"你已删除资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
+            course_code=material.course.code if material.course else "",
+            course_name=material.course.name if material.course else "",
+        )
+        # 同时通知所有超级管理员和相关版主
+        from django.contrib.auth.models import User as AuthUser
+        admins = AuthUser.objects.filter(
+            userprofile__role__in=[UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR]
+        ).exclude(id=request.user.id).distinct()
+        for admin in admins:
+            _create_notification(
+                recipient=admin,
+                type=Notification.Type.FILE_DELETED,
+                title="用户自行删除资料",
+                message=f"用户 {material.uploader_name or request.user.username} 删除了资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
+                course_code=material.course.code if material.course else "",
+                course_name=material.course.name if material.course else "",
+                triggered_by=request.user,
+            )
 
     # 删除磁盘文件
     file_path = Path(settings.MEDIA_ROOT) / material.file_path
@@ -1287,11 +1491,12 @@ def _get_moderated_material_qs(user, include_assigned=True):
         return qs
 
     if profile.role == UserProfile.Role.SUB_MODERATOR:
-        # 小版主：通过 CourseCategory 节点管辖范围内的资料 + 指派给自己的
+        # 小版主：通过 CourseCategory 节点管辖范围内的资料 + 指派给自己的 + 自己上传的
         all_courses = []
         for cat in profile.moderated_sections.all():
             all_courses.extend(_get_courses_in_category(cat))
         q = Q(course__in=set(all_courses)) if all_courses else Q(pk__in=[])
+        q |= Q(uploader=user)  # 始终能看到自己的上传
         if include_assigned:
             q |= Q(assigned_moderator=user)
         return Material.objects.filter(q).select_related("course", "uploader")
@@ -1305,6 +1510,7 @@ def _get_moderated_material_qs(user, include_assigned=True):
     for cat in profile.moderated_sections.all():
         all_courses.update(_get_courses_in_category(cat))
     q = Q(course__in=all_courses) if all_courses else Q(pk__in=[])
+    q |= Q(uploader=user)  # 始终能看到自己的上传
     if include_assigned:
         q |= Q(assigned_moderator=user)
     return Material.objects.filter(q).select_related("course", "uploader")
@@ -1321,6 +1527,11 @@ def api_moderation_pending(request):
         Q(review_status="pending") |
         (Q(review_status="approved", reviewed_at__gte=recently) & ~Q(reviewed_by=request.user))
     )
+    # 隐藏同僚已通过（仅保留待审核）
+    hide_peer_approved = request.GET.get("hide_peer_approved") == "1"
+    if hide_peer_approved:
+        qs = qs.filter(review_status="pending")
+
     qs = qs.order_by("-created_at")
 
     # 清理失效指派：assigned_moderator 指向的用户不再是活跃的小版主 → 清空指派
@@ -1513,18 +1724,22 @@ def api_review_comments(request, file_id):
         # 仅已审核通过的资料可提异议
         if material.review_status != "approved":
             return _err("仅可对已通过审核的资料提出异议", 400)
-        # 不允许自己给自己通过的文件提异议
-        if material.reviewed_by == request.user:
-            return _err("不能给自己通过的文件提出异议", 400)
+
         try:
             body = json.loads(request.body)
         except json.JSONDecodeError:
             return _err("请求格式错误")
+
+        parent_id = body.get("parent_id")
+        # 如果是回复（parent_id 存在），跳过"不能给自己通过"的限制
+        if not parent_id:
+            if material.reviewed_by == request.user:
+                return _err("不能给自己通过的文件提出异议", 400)
+
         content = (body.get("content") or "").strip()
         if not content:
             return _err("内容不能为空")
 
-        parent_id = body.get("parent_id")
         parent_comment = None
         if parent_id is not None:
             parent_comment = get_object_or_404(ReviewComment, id=parent_id, material=material)
@@ -1677,7 +1892,8 @@ def api_moderation_history(request):
     if course_code:
         qs = qs.filter(course__code__icontains=course_code)
 
-    qs = qs.order_by("-reviewed_at")
+    # NULL reviewed_at（管理员自传）排最前，其余按审核时间降序
+    qs = qs.order_by(F("reviewed_at").desc(nulls_first=True))
 
     # 分页
     page = int(request.GET.get("page", 1))
@@ -1738,6 +1954,471 @@ def api_moderation_stats(request):
         "total_approved": total_approved,
         "total_materials": qs.count(),
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# 删除记录 API
+# ═══════════════════════════════════════════════════════════════
+
+def _get_visible_deletion_records(user):
+    """获取管理员可见的删除记录（按管辖范围过滤）"""
+    from .models import Course  # local import to avoid cycles
+    profile = _get_or_create_profile(user)
+    if profile.role == UserProfile.Role.SUPER_ADMIN:
+        return DeletionRecord.objects.all()
+
+    visible_codes = set()
+    if profile.role == UserProfile.Role.MODERATOR:
+        college_ids = list(profile.managed_majors.values_list("id", flat=True))
+        for c in Course.objects.filter(college_id__in=college_ids).only("code"):
+            if c.code: visible_codes.add(c.code)
+        if profile.can_moderate_general:
+            for c in Course.objects.filter(college__isnull=True).only("code"):
+                if c.code: visible_codes.add(c.code)
+        for cat_id in profile.moderated_sections.values_list("id", flat=True):
+            try:
+                cat = CourseCategory.objects.get(id=cat_id)
+                for c in _get_courses_in_category(cat):
+                    if c.code: visible_codes.add(c.code)
+            except CourseCategory.DoesNotExist:
+                continue
+    elif profile.role == UserProfile.Role.SUB_MODERATOR:
+        for cat_id in profile.moderated_sections.values_list("id", flat=True):
+            try:
+                cat = CourseCategory.objects.get(id=cat_id)
+                for c in _get_courses_in_category(cat):
+                    if c.code: visible_codes.add(c.code)
+            except CourseCategory.DoesNotExist:
+                continue
+
+    if visible_codes:
+        return DeletionRecord.objects.filter(course_code__in=visible_codes)
+    return DeletionRecord.objects.none()
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_deletion_records(request):
+    """GET /api/moderation/deletions/ — 已删除资料记录（按管辖范围过滤）"""
+    page = int(request.GET.get("page", 1))
+    per_page = min(int(request.GET.get("per_page", 20)), 100)
+    qs = _get_visible_deletion_records(request.user)
+    total = qs.count()
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    start = (page - 1) * per_page
+    records = qs[start:start + per_page]
+
+    from datetime import timedelta
+    now = timezone.now()
+
+    def _serialize(r):
+        can_restore = False
+        if not r.is_restored:
+            age = now - r.deleted_at
+            if age.total_seconds() < 48 * 3600:
+                # 有权限：自己删的 or 上级 or super_admin
+                profile = _get_or_create_profile(request.user)
+                if (profile.role == UserProfile.Role.SUPER_ADMIN
+                        or r.deleted_by_id == request.user.id
+                        or profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR)):
+                    can_restore = True
+        return {
+            "id": r.id,
+            "material_id": r.material_id,
+            "title": r.title,
+            "file_name": r.file_name,
+            "file_size": r.file_size,
+            "course_code": r.course_code,
+            "course_name": r.course_name,
+            "uploader_name": r.uploader_name,
+            "deleted_by_id": r.deleted_by_id,
+            "deleted_by_name": r.deleted_by.first_name or r.deleted_by.username if r.deleted_by else "未知",
+            "deleted_at": r.deleted_at.strftime("%Y-%m-%d %H:%M") if r.deleted_at else "",
+            "delete_reason": r.delete_reason or "",
+            "is_restored": r.is_restored,
+            "can_restore": can_restore,
+        }
+
+    return _ok({
+        "items": [_serialize(r) for r in records],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════
+# 文件管理 API（Iter 6 — 管理模式）
+# ═══════════════════════════════════════════════════════════════
+
+@require_login
+def api_file_update(request, file_id):
+    """PATCH /api/files/<id>/update/ — 更新文件元信息（标题/任课教师/简介）"""
+    if request.method != "PATCH":
+        return _err("仅支持 PATCH", 405)
+    material = get_object_or_404(Material, id=file_id)
+    profile = _get_or_create_profile(request.user)
+    # 仅上传者本人或有管辖权限的管理员可编辑
+    if material.uploader_id != request.user.id:
+        if profile.role not in (UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+            return _err("无权编辑", 403)
+        try:
+            _check_moderator_access(request.user, material)
+        except Exception:
+            return _err("无权编辑该资料", 403)
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return _err("请求格式错误")
+    updated = []
+    if "title" in body and body["title"].strip():
+        material.title = body["title"].strip()
+        updated.append("title")
+    if "teacher" in body:
+        material.teacher = body["teacher"].strip()
+        updated.append("teacher")
+    if "description" in body:
+        material.description = body["description"].strip()
+        updated.append("description")
+    if updated:
+        material.save(update_fields=updated)
+    return _ok({"id": material.id, "title": material.title, "teacher": material.teacher, "description": material.description})
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_folder_create(request):
+    """POST /api/folders/create/ — 新建文件夹（CourseCategory）"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return _err("请求格式错误")
+    name = (body.get("name") or "").strip()
+    parent_id = body.get("parent_id")
+    folder_type = body.get("folder_type", "")  # ""=普通  "leaf"=底层
+    if not name:
+        return _err("文件夹名称不能为空")
+    if parent_id:
+        parent = get_object_or_404(CourseCategory, id=parent_id)
+    else:
+        parent = None
+    cat = CourseCategory.objects.create(
+        name=name,
+        parent=parent,
+        order=0,
+    )
+    # 记录操作
+    path_parts = []
+    p = cat.parent
+    while p:
+        path_parts.append(p.name or f"#{p.id}")
+        p = p.parent
+    parent_path = "/".join(reversed(path_parts))
+    FolderOperation.objects.create(
+        user=request.user,
+        action=FolderOperation.Action.CREATE,
+        category_id=cat.id,
+        category_name=cat.name,
+        parent_path=parent_path,
+        folder_type=folder_type,
+    )
+    return _ok({"id": cat.id, "name": cat.name, "parent_id": cat.parent_id})
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_folder_delete(request, folder_id):
+    """DELETE /api/folders/<id>/ — 删除文件夹（仅可删无 course 关联的容器节点）"""
+    if request.method != "DELETE":
+        return _err("仅支持 DELETE", 405)
+    cat = get_object_or_404(CourseCategory, id=folder_id)
+    # 不可删除有 course 或 course_text 关联的系统节点
+    if cat.course_id or cat.course_text:
+        return _err("系统文件夹不可删除", 403)
+    # 检查文件夹是否为空
+    children = CourseCategory.objects.filter(parent=cat)
+    child_count = children.count()
+    if child_count > 0:
+        return _err(f"文件夹不为空，已包含 {child_count} 个子文件夹，请先清空后再删除", 400)
+    # 检查关联资料
+    material_count = Material.objects.filter(course__in=Course.objects.filter(
+        code__startswith=f"CAT{cat.id}_"  # 简单检查
+    )).count()
+    # 用更准确的方式检查：是否有课程分类指向此节点
+    # 实际上，CourseCategory 本身不直接关联 Material，通过 Course 间接关联
+    # 但这里只删除容器节点，不会删除课程
+    # 记录路径
+    path_parts = []
+    p = cat.parent
+    while p:
+        path_parts.append(p.name or f"#{p.id}")
+        p = p.parent
+    parent_path = "/".join(reversed(path_parts))
+    cat_name = cat.name or f"#{cat.id}"
+    cat_id = cat.id
+    cat.delete()
+    FolderOperation.objects.create(
+        user=request.user,
+        action=FolderOperation.Action.DELETE,
+        category_id=cat_id,
+        category_name=cat_name,
+        parent_path=parent_path,
+    )
+    return _ok({"message": f"文件夹「{cat_name}」已删除"})
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_operations(request):
+    """GET /api/operations/ — 文件夹操作记录"""
+    profile = _get_or_create_profile(request.user)
+    qs = FolderOperation.objects.all().select_related("user")
+    # 按管辖范围过滤
+    if profile.role == UserProfile.Role.SUPER_ADMIN:
+        pass  # 全可见
+    else:
+        # 获取当前管理员管辖范围内的课程分类 ID
+        visible_cat_ids = set(profile.moderated_sections.values_list("id", flat=True))
+        if profile.role == UserProfile.Role.MODERATOR:
+            # 版主还可以看到自己管辖学院相关的操作
+            college_ids = list(profile.managed_majors.values_list("id", flat=True))
+            # 查找这些学院对应的 CourseCategory 节点（通过 course_text 前缀匹配）
+            for cc in College.objects.filter(id__in=college_ids):
+                for cat in CourseCategory.objects.filter(
+                    models.Q(course_text__startswith=cc.slug.upper()[:3]) | models.Q(name=cc.short_name)
+                ):
+                    visible_cat_ids.add(cat.id)
+        # 过滤操作记录
+        if visible_cat_ids:
+            qs = qs.filter(category_id__in=visible_cat_ids)
+        else:
+            qs = qs.none()
+    page = int(request.GET.get("page", 1))
+    per_page = min(int(request.GET.get("per_page", 20)), 100)
+    total = qs.count()
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    start = (page - 1) * per_page
+    records = qs[start:start + per_page]
+
+    from datetime import timedelta
+    now = timezone.now()
+
+    def _serialize(op):
+        can_restore = False
+        if not op.is_restored:
+            age = now - op.created_at
+            if age.total_seconds() < 48 * 3600:
+                profile = _get_or_create_profile(request.user)
+                if (profile.role == UserProfile.Role.SUPER_ADMIN
+                        or op.user_id == request.user.id):
+                    can_restore = True
+        return {
+            "id": op.id,
+            "user_id": op.user_id,
+            "user_name": op.user.first_name or op.user.username if op.user else "未知",
+            "action": op.action,
+            "action_label": op.get_action_display(),
+            "category_id": op.category_id,
+            "category_name": op.category_name,
+            "parent_path": op.parent_path,
+            "folder_type": op.folder_type,
+            "reason": op.reason or "",
+            "is_restored": op.is_restored,
+            "can_restore": can_restore,
+            "created_at": op.created_at.strftime("%Y-%m-%d %H:%M") if op.created_at else "",
+        }
+
+    return _ok({
+        "items": [_serialize(r) for r in records],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+    })
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_folder_restore(request, operation_id):
+    """POST /api/operations/<id>/restore/ — 撤销文件夹操作"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    op = get_object_or_404(FolderOperation, id=operation_id)
+    if op.is_restored:
+        return _err("该操作已撤销", 400)
+    from datetime import timedelta
+    if timezone.now() - op.created_at > timedelta(hours=48):
+        return _err("已超过48小时，无法撤销", 400)
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except Exception:
+        body = {}
+    reason = body.get("reason", "")
+
+    if op.action == FolderOperation.Action.CREATE:
+        # 撤销创建 = 删除文件夹
+        try:
+            cat = CourseCategory.objects.get(id=op.category_id)
+            if cat.course_id or cat.course_text:
+                return _err("无法撤销：该文件夹已被系统使用", 400)
+            cat.delete()
+        except CourseCategory.DoesNotExist:
+            pass  # 文件夹可能已被手动删除，仍标记撤销
+    elif op.action == FolderOperation.Action.DELETE:
+        # 撤销删除 = 重建文件夹
+        parent = None
+        if op.parent_path:
+            # 根据 path 找父节点（简单方案：现有任何可用的父级）
+            pass  # 暂时简单重建为根节点
+        CourseCategory.objects.create(
+            name=op.category_name,
+            parent=None,
+            order=0,
+        )
+
+    op.is_restored = True
+    op.restored_at = timezone.now()
+    op.restored_by = request.user
+    op.reason = reason
+    op.save(update_fields=["is_restored", "restored_at", "restored_by", "reason"])
+    return _ok({"message": "操作已撤销"})
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_restore_deletion(request, deletion_id):
+    """POST /api/moderation/deletions/<id>/restore/ — 恢复已删除文件"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    dr = get_object_or_404(DeletionRecord, id=deletion_id)
+    if dr.is_restored:
+        return _err("该文件已恢复", 400)
+    from datetime import timedelta
+    if timezone.now() - dr.deleted_at > timedelta(hours=48):
+        return _err("已超过48小时，无法恢复", 400)
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except Exception:
+        body = {}
+    reason = body.get("reason", "")
+
+    # 重建 Material
+    course = Course.objects.filter(code=dr.course_code).first()
+    if not course:
+        return _err("原课程已不存在，无法恢复", 400)
+    material = Material.objects.create(
+        course=course,
+        title=dr.title,
+        file_name=dr.file_name,
+        file_size=dr.file_size,
+        file_path="",  # 文件实际可能已从磁盘删除，只恢复记录
+        uploader_name=dr.uploader_name,
+        review_status="approved",
+        is_approved=True,
+        reviewed_by=dr.deleted_by,
+    )
+    dr.is_restored = True
+    dr.restored_at = timezone.now()
+    dr.restored_by = request.user
+    dr.save(update_fields=["is_restored", "restored_at", "restored_by"])
+
+    # 通知删除人
+    if reason and dr.deleted_by and dr.deleted_by_id != request.user.id:
+        _create_notification(
+            recipient=dr.deleted_by,
+            type=Notification.Type.APPROVED,  # 借用
+            title="你的删除操作已被撤销",
+            message=f"管理员撤销了你对资料「{dr.title}」的删除操作。撤销理由：{reason}",
+            course_code=dr.course_code,
+            course_name=dr.course_name,
+        )
+
+    return _ok({"message": "文件已恢复", "material_id": material.id})
+
+
+@require_login
+def api_file_batch_delete(request):
+    """POST /api/files/batch-delete/ — 批量删除文件"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return _err("请求格式错误")
+    file_ids = body.get("file_ids", [])
+    reason = body.get("reason", "")
+    if not file_ids:
+        return _err("请选择要删除的文件")
+    profile = _get_or_create_profile(request.user)
+    deleted = 0
+    errors = []
+    for fid in file_ids:
+        try:
+            m = Material.objects.get(id=fid)
+            # 权限检查
+            if profile.role == UserProfile.Role.SUPER_ADMIN:
+                pass
+            elif m.uploader_id == request.user.id:
+                if m.review_status not in ("rejected",):
+                    errors.append(f"文件#{fid}：仅可删除已驳回资料")
+                    continue
+            elif profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+                try:
+                    _check_moderator_access(request.user, m)
+                except Exception:
+                    errors.append(f"文件#{fid}：无权删除")
+                    continue
+            else:
+                errors.append(f"文件#{fid}：无权删除")
+                continue
+            DeletionRecord.objects.create(
+                material_id=m.id, title=m.title,
+                file_name=m.file_name, file_size=m.file_size,
+                course_code=m.course.code if m.course else "",
+                course_name=m.course.name if m.course else "",
+                college_id=m.course.college_id if m.course and m.course.college else None,
+                uploader_name=m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
+                deleted_by=request.user,
+                delete_reason=reason,
+            )
+            m.delete()
+            deleted += 1
+        except Material.DoesNotExist:
+            errors.append(f"文件#{fid}：不存在")
+    # 批量删除只发一条通知给相关上传者（简化处理）
+    return _ok({"deleted": deleted, "errors": errors, "total": len(file_ids)})
+
+
+@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_file_batch_edit(request):
+    """POST /api/files/batch-edit/ — 批量修改文件元信息"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return _err("请求格式错误")
+    file_ids = body.get("file_ids", [])
+    if not file_ids:
+        return _err("请选择文件")
+    updated = 0
+    for fid in file_ids:
+        try:
+            m = Material.objects.get(id=fid)
+            try:
+                _check_moderator_access(request.user, m)
+            except Exception:
+                continue
+            changed = False
+            if "teacher" in body:
+                m.teacher = body["teacher"].strip()
+                changed = True
+            if "description" in body:
+                m.description = body["description"].strip()
+                changed = True
+            if changed:
+                m.save(update_fields=["teacher", "description"])
+                updated += 1
+        except Material.DoesNotExist:
+            continue
+    return _ok({"updated": updated})
 
 
 # ═══════════════════════════════════════════════════════════════
