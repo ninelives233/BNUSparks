@@ -21,12 +21,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='userprofile',
             name='managed_majors',
-            field=models.ManyToManyField(blank=True, help_text='专业审委仅管理这些专业（学院）对应的课程资料审核', to='materials.college', verbose_name='管辖专业'),
+            field=models.ManyToManyField(blank=True, help_text='小版主仅管理这些专业（学院）对应的课程资料审核', to='materials.college', verbose_name='管辖专业'),
         ),
         migrations.AlterField(
             model_name='userprofile',
             name='role',
-            field=models.CharField(choices=[('user', '普通用户'), ('sub_moderator', '专业审委'), ('moderator', '学院督学'), ('super_admin', '总管理员')], default='user', max_length=20),
+            field=models.CharField(choices=[('user', '普通用户'), ('sub_moderator', '小版主'), ('moderator', '版主'), ('super_admin', '总管理员')], default='user', max_length=20),
         ),
         migrations.CreateModel(
             name='ReviewComment',

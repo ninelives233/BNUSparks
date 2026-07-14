@@ -161,6 +161,35 @@ class Material(models.Model):
         return self.title
 
 
+class FolderOperation(models.Model):
+    """文件夹操作记录——供管理员追溯"""
+    class Action(models.TextChoices):
+        CREATE = "create", "创建"
+        DELETE = "delete", "删除"
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="操作人")
+    action = models.CharField("操作类型", max_length=10, choices=Action.choices)
+    category_id = models.IntegerField("文件夹ID", default=0)
+    category_name = models.CharField("文件夹名称", max_length=200, blank=True)
+    parent_path = models.CharField("路径", max_length=500, blank=True, help_text="父节点名称序列，用 / 分隔")
+    folder_type = models.CharField("文件夹类型", max_length=10, blank=True, default="",
+                                    help_text="normal=普通文件夹 leaf=底层文件夹")
+    reason = models.TextField("操作理由", blank=True, default="")
+    is_restored = models.BooleanField("已撤销", default=False)
+    restored_at = models.DateTimeField("撤销时间", null=True, blank=True)
+    restored_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     verbose_name="撤销人", related_name="restored_operations")
+    created_at = models.DateTimeField("操作时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "文件夹操作"
+        verbose_name_plural = "文件夹操作"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.get_action_display()}] {self.category_name} by {self.user}"
+
+
 class CourseCategory(models.Model):
     """导航树节点 — 自引用无限层级"""
     name = models.CharField("节点名称", max_length=200, blank=True)
@@ -198,6 +227,7 @@ class Notification(models.Model):
         REJECTED = "rejected", "审核驳回"
         DISAGREE = "disagree", "审核异议"
         REPORT = "report", "举报通知"
+        FILE_DELETED = "file_deleted", "用户删除资料"
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications",
@@ -226,6 +256,34 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"[{self.get_type_display()}] {self.title}"
+
+
+class DeletionRecord(models.Model):
+    """已删除资料的存档记录——供管理员追溯"""
+    material_id = models.IntegerField("原资料ID")
+    title = models.CharField("标题", max_length=200)
+    file_name = models.CharField("文件名", max_length=500)
+    file_size = models.BigIntegerField("文件大小", default=0)
+    course_code = models.CharField("课程代码", max_length=50)
+    course_name = models.CharField("课程名称", max_length=200)
+    uploader_name = models.CharField("上传者", max_length=150)
+    college_id = models.IntegerField("所属学院ID", null=True, blank=True, default=None,
+                                      help_text="冗余字段，用于管理员按管辖范围过滤删除记录")
+    deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="删除人")
+    deleted_at = models.DateTimeField("删除时间", auto_now_add=True)
+    delete_reason = models.TextField("删除理由", blank=True, default="")
+    is_restored = models.BooleanField("已恢复", default=False)
+    restored_at = models.DateTimeField("恢复时间", null=True, blank=True)
+    restored_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                     verbose_name="恢复人", related_name="restored_deletions")
+
+    class Meta:
+        verbose_name = "删除记录"
+        verbose_name_plural = "删除记录"
+        ordering = ["-deleted_at"]
+
+    def __str__(self):
+        return f"[删除] {self.title} by {self.deleted_by}"
 
 
 class ReviewComment(models.Model):
