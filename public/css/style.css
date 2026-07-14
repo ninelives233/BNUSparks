@@ -789,6 +789,7 @@
   .mf-progress-bar { flex: 1; height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
   .mf-progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; border-radius: 3px; }
   .mf-progress span { font-size: 0.82rem; color: var(--ink-faint); white-space: nowrap; }
+  .mf-hint { font-size: 0.78rem; color: var(--ink-faint); margin-top: 4px; }
 
   /* ── Register Success ───────────────────── */
   .mf-success {
@@ -979,6 +980,38 @@
     margin-top: 1px;
   }
 
+  /* ── 同名课程（底部横排） ── */
+  .file-area-side-bottom {
+    margin-top: var(--space-lg);
+    padding: var(--space-md);
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+  }
+  .file-area-side-bottom .fasb-title {
+    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-faint);
+    margin-bottom: var(--space-sm);
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px solid var(--border-light);
+  }
+  .file-area-side-bottom .fasb-list {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+  }
+  .file-area-side-bottom .fasb-item {
+    display: inline-flex; align-items: center; gap: 4px;
+    cursor: pointer; font-size: 0.82rem;
+    color: var(--primary); text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .file-area-side-bottom .fasb-item:hover { opacity: 0.7; }
+  .file-area-side-bottom .fasb-code {
+    font-weight: 600; white-space: nowrap;
+  }
+  .file-area-side-bottom .fasb-programs {
+    font-size: 0.72rem; color: var(--ink-soft);
+  }
+
   /* ═══════════════════════════════════════════
      File table
      ═══════════════════════════════════════════ */
@@ -998,17 +1031,70 @@
     text-align: left; white-space: nowrap;
     width: auto;
   }
-  .file-table thead th:nth-child(1) { width: 36px; }     /* checkbox */
-  .file-table thead th:nth-child(2) { width: auto; }     /* 文件名 - 自适应 */
-  .file-table thead th:nth-child(3) { width: 60px; }     /* 类型 */
-  .file-table thead th:nth-child(4) { width: 85px; }     /* 大小 */
-  .file-table thead th:nth-child(5) { width: 90px; }     /* 上传者 */
-  .file-table thead th:nth-child(6) { width: 90px; }     /* 任课教师 */
-  .file-table thead th:nth-child(7) { width: 72px; }     /* 下载次数 */
-  .file-table thead th:nth-child(8) { width: 84px; }     /* 下载按钮 */
-  .ft-chk-col { width: 36px; text-align: center; padding: 0 !important; }
-  .ft-chk-col input[type="checkbox"] { cursor: pointer; }
-  .batch-dl-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--primary-surface); border-radius: var(--radius) var(--radius) 0 0; border: 1px solid var(--border-light); border-bottom: none; font-size: 0.82rem; }
+  .file-table thead th:nth-child(1) { width: auto; }     /* 文件名 - 自适应 */
+  .file-table thead th:nth-child(2) { width: 60px; }     /* 类型 */
+  .file-table thead th:nth-child(3) { width: 85px; }     /* 大小 */
+  .file-table thead th:nth-child(4) { width: 90px; }     /* 上传者 */
+  .file-table thead th:nth-child(5) { width: 90px; }     /* 任课教师 */
+  .file-table thead th:nth-child(6) { width: 72px; }     /* 下载次数 */
+  .file-table thead th:nth-child(7) { width: 84px; }     /* 下载按钮 */
+  .file-table thead th.th-name { text-align: center; }
+  .file-table thead th.th-size { width: 85px; }
+  .file-table thead th.th-download { width: 84px; position: relative; text-align: center; }
+
+  /* ── 下载按钮 ↔ 多选复选框 切换（绝对定位叠层，不影响行高） ── */
+  .ft-download {
+    position: relative;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .dl-normal, .dl-check {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    white-space: nowrap;
+  }
+  .dl-normal {
+    opacity: 1;
+    transition: opacity 150ms ease;
+    transform: translate(-50%, -50%);
+  }
+  .dl-check {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms ease, transform 150ms ease;
+    transform: translate(-50%, calc(-50% - 4px));
+  }
+  .dl-check input[type="checkbox"] { cursor: pointer; width: 20px; height: 20px; margin: 0; padding: 0; }
+  .file-table.multi-select .dl-normal {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .file-table.multi-select .dl-check {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%);
+  }
+  .file-table.multi-select .ft-download { text-align: center; }
+
+  /* ── 批量选择工具栏（display: none/flex + 淡入动画） ── */
+  @keyframes bar-fade-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .batch-dl-bar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--primary-surface);
+    border-radius: var(--radius) var(--radius) 0 0;
+    font-size: 0.82rem;
+  }
+  .batch-dl-bar.is-visible {
+    display: flex;
+    animation: bar-fade-in 200ms ease both;
+  }
   .file-table tbody td {
     padding: var(--space-sm);
     border-bottom: 1px solid var(--border-light);
@@ -1126,6 +1212,10 @@
   }
   .fa-upload-header-btn .fa-upload-btn:hover {
     background: var(--primary); color: #fff;
+  }
+  .fa-upload-header-btn .fa-batch-dl-btn {
+    margin-left: 12px;
+    /* Same visual style as fa-upload-btn / dl-link (outlined primary) */
   }
 
   .fa-per-page {
@@ -1527,7 +1617,7 @@
     }
   }
 
-  /* ── 文件表格水平滚动包裹层 ────────── */
+  /* ── 文件表格包裹 ── */
   .file-table-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -1537,10 +1627,10 @@
      空间不足时折叠次要列
      ═══════════════════════════════════════════ */
 
-  .file-area-compact .file-table thead th:nth-child(2),
-  .file-area-compact .file-table thead th:nth-child(4),
-  .file-area-compact .file-table thead th:nth-child(5),
-  .file-area-compact .file-table thead th:nth-child(6),
+  .file-area-compact .file-table thead th.th-type,
+  .file-area-compact .file-table thead th.th-uploader,
+  .file-area-compact .file-table thead th.th-teacher,
+  .file-area-compact .file-table thead th.th-dlcount,
   .file-area-compact .file-table tbody td.ft-type-cell,
   .file-area-compact .file-table tbody td.ft-uploader,
   .file-area-compact .file-table tbody td.ft-teacher,
@@ -1558,10 +1648,10 @@
       order: 1;
       margin-top: var(--space-md);
     }
-    .file-table thead th:nth-child(2),
-    .file-table thead th:nth-child(4),
-    .file-table thead th:nth-child(5),
-    .file-table thead th:nth-child(6),
+    .file-table thead th.th-type,
+    .file-table thead th.th-uploader,
+    .file-table thead th.th-teacher,
+    .file-table thead th.th-dlcount,
     .file-table tbody td.ft-type-cell,
     .file-table tbody td.ft-uploader,
     .file-table tbody td.ft-teacher,
@@ -1608,7 +1698,7 @@
     }
     .file-table thead th,
     .file-table tbody td { white-space: nowrap; }
-    .file-table tbody td.ft-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-table tbody td.ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
 
   /* ═══════════════════════════════════════════
@@ -2614,4 +2704,266 @@
 .section-check-list {
   border: 1px solid var(--border-light); border-radius: var(--radius);
   padding: 8px 12px; background: var(--surface);
+}
+
+/* ── 管理后台移动端适配（@640px） ── */
+@media (max-width: 640px) {
+  .admin-panel {
+    max-width: 100%;
+    padding: 16px 12px;
+  }
+  .admin-tabs {
+    overflow-x: auto;
+    gap: 0;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+  .admin-tab {
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+  }
+  .admin-stat-card {
+    padding: 12px 14px;
+  }
+  .admin-stat-card .stat-number {
+    font-size: 1.3rem;
+  }
+  .admin-stat-card .stat-label {
+    font-size: 0.7rem;
+  }
+  .admin-pending-card {
+    padding: 12px 14px;
+  }
+  .admin-pending-card .pc-title {
+    font-size: 0.9rem;
+  }
+  .admin-pending-card .pc-meta {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.78rem;
+  }
+  .admin-pending-card .pc-meta span {
+    display: block;
+  }
+  .admin-pending-card .pc-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .admin-pending-card .pc-actions .admin-btn {
+    width: 100%;
+    text-align: center;
+    padding: 8px 14px;
+  }
+  .admin-table th,
+  .admin-table td {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  .admin-reject-dialog {
+    width: calc(100vw - 32px);
+    min-width: 0;
+    max-width: none;
+    padding: 20px;
+    margin: 0 16px;
+    max-height: 85vh;
+  }
+  .admin-reject-dialog .ar-actions {
+    flex-direction: column;
+  }
+  .admin-reject-dialog .ar-actions .admin-btn {
+    width: 100%;
+    text-align: center;
+  }
+  .admin-auto-toggle {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+  .admin-auto-toggle button {
+    align-self: stretch;
+  }
+  .pc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .pc-toolbar .admin-btn {
+    width: 100%;
+    text-align: center;
+  }
+  .pc-toolbar-toggle {
+    font-size: 0.78rem;
+  }
+  .admin-search-box {
+    flex-direction: column;
+  }
+  .admin-search-box input {
+    max-width: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .admin-search-box button {
+    width: 100%;
+  }
+  .admin-pagination {
+    justify-content: center;
+  }
+  .admin-pagination button {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+  .admin-pagination .page-info {
+    font-size: 0.72rem;
+  }
+  .fm-node {
+    flex-wrap: wrap;
+    padding: 8px 6px;
+  }
+  .fm-node-name {
+    font-size: 0.82rem;
+  }
+  .fm-node-actions {
+    width: 100%;
+    margin-top: 4px;
+  }
+  .fm-action-btn {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+  .fm-children {
+    padding-left: 12px;
+  }
+  .pc-section-label {
+    font-size: 0.85rem;
+  }
+  .pc-peer-approved-badge {
+    font-size: 0.78rem;
+  }
+  .sub-tag {
+    font-size: 0.7rem;
+  }
+}
+
+/* ═══ Iter 6 — 管理模式 / 文件编辑 / 操作记录 ═══ */
+
+/* iOS 开关 */
+.ios-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  background: #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+.ios-toggle-on { background: var(--success, #34c759); }
+.ios-toggle-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 20px; height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.3s;
+}
+.ios-toggle-on .ios-toggle-knob { transform: translateX(20px); }
+
+/* 抽屉开关行 */
+.dm-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  cursor: default;
+}
+.dm-toggle-label { font-size: 0.85rem; }
+
+/* 管理模式 — 新建按钮 */
+.mgmt-new-btn {
+  margin-left: auto;
+  background: var(--accent, #c97d2d);
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mgmt-new-btn:hover { opacity: 0.85; }
+
+/* 管理模式 — 文件列表铅笔图标 */
+.mgmt-pen {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.mgmt-pen:hover { opacity: 1; }
+.mgmt-pen-sm { font-size: 0.7rem; vertical-align: middle; }
+
+/* 我的上传页面 tabs */
+.mu-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.mu-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: 20px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-muted, #666);
+  transition: all 0.2s;
+}
+.mu-tab.active {
+  background: var(--accent, #c97d2d);
+  color: #fff;
+  border-color: var(--accent, #c97d2d);
+}
+.mu-tab:hover:not(.active) { border-color: var(--accent, #c97d2d); }
+
+/* 文件详情 — 简介行 */
+.fi-row-desc .fi-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 文件详情 — 内联编辑输入框 */
+.fi-edit-input {
+  width: 90%;
+  padding: 4px 6px;
+  border: 1px solid var(--accent, #c97d2d);
+  border-radius: 4px;
+  font-size: inherit;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.fi-pen {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  vertical-align: middle;
+}
+.fi-pen:hover { opacity: 1; }
+
+/* 审核面板 — 详情按钮 */
+.pc-btn-detail {
+  background: var(--surface-alt, #f0f0f0);
+  border-color: transparent;
 }

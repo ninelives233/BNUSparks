@@ -13,6 +13,7 @@ urlpatterns = [
     path("auth/change-password/", views.api_change_password, name="api_change_password"),
     path("auth/forgot-password/", views.api_forgot_password, name="api_forgot_password"),
     path("auth/reset-password/", views.api_reset_password, name="api_reset_password"),
+    path("auth/verify-email/", views.api_verify_email, name="api_verify_email"),
 
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
@@ -23,6 +24,17 @@ urlpatterns = [
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
     path("files/<int:file_id>/download/", views.api_file_download, name="api_file_download"),
     path("files/<int:file_id>/delete/", views.api_file_delete, name="api_file_delete"),
+    path("files/<int:file_id>/update/", views.api_file_update, name="api_file_update"),
+    path("files/batch-delete/", views.api_file_batch_delete, name="api_file_batch_delete"),
+    path("files/batch-edit/", views.api_file_batch_edit, name="api_file_batch_edit"),
+
+    # 文件夹管理（Iter 6）
+    path("folders/create/", views.api_folder_create, name="api_folder_create"),
+    path("folders/<int:folder_id>/delete/", views.api_folder_delete, name="api_folder_delete"),
+
+    # 操作记录（Iter 6）
+    path("operations/", views.api_operations, name="api_operations"),
+    path("operations/<int:operation_id>/restore/", views.api_folder_restore, name="api_folder_restore"),
 
     # 通知 & 个人资料
     path("auth/notifications/", views.api_notifications, name="api_notifications"),
@@ -45,6 +57,8 @@ urlpatterns = [
     path("moderation/<int:file_id>/reassign/", views.api_moderation_reassign, name="api_moderation_reassign"),
     path("moderation/<int:file_id>/comments/", views.api_review_comments, name="api_review_comments"),
     path("moderation/history/", views.api_moderation_history, name="api_moderation_history"),
+    path("moderation/deletions/", views.api_deletion_records, name="api_deletion_records"),
+    path("moderation/deletions/<int:deletion_id>/restore/", views.api_restore_deletion, name="api_restore_deletion"),
     path("moderation/stats/", views.api_moderation_stats, name="api_moderation_stats"),
 
     # 用户管理（Iter 3 — 仅 super_admin）
