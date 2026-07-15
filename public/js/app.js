@@ -3102,6 +3102,10 @@
     'scroll': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3h8V3M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 9h8M8 13h5"/></svg>',
     'columns': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="3" rx="0.5"/><rect x="3" y="10" width="18" height="1.5" rx="0.3"/><rect x="5.5" y="11.5" width="3" height="7.5" rx="0.3"/><rect x="10.5" y="11.5" width="3" height="7.5" rx="0.3"/><rect x="15.5" y="11.5" width="3" height="7.5" rx="0.3"/><rect x="3" y="19" width="18" height="2" rx="0.3"/><rect x="2" y="21" width="20" height="2" rx="0.3"/></svg>',
     'scales': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="9"/><line x1="4" y1="9" x2="20" y2="9"/><path d="M4 9L1 17"/><path d="M20 9l3 8"/><path d="M-1 17C-1 20 3 20 3 17"/><path d="M21 17c0 3 4 3 4 0"/></svg>',
+    'brush': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18l12-12"/><path d="M18 6l4-4"/><path d="M5 19h8"/><path d="M8 15l-4 4"/></svg>',
+    'network': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="12" cy="18" r="3"/><line x1="9.5" y1="9.5" x2="10.5" y2="15"/><line x1="14.5" y1="9.5" x2="13.5" y2="15"/><line x1="10" y1="7" x2="14" y2="7"/></svg>',
+    'brain': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4c-4 0-6 2.5-6 5.5 0 1.5.7 2.8 1.8 3.7C7.3 13.8 7 14.7 7 16c0 2.2 2.2 4 5 4s5-1.8 5-4c0-1.3-.3-2.2-.8-2.8C17.3 12.3 18 11 18 9.5 18 6.5 16 4 12 4z"/><path d="M12 4v16"/><path d="M8 9h8"/><path d="M9 13h6"/></svg>',
+    'hourglass': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14"/><path d="M5 21h14"/><path d="M6 3v2c0 2 3 4 6 6 3-2 6-4 6-6V3"/><path d="M6 21v-2c0-2 3-4 6-6 3 2 6 4 6 6v2"/></svg>',
   };
 
   // ── State ──
@@ -3141,6 +3145,11 @@
     try {
       const courses = await api('/api/courses/');
       courses.forEach(c => { courseFileCounts[c.code] = c.material_count; });
+      // 文件计数加载后重绘课程列表，避免 fallback 到"有文件"
+      const ev = document.getElementById('explorerView');
+      if (ev && ev.style.display !== 'none' && expPath.length >= 2) {
+        renderExplorer();
+      }
     } catch(e) { /* ignore */ }
   }
 
