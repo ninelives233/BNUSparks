@@ -228,6 +228,7 @@ class Notification(models.Model):
         DISAGREE = "disagree", "审核异议"
         REPORT = "report", "举报通知"
         FILE_DELETED = "file_deleted", "用户删除资料"
+        OPERATION = "operation", "操作通知"
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications",
