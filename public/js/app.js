@@ -606,13 +606,14 @@
 
   // ── 个人资料 ──
   function showProfile() {
-    // 关闭所有视图（直接操作 display 避免 CSS 类冲突）
+    // 关闭所有视图
     document.querySelectorAll('.view-section').forEach(function(v) {
       v.style.display = 'none';
+      v.classList.remove('active');
     });
     // 显示个人资料
     var pv = document.getElementById('profileView');
-    if (pv) pv.style.display = 'block';
+    if (pv) { pv.style.display = 'block'; pv.classList.add('active'); }
     updateSidebar(null);
     window.scrollTo({ top: 0 });
     pushViewState('profile', {});
@@ -696,9 +697,13 @@
   // ── 我的上传独立页面（Iter 6） ──
   function showMyUploadsPage() {
     closeNotifDrawer();
-    document.querySelectorAll('.view-section').forEach(function(v) { v.style.display = 'none'; });
+    // 彻底清除所有视图
+    document.querySelectorAll('.view-section').forEach(function(v) {
+      v.style.display = 'none';
+      v.classList.remove('active');
+    });
     var v = document.getElementById('myUploadsView');
-    if (v) v.style.display = 'block';
+    if (v) { v.style.display = 'block'; v.classList.add('active'); }
     updateSidebar(null);
     window.scrollTo({ top: 0 });
     pushViewState('myuploads', {});
@@ -765,6 +770,44 @@
   function switchMyUploadsTab(tab) {
     _myUploadTab = tab;
     renderMyUploadsPage();
+  }
+
+  // ── 我的下载独立页面 ═══
+  function showMyDownloadsPage() {
+    closeNotifDrawer();
+    document.querySelectorAll('.view-section').forEach(function(v) {
+      v.style.display = 'none';
+      v.classList.remove('active');
+    });
+    var v = document.getElementById('myDownloadsView');
+    if (v) { v.style.display = 'block'; v.classList.add('active'); }
+    updateSidebar(null);
+    window.scrollTo({ top: 0 });
+    pushViewState('mydownloads', {});
+    renderMyDownloadsPage();
+  }
+
+  function renderMyDownloadsPage() {
+    var list = document.getElementById('myDownloadsPageList');
+    if (!list) return;
+    list.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/user/downloads/').then(function(data) {
+      if (!data || !data.length) {
+        list.innerHTML = '<div class="admin-empty">暂无下载记录</div>';
+        return;
+      }
+      list.innerHTML = data.map(function(r) {
+        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.material_id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+          '<div class="hc-item-left">' +
+            '<div class="hc-item-name">' + esc(r.material_title) + '</div>' +
+            '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + esc(r.created_at) + '</div>' +
+          '</div>' +
+          '<span class="hc-item-count">📥</span>' +
+        '</div>';
+      }).join('');
+    }).catch(function(err) {
+      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+    });
   }
 
   function renderMyDeletedTab(listEl) {
@@ -1037,7 +1080,7 @@
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span>👤</span> 个人中心</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span>🔔</span> 通知中心' + notifBadgeHtml + '</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyUploadsPage()"><span>📤</span> 我的上传</a>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerDownloads()"><span>📥</span> 我的下载</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyDownloadsPage()"><span>📥</span> 我的下载</a>' +
       '<div class="dm-divider"></div>' +
       (showAdmin ? mgmtToggle + civilianToggle + '<div class="dm-divider"></div>' : '') +
       '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span>🚪</span> 退出登录</a>';
@@ -2906,6 +2949,7 @@
           case 'announcements': showAnnouncements(); break;
           case 'broad': showBroad(); break;
           case 'myuploads': showMyUploadsPage(); break;
+          case 'mydownloads': showMyDownloadsPage(); break;
           default: showHome();
         }
         _suppressingPushState = false;
@@ -4373,6 +4417,9 @@
         break;
       case 'myuploads':
         showMyUploadsPage();
+        break;
+      case 'mydownloads':
+        showMyDownloadsPage();
         break;
     }
     _suppressingPushState = false;
