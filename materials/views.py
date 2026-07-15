@@ -856,7 +856,18 @@ def api_courses(request):
 
 def api_course_files(request, course_code):
     """GET /api/courses/<code>/files"""
-    course = get_object_or_404(Course, code=course_code)
+    try:
+        course = Course.objects.get(code=course_code)
+    except Course.DoesNotExist:
+        # fallback: 前缀匹配
+        cleaned = course_code.replace("*", "").replace("-", "")
+        matched = Course.objects.filter(code__startswith=cleaned)
+        if matched.count() == 1:
+            course = matched.first()
+        elif matched.count() > 1:
+            return _err("课程代码不明确")
+        else:
+            return _err("课程不存在", 404)
     user = _get_user(request)
 
     # 普通用户只能看到已通过的资料，上传者可看到自己的待审资料
@@ -1006,7 +1017,15 @@ def api_file_upload(request):
     try:
         course = Course.objects.get(code=course_code)
     except Course.DoesNotExist:
-        return _err("课程不存在")
+        # fallback: 前缀匹配（支持 course_text 内容未对应实际课程的情况）
+        cleaned = course_code.replace("*", "").replace("-", "")
+        matched = Course.objects.filter(code__startswith=cleaned)
+        if matched.count() == 1:
+            course = matched.first()
+        elif matched.count() > 1:
+            return _err("课程代码不明确，请联系管理员")
+        else:
+            return _err("课程不存在")
 
     # 保存文件
     ext = Path(uploaded_file.name).suffix
@@ -1328,11 +1347,18 @@ def _build_tree_node(qs):
                 course=cat.course, is_approved=True
             ).exists()
         elif cat.course_text:
-            # 叶子节点：通配符代码
-            node["courseId"] = cat.course_text
-            # 试试能否匹配实际课程
+            # 叶子节点：通配符代码（如 "GEN02***"）或精确课程代码
             code = cat.course_text.replace("*", "").replace("-", "")
             if code:
+                # 精确值（无通配符）：尝试解析为真实课程代码
+                if "*" not in cat.course_text:
+                    real = Course.objects.filter(code__startswith=code)
+                    if real.count() == 1:
+                        node["courseId"] = real[0].code
+                    else:
+                        node["courseId"] = cat.course_text
+                else:
+                    node["courseId"] = cat.course_text
                 node["hasFiles"] = Material.objects.filter(
                     course__code__startswith=code, is_approved=True
                 ).exists()
