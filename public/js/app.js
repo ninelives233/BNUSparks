@@ -693,54 +693,12 @@
     e.target.value = ''; // 重置 input 可重复选同一文件
   }
 
-  async function loadMyUploads() {
-    const section = document.getElementById('myUploadsSection');
-    const list = document.getElementById('myUploadsList');
-    const count = document.getElementById('myUploadsCount');
-    if (!section || !list) return;
-    try {
-      const uploads = await api('/api/user/uploads/');
-      if (!uploads || !uploads.length) {
-        section.style.display = 'block';
-        list.innerHTML = '<div class="hc-empty">暂无上传记录，快去上传第一份资料吧！</div>';
-        if (count) count.textContent = '';
-        return;
-      }
-      section.style.display = 'block';
-      if (count) count.textContent = '共 ' + uploads.length + ' 条';
-      list.innerHTML = uploads.map(function(m) {
-        var badgeLabel = '', badgeClass = '';
-        if (m.review_status === 'pending') { badgeLabel = '审核中'; badgeClass = 'review-badge-pending'; }
-        else if (m.review_status === 'rejected') { badgeLabel = '已驳回'; badgeClass = 'review-badge-rejected'; }
-        else { badgeLabel = '已通过'; badgeClass = 'review-badge-approved'; }
-        var badgeHtml = '<span class="review-badge ' + badgeClass + '">' + badgeLabel + '</span>';
-        var reuploadBtn = m.review_status === 'rejected'
-          ? '<button class="reupload-btn" onclick="showReUploadDialog(' + m.id + ',\'' + esc(m.course_code) + '\',\'' + esc(m.course_name) + '\',\'' + esc(m.title) + '\',\'' + esc(m.review_notes||'') + '\',\'' + esc(m.teacher||'') + '\')">↻ 重新上传</button>'
-          : '';
-        return '<div class="hc-item">' +
-          '<div class="hc-item-left">' +
-            '<div class="hc-item-name">' + esc(m.title) + ' ' + badgeHtml + '</div>' +
-            '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + formatSize(m.file_size) + ' · ' + m.download_count + ' 次下载' +
-              (m.review_status === 'rejected' && m.review_notes ? ' · 驳回原因: ' + esc(m.review_notes) : '') +
-            '</div>' +
-            (m.review_status === 'rejected' ? '<div class="hc-item-actions">' + reuploadBtn + '<button class="delete-rejected-btn" onclick="deleteRejected(' + m.id + ', this)">🗑 删除记录</button></div>' : '') +
-          '</div>' +
-          '<span class="hc-item-count">' + m.created_at + '</span>' +
-        '</div>';
-      }).join('');
-    } catch(e) {
-      section.style.display = 'block';
-      list.innerHTML = '<div class="hc-empty">加载失败</div>';
-    }
-  }
-
   // ── 我的上传独立页面（Iter 6） ──
   function showMyUploadsPage() {
     closeNotifDrawer();
     document.querySelectorAll('.view-section').forEach(function(v) { v.style.display = 'none'; });
     var v = document.getElementById('myUploadsView');
     if (v) v.style.display = 'block';
-    switchView('profile', true);
     updateSidebar(null);
     window.scrollTo({ top: 0 });
     pushViewState('myuploads', {});
@@ -859,10 +817,8 @@
     if (btn) btn.disabled = true;
     try {
       await api('/api/files/' + materialId + '/delete/', { method: 'DELETE' });
-      // 从 DOM 移除整条记录
-      var item = btn ? btn.closest('.hc-item') : null;
-      if (item) item.remove();
-      loadMyUploads(); // 刷新列表
+      // 刷新我的上传页面
+      renderMyUploadsPage();
     } catch (err) {
       alert('删除失败：' + err.message);
       if (btn) btn.disabled = false;
@@ -1463,9 +1419,6 @@
     updateSidebar('admin');
     window.scrollTo({ top: 0 });
     pushViewState('admin', {});
-    // 确保"我的上传"区域被隐藏（不在 .view-section 中）
-    var uploadsSec = document.getElementById('myUploadsSection');
-    if (uploadsSec) uploadsSec.style.display = 'none';
     loadAdminPanel();
   }
 
@@ -2952,6 +2905,7 @@
           case 'tutorial': showTutorial(); break;
           case 'announcements': showAnnouncements(); break;
           case 'broad': showBroad(); break;
+          case 'myuploads': showMyUploadsPage(); break;
           default: showHome();
         }
         _suppressingPushState = false;
@@ -4416,6 +4370,9 @@
         break;
       case 'broad':
         showBroad();
+        break;
+      case 'myuploads':
+        showMyUploadsPage();
         break;
     }
     _suppressingPushState = false;
