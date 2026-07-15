@@ -1159,9 +1159,12 @@ def api_file_delete(request, file_id):
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         pass  # 总管理员可删任意
     elif material.uploader_id == request.user.id:
-        # 上传者本人只可删除已驳回或被拒状态的资料，防止误删已通过
         if material.review_status not in ("rejected",):
-            return _err("仅可删除已被驳回的资料", 403)
+            if profile.role == UserProfile.Role.USER:
+                # 普通用户可删除自己的任何资料（已通过的可删，但需确认）
+                pass
+            else:
+                return _err("仅可删除已被驳回的资料", 403)
     elif profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
         # 版主/小版主检查是否在管辖板块内
         try:
@@ -1190,6 +1193,19 @@ def api_file_delete(request, file_id):
         deleted_by=request.user,
         delete_reason=delete_reason,
     )
+
+    # 非本人删除且填写了理由 → 通知文件上传者
+    if not is_self_delete and delete_reason and material.uploader and material.uploader_id != request.user.id:
+        _create_notification(
+            recipient=material.uploader,
+            type=Notification.Type.FILE_DELETED,
+            title="你的资料被管理员删除",
+            message=f"管理员{request.user.first_name or request.user.username}删除了你的资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。\n删除理由：{delete_reason}\n你可以在此课程目录下重新上传。",
+            material=material,
+            course_code=material.course.code if material.course else "",
+            course_name=material.course.name if material.course else "",
+            triggered_by=request.user,
+        )
 
     # 普通用户自行删除时，通知管理员关注
     if is_self_delete:
@@ -2164,6 +2180,20 @@ def api_folder_delete(request, folder_id):
         category_name=cat_name,
         parent_path=parent_path,
     )
+    # 通知其他超级管理员
+    if request.user.profile.role != UserProfile.Role.SUPER_ADMIN:
+        from django.contrib.auth.models import User as AuthUser
+        admins = AuthUser.objects.filter(
+            userprofile__role=UserProfile.Role.SUPER_ADMIN
+        ).exclude(id=request.user.id)
+        for admin in admins:
+            _create_notification(
+                recipient=admin,
+                type=Notification.Type.OPERATION,
+                title="文件夹被删除",
+                message=f"{request.user.first_name or request.user.username} 删除了文件夹「{cat_name}」（路径：{parent_path}）。",
+                triggered_by=request.user,
+            )
     return _ok({"message": f"文件夹「{cat_name}」已删除"})
 
 
@@ -2184,7 +2214,7 @@ def api_operations(request):
             # 查找这些学院对应的 CourseCategory 节点（通过 course_text 前缀匹配）
             for cc in College.objects.filter(id__in=college_ids):
                 for cat in CourseCategory.objects.filter(
-                    models.Q(course_text__startswith=cc.slug.upper()[:3]) | models.Q(name=cc.short_name)
+                    Q(course_text__startswith=cc.slug.upper()[:3]) | Q(name=cc.short_name)
                 ):
                     visible_cat_ids.add(cat.id)
         # 过滤操作记录
@@ -2236,6 +2266,7 @@ def api_operations(request):
     })
 
 
+@csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_folder_restore(request, operation_id):
     """POST /api/operations/<id>/restore/ — 撤销文件夹操作"""
@@ -2279,9 +2310,21 @@ def api_folder_restore(request, operation_id):
     op.restored_by = request.user
     op.reason = reason
     op.save(update_fields=["is_restored", "restored_at", "restored_by", "reason"])
+
+    # 非本人撤销且填写了理由 → 通知原操作人
+    if reason and op.user and op.user_id != request.user.id:
+        _create_notification(
+            recipient=op.user,
+            type=Notification.Type.OPERATION,
+            title="你的文件夹操作已被撤销",
+            message=f"{request.user.first_name or request.user.username} 撤销了你的文件夹「{op.category_name}」的「{op.get_action_display()}」操作。\n撤销理由：{reason}",
+            triggered_by=request.user,
+        )
+
     return _ok({"message": "操作已撤销"})
 
 
+@csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_restore_deletion(request, deletion_id):
     """POST /api/moderation/deletions/<id>/restore/ — 恢复已删除文件"""
@@ -2319,15 +2362,31 @@ def api_restore_deletion(request, deletion_id):
     dr.restored_by = request.user
     dr.save(update_fields=["is_restored", "restored_at", "restored_by"])
 
+    # 通知原上传者（如果非本人恢复）
+    original_uploader = User.objects.filter(username=dr.uploader_name).first()
+    if original_uploader and original_uploader != request.user:
+        _create_notification(
+            recipient=original_uploader,
+            type=Notification.Type.OPERATION,
+            title="你的资料已被恢复",
+            message=f"管理员恢复了你的资料「{dr.title}」，现在可以查看和下载了。",
+            material=material,
+            course_code=dr.course_code,
+            course_name=dr.course_name,
+            triggered_by=request.user,
+        )
+
     # 通知删除人
     if reason and dr.deleted_by and dr.deleted_by_id != request.user.id:
         _create_notification(
             recipient=dr.deleted_by,
-            type=Notification.Type.APPROVED,  # 借用
+            type=Notification.Type.OPERATION,
             title="你的删除操作已被撤销",
             message=f"管理员撤销了你对资料「{dr.title}」的删除操作。撤销理由：{reason}",
+            material=material,
             course_code=dr.course_code,
             course_name=dr.course_name,
+            triggered_by=request.user,
         )
 
     return _ok({"message": "文件已恢复", "material_id": material.id})
@@ -2382,7 +2441,26 @@ def api_file_batch_delete(request):
             deleted += 1
         except Material.DoesNotExist:
             errors.append(f"文件#{fid}：不存在")
-    # 批量删除只发一条通知给相关上传者（简化处理）
+    # 通知受影响的文件上传者（去重，每次批量只发一条通知）
+    if deleted > 0 and reason:
+        notified_uploaders = set()
+        for fid in file_ids:
+            try:
+                m = Material.objects.get(id=fid)
+                if m.uploader and m.uploader_id not in notified_uploaders:
+                    if m.uploader_id != request.user.id:
+                        _create_notification(
+                            recipient=m.uploader,
+                            type=Notification.Type.FILE_DELETED,
+                            title="你的资料被管理员批量删除",
+                            message=f"管理员批量删除了你的一部分资料。\n删除理由：{reason}\n如有疑问请联系管理员。",
+                            course_code=m.course.code if m.course else "",
+                            course_name=m.course.name if m.course else "",
+                            triggered_by=request.user,
+                        )
+                        notified_uploaders.add(m.uploader_id)
+            except Material.DoesNotExist:
+                continue
     return _ok({"deleted": deleted, "errors": errors, "total": len(file_ids)})
 
 
