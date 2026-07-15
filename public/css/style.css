@@ -550,9 +550,11 @@
   /* ── Level 1: Square Card Grid ──────────── */
   .folder-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(178px, 218px));
     gap: var(--space-md);
     padding: var(--space-sm) 0 var(--space-xl);
+    max-width: 1180px;
+    margin: 0 auto;
   }
   .folder-card {
     aspect-ratio: 1;
@@ -562,7 +564,7 @@
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     gap: var(--space-sm); cursor: pointer;
-    padding: var(--space-md);
+    padding: var(--space-sm);
     transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     position: relative; overflow: hidden;
   }
@@ -577,14 +579,14 @@
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.05);
   }
   .folder-card .fc-icon {
-    width: 54px; height: 54px;
+    width: 40px; height: 40px;
     display: flex; align-items: center; justify-content: center;
     background: var(--primary-surface);
     border-radius: var(--radius-md);
     transition: background 0.2s, transform 0.2s;
   }
   .folder-card:hover .fc-icon { background: oklch(from var(--primary) l c h / 0.12); transform: scale(1.05); }
-  .folder-card .fc-icon svg { width: 28px; height: 28px; color: var(--primary); opacity: 0.6; }
+  .folder-card .fc-icon svg { width: 20px; height: 20px; color: var(--primary); opacity: 0.6; }
   .folder-card .fc-name {
     font-size: 0.88rem; font-weight: 600; color: var(--ink);
     text-align: center; line-height: 1.3;
@@ -670,10 +672,11 @@
 
   /* ── Mobile responsive ──────────────────── */
   @media (max-width: 640px) {
-    .folder-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--space-sm); }
-    .folder-card { padding: var(--space-sm); }
-    .folder-card .fc-icon { width: 42px; height: 42px; }
-    .folder-card .fc-name { font-size: 0.8rem; }
+    .folder-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--space-sm); }
+    .folder-card { padding: 8px; }
+    .folder-card .fc-icon { width: 36px; height: 36px; }
+    .folder-card .fc-icon svg { width: 20px; height: 20px; }
+    .folder-card .fc-name { font-size: 0.75rem; }
     .folder-list-item { padding: 10px 14px; }
     .file-table thead th,
     .file-table tbody td { padding: 8px 12px; font-size: 0.78rem; }
@@ -2846,6 +2849,31 @@
   .sub-tag {
     font-size: 0.7rem;
   }
+
+  /* ── 批量操作工具栏移动端 ── */
+  .batch-dl-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .batch-dl-bar .admin-btn-sm {
+    font-size: 0.72rem;
+    padding: 5px 10px;
+  }
+
+  /* ── 管理模式新建按钮移动端 ── */
+  .mgmt-new-btn {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+  }
+
+  /* ── 管理表格（删除记录/操作记录）横向滚动 ── */
+  .admin-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-table-wrapper table {
+    min-width: 560px;
+  }
 }
 
 /* ═══ Iter 6 — 管理模式 / 文件编辑 / 操作记录 ═══ */
@@ -2966,4 +2994,211 @@
 .pc-btn-detail {
   background: var(--surface-alt, #f0f0f0);
   border-color: transparent;
+}
+
+/* ═══════════════════════════════════════════
+   文件预览 — 表格行按钮
+   ═══════════════════════════════════════════ */
+
+.file-table .pv-link {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 0.72rem; font-weight: 600;
+  color: oklch(0.48 0.10 165); text-decoration: none;
+  border: 1.5px solid oklch(0.48 0.10 165);
+  transition: all 0.15s;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.file-table .pv-link:hover {
+  background: oklch(0.48 0.10 165); color: #fff;
+}
+/* 多选模式隐藏预览 */
+.file-table.multi-select .pv-link {
+  display: none;
+}
+
+/* 下载+预览按钮同行排列 */
+.dl-normal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════
+   文件预览 — 预览模态框
+   ═══════════════════════════════════════════ */
+
+.preview-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: oklch(0 0 0 / 0.88);
+  display: flex; flex-direction: column;
+  padding: var(--space-md);
+  backdrop-filter: blur(8px);
+  animation: modalIn 0.2s ease-out;
+}
+
+.preview-header {
+  display: flex; align-items: center; gap: var(--space-sm);
+  color: #fff; padding: 0 var(--space-sm) var(--space-sm);
+  flex-shrink: 0;
+}
+.preview-header .pv-badge {
+  flex-shrink: 0;
+}
+.preview-header .pv-title {
+  flex: 1; font-size: 0.85rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+.preview-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: auto; min-height: 0;
+}
+
+.preview-close {
+  position: absolute; top: 16px; right: 16px; z-index: 10;
+  width: 36px; height: 36px; border: none;
+  background: oklch(1 0 0 / 0.12); color: #fff;
+  font-size: 1.1rem; border-radius: 50%;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.preview-close:hover { background: oklch(1 0 0 / 0.3); }
+
+/* 预览下载按钮 */
+.pv-dl-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 18px; border-radius: 6px;
+  font-size: 0.82rem; font-weight: 600;
+  background: var(--primary); color: #fff;
+  border: none; cursor: pointer; text-decoration: none;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.pv-dl-btn:hover { background: var(--primary-dark); }
+.pv-dl-btn-hdr {
+  margin-left: auto;
+  font-size: 0.78rem;
+  padding: 5px 14px;
+}
+
+/* 预览内嵌渲染区 */
+.pv-viewer { border-radius: var(--radius-md); }
+
+/* 文本预览 */
+.pv-text-wrap {
+  width: 100%; max-width: 900px; max-height: 100%;
+  margin: 0 auto; overflow: auto;
+}
+.pv-text {
+  background: oklch(0.2 0.01 250); color: oklch(0.85 0.005 250);
+  padding: var(--space-md); border-radius: var(--radius-md);
+  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  font-size: 0.75rem; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-all;
+  overflow-x: auto;
+}
+.pv-text-code {
+  color: oklch(0.83 0.04 150);
+}
+
+/* 不支持的格式 */
+.pv-unsupported {
+  text-align: center; color: oklch(0.7 0.01 0);
+}
+.pv-unsupported-icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.5; }
+.pv-unsupported-text { font-size: 1.1rem; font-weight: 500; margin-bottom: 4px; }
+.pv-unsupported-sub { font-size: 0.82rem; opacity: 0.5; margin-bottom: var(--space-lg); }
+
+/* 文件详情弹窗预览按钮 */
+.fi-preview-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 22px; border-radius: var(--radius-sm);
+  font-size: 0.85rem; font-weight: 600;
+  background: transparent; color: oklch(0.48 0.10 165);
+  border: 1.5px solid oklch(0.48 0.10 165);
+  cursor: pointer; text-decoration: none; margin-bottom: 8px;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.fi-preview-btn:hover {
+  background: oklch(0.48 0.10 165); color: #fff;
+}
+
+/* ═══════════════════════════════════════════
+   文件列表布局优化 — 扩展内容区
+   ═══════════════════════════════════════════ */
+
+.explorer-view .container {
+  max-width: none;
+  padding: 0 32px;
+}
+@media (max-width: 640px) {
+  .explorer-view .container { padding: 0 var(--space-md); }
+}
+
+/* 超宽屏上限 */
+@media (min-width: 2000px) {
+  .explorer-view .container {
+    max-width: 1800px;
+    margin: 0 auto;
+  }
+}
+
+/* ── 列宽重新分配 ── */
+.file-table thead th:nth-child(1) { width: auto; }     /* 文件名 — 自适应占剩余空间 */
+.file-table thead th:nth-child(2) { width: 55px; }     /* 类型 */
+.file-table thead th:nth-child(3) { width: 75px; }     /* 大小 */
+.file-table thead th:nth-child(4) { width: 90px; }     /* 上传者 */
+.file-table thead th:nth-child(5) { width: 110px; }    /* 任课教师 — 留出铅笔图标空间 */
+.file-table thead th:nth-child(6) { width: 68px; }     /* 下载次数 */
+.file-table thead th:nth-child(7) { width: 160px; }    /* 下载+预览 */
+
+/* ── 渐进隐藏列：空间不足时优先显示文件名 ── */
+
+/* 中屏：隐藏任课教师 */
+@media (max-width: 1200px) {
+  .file-table .ft-teacher,
+  .file-table .th-teacher {
+    display: none;
+  }
+}
+/* 中窄屏：再隐藏上传者 */
+@media (max-width: 1000px) {
+  .file-table .ft-uploader,
+  .file-table .th-uploader {
+    display: none;
+  }
+}
+/* 窄屏：隐藏类型、下载次数，保留文件名/大小/按钮 */
+@media (max-width: 768px) {
+  .file-table .ft-type-cell,
+  .file-table .th-type,
+  .file-table .ft-dlcount,
+  .file-table .th-dlcount {
+    display: none;
+  }
+  /* 管理模式铅笔图标自动隐藏 */
+  .mgmt-pen { display: none; }
+  /* 下载列占满剩余宽度 */
+  .file-table thead th:nth-child(7) { width: auto; }
+}
+/* 移动端(<640px)：隐藏预览按钮，单按钮宽度 */
+@media (max-width: 640px) {
+  .file-table .pv-link { display: none; }
+  .file-table thead th:nth-child(7) { width: 84px; }
+}
+
+/* 预览弹窗移动端适配 */
+@media (max-width: 640px) {
+  .preview-overlay { padding: var(--space-xs); }
+  .preview-body embed,
+  .preview-body iframe { border-radius: var(--radius-sm); }
+  .pv-text-wrap { max-width: 100%; }
+  .pv-text { font-size: 0.7rem; padding: var(--space-sm); }
+  .preview-header .pv-title { font-size: 0.78rem; }
+  .fi-preview-btn { font-size: 0.8rem; padding: 7px 16px; }
 }

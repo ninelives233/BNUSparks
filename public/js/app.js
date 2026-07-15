@@ -231,7 +231,7 @@
         '<div style="margin-bottom:10px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件简介</label>' +
           '<textarea id="batchEditDesc" rows="3" placeholder="留空不修改" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.85rem;box-sizing:border-box;resize:vertical"></textarea></div>' +
         '<div class="ar-actions">' +
-          '<button class="admin-btn admin-btn-primary" onclick="confirmBatchEdit(' + selected.join(',') + ')">确认修改</button>' +
+          '<button class="admin-btn admin-btn-primary" onclick="confirmBatchEdit(\'' + selected.join(',') + '\')">确认修改</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
@@ -3643,6 +3643,7 @@
 
         const fileLookup = {};
         pageFiles.forEach(f => { fileLookup[f.id] = f; });
+        window._fileLookup = fileLookup;
         tbody.innerHTML = pageFiles.map(function(f) {
           var badgeHtml = '';
           if (f.is_uploader && f.review_status !== 'approved') {
@@ -3652,7 +3653,7 @@
           }
           var dlLink = currentUser
             ? (f.can_download !== false
-                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a>'
+                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a><a href="javascript:void(0)" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</a>'
                 : '<span class="dl-link dl-disabled" title="审核通过后可下载">⏳ 待审核</span>')
             : '<a href="javascript:void(0)" class="dl-link dl-login-prompt" onclick="event.stopPropagation();showLoginModal()">🔒 登录下载</a>';
           var isChecked = !!_selectedIds[f.id];
@@ -3675,7 +3676,7 @@
         // 点击行显示文件简介
         Array.from(tbody.children).forEach(tr => {
           tr.addEventListener('click', function(e) {
-            if (e.target.closest('.dl-link, .dl-chk, .dl-check')) return;
+            if (e.target.closest('.dl-link, .dl-chk, .dl-check, .pv-link')) return;
             const fileId = parseInt(this.dataset.fileId);
             if (fileLookup[fileId]) showFileInfoModal(fileLookup[fileId]);
           });
@@ -3856,7 +3857,8 @@
 
     // 权限检测：是否可编辑（上传者本人或不越界的管理员）
     // can_delete 由后端 api_course_files 基于管辖范围计算得出
-    var canEdit = currentUser && (
+    // 平民模式下隐藏所有编辑/删除功能
+    var canEdit = currentUser && !_civilianMode && (
       file.is_uploader
       || (file.can_delete && currentUser.role !== 'user')
     );
@@ -3888,8 +3890,8 @@
           '<div class="fi-row"><span class="fi-label">下载次数</span><span class="fi-value">' + file.download_count + ' 次</span></div>' +
           '<div class="fi-row"><span class="fi-label">上传日期</span><span class="fi-value">' + esc(file.created_at || '') + '</span></div>' +
           '<div class="fi-row fi-row-desc"><span class="fi-label">简介</span><span class="fi-value">' + descHtml + '</span></div>' +
-          '<div style="text-align:center;margin-top:12px">' + (currentUser ? '<button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>' : '<a href="javascript:void(0)" class="fi-download-btn" onclick="event.stopPropagation();showLoginModal()" style="opacity:0.6">🔒 登录后下载</a>') + '</div>' +
-          (file.can_delete ? '<div style="text-align:center;margin-top:10px"><button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">🗑️ 删除此资料</button></div>' : '') +
+          '<div style="text-align:center;margin-top:12px">' + (currentUser ? '<button class="fi-preview-btn" onclick="event.stopPropagation();showPreview(' + file.id + ')">预览文件</button><br><button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>' : '<a href="javascript:void(0)" class="fi-download-btn" onclick="event.stopPropagation();showLoginModal()" style="opacity:0.6">🔒 登录后下载</a>') + '</div>' +
+          (file.can_delete && !_civilianMode ? '<div style="text-align:center;margin-top:10px"><button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">🗑️ 删除此资料</button></div>' : '') +
         '</div>' +
       '</div>';
     overlay.addEventListener('click', function(e) {
@@ -3977,6 +3979,134 @@
       _skipPopstateRender = true;
       history.back();
       // 100ms 后清除标志（足够 popstate 处理完毕）
+      setTimeout(function() { _skipPopstateRender = false; }, 100);
+    }
+  }
+
+  // ── 文件预览 ──
+  var _previewModal = null;
+
+  function _previewUrl(fileId) {
+    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return '/api/files/' + fileId + '/download/?token=' + encodeURIComponent(token) + '&preview=1';
+  }
+
+  function _isPreviewableExt(fileName) {
+    if (!fileName) return 'other';
+    var ext = fileName.split('.').pop().toLowerCase();
+    if (['pdf'].includes(ext)) return 'pdf';
+    if (['ppt','pptx'].includes(ext)) return 'ppt';
+    if (['jpg','jpeg','png','gif','webp','bmp','svg','ico'].includes(ext)) return 'image';
+    if (['txt','md','py','js','ts','jsx','tsx','css','html','json','xml','yaml','yml','sh','bash','zsh','conf','ini','cfg','log','csv','sql','c','cpp','h','hpp','java','go','rs','rb','php','pl','lua','r','kt','swift','m','mm','tex','rst','asciidoc','bat','ps1','env','gitignore','dockerfile','makefile'].includes(ext)) return 'text';
+    return 'other';
+  }
+
+  function showPreview(fileId) {
+    // 关闭已有预览弹窗
+    var existing = document.querySelector('.preview-overlay');
+    if (existing) existing.remove();
+
+    // 获取文件详情
+    // 尝试从表格行 data 取信息
+    var tr = document.querySelector('tr[data-file-id="' + fileId + '"]');
+    var fileName = '', fileTitle = '';
+    if (tr) {
+      var fnText = tr.querySelector('.fn-text');
+      if (fnText) fileTitle = fnText.textContent || '';
+      // 从 data 属性或文本
+    }
+    // 若无行信息，尝试从 fileLookup（可能不存在）
+    // 降级：调用 API
+    var promise;
+    if (window._fileLookup && window._fileLookup[fileId]) {
+      var f = window._fileLookup[fileId];
+      promise = Promise.resolve(f);
+    } else {
+      // 无缓存数据时，直接用文件名信息（预览只需文件 ID 和下载 token）
+      promise = Promise.resolve({ id: fileId, title: '#' + fileId, file_name: '' });
+    }
+
+    promise.then(function(f) {
+      if (!f) f = { id: fileId, title: '文件', file_name: '' };
+      var fn = f.file_name || f.title || '';
+      var extType = _isPreviewableExt(fn);
+      var previewUrl = _previewUrl(fileId);
+      var extBadgeHtml = extBadge(fn);
+
+      var bodyHtml = '';
+      if (extType === 'pdf') {
+        bodyHtml = '<embed src="' + previewUrl + '" type="application/pdf" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer">';
+      } else if (extType === 'image') {
+        bodyHtml = '<img src="' + previewUrl + '" alt="' + esc(fn) + '" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
+      } else if (extType === 'text') {
+        bodyHtml = '<div class="pv-text-wrap"><pre class="pv-text" id="pvTextContent">加载中…</pre></div>';
+      } else if (extType === 'ppt') {
+        bodyHtml = '<div class="pv-unsupported">' +
+          '<div class="pv-unsupported-icon">📊</div>' +
+          '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
+          '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
+          '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
+        '</div>';
+      } else {
+        bodyHtml = '<div class="pv-unsupported">' +
+          '<div class="pv-unsupported-icon">📄</div>' +
+          '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
+          '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
+          '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
+        '</div>';
+      }
+
+      var overlay = document.createElement('div');
+      overlay.className = 'preview-overlay';
+      overlay.innerHTML =
+        '<button class="preview-close" onclick="closePreview()">✕</button>' +
+        '<div class="preview-header">' +
+          '<span class="pv-badge">' + extBadgeHtml + '</span>' +
+          '<span class="pv-title" title="' + esc(fn) + '">' + esc(fileTitle || fn || '文件预览') + '</span>' +
+          '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">⬇ 下载</button>' +
+        '</div>' +
+        '<div class="preview-body" id="previewBody">' + bodyHtml + '</div>';
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closePreview();
+      });
+      document.body.appendChild(overlay);
+      lockScroll();
+      _previewModal = overlay;
+      _pushModalHistory();
+
+      // 文本文件：fetch 内容
+      if (extType === 'text') {
+        fetch(previewUrl).then(function(r) {
+          if (!r.ok) throw new Error('加载失败');
+          return r.text();
+        }).then(function(text) {
+          var pre = document.getElementById('pvTextContent');
+          if (pre) {
+            pre.textContent = text;
+            // 尝试猜测语言高亮（简单判断）
+            var langClass = '';
+            var ext = fn.split('.').pop().toLowerCase();
+            if (['py','js','ts','jsx','tsx','css','html','json','xml','sh','bash','c','cpp','java','go','rs','rb','php','sql','md'].includes(ext)) {
+              pre.className = 'pv-text pv-text-code';
+            }
+          }
+        }).catch(function() {
+          var pre = document.getElementById('pvTextContent');
+          if (pre) pre.textContent = '⚠️ 无法加载文件内容';
+        });
+      }
+    });
+  }
+
+  function closePreview() {
+    var overlay = document.querySelector('.preview-overlay');
+    if (!overlay) return;
+    unlockScroll();
+    overlay.remove();
+    _previewModal = null;
+    if (history.state && history.state._modal) {
+      _skipPopstateRender = true;
+      history.back();
       setTimeout(function() { _skipPopstateRender = false; }, 100);
     }
   }
@@ -4341,8 +4471,9 @@
 
     // 如果有打开的弹窗，关闭弹窗并阻止页面导航
     // 动态创建的弹窗（直接移除 DOM）
-    var dynOverlay = document.querySelector('.file-info-overlay, .admin-reject-overlay, .search-overlay');
+    var dynOverlay = document.querySelector('.file-info-overlay, .admin-reject-overlay, .search-overlay, .preview-overlay');
     if (dynOverlay) {
+      if (dynOverlay.classList.contains('preview-overlay')) _previewModal = null;
       dynOverlay.remove();
       unlockScroll();
       _suppressingPushState = false;
