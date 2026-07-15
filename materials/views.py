@@ -1096,7 +1096,7 @@ def api_file_upload(request):
 
 
 def api_file_download(request, file_id):
-    """GET /api/files/<id>/download"""
+    """GET /api/files/<id>/download — 支持 ?preview=1 内联预览"""
     material = get_object_or_404(Material, id=file_id)
     file_path = Path(settings.MEDIA_ROOT) / material.file_path
 
@@ -1114,6 +1114,17 @@ def api_file_download(request, file_id):
             _check_moderator_access(user, material)
         except Exception:
             return _err("该资料未通过审核，暂不可下载", 403)
+
+    # 预览模式：不计配额、不计下载数、内联渲染
+    is_preview = request.GET.get("preview") == "1"
+    if is_preview:
+        response = FileResponse(
+            open(file_path, "rb"),
+            as_attachment=False,
+            filename=material.file_name or material.title,
+        )
+        response['X-Frame-Options'] = 'SAMEORIGIN'  # 允许在 embed 中渲染
+        return response
 
     # 下载配额校验
     allowed, remaining, msg = _check_download_quota(user)
@@ -2067,6 +2078,7 @@ def api_deletion_records(request):
 # 文件管理 API（Iter 6 — 管理模式）
 # ═══════════════════════════════════════════════════════════════
 
+@csrf_exempt
 @require_login
 def api_file_update(request, file_id):
     """PATCH /api/files/<id>/update/ — 更新文件元信息（标题/任课教师/简介）"""
@@ -2392,6 +2404,7 @@ def api_restore_deletion(request, deletion_id):
     return _ok({"message": "文件已恢复", "material_id": material.id})
 
 
+@csrf_exempt
 @require_login
 def api_file_batch_delete(request):
     """POST /api/files/batch-delete/ — 批量删除文件"""
@@ -2464,6 +2477,7 @@ def api_file_batch_delete(request):
     return _ok({"deleted": deleted, "errors": errors, "total": len(file_ids)})
 
 
+@csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_file_batch_edit(request):
     """POST /api/files/batch-edit/ — 批量修改文件元信息"""
