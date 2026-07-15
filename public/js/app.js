@@ -369,7 +369,7 @@
       var username = sid + '@mail.bnu.edu.cn';
       const data = await api('/api/auth/login/', { method: 'POST',
         body: { username: username, password: document.getElementById('loginPassword').value, remember: remember } });
-      _persistToken(data.token, remember);
+      _persistToken(data.token, remember, data.user && data.user.id);
       currentUser = data.user;
       closeAuthModal(); updateAuthUI();
     } catch (err) { el.textContent = err.message; el.style.display = 'block'; }
@@ -532,19 +532,26 @@
   }
 
   // ── Token 持久化：sessionStorage（当前会话）+ localStorage（跨会话） ──
-  function _persistToken(token, remember) {
+  function _persistToken(token, remember, userId) {
     sessionStorage.setItem('token', token);
     localStorage.setItem('token', token);
     localStorage.setItem('_loginTime', Date.now().toString());
     localStorage.setItem('_loginRemember', remember ? '1' : '0');
+    if (userId) localStorage.setItem('bnusparks_user_id', String(userId));
   }
 
   async function checkAuth() {
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
     if (!token) { updateAuthUI(); return; }
     // 从 localStorage 恢复 sessionStorage（页面刷新后）
+    // 但仅在 localStorage 用户 ID 与当前 session 一致时才恢复
     if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
-      sessionStorage.setItem('token', localStorage.getItem('token'));
+      var savedUserId = localStorage.getItem('bnusparks_user_id');
+      if (savedUserId) {
+        sessionStorage.setItem('token', localStorage.getItem('token'));
+      } else {
+        // 无存储的用户 ID，安全起见不清除 localStorage 但也不恢复
+      }
     }
     try {
       currentUser = await api('/api/auth/me/');
@@ -609,8 +616,6 @@
     updateSidebar(null);
     window.scrollTo({ top: 0 });
     pushViewState('profile', {});
-    // 显示我的上传
-    switchView('profile', true);
     // 加载数据
     loadProfile();
   }
@@ -1162,6 +1167,11 @@
             linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a></div>';
           } else if (n.type === 'rejected') {
             linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="navToReUpload(\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')" style="font-weight:600">↻ 跳转到文件目录并重新上传 →</a></div>';
+          } else if (n.type === 'operation') {
+            // 操作通知：如果有 material_id 则跳转到文件
+            if (n.material_id) {
+              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看资料详情 →</a></div>';
+            }
           } else {
             linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>';
           }
@@ -1845,7 +1855,7 @@
 
   // ── 文件删除 ──
   function deleteFileConfirm(fileId, btn) {
-    if (!confirm('确认删除此文件？此操作不可撤销。')) return;
+    if (!confirm('确认删除此文件？此操作将在48小时内可撤销。')) return;
     var overlay = btn && btn.closest('.file-info-overlay');
     api('/api/files/' + fileId + '/delete/', { method: 'DELETE' }).then(function() {
       if (overlay) overlay.remove();
@@ -1871,58 +1881,65 @@
 
   // ── 审核界面查看待审资料详情 ──
   function showPendingFileDetail(materialId) {
-    // 尝试从当前 pending list 中获取数据
+    // 尝试从当前 pending list 卡片中获取数据
     var card = document.getElementById('pc-' + materialId);
-    if (!card) {
-      // 降级：显示最简单的弹窗
-      var overlay = document.createElement('div');
-      overlay.className = 'modal-overlay file-info-overlay';
-      overlay.innerHTML = '<div class="modal-card file-info-card" style="max-width:400px"><button class="modal-close" onclick="closeFileInfoModal(event)">✕</button><h2 class="modal-title">资料 #' + materialId + '</h2><div class="file-info-content"><p style="color:var(--text-muted)">加载详情中…</p></div></div>';
-      document.body.appendChild(overlay);
-      lockScroll();
-      _pushModalHistory();
-      // 尝试从 API 获取
-      api('/api/user/uploads/').then(function(data) {
-        var item = data ? data.find(function(m) { return m.id === materialId; }) : null;
-        if (item && overlay) {
-          overlay.querySelector('.file-info-content').innerHTML =
-            '<div class="fi-row"><span class="fi-label">标题</span><span class="fi-value">' + esc(item.title) + '</span></div>' +
-            '<div class="fi-row"><span class="fi-label">课程</span><span class="fi-value">' + esc(item.course_name) + ' (' + esc(item.course_code) + ')</span></div>' +
-            '<div class="fi-row"><span class="fi-label">任课教师</span><span class="fi-value">' + esc(item.teacher || '未填写') + '</span></div>' +
-            '<div class="fi-row"><span class="fi-label">大小</span><span class="fi-value">' + formatSize(item.file_size) + '</span></div>' +
-            (item.description ? '<div class="fi-row fi-row-desc"><span class="fi-label">简介</span><span class="fi-value">' + esc(item.description) + '</span></div>' : '') +
-            '<div style="text-align:center;margin-top:12px"><button class="fi-download-btn" onclick="doDirectDownload(' + item.id + ')">⬇ 下载文件</button></div>';
-        }
-      }).catch(function(){});
+    if (card) {
+      // 从卡片提取信息
+      var title = card.querySelector('.pc-title') ? card.querySelector('.pc-title').textContent : '';
+      var metaEls = card.querySelectorAll('.pc-meta span');
+      var courseName = '', uploader = '', createdAt = '', fileSize = '';
+      if (metaEls[0]) courseName = metaEls[0].textContent.replace(/^📚 /, '');
+      if (metaEls[1]) uploader = metaEls[1].textContent.replace(/^👤 /, '');
+      if (metaEls[2]) createdAt = metaEls[2].textContent.replace(/^📅 /, '');
+      if (metaEls[3]) fileSize = metaEls[3].textContent.replace(/^📄 /, '');
+      var fileObj = {
+        id: materialId,
+        title: title,
+        course_name: courseName,
+        course_code: '',
+        file_name: title,
+        file_size: parseInt(fileSize) || 0,
+        file_type: '未知',
+        uploader: uploader,
+        teacher: '待填',
+        description: '',
+        download_count: 0,
+        created_at: createdAt,
+        is_uploader: false,
+        can_delete: currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'moderator' || currentUser.role === 'sub_moderator'),
+        is_admin_uploaded: false,
+      };
+      showFileInfoModal(fileObj);
       return;
     }
-    // 直接从卡片 DOM 提取信息
-    var title = card.querySelector('.pc-title') ? card.querySelector('.pc-title').textContent : '';
-    var metaEls = card.querySelectorAll('.pc-meta span');
-    var courseName = '', uploader = '', createdAt = '', fileSize = '';
-    if (metaEls[0]) courseName = metaEls[0].textContent.replace(/^📚 /, '');
-    if (metaEls[1]) uploader = metaEls[1].textContent.replace(/^👤 /, '');
-    if (metaEls[2]) createdAt = metaEls[2].textContent.replace(/^📅 /, '');
-    if (metaEls[3]) fileSize = metaEls[3].textContent.replace(/^📄 /, '');
-    // 渲染详情弹窗
-    var overlay = document.createElement('div');
-    overlay.className = 'modal-overlay file-info-overlay';
-    overlay.innerHTML =
-      '<div class="modal-card file-info-card">' +
-        '<button class="modal-close" onclick="closeFileInfoModal(event)">✕</button>' +
-        '<h2 class="modal-title" style="padding-right:28px">' + esc(title) + '</h2>' +
-        '<div class="file-info-content">' +
-          '<div class="fi-row"><span class="fi-label">课程</span><span class="fi-value">' + esc(courseName) + '</span></div>' +
-          '<div class="fi-row"><span class="fi-label">上传者</span><span class="fi-value">' + esc(uploader) + '</span></div>' +
-          '<div class="fi-row"><span class="fi-label">大小</span><span class="fi-value">' + esc(fileSize) + '</span></div>' +
-          '<div class="fi-row"><span class="fi-label">上传时间</span><span class="fi-value">' + esc(createdAt) + '</span></div>' +
-          '<div style="text-align:center;margin-top:12px"><button class="fi-download-btn" onclick="doDirectDownload(' + materialId + ');closeFileInfoModal(event)">⬇ 下载文件</button></div>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(overlay);
-    lockScroll();
-    _pushModalHistory();
-    overlay.addEventListener('click', function(e) { if (e.target === this) closeFileInfoModal(e); });
+    // 降级：尝试从 API 加载
+    api('/api/user/uploads/').then(function(data) {
+      var item = data ? data.find(function(m) { return m.id === materialId; }) : null;
+      if (item) {
+        var fileObj = {
+          id: item.id,
+          title: item.title,
+          course_name: item.course_name,
+          course_code: item.course_code,
+          file_name: item.file_name || item.title,
+          file_size: item.file_size,
+          file_type: item.file_type || '未知',
+          uploader: item.uploader_name || '匿名',
+          teacher: item.teacher || '',
+          description: item.description || '',
+          download_count: item.download_count || 0,
+          created_at: item.created_at || '',
+          is_uploader: false,
+          can_delete: currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'moderator' || currentUser.role === 'sub_moderator'),
+          is_admin_uploaded: false,
+        };
+        showFileInfoModal(fileObj);
+      } else {
+        alert('无法加载文件详情');
+      }
+    }).catch(function() {
+      alert('无法加载文件详情');
+    });
   }
 
   // ── 审核历史 ──
@@ -2126,7 +2143,8 @@
   // ── 操作记录（替换文件管理） ──
   var _opPage = 1, _opPerPage = 20;
 
-  async function renderAdminOperations(content) {
+  async function renderAdminOperations(content, page) {
+    if (page !== undefined) _opPage = page;
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
     try {
       var data = await api('/api/operations/?page=' + _opPage + '&per_page=' + _opPerPage);
@@ -2890,7 +2908,7 @@
           api('/api/auth/verify-email/', { method: 'POST', body: { uid: parseInt(uid), vtoken: vtoken } })
             .then(function(data) {
               if (data.token) {
-                _persistToken(data.token, false);
+                _persistToken(data.token, false, data.user && data.user.id);
                 currentUser = data.user;
               }
               history.replaceState(null, '', '/');
@@ -3331,9 +3349,43 @@
   }
 
   function _userInScope(path) {
-    // 简易检查：小版主的管辖范围是否包含当前路径
-    // 当前仅返回 true — 后端 API 会做实际权限校验
-    return true;
+    // 检查当前用户的管辖范围是否包含给定路径
+    if (!currentUser) return false;
+    if (currentUser.role === 'super_admin') return true;
+    if (currentUser.role === 'user') return false;
+    // 从 path 推断所属的一级分类（专业课/通识课）
+    if (!path || !path.length) return false;
+    var rootCategory = path[0]; // '通识课' 或 '专业课'
+    // 版主/小版主需要权限
+    if (currentUser.role === 'moderator') {
+      // 版主：检查 managed_majors + can_moderate_general + moderated_sections
+      // 通识课全域：有 can_moderate_general 权限
+      if (rootCategory === '通识课' && currentUser.can_moderate_general) return true;
+      // 检查 moderated_sections（通识课子类等）
+      if (currentUser.moderated_sections && currentUser.moderated_sections.length) {
+        // 如果能匹配到任何管辖分类的路径，返回 true
+        // 简化处理：有管辖板块的版主在通识课/专业课的二级目录有权限
+        return true;
+      }
+      // 检查 managed_majors（管辖学院）
+      if (currentUser.managed_majors && currentUser.managed_majors.length) {
+        // 在专业课根下有管辖学院的版主有权限
+        if (rootCategory === '专业课') return true;
+      }
+      return false;
+    }
+    if (currentUser.role === 'sub_moderator') {
+      // 小版主：仅可在管辖的 CourseCategory 路径下操作
+      if (!courseTree) return false;
+      // 小版主只在具体专业层级及以下才可操作
+      // 在一级目录（专业课/通识课）下不应看到新建按钮
+      if (path.length <= 1) return false;
+      // 如果有 moderated_sections 数据，尝试匹配
+      if (!currentUser.moderated_sections || !currentUser.moderated_sections.length) return false;
+      // 小版主在二级及以下有管辖权
+      return true;
+    }
+    return false;
   }
 
   // ── Renderers ──
@@ -3804,12 +3856,11 @@
     var titleLen = (file.title || '').length;
     var titleFontSize = titleLen > 20 ? '1.0rem' : (titleLen > 10 ? '1.15rem' : '1.3rem');
 
-    // 权限检测：是否可编辑（上传者本人或有管辖权限的管理员）
+    // 权限检测：是否可编辑（上传者本人或不越界的管理员）
+    // can_delete 由后端 api_course_files 基于管辖范围计算得出
     var canEdit = currentUser && (
-      currentUser.role === 'super_admin'
-      || currentUser.role === 'moderator'
-      || currentUser.role === 'sub_moderator'
-      || file.is_uploader
+      file.is_uploader
+      || (file.can_delete && currentUser.role !== 'user')
     );
 
     var penIcon = '<span class="fi-pen" onclick="fiEditField(this)" title="点击编辑">✏️</span>';
@@ -3961,15 +4012,6 @@
       el.style.display = '';
       el.classList.toggle('active', id.replace('View','') === name);
     });
-    // 我的上传：仅在首页和个人中心显示
-    var uploadsSec = document.getElementById('myUploadsSection');
-    if (uploadsSec) {
-      if (name === 'home' || name === 'profile') {
-        loadMyUploads();  // 异步加载并显示
-      } else {
-        uploadsSec.style.display = 'none';
-      }
-    }
     if (!skipScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
