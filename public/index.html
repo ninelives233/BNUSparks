@@ -31,6 +31,7 @@
   <a href="#" data-view="home" class="active"><span class="gi gi-nav-home" style="width:18px;height:18px"></span> 首页</a>
   <a href="#" data-view="general"><span class="gi gi-nav-general"></span> 通识课</a>
   <a href="#" data-view="major"><span class="gi gi-nav-major"></span> 专业课</a>
+  <a href="#" data-view="leaderboard"><span class="gi gi-nav-leaderboard" style="width:16px;height:16px"><span></span></span> 排行榜</a>
   <a href="#" data-view="admin" id="mobAdminLink" style="display:none"><span>⚙️</span> 管理后台</a>
   <a href="#" data-view="about"><span>ℹ️</span> 关于</a>
 </div>
@@ -41,6 +42,7 @@
   <a href="#" class="active" data-view="home"><span class="sn-icon gi gi-nav-home" style="width:22px;height:22px"></span>首页</a>
   <a href="#" data-view="general"><span class="sn-icon gi gi-nav-general"></span>通识课</a>
   <a href="#" data-view="major"><span class="sn-icon gi gi-nav-major"></span>专业课</a>
+  <a href="#" data-view="leaderboard"><span class="sn-icon gi gi-nav-leaderboard"><span></span></span>排行榜</a>
   <a href="#" data-view="admin" id="sideAdminLink" style="display:none"><span class="sn-icon gi" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center">⚙️</span>管理后台</a>
   <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon gi" style="width:3px;height:16px;background:currentColor;border-radius:2px;opacity:0.5"></span>关于</a>
 </nav>
@@ -73,7 +75,7 @@
         <a href="mailto:bnusparks@163.com" class="hf-email">bnusparks@163.com</a>
       </p>
       <p class="hero-footer" style="margin-top:4px">
-        <a href="javascript:void(0)" style="color:var(--primary);font-weight:500;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.15s">提供物质支持</a>
+        <a href="javascript:void(0)" onclick="showSupportMessage()" style="color:var(--primary);font-weight:500;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.15s;cursor:pointer">提供物质支持</a>
       </p>
     </div>
   </section>
@@ -104,6 +106,15 @@
     </div>
   </section>
   <hr class="home-divider">
+
+  <!-- ═══ 上传按钮 ═══ -->
+  <section class="home-upload-section">
+    <button class="home-upload-btn" onclick="openCourseSearchUpload()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      上传文件
+    </button>
+    <p class="home-materials-count">当前已有 <strong id="totalMaterialCount">-</strong> 份资料</p>
+  </section>
 
   <!-- ═══ Home Content ═══ -->
   <section class="home-content">
@@ -183,20 +194,21 @@
   </div>
 </div>
 
-<!-- ═══ Announcements View ═══ -->
+<!-- ═══ Announcements View (Iter 7 — 动态公告) ═══ -->
 <div class="view-section" id="announcementsView">
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
+      <div class="breadcrumb" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
         <a onclick="showHome()">首页</a>
         <span class="bc-sep"> / </span>
-        <span class="bc-current">公告</span>
+        <span class="bc-current" style="flex:1">公告</span>
+        <button class="announcement-create-btn" id="createAnnouncementBtn" style="display:none" onclick="showAnnouncementEditor()">📝 发布公告</button>
       </div>
       <div class="about-header">
         <h2 class="about-title">公告</h2>
         <p class="about-subtitle">平台最新动态</p>
       </div>
-      <div class="about-content static-content" id="announcementsContent"></div>
+      <div id="announcementsList"><div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div></div>
     </div>
   </div>
 </div>
@@ -233,6 +245,45 @@
         <p class="about-subtitle">最受欢迎的资料</p>
       </div>
       <div class="rankings-content" id="rankingsContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ User Leaderboard View (Iter 7) ═══ -->
+<div class="view-section" id="leaderboardView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">用户排行榜</span>
+      </div>
+      <div class="about-header">
+        <h2 class="about-title">用户排行榜</h2>
+        <p class="about-subtitle">看看谁在为社区做贡献</p>
+      </div>
+      <div class="leaderboard-tabs" id="lbTabs">
+        <button class="lb-tab active" data-type="upload" onclick="switchLeaderboardTab('upload')">📤 上传量排行榜</button>
+        <button class="lb-tab" data-type="download" onclick="switchLeaderboardTab('download')">📥 下载量排行榜</button>
+        <button class="lb-tab" data-type="collection" onclick="switchLeaderboardTab('collection')">⭐ 收藏量排行榜</button>
+      </div>
+      <div class="leaderboard-content" id="leaderboardContent">
+        <div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ User Public View (Iter 7) ═══ -->
+<div class="view-section" id="userPublicView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">用户主页</span>
+      </div>
+      <div id="userPublicContent"></div>
     </div>
   </div>
 </div>
@@ -285,7 +336,7 @@
   </div>
 </div>
 
-<!-- ═══ Profile View ═══ -->
+<!-- ═══ Profile View (Iter 7) ═══ -->
 <div class="view-section" id="profileView">
   <div class="about-page">
     <div class="container">
@@ -294,6 +345,25 @@
         <span class="bc-sep"> / </span>
         <span class="bc-current">个人资料</span>
       </div>
+      <h2 class="profile-section-title">我的资料</h2>
+
+      <!-- 用户数据三栏 -->
+      <div class="user-stats-row" id="userStatsRow">
+        <div class="user-stat-card">
+          <div class="usc-value" id="statUploads">-</div>
+          <div class="usc-label">上传文件数</div>
+        </div>
+        <div class="user-stat-card">
+          <div class="usc-value" id="statDownloads">-</div>
+          <div class="usc-label">被下载次数</div>
+        </div>
+        <div class="user-stat-card">
+          <div class="usc-value" id="statCollections">-</div>
+          <div class="usc-label">被收藏次数</div>
+        </div>
+      </div>
+
+      <!-- 现有资料卡片 -->
       <div class="profile-card">
         <div class="profile-avatar">
           <div class="profile-avatar-circle" id="profileAvatar">🧑</div>
@@ -363,6 +433,27 @@
           </div>
         </div>
       </div>
+
+      <!-- 公开资料卡片 -->
+      <div class="profile-public-card">
+        <div class="ppc-title">公开资料</div>
+        <p class="ppc-hint">这是你对其他用户除头像和昵称之外，处于可见状态的个人信息。不填写则隐藏。您上传的文件列表也在展示范围内。</p>
+        <div class="ppc-field">
+          <label>联系邮箱</label>
+          <input type="email" id="pubContactEmail" placeholder="不填写则视为不可见">
+        </div>
+        <div class="ppc-field">
+          <label>联系方式</label>
+          <input type="text" id="pubContactWay" placeholder="不填写则视为不可见">
+        </div>
+        <div class="ppc-field">
+          <label>个人简介（200字以内）</label>
+          <textarea id="pubBio" maxlength="200" placeholder="介绍你自己…"></textarea>
+          <div class="ppc-char-count"><span id="pubBioCount">0</span>/200</div>
+        </div>
+        <button class="ppc-save-btn" onclick="savePublicProfile()">保存公开资料</button>
+        <div id="pubProfileMsg" style="font-size:0.82rem;color:var(--success);margin-top:6px;display:none">已保存</div>
+      </div>
     </div>
   </div>
 </div>
@@ -421,7 +512,7 @@
 </div>
 
 <!-- ═══ Footer ═══ -->
-<footer class="site-footer">
+<footer class="site-footer" id="siteFooter">
   <div class="container">
     <div class="footer-grid">
       <div class="footer-col footer-brand">
@@ -448,11 +539,6 @@
     </div>
     <div class="footer-bottom">
       <p>© 2026 BNU Sparks · 木铎星火 · 学术资源共享平台</p>
-      <div class="footer-social">
-        <a href="#" aria-label="GitHub" class="gi-footer gi-footer-gh"></a>
-        <a href="#" aria-label="RSS" class="gi-footer gi-footer-rss"></a>
-        <a href="#" aria-label="Email" class="gi-footer gi-footer-mail"></a>
-      </div>
     </div>
   </div>
 </footer>
@@ -600,19 +686,34 @@
   <div class="modal-card modal-card-wide">
     <button class="modal-close" onclick="closeUploadModal()">✕</button>
     <h2 class="modal-title">上传资料</h2>
+    <div class="upload-mode-tabs">
+      <button class="um-tab um-tab-active" data-mode="file" onclick="switchUploadMode('file')">📁 上传文件</button>
+      <button class="um-tab" data-mode="text" onclick="switchUploadMode('text')">✏️ 文字录入</button>
+    </div>
     <form id="uploadForm" onsubmit="return handleUpload(event)">
       <div class="mf-group">
         <label>课程</label>
         <input type="text" id="uploadCourse" class="mf-input" readonly placeholder="选择课程后自动填充">
       </div>
-      <div class="mf-group">
-        <label>文件</label>
-        <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg" onchange="autoFillUploadTitle()">
-        <div class="mf-hint">单个文件大小不超过 50MB</div>
+      <!-- 文件上传模式 -->
+      <div id="uploadModeFile" class="upload-mode-pane">
+        <div class="mf-group">
+          <label>文件</label>
+          <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg" onchange="autoFillUploadTitle()">
+          <div class="mf-hint">单个文件大小不超过 50MB</div>
+        </div>
+      </div>
+      <!-- 文字录入模式 -->
+      <div id="uploadModeText" class="upload-mode-pane" style="display:none">
+        <div class="mf-group">
+          <label>内容</label>
+          <textarea id="uploadTextContent" class="mf-input mf-textarea mf-textarea-lg" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等"></textarea>
+          <div class="mf-hint">录入的文字将保存为 .txt 文件，若字数较多建议生成文档后上传</div>
+        </div>
       </div>
       <div class="mf-group">
         <label>资料标题</label>
-        <input type="text" id="uploadTitle" class="mf-input" placeholder="留空则自动使用文件原始名称">
+        <input type="text" id="uploadTitle" class="mf-input" placeholder="文字模式下留空则自动取内容前20字">
       </div>
       <div class="mf-group">
         <label>任课教师</label>
@@ -633,7 +734,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=67"></script>
+<script src="/static/js/app.js?v=68"></script>
 
 </body>
 </html>

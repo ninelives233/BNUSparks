@@ -22,11 +22,11 @@ from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.conf import settings
-from django.db.models import Q, Count, F
+from django.db.models import Q, Count, Sum, F
 from django.utils import timezone
 from datetime import date, timedelta
 
-from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment, DownloadRecord, DeletionRecord, FolderOperation
+from .models import College, Course, CourseType, Material, MaterialType, CourseCategory, UserProfile, Notification, ReviewComment, DownloadRecord, DeletionRecord, FolderOperation, Announcement
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -599,6 +599,13 @@ def api_profile(request):
             except Exception:
                 avatar_url = ""
 
+        # 统计用户贡献数据
+        upload_count = Material.objects.filter(uploader=request.user).count()
+        dl_agg = Material.objects.filter(uploader=request.user).aggregate(
+            total=Sum("download_count")
+        )
+        download_count = dl_agg["total"] or 0
+
         return _ok({
             "id": request.user.id,
             "username": request.user.username,
@@ -613,6 +620,14 @@ def api_profile(request):
             "managed_sections": _get_managed_sections_display(profile),
             "auto_approve": profile.auto_approve,
             "can_auto_approve": profile.can_auto_approve,
+            # 公开资料字段（Iter 7）
+            "contact_email": profile.contact_email or "",
+            "contact_way": profile.contact_way or "",
+            "bio": profile.bio or "",
+            # 用户数据
+            "upload_count": upload_count,
+            "download_count": download_count,
+            "collection_count": 0,  # 功能未设计
         })
 
     elif request.method == "PATCH":
@@ -631,6 +646,24 @@ def api_profile(request):
             Material.objects.filter(uploader=request.user).exclude(
                 uploader_name=nickname
             ).update(uploader_name=nickname)
+
+        # 公开资料字段更新
+        profile = _get_or_create_profile(request.user)
+        updated = False
+        if "contact_email" in body:
+            profile.contact_email = (body["contact_email"] or "").strip()
+            updated = True
+        if "contact_way" in body:
+            profile.contact_way = (body["contact_way"] or "").strip()
+            updated = True
+        if "bio" in body:
+            bio_val = (body["bio"] or "").strip()
+            if len(bio_val) > 200:
+                return _err("个人简介不能超过 200 字")
+            profile.bio = bio_val
+            updated = True
+        if updated:
+            profile.save(update_fields=["contact_email", "contact_way", "bio"])
 
         return _ok({
             "nickname": request.user.first_name or request.user.username,
@@ -822,6 +855,131 @@ def api_my_downloads(request):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 用户排行榜 & 公开页（Iter 7）
+# ═══════════════════════════════════════════════════════════════
+
+def api_user_rankings(request):
+    """GET /api/user/rankings/?type=upload|download&page=1
+
+    返回用户排行榜，每页25条，最多4页（100条）。
+    type=upload: 按上传文件数排序
+    type=download: 按被下载总数（用户上传资料的 download_count 之和）排序
+    """
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+
+    rtype = request.GET.get("type", "upload")
+    page = int(request.GET.get("page", 1))
+    page = max(1, min(page, 4))  # 最多4页
+    per_page = 25
+
+    users = User.objects.filter(is_active=True).select_related("profile")
+
+    if rtype == "download":
+        # 按被下载总数排序
+        users = users.annotate(
+            total_dl=Sum("uploads__download_count")
+        ).order_by("-total_dl", "id")
+    else:
+        # 按上传文件数排序
+        users = users.annotate(
+            total_dl=Count("uploads")
+        ).order_by("-total_dl", "id")
+
+    total = users.count()
+    offset = (page - 1) * per_page
+    items = []
+    for idx, u in enumerate(users[offset:offset + per_page], start=offset + 1):
+        profile = _get_or_create_profile(u)
+        avatar_url = ""
+        if profile.avatar:
+            try:
+                avatar_url = profile.avatar.url
+            except Exception:
+                pass
+        count = getattr(u, "total_dl", 0) or 0
+        items.append({
+            "rank": idx,
+            "user_id": u.id,
+            "nickname": u.first_name or u.username,
+            "avatar_url": avatar_url,
+            "count": count,
+        })
+
+    return _ok({
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": min((total + per_page - 1) // per_page, 4) if total > 0 else 0,
+    })
+
+
+def api_user_public(request, uid):
+    """GET /api/user/public/<id>/?page=1
+
+    返回用户公开信息和上传文件列表（分页，每页20条）。
+    匿名用户也可访问。
+    """
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+
+    try:
+        u = User.objects.get(id=uid, is_active=True)
+    except User.DoesNotExist:
+        return _err("用户不存在", 404)
+
+    profile = _get_or_create_profile(u)
+    avatar_url = ""
+    if profile.avatar:
+        try:
+            avatar_url = profile.avatar.url
+        except Exception:
+            pass
+
+    # 公开信息（空字段隐藏）
+    pub_info = {
+        "user_id": u.id,
+        "nickname": u.first_name or u.username,
+        "avatar_url": avatar_url,
+        "bio": profile.bio or "此人神秘，未留简介",
+        "contact_email": profile.contact_email if profile.contact_email else "",
+        "contact_way": profile.contact_way if profile.contact_way else "",
+    }
+
+    # 上传文件列表（分页，每页20）
+    page = int(request.GET.get("page", 1))
+    page = max(1, page)
+    per_page = 20
+    qs = Material.objects.filter(
+        uploader=u, is_approved=True
+    ).select_related("course", "material_type").order_by("-created_at")
+
+    total = qs.count()
+    offset = (page - 1) * per_page
+    materials = []
+    for m in qs[offset:offset + per_page]:
+        materials.append({
+            "id": m.id,
+            "title": m.title,
+            "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
+            "course_name": m.course.name if m.course else "",
+            "course_code": m.course.code if m.course else "",
+            "download_count": m.download_count,
+            "created_at": m.created_at.strftime("%Y-%m-%d"),
+        })
+
+    return _ok({
+        "user": pub_info,
+        "materials": materials,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": max(1, (total + per_page - 1) // per_page) if total > 0 else 0,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════
 # 课程 API
 # ═══════════════════════════════════════════════════════════════
 
@@ -868,6 +1026,16 @@ def api_course_files(request, course_code):
             return _err("课程代码不明确")
         else:
             return _err("课程不存在", 404)
+    except Course.MultipleObjectsReturned:
+        # 同代码课程（通识+专业各一条），取有已审核资料的
+        courses = Course.objects.filter(code=course_code).order_by("id")
+        with_files = courses.filter(materials__is_approved=True).distinct()
+        if with_files.count() == 1:
+            course = with_files.first()
+        elif with_files.count() > 1:
+            return _err("课程代码不明确")
+        else:
+            course = courses.first()
     user = _get_user(request)
 
     # 普通用户只能看到已通过的资料，上传者可看到自己的待审资料
@@ -1026,6 +1194,15 @@ def api_file_upload(request):
             return _err("课程代码不明确，请联系管理员")
         else:
             return _err("课程不存在")
+    except Course.MultipleObjectsReturned:
+        courses = Course.objects.filter(code=course_code).order_by("id")
+        with_files = courses.filter(materials__is_approved=True).distinct()
+        if with_files.count() == 1:
+            course = with_files.first()
+        elif with_files.count() > 1:
+            return _err("课程代码不明确，请联系管理员")
+        else:
+            course = courses.first()
 
     # 保存文件
     ext = Path(uploaded_file.name).suffix
@@ -1105,6 +1282,124 @@ def api_file_upload(request):
     return _ok({
         "id": material.id, "title": material.title,
         "file_name": uploaded_file.name, "file_size": file_size,
+        "created_at": material.created_at.strftime("%Y-%m-%d"),
+        "review_status": material.review_status,
+        "is_approved": material.is_approved,
+        "assigned_moderator": material.assigned_moderator_id,
+        "assigned_moderator_name": material.assigned_moderator.first_name or material.assigned_moderator.username
+            if material.assigned_moderator else None,
+    })
+
+
+@csrf_exempt
+@require_login
+def api_file_upload_text(request):
+    """POST /api/files/upload-text/ — 文字录入转 TXT"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    course_code = (data.get("course_code") or "").strip()
+    title = (data.get("title") or "").strip()
+    teacher = (data.get("teacher") or "").strip()
+    description = (data.get("description") or "").strip()
+    content = (data.get("content") or "").strip()
+
+    if not course_code or not content:
+        return _err("课程代码和内容不能为空")
+    if not teacher:
+        return _err("请填写任课教师姓名")
+    if not title:
+        # 取内容前 20 个字作为标题
+        title = content[:20].strip().rstrip("，。！？,.!?")
+    if not title:
+        title = "无标题"
+
+    try:
+        course = Course.objects.get(code=course_code)
+    except Course.DoesNotExist:
+        cleaned = course_code.replace("*", "").replace("-", "")
+        matched = Course.objects.filter(code__startswith=cleaned)
+        if matched.count() == 1:
+            course = matched.first()
+        elif matched.count() > 1:
+            return _err("课程代码不明确，请联系管理员")
+        else:
+            return _err("课程不存在")
+    except Course.MultipleObjectsReturned:
+        courses = Course.objects.filter(code=course_code).order_by("id")
+        with_files = courses.filter(materials__is_approved=True).distinct()
+        if with_files.count() == 1:
+            course = with_files.first()
+        elif with_files.count() > 1:
+            return _err("课程代码不明确，请联系管理员")
+        else:
+            course = courses.first()
+
+    # 写入 TXT 文件
+    safe_name = f"text_{uuid.uuid4().hex[:12]}_{title[:40]}.txt"
+    save_dir = Path(settings.MEDIA_ROOT) / course_code
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    (save_dir / safe_name).write_text(content, encoding="utf-8")
+    file_size = (save_dir / safe_name).stat().st_size
+
+    # 审核状态
+    profile = _get_or_create_profile(request.user)
+    is_auto_approved = profile.role in (
+        UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN, UserProfile.Role.SUB_MODERATOR,
+    )
+    auto_approved_by = None
+    if is_auto_approved:
+        auto_approved_by = request.user
+    else:
+        auto_approved_by = _check_auto_approve(course)
+        if auto_approved_by:
+            is_auto_approved = True
+
+    review_status = "approved" if is_auto_approved else "pending"
+
+    material = Material.objects.create(
+        course=course, title=title, description=description,
+        teacher=teacher,
+        file_name=safe_name,
+        file_path=f"{course_code}/{safe_name}",
+        file_size=file_size,
+        uploader=request.user,
+        uploader_name=request.user.first_name or request.user.username,
+        review_status=review_status,
+        is_approved=is_auto_approved,
+        reviewed_by=auto_approved_by,
+        reviewed_at=timezone.now() if auto_approved_by else None,
+    )
+
+    try:
+        from git_storage import commit_file
+        commit_file(f"{course_code}/{safe_name}")
+    except Exception:
+        pass
+
+    if review_status == "pending":
+        assigned = _calculate_review_assignment(material)
+        if assigned:
+            material.assigned_moderator = assigned
+            material.save(update_fields=["assigned_moderator"])
+
+        _create_notification(
+            recipient=request.user,
+            type=Notification.Type.REPORT,
+            title="资料已提交，等待审核",
+            message=f"你的资料「{title}」已提交，审核通过后即可被其他同学下载。",
+            material=material,
+        )
+
+    return _ok({
+        "id": material.id, "title": material.title,
+        "file_name": material.file_name, "file_size": file_size,
         "created_at": material.created_at.strftime("%Y-%m-%d"),
         "review_status": material.review_status,
         "is_approved": material.is_approved,
@@ -1343,9 +1638,10 @@ def _build_tree_node(qs):
         elif cat.course_id:
             # 叶子节点：关联真实课程
             node["courseId"] = cat.course.code
-            node["hasFiles"] = Material.objects.filter(
-                course=cat.course, is_approved=True
-            ).exists()
+            # 按课程代码统计文件数（同名课程共享根目录，两个入口文件数应一致）
+            node["fileCount"] = Material.objects.filter(
+                course__code=cat.course.code, is_approved=True
+            ).count()
         elif cat.course_text:
             # 叶子节点：通配符代码（如 "GEN02***"）或精确课程代码
             code = cat.course_text.replace("*", "").replace("-", "")
@@ -1359,15 +1655,15 @@ def _build_tree_node(qs):
                         node["courseId"] = cat.course_text
                 else:
                     node["courseId"] = cat.course_text
-                node["hasFiles"] = Material.objects.filter(
+                node["fileCount"] = Material.objects.filter(
                     course__code__startswith=code, is_approved=True
-                ).exists()
+                ).count()
 
         result.append(node)
 
     # 纯叶子节点层：有资料的课程浮到顶端
     if result and not any("children" in r for r in result):
-        result.sort(key=lambda r: (0 if r.get("hasFiles") else 1, r.get("name", "")))
+        result.sort(key=lambda r: (0 if r.get("fileCount", 0) else 1, r.get("name", "")))
 
     return result
 
@@ -2701,3 +2997,107 @@ def api_admin_auto_approve_toggle(request, uid):
 
     profile.save(update_fields=["auto_approve", "can_auto_approve"])
     return _ok({"auto_approve": profile.auto_approve, "can_auto_approve": profile.can_auto_approve})
+
+
+# ═══════════════════════════════════════════════════════════════
+# 公告 API（Iter 7）
+# ═══════════════════════════════════════════════════════════════
+
+@csrf_exempt
+def api_announcements(request):
+    """GET /api/announcements/ — 获取公告列表（无需登录）
+       POST /api/announcements/ — 创建公告（仅 super_admin）"""
+    if request.method == "GET":
+        # 获取当前用户（可空，用于 admin 参数判断）
+        user = _get_user(request)
+        is_admin = request.GET.get("admin") == "1" and user is not None and user.profile.role == UserProfile.Role.SUPER_ADMIN
+        qs = Announcement.objects.select_related("publisher__profile")
+        if not is_admin:
+            qs = qs.filter(is_published=True)
+        qs = qs.order_by("-created_at")[:50]
+
+        def _serialize(a):
+            avatar_url = ""
+            try:
+                if a.publisher.profile.avatar:
+                    avatar_url = a.publisher.profile.avatar.url
+            except Exception:
+                pass
+            return {
+                "id": a.id,
+                "title": a.title,
+                "content": a.content,
+                "publisher_id": a.publisher_id,
+                "publisher_name": a.publisher.first_name or a.publisher.username,
+                "publisher_avatar": avatar_url,
+                "created_at": a.created_at.strftime("%Y-%m-%d %H:%M"),
+                "is_published": a.is_published,
+            }
+
+        return _ok([_serialize(a) for a in qs])
+
+    elif request.method == "POST":
+        # POST 需要登录 + super_admin
+        user = _get_user(request)
+        if user is None:
+            return _err("请先登录", 401)
+        profile = _get_or_create_profile(user)
+        if profile.role != UserProfile.Role.SUPER_ADMIN:
+            return _err("仅总管理员可发布公告", 403)
+
+        try:
+            body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return _err("请求格式错误")
+
+        title = (body.get("title") or "").strip()
+        content = (body.get("content") or "").strip()
+        if not title:
+            return _err("公告标题不能为空")
+        if not content:
+            return _err("公告内容不能为空")
+
+        announcement = Announcement.objects.create(
+            title=title,
+            content=content,
+            publisher=user,
+        )
+
+        # 发送通知给所有用户
+        all_users = User.objects.filter(is_active=True)
+        for u in all_users:
+            _create_notification(
+                recipient=u,
+                type=Notification.Type.ANNOUNCEMENT,
+                title=announcement.title,
+                message=announcement.content[:200],
+                triggered_by=user,
+            )
+
+        return _ok({
+            "id": announcement.id,
+            "title": announcement.title,
+            "content": announcement.content,
+            "created_at": announcement.created_at.strftime("%Y-%m-%d %H:%M"),
+            "message": "公告已发布",
+        })
+
+    return _err("仅支持 GET/POST", 405)
+
+
+@csrf_exempt
+@require_login
+def api_announcement_delete(request, aid):
+    """DELETE /api/announcements/<id>/ — 删除公告（发布者或 super_admin）"""
+    if request.method != "DELETE":
+        return _err("仅支持 DELETE", 405)
+
+    announcement = get_object_or_404(Announcement, id=aid)
+    is_publisher = announcement.publisher_id == request.user.id
+    is_super = request.user.profile.role == UserProfile.Role.SUPER_ADMIN
+
+    if not is_publisher and not is_super:
+        return _err("无权删除此公告", 403)
+
+    announcement.delete()
+    return _ok({"message": "公告已删除"})

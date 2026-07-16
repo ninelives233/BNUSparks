@@ -22,6 +22,7 @@ urlpatterns = [
 
     # 文件
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
+    path("files/upload-text/", views.api_file_upload_text, name="api_file_upload_text"),
     path("files/<int:file_id>/download/", views.api_file_download, name="api_file_download"),
     path("files/<int:file_id>/delete/", views.api_file_delete, name="api_file_delete"),
     path("files/<int:file_id>/update/", views.api_file_update, name="api_file_update"),
@@ -43,6 +44,12 @@ urlpatterns = [
     path("auth/avatar/", views.api_avatar_upload, name="api_avatar_upload"),
     path("user/uploads/", views.api_my_uploads, name="api_my_uploads"),
     path("user/downloads/", views.api_my_downloads, name="api_my_downloads"),
+    path("user/rankings/", views.api_user_rankings, name="api_user_rankings"),
+    path("user/public/<int:uid>/", views.api_user_public, name="api_user_public"),
+
+    # 公告（Iter 7）
+    path("announcements/", views.api_announcements, name="api_announcements"),
+    path("announcements/<int:aid>/", views.api_announcement_delete, name="api_announcement_delete"),
 
     # 搜索 & 统计
     path("search/", views.api_search, name="api_search"),

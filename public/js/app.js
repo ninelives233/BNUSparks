@@ -619,6 +619,7 @@
     pushViewState('profile', {});
     // 加载数据
     loadProfile();
+    _updateFooterVisibility('profile');
   }
 
   async function loadProfile() {
@@ -653,6 +654,25 @@
         } else {
           sectionsRow.style.display = 'none';
         }
+      }
+      // ── Iter 7: 用户数据 ──
+      var statUploads = document.getElementById('statUploads');
+      var statDownloads = document.getElementById('statDownloads');
+      var statCollections = document.getElementById('statCollections');
+      if (statUploads) statUploads.textContent = data.upload_count || 0;
+      if (statDownloads) statDownloads.textContent = data.download_count || 0;
+      if (statCollections) statCollections.textContent = data.collection_count != null ? data.collection_count : '-';
+
+      // ── Iter 7: 公开资料 ──
+      var contactEmailEl = document.getElementById('pubContactEmail');
+      var contactWayEl = document.getElementById('pubContactWay');
+      var bioEl = document.getElementById('pubBio');
+      if (contactEmailEl) contactEmailEl.value = data.contact_email || '';
+      if (contactWayEl) contactWayEl.value = data.contact_way || '';
+      if (bioEl) {
+        bioEl.value = data.bio || '';
+        var countEl = document.getElementById('pubBioCount');
+        if (countEl) countEl.textContent = (data.bio || '').length;
       }
     } catch (err) {
       emailEl.textContent = '加载失败';
@@ -708,6 +728,7 @@
     window.scrollTo({ top: 0 });
     pushViewState('myuploads', {});
     renderMyUploadsPage();
+    _updateFooterVisibility('myuploads');
   }
 
   var _myUploadTab = 'approved';
@@ -785,6 +806,7 @@
     window.scrollTo({ top: 0 });
     pushViewState('mydownloads', {});
     renderMyDownloadsPage();
+    _updateFooterVisibility('mydownloads');
   }
 
   function renderMyDownloadsPage() {
@@ -962,6 +984,31 @@
   }
 
   // ── 通知已读状态 localStorage 缓存 ──
+  // ── Iter 7: 保存公开资料 ──
+  async function savePublicProfile() {
+    var contactEmail = document.getElementById('pubContactEmail').value.trim();
+    var contactWay = document.getElementById('pubContactWay').value.trim();
+    var bio = document.getElementById('pubBio').value.trim();
+    var msgEl = document.getElementById('pubProfileMsg');
+    if (bio.length > 200) { alert('个人简介不能超过 200 字'); return; }
+    try {
+      await api('/api/auth/profile/', { method: 'PATCH', body: {
+        contact_email: contactEmail,
+        contact_way: contactWay,
+        bio: bio,
+      }});
+      if (msgEl) { msgEl.style.display = 'block'; setTimeout(function(){ msgEl.style.display = 'none'; }, 2000); }
+    } catch (err) { alert('保存失败：' + err.message); }
+  }
+
+  // ── 公开资料实时字数统计 ──
+  document.addEventListener('input', function(e) {
+    if (e.target && e.target.id === 'pubBio') {
+      var countEl = document.getElementById('pubBioCount');
+      if (countEl) countEl.textContent = e.target.value.length;
+    }
+  });
+
   function _getReadNotifSet() {
     try { return new Set(JSON.parse(localStorage.getItem('readNotifs') || '[]')); } catch(e) { return new Set(); }
   }
@@ -1463,6 +1510,7 @@
     window.scrollTo({ top: 0 });
     pushViewState('admin', {});
     loadAdminPanel();
+    _updateFooterVisibility('admin');
   }
 
   function loadAdminPanel() {
@@ -2839,6 +2887,9 @@
       } else {
         recentEl.innerHTML = '<div class="hc-empty">暂无上传记录，快来上传第一份资料！</div>';
       }
+    // Iter 7: 首页文件总数
+      var totalCountEl = document.getElementById('totalMaterialCount');
+      if (totalCountEl) totalCountEl.textContent = s.material_count || 0;
     } catch(e) {}
   }
 
@@ -2922,7 +2973,7 @@
       })();
     } catch(e) {}
 
-    setupSearch(); loadStats(); loadCourseFileCounts();
+    setupSearch(); loadStats();
     // 尝试从 sessionStorage 恢复刷新前的视图
     try {
       var saved = JSON.parse(sessionStorage.getItem('bnusparks_view'));
@@ -2964,25 +3015,39 @@
      ═══════════════════════════════════════════════════════════ */
 
   let uploadCourseCode = '';
+  let _uploadMode = 'file'; // 'file' | 'text'
 
   function autoFillUploadTitle() {
     var fileInput = document.getElementById('uploadFile');
     var titleInput = document.getElementById('uploadTitle');
     if (!fileInput || !titleInput) return;
-    if (titleInput.value.trim()) return; // 已填写标题不覆盖
+    if (titleInput.value.trim()) return;
     if (fileInput.files.length === 1) {
       titleInput.value = fileInput.files[0].name.replace(/\.[^.]+$/, '');
     }
   }
 
+  function switchUploadMode(mode) {
+    _uploadMode = mode;
+    document.getElementById('uploadModeFile').style.display = mode === 'file' ? '' : 'none';
+    document.getElementById('uploadModeText').style.display = mode === 'text' ? '' : 'none';
+    document.querySelectorAll('.um-tab').forEach(function(t) {
+      t.classList.toggle('um-tab-active', t.dataset.mode === mode);
+    });
+    // 切换模式自动清空错误
+    document.getElementById('uploadError').style.display = 'none';
+  }
+
   function showUploadModal(code, name) {
     if (!currentUser) { showLoginModal(); return; }
     uploadCourseCode = code;
+    _uploadMode = 'file';
     document.getElementById('uploadCourse').value = name + ' (' + code + ')';
-    // 普通上传时隐藏重传驳回提示（避免残留）
     var ri = document.getElementById('reuploadInfo');
     if (ri) ri.style.display = 'none';
     _reuploadOldId = null;
+    // 重置到文件模式
+    switchUploadMode('file');
     document.getElementById('uploadModal').style.display = 'flex';
     lockScroll();
     _pushModalHistory();
@@ -2993,7 +3058,6 @@
     document.getElementById('uploadForm').reset();
     document.getElementById('uploadError').style.display = 'none';
     document.getElementById('uploadProgress').style.display = 'none';
-    // 清除重传相关的状态，防止残留到下一次打开弹窗
     var ri = document.getElementById('reuploadInfo');
     if (ri) ri.style.display = 'none';
     _reuploadOldId = null;
@@ -3008,9 +3072,6 @@
     const fill = document.getElementById('uploadProgressFill');
     const text = document.getElementById('uploadProgressText');
 
-    const files = document.getElementById('uploadFile').files;
-    if (!files || !files.length) { el.textContent = '请选择文件'; el.style.display = 'block'; return false; }
-
     el.style.display = 'none';
 
     var title = document.getElementById('uploadTitle').value;
@@ -3023,15 +3084,54 @@
       return false;
     }
 
-    progress.style.display = 'flex';
+    // ── 文字录入模式 ──
+    if (_uploadMode === 'text') {
+      var content = document.getElementById('uploadTextContent').value;
+      if (!content.trim()) {
+        el.textContent = '请输入文字内容';
+        el.style.display = 'block';
+        return false;
+      }
+      progress.style.display = 'flex';
+      fill.style.width = '30%';
+      text.textContent = '正在提交文字内容…';
 
+      try {
+        var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const resp = await fetch('/api/files/upload-text/', {
+          method: 'POST',
+          headers: token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            course_code: uploadCourseCode,
+            title: title,
+            content: content,
+            description: description,
+            teacher: teacher,
+          }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || '上传失败');
+
+        fill.style.width = '100%';
+        text.textContent = '✅ 文字录入成功！';
+        setTimeout(function() { closeUploadModal(); renderExplorer(); }, 1500);
+      } catch (err) {
+        fill.style.width = '100%';
+        text.textContent = '❌ 失败: ' + err.message;
+      }
+      return false;
+    }
+
+    // ── 文件上传模式 ──
+    const files = document.getElementById('uploadFile').files;
+    if (!files || !files.length) { el.textContent = '请选择文件'; el.style.display = 'block'; return false; }
+
+    progress.style.display = 'flex';
     var successCount = 0, failCount = 0;
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
 
-    // 单标题模式：用相同标题上传多个文件（会在文件名后追加序号）
     for (var i = 0; i < files.length; i++) {
       var file = files[i];
-      // 检查大小
       if (file.size > 50 * 1024 * 1024) {
         failCount++;
         text.textContent = (i + 1) + '/' + files.length + ' ' + file.name + ' 超过 50MB，跳过';
@@ -3063,11 +3163,10 @@
       } catch (err) {
         failCount++;
         text.textContent = (i + 1) + '/' + files.length + ' ' + file.name + ' 失败: ' + err.message;
-        await new Promise(r => setTimeout(r, 500)); // 短暂停顿，让用户看到错误
+        await new Promise(r => setTimeout(r, 500));
       }
     }
 
-    // 如果是重传，自动删除旧驳回记录
     if (successCount > 0 && _reuploadOldId) {
       try {
         await api('/api/files/' + _reuploadOldId + '/delete/', { method: 'DELETE' });
@@ -3111,7 +3210,7 @@
 
   // ── State ──
   let expPath = [];
-  let courseFileCounts = {};
+  // 文件计数已嵌入课程树响应（fileCount），无需单独请求
   let courseTree = null;  // 从 API 动态加载
   let highlightFileId = null;  // 从排行榜/最近上传跳转时高亮目标文件
   var returnState = null;      // { view:'home'|'rankings'|'recentAll', scrollY } 供"返回"按钮使用
@@ -3140,18 +3239,6 @@
       console.warn('课程树加载失败，使用备用空树', e);
       courseTree = {};
     }
-  }
-
-  async function loadCourseFileCounts() {
-    try {
-      const courses = await api('/api/courses/');
-      courses.forEach(c => { courseFileCounts[c.code] = c.material_count; });
-      // 文件计数加载后重绘课程列表，避免 fallback 到"有文件"
-      const ev = document.getElementById('explorerView');
-      if (ev && ev.style.display !== 'none' && expPath.length >= 2) {
-        renderExplorer();
-      }
-    } catch(e) { /* ignore */ }
   }
 
   // ── 同名课程映射 ──
@@ -3445,19 +3532,12 @@
   function listHtml(item) {
     const hasSub = !!(item.children && item.children.length);
     const cId = item.courseId;
-    const fCount = cId && courseFileCounts[cId] !== undefined ? courseFileCounts[cId] : null;
     let badge = '';
     if (cId) {
-      if (fCount !== null) {
-        badge = fCount > 0
-          ? '<span class="fli-badge has-data">' + fCount + ' 个文件</span>'
-          : '<span class="fli-badge no-data">暂无资料</span>';
-      } else {
-        // courseFileCounts 尚未加载完毕，使用 tree 中的 hasFiles 布尔值
-        badge = item.hasFiles
-          ? '<span class="fli-badge has-data">有文件</span>'
-          : '<span class="fli-badge no-data">暂无资料</span>';
-      }
+      const fCount = item.fileCount !== undefined ? item.fileCount : null;
+      badge = fCount !== null && fCount > 0
+        ? '<span class="fli-badge has-data">' + fCount + ' 个文件</span>'
+        : '<span class="fli-badge no-data">暂无资料</span>';
     } else if (hasSub) {
       badge = '<span class="fli-badge has-data">' + item.children.length + ' 项</span>';
     }
@@ -4142,7 +4222,8 @@
     const views = [
       'homeView', 'explorerView', 'aboutView',
       'tutorialView', 'announcementsView', 'broadView',
-      'rankingsView', 'recentAllView', 'profileView', 'notifView', 'adminView'
+      'rankingsView', 'recentAllView', 'profileView', 'notifView', 'adminView',
+      'leaderboardView', 'userPublicView',
     ];
     views.forEach(id => {
       const el = document.getElementById(id);
@@ -4153,6 +4234,8 @@
     if (!skipScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    // Iter 7: Footer 仅在首页显示
+    _updateFooterVisibility(name);
   }
 
   function updateSidebar(viewName) {
@@ -4414,6 +4497,330 @@
     renderRecentAll(restoreScrollY);
   }
 
+  /* ═══════════════════════════════════════════════════════════
+     Iter 7: 用户排行榜
+     ═══════════════════════════════════════════════════════════ */
+
+  var _lbType = 'upload';
+  var _lbPage = 1;
+
+  function showLeaderboard() {
+    pushViewState('leaderboard', {});
+    switchView('leaderboard');
+    updateSidebar('leaderboard');
+    _lbType = 'upload';
+    _lbPage = 1;
+    renderLeaderboard('upload', 1);
+  }
+
+  function switchLeaderboardTab(type) {
+    if (type === 'collection') {
+      alert('该功能开发中');
+      return;
+    }
+    _lbType = type;
+    _lbPage = 1;
+    document.querySelectorAll('.lb-tab').forEach(function(t) { t.classList.remove('active'); });
+    var tab = document.querySelector('.lb-tab[data-type="' + type + '"]');
+    if (tab) tab.classList.add('active');
+    renderLeaderboard(type, 1);
+  }
+
+  async function renderLeaderboard(type, page) {
+    var container = document.getElementById('leaderboardContent');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    try {
+      var data = await api('/api/user/rankings/?type=' + encodeURIComponent(type) + '&page=' + page);
+      var items = data.items || [];
+      if (!items.length) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">暂无数据</div>';
+        return;
+      }
+      var html = '<div class="leaderboard-table-wrap"><table class="leaderboard-table"><thead><tr><th>排名</th><th>用户</th><th>' + (type === 'download' ? '被下载次数' : '上传文件数') + '</th></tr></thead><tbody>';
+      items.forEach(function(u) {
+        var rankClass = 'lb-rank';
+        if (u.rank === 1) rankClass += ' top-1';
+        else if (u.rank === 2) rankClass += ' top-2';
+        else if (u.rank === 3) rankClass += ' top-3';
+        var avatarHtml = u.avatar_url
+          ? '<img src="' + esc(u.avatar_url) + '" class="lb-avatar" onclick="showUserPublic(' + u.user_id + ')">'
+          : '<span class="lb-avatar-placeholder" onclick="showUserPublic(' + u.user_id + ')">' + esc((u.nickname || '?').charAt(0).toUpperCase()) + '</span>';
+        html += '<tr><td><span class="' + rankClass + '">#' + u.rank + '</span></td>' +
+          '<td><div class="lb-user-cell">' + avatarHtml + '<span class="lb-user-name" onclick="showUserPublic(' + u.user_id + ')">' + esc(u.nickname) + '</span></div></td>' +
+          '<td><span class="lb-count">' + u.count + '</span></td></tr>';
+      });
+      html += '</tbody></table></div>';
+
+      // 翻页
+      var totalPages = data.total_pages || 1;
+      html += '<div class="leaderboard-pagination">';
+      html += '<button onclick="renderLeaderboard(\'' + type + '\',' + Math.max(1, page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') + '>‹</button>';
+      for (var p = 1; p <= totalPages; p++) {
+        html += '<button class="' + (p === page ? 'active' : '') + '" onclick="renderLeaderboard(\'' + type + '\',' + p + ')">' + p + '</button>';
+      }
+      html += '<button onclick="renderLeaderboard(\'' + type + '\',' + Math.min(totalPages, page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') + '>›</button>';
+      html += '</div>';
+
+      container.innerHTML = html;
+    } catch(e) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     Iter 7: 用户公开页
+     ═══════════════════════════════════════════════════════════ */
+
+  var _userPublicId = null;
+  var _userPublicPage = 1;
+
+  function showUserPublic(userId) {
+    _userPublicId = userId;
+    _userPublicPage = 1;
+    pushViewState('userPublic', { userId: userId });
+    switchView('userPublic');
+    updateSidebar(null);
+    renderUserPublic(userId, 1);
+  }
+
+  async function renderUserPublic(userId, page) {
+    var container = document.getElementById('userPublicContent');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    try {
+      var data = await api('/api/user/public/' + userId + '/?page=' + page);
+      var u = data.user;
+      if (!u) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">用户不存在</div>'; return; }
+
+      // 用户名片
+      var initial = (u.nickname || '?').charAt(0).toUpperCase();
+      var avatarHtml = u.avatar_url
+        ? '<img src="' + esc(u.avatar_url) + '" class="user-public-avatar">'
+        : '<div class="user-public-avatar-placeholder">' + esc(initial) + '</div>';
+      var contactHtml = '';
+      if (u.contact_email || u.contact_way) {
+        contactHtml = '<div class="upi-contact">';
+        if (u.contact_email) contactHtml += '📧 ' + esc(u.contact_email) + ' ';
+        if (u.contact_way) contactHtml += '💬 ' + esc(u.contact_way);
+        contactHtml += '</div>';
+      }
+      var html = '<div class="user-public-card">' + avatarHtml +
+        '<div class="user-public-info">' +
+          '<div class="upi-name">' + esc(u.nickname) + '</div>' +
+          '<div class="upi-bio">' + esc(u.bio || '此人神秘，未留简介') + '</div>' +
+          contactHtml +
+        '</div></div>';
+
+      // 文件列表
+      if (data.materials && data.materials.length) {
+        html += '<h3 style="font-size:0.95rem;font-weight:600;margin-bottom:var(--space-sm);color:var(--ink)">上传的文件</h3>';
+        html += '<div class="user-public-materials">';
+        data.materials.forEach(function(m) {
+          html += '<div class="hc-item" style="cursor:pointer" onclick="showHome();navToLast(\'' + esc(m.course_code) + '\')">' +
+            '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div>' +
+            '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + m.created_at + ' · ' + m.download_count + ' 次下载</div></div>' +
+            '<span class="hc-item-count">📄</span></div>';
+        });
+        html += '</div>';
+
+        // 翻页
+        var totalPages = data.total_pages || 1;
+        if (totalPages > 1) {
+          html += '<div class="leaderboard-pagination" style="margin-top:var(--space-md)">';
+          html += '<button onclick="renderUserPublic(' + userId + ',' + Math.max(1, page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') + '>‹</button>';
+          for (var p = 1; p <= totalPages; p++) {
+            html += '<button class="' + (p === page ? 'active' : '') + '" onclick="renderUserPublic(' + userId + ',' + p + ')">' + p + '</button>';
+          }
+          html += '<button onclick="renderUserPublic(' + userId + ',' + Math.min(totalPages, page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') + '>›</button>';
+          html += '</div>';
+        }
+      } else {
+        html += '<div style="text-align:center;padding:24px;color:var(--ink-faint);font-size:0.85rem">该用户尚未上传资料</div>';
+      }
+
+      container.innerHTML = html;
+    } catch(e) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     Iter 7: 公告系统
+     ═══════════════════════════════════════════════════════════ */
+
+  function showAnnouncements() {
+    pushViewState('announcements', {});
+    switchView('announcements');
+    updateSidebar('home');
+    loadAnnouncements();
+  }
+
+  async function loadAnnouncements() {
+    var list = document.getElementById('announcementsList');
+    if (!list) return;
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+
+    // 发布公告按钮权限
+    var createBtn = document.getElementById('createAnnouncementBtn');
+    if (createBtn && currentUser && currentUser.role === 'super_admin') {
+      createBtn.style.display = '';
+    } else if (createBtn) {
+      createBtn.style.display = 'none';
+    }
+
+    try {
+      var data = await api('/api/announcements/');
+      if (!data || !data.length) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">暂无公告</div>';
+        return;
+      }
+      var html = '';
+      data.forEach(function(a) {
+        var avatarHtml = a.publisher_avatar
+          ? '<img src="' + esc(a.publisher_avatar) + '" class="ai-avatar" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">'
+          : '<span class="ai-avatar-placeholder" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">' + esc((a.publisher_name || '?').charAt(0).toUpperCase()) + '</span>';
+        var canDelete = currentUser && (currentUser.id === a.publisher_id || currentUser.role === 'super_admin');
+        var deleteBtn = canDelete ? '<button class="ai-delete" onclick="deleteAnnouncement(' + a.id + ')" title="删除公告">🗑</button>' : '';
+        html += '<div class="announcement-item">' +
+          '<div class="ai-header">' +
+            avatarHtml +
+            '<span class="ai-title">' + esc(a.title) + '</span>' +
+            deleteBtn +
+          '</div>' +
+          '<div class="ai-content">' + esc(a.content) + '</div>' +
+          '<div class="ai-time">' + a.created_at + '</div>' +
+        '</div>';
+      });
+      list.innerHTML = html;
+    } catch(e) {
+      list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
+    }
+  }
+
+  function showAnnouncementEditor() {
+    var overlay = document.createElement('div');
+    overlay.className = 'announcement-editor-overlay';
+    overlay.innerHTML =
+      '<div class="announcement-editor-dialog">' +
+        '<h3>发布公告</h3>' +
+        '<div class="ae-error" id="aeError" style="display:none"></div>' +
+        '<input type="text" id="aeTitle" placeholder="公告标题" maxlength="200">' +
+        '<textarea id="aeContent" placeholder="公告内容..."></textarea>' +
+        '<div class="ae-actions">' +
+          '<button class="ae-publish" onclick="submitAnnouncement(this)">📢 发布</button>' +
+          '<button class="ae-cancel" onclick="_removeOverlay(this.closest(\'.announcement-editor-overlay\'))">取消</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    lockScroll();
+  }
+
+  async function submitAnnouncement(btn) {
+    var title = document.getElementById('aeTitle').value.trim();
+    var content = document.getElementById('aeContent').value.trim();
+    var errEl = document.getElementById('aeError');
+    if (!title) { errEl.textContent = '请输入公告标题'; errEl.style.display = 'block'; return; }
+    if (!content) { errEl.textContent = '请输入公告内容'; errEl.style.display = 'block'; return; }
+    if (btn) btn.disabled = true;
+    try {
+      await api('/api/announcements/', { method: 'POST', body: { title: title, content: content } });
+      _removeOverlay(btn.closest('.announcement-editor-overlay'));
+      loadAnnouncements();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function deleteAnnouncement(aid) {
+    if (!confirm('确定删除此公告？')) return;
+    try {
+      await api('/api/announcements/' + aid + '/', { method: 'DELETE' });
+      loadAnnouncements();
+    } catch (err) {
+      alert('删除失败：' + err.message);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     Iter 7: 首页上传按钮 + 物质支持
+     ═══════════════════════════════════════════════════════════ */
+
+  function openCourseSearchUpload() {
+    if (!currentUser) { showLoginModal(); return; }
+    // 弹出课程搜索覆盖层
+    var overlay = document.createElement('div');
+    overlay.className = 'search-overlay';
+    overlay.innerHTML =
+      '<div class="search-overlay-inner" onclick="event.stopPropagation()">' +
+        '<button class="search-overlay-close" onclick="_removeOverlay(this.closest(\'.search-overlay\'))">✕</button>' +
+        '<div class="search-overlay-header">选择要上传资料的课程</div>' +
+        '<div class="search-overlay-input-wrap">' +
+          '<input type="text" id="courseSearchInput" placeholder="请输入您要上传资料的课程" autofocus>' +
+        '</div>' +
+        '<div class="search-overlay-results" id="courseSearchResults">' +
+          '<p style="text-align:center;color:var(--ink-faint);padding:16px;font-size:0.85rem">输入课程名称或代码搜索</p>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    lockScroll();
+    document.getElementById('courseSearchInput').focus();
+
+    // 键盘搜索
+    var timer;
+    document.getElementById('courseSearchInput').addEventListener('input', function() {
+      clearTimeout(timer);
+      var q = this.value.trim();
+      if (q.length < 1) {
+        document.getElementById('courseSearchResults').innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:16px;font-size:0.85rem">输入课程名称或代码搜索</p>';
+        return;
+      }
+      timer = setTimeout(function() {
+        searchCourses(q);
+      }, 300);
+    });
+    overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
+  }
+
+  async function searchCourses(q) {
+    var resultsEl = document.getElementById('courseSearchResults');
+    if (!resultsEl) return;
+    try {
+      var data = await api('/api/search/?q=' + encodeURIComponent(q));
+      var courses = data.courses || [];
+      if (!courses.length) {
+        resultsEl.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:16px;font-size:0.85rem">未找到相关课程</p>';
+        return;
+      }
+      var html = '<div class="search-results-list">';
+      courses.forEach(function(c) {
+        var typeLabel = c.course_type === 'general' ? '通识课' : '专业课';
+        html += '<a href="#" class="search-item" onclick="event.preventDefault();_removeOverlay(this.closest(\'.search-overlay\'));showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + esc(c.code) + '\')">' +
+          '<span class="si-name">' + esc(c.name) + '</span> <span class="si-code">' + esc(c.code) + ' · ' + typeLabel + '</span></a>';
+      });
+      html += '</div>';
+      resultsEl.innerHTML = html;
+    } catch(e) {
+      resultsEl.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:16px">搜索失败</p>';
+    }
+  }
+
+  function showSupportMessage() {
+    alert('当前还没有准备收款码，您对网站的合理使用就是对我们最大的支持！');
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     Iter 7: Footer 显示控制
+     ═══════════════════════════════════════════════════════════ */
+
+  function _updateFooterVisibility(viewName) {
+    var footer = document.getElementById('siteFooter');
+    if (!footer) return;
+    footer.style.display = viewName === 'home' ? '' : 'none';
+  }
+
   function returnToPreviousView() {
     if (!returnState) return;
     const sv = returnState.scrollY;
@@ -4456,6 +4863,7 @@
       else if (view === 'major') showExplorer('专业课');
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
+      else if (view === 'leaderboard') showLeaderboard();
     });
   });
 
@@ -4470,6 +4878,7 @@
       else if (view === 'major') showExplorer('专业课');
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
+      else if (view === 'leaderboard') showLeaderboard();
       drawer.classList.remove('open');
     });
   });
@@ -4561,6 +4970,13 @@
         break;
       case 'mydownloads':
         showMyDownloadsPage();
+        break;
+      case 'leaderboard':
+        showLeaderboard();
+        break;
+      case 'userPublic':
+        if (s.userId) showUserPublic(s.userId);
+        else showHome();
         break;
     }
     _suppressingPushState = false;
