@@ -2888,8 +2888,8 @@
         recentEl.innerHTML = '<div class="hc-empty">暂无上传记录，快来上传第一份资料！</div>';
       }
     // Iter 7: 首页文件总数
-      var totalCountEl = document.getElementById('totalMaterialCount');
-      if (totalCountEl) totalCountEl.textContent = s.material_count || 0;
+      var totalCountEls = document.querySelectorAll('.total-material-count');
+      totalCountEls.forEach(function(el){ el.textContent = s.material_count || 0; });
     } catch(e) {}
   }
 
@@ -4219,17 +4219,9 @@
 
   // ── View Switching ──
   function switchView(name, skipScroll) {
-    const views = [
-      'homeView', 'explorerView', 'aboutView',
-      'tutorialView', 'announcementsView', 'broadView',
-      'rankingsView', 'recentAllView', 'profileView', 'notifView', 'adminView',
-      'leaderboardView', 'userPublicView',
-    ];
-    views.forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
+    document.querySelectorAll('.view-section').forEach(el => {
       el.style.display = '';
-      el.classList.toggle('active', id.replace('View','') === name);
+      el.classList.toggle('active', el.id === name + 'View');
     });
     if (!skipScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4611,6 +4603,13 @@
           '<div class="upi-bio">' + esc(u.bio || '此人神秘，未留简介') + '</div>' +
           contactHtml +
         '</div></div>';
+
+      // 统计数据
+      html += '<div class="user-stats-row">' +
+        '<div class="user-stat-card"><div class="usc-value">' + (u.upload_count || 0) + '</div><div class="usc-label">上传文件</div></div>' +
+        '<div class="user-stat-card"><div class="usc-value">' + (u.download_count || 0) + '</div><div class="usc-label">被下载次数</div></div>' +
+        '<div class="user-stat-card"><div class="usc-value">' + (u.collection_count || 0) + '</div><div class="usc-label">被收藏次数</div></div>' +
+      '</div>';
 
       // 文件列表
       if (data.materials && data.materials.length) {

@@ -344,7 +344,7 @@
     font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em;
     color: var(--ink-faint); margin-bottom: var(--space-xs);
   }
-  .hero .stats-row { display: flex; justify-content: center; gap: var(--space-sm); flex-wrap: wrap; margin-bottom: var(--space-lg); }
+  .hero .stats-row { display: flex; justify-content: center; gap: var(--space-sm); flex-wrap: wrap; margin-bottom: var(--space-md); }
   .hero .stat-pill {
     display: inline-flex; align-items: center; gap: var(--space-xs);
     background: var(--raised); border: 1px solid var(--border-light);
@@ -1895,6 +1895,7 @@
   border-radius: var(--radius-lg);
   padding: var(--space-xl);
   margin-top: var(--space-lg);
+  margin-bottom: var(--space-xl);
   display: flex;
   gap: var(--space-xl);
   align-items: flex-start;
@@ -3228,7 +3229,7 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-xl);
 }
 
 .profile-public-card .ppc-title {
@@ -3574,8 +3575,9 @@
 
 .home-upload-section {
   text-align: center;
-  padding: var(--space-lg) 0;
+  padding: 0 0 var(--space-md);
 }
+.home-upload-section--navcards { display: none; } /* 默认隐藏宽屏版 */
 
 .home-upload-btn {
   display: inline-flex;
@@ -3617,6 +3619,15 @@
 .home-materials-count strong {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* 宽屏（≥ 641px，与 nav-card 三列并排的断点对齐）：按钮移到三个卡片下方 */
+@media (min-width: 641px) {
+  .home-upload-section--hero { display: none; }
+  .home-upload-section--navcards {
+    display: block;
+    padding: var(--space-lg) 0;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
