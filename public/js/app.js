@@ -119,18 +119,28 @@
     }, 3000);
   }
 
-  // ── 直接下载（浏览器原生下载对话框，无内存缓冲问题） ──
-  function doDirectDownload(fileId, fileName) {
+  // ── 直接下载（短时令牌替代 JWT 放入 URL，避免 JWT 泄露到日志） ──
+  async function doDirectDownload(fileId, fileName) {
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
     if (!token) { alert('请先登录'); return; }
-    var url = '/api/files/' + fileId + '/download/?token=' + encodeURIComponent(token);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = fileName || '';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      var resp = await fetch('/api/files/' + fileId + '/download-token/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      var data = await resp.json();
+      if (!data.ok) throw new Error(data.error || '获取下载令牌失败');
+      var dtoken = data.data.token;
+      var url = '/api/files/' + fileId + '/download/?dtoken=' + encodeURIComponent(dtoken);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || '';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      alert('下载失败：' + err.message);
+    }
   }
 
   // ── 批量下载辅助 ──
@@ -969,7 +979,7 @@
     const confirmPwd = document.getElementById('cpConfirmPwd').value;
 
     if (!oldPwd) { errEl.textContent = '请输入当前密码'; errEl.style.display = 'block'; return; }
-    if (newPwd.length < 6) { errEl.textContent = '新密码长度至少 6 位'; errEl.style.display = 'block'; return; }
+    if (newPwd.length < 8) { errEl.textContent = '新密码长度至少 8 位'; errEl.style.display = 'block'; return; }
     if (newPwd !== confirmPwd) { errEl.textContent = '两次输入的新密码不一致'; errEl.style.display = 'block'; return; }
 
     try {
@@ -1575,7 +1585,7 @@
         });
       });
     }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
     });
   }
 
@@ -1678,7 +1688,7 @@
       }
       content.innerHTML = html;
     }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
     });
   }
 
@@ -1803,7 +1813,7 @@
       html += '</div>';
       content.innerHTML = html;
     }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
     });
   }
 
@@ -2061,7 +2071,7 @@
         }
       }
     }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
     });
   }
 
@@ -2119,7 +2129,7 @@
       }
       content.innerHTML = html;
     } catch (err) {
-      content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:40px">加载失败：' + (err.message || '未知错误') + '</p>';
+      content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:40px">加载失败：' + esc(err.message || '未知错误') + '</p>';
     }
   }
 
@@ -2235,7 +2245,7 @@
       }
       content.innerHTML = html;
     } catch (err) {
-      content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:40px">加载失败：' + (err.message || '未知错误') + '</p>';
+      content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:40px">加载失败：' + esc(err.message || '未知错误') + '</p>';
     }
   }
 
@@ -2330,7 +2340,7 @@
       html += '</tbody></table></div>';
       content.innerHTML = html;
     }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">加载失败：' + err.message + '</div>';
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
     });
   }
 
@@ -4077,8 +4087,22 @@
   var _previewModal = null;
 
   function _previewUrl(fileId) {
+    // 使用短时下载令牌（异步获取后生成 URL）
+    return _getDownloadToken(fileId).then(function(dtoken) {
+      return '/api/files/' + fileId + '/download/?dtoken=' + encodeURIComponent(dtoken) + '&preview=1';
+    });
+  }
+
+  // 获取短时下载令牌（供 _previewUrl 和 doDirectDownload 使用）
+  async function _getDownloadToken(fileId) {
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    return '/api/files/' + fileId + '/download/?token=' + encodeURIComponent(token) + '&preview=1';
+    if (!token) { throw new Error('请先登录'); }
+    var resp = await fetch('/api/files/' + fileId + '/download-token/', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || '获取下载令牌失败');
+    return data.data.token;
   }
 
   function _isPreviewableExt(fileName) {
@@ -4120,71 +4144,73 @@
       if (!f) f = { id: fileId, title: '文件', file_name: '' };
       var fn = f.file_name || f.title || '';
       var extType = _isPreviewableExt(fn);
-      var previewUrl = _previewUrl(fileId);
       var extBadgeHtml = extBadge(fn);
 
-      var bodyHtml = '';
-      if (extType === 'pdf') {
-        bodyHtml = '<embed src="' + previewUrl + '" type="application/pdf" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer">';
-      } else if (extType === 'image') {
-        bodyHtml = '<img src="' + previewUrl + '" alt="' + esc(fn) + '" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
-      } else if (extType === 'text') {
-        bodyHtml = '<div class="pv-text-wrap"><pre class="pv-text" id="pvTextContent">加载中…</pre></div>';
-      } else if (extType === 'ppt') {
-        bodyHtml = '<div class="pv-unsupported">' +
-          '<div class="pv-unsupported-icon">📊</div>' +
-          '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
-          '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
-          '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
-        '</div>';
-      } else {
-        bodyHtml = '<div class="pv-unsupported">' +
-          '<div class="pv-unsupported-icon">📄</div>' +
-          '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
-          '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
-          '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
-        '</div>';
-      }
+      // 异步获取预览 URL（短时下载令牌）
+      _previewUrl(fileId).then(function(previewUrl) {
+        var bodyHtml = '';
+        if (extType === 'pdf') {
+          bodyHtml = '<embed src="' + previewUrl + '" type="application/pdf" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer">';
+        } else if (extType === 'image') {
+          bodyHtml = '<img src="' + previewUrl + '" alt="' + esc(fn) + '" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
+        } else if (extType === 'text') {
+          bodyHtml = '<div class="pv-text-wrap"><pre class="pv-text" id="pvTextContent">加载中…</pre></div>';
+        } else if (extType === 'ppt') {
+          bodyHtml = '<div class="pv-unsupported">' +
+            '<div class="pv-unsupported-icon">📊</div>' +
+            '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
+            '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
+            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
+          '</div>';
+        } else {
+          bodyHtml = '<div class="pv-unsupported">' +
+            '<div class="pv-unsupported-icon">📄</div>' +
+            '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
+            '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
+            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
+          '</div>';
+        }
 
-      var overlay = document.createElement('div');
-      overlay.className = 'preview-overlay';
-      overlay.innerHTML =
-        '<button class="preview-close" onclick="closePreview()">✕</button>' +
-        '<div class="preview-header">' +
-          '<span class="pv-badge">' + extBadgeHtml + '</span>' +
-          '<span class="pv-title" title="' + esc(fn) + '">' + esc(fileTitle || fn || '文件预览') + '</span>' +
-          '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">⬇ 下载</button>' +
-        '</div>' +
-        '<div class="preview-body" id="previewBody">' + bodyHtml + '</div>';
-      overlay.addEventListener('click', function(e) {
-        if (e.target === overlay) closePreview();
-      });
-      document.body.appendChild(overlay);
-      lockScroll();
-      _previewModal = overlay;
-      _pushModalHistory();
-
-      // 文本文件：fetch 内容
-      if (extType === 'text') {
-        fetch(previewUrl).then(function(r) {
-          if (!r.ok) throw new Error('加载失败');
-          return r.text();
-        }).then(function(text) {
-          var pre = document.getElementById('pvTextContent');
-          if (pre) {
-            pre.textContent = text;
-            // 尝试猜测语言高亮（简单判断）
-            var langClass = '';
-            var ext = fn.split('.').pop().toLowerCase();
-            if (['py','js','ts','jsx','tsx','css','html','json','xml','sh','bash','c','cpp','java','go','rs','rb','php','sql','md'].includes(ext)) {
-              pre.className = 'pv-text pv-text-code';
-            }
-          }
-        }).catch(function() {
-          var pre = document.getElementById('pvTextContent');
-          if (pre) pre.textContent = '⚠️ 无法加载文件内容';
+        var overlay = document.createElement('div');
+        overlay.className = 'preview-overlay';
+        overlay.innerHTML =
+          '<button class="preview-close" onclick="closePreview()">✕</button>' +
+          '<div class="preview-header">' +
+            '<span class="pv-badge">' + extBadgeHtml + '</span>' +
+            '<span class="pv-title" title="' + esc(fn) + '">' + esc(fileTitle || fn || '文件预览') + '</span>' +
+            '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">⬇ 下载</button>' +
+          '</div>' +
+          '<div class="preview-body" id="previewBody">' + bodyHtml + '</div>';
+        overlay.addEventListener('click', function(e) {
+          if (e.target === overlay) closePreview();
         });
-      }
+        document.body.appendChild(overlay);
+        lockScroll();
+        _previewModal = overlay;
+        _pushModalHistory();
+
+        // 文本文件：fetch 内容
+        if (extType === 'text') {
+          fetch(previewUrl).then(function(r) {
+            if (!r.ok) throw new Error('加载失败');
+            return r.text();
+          }).then(function(text) {
+            var pre = document.getElementById('pvTextContent');
+            if (pre) {
+              pre.textContent = text;
+              var ext = fn.split('.').pop().toLowerCase();
+              if (['py','js','ts','jsx','tsx','css','html','json','xml','sh','bash','c','cpp','java','go','rs','rb','php','sql','md'].includes(ext)) {
+                pre.className = 'pv-text pv-text-code';
+              }
+            }
+          }).catch(function() {
+            var pre = document.getElementById('pvTextContent');
+            if (pre) pre.textContent = '⚠️ 无法加载文件内容';
+          });
+        }
+      }).catch(function() {
+        alert('获取预览链接失败，请重试');
+      });
     });
   }
 

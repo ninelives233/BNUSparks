@@ -24,6 +24,7 @@ urlpatterns = [
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
     path("files/upload-text/", views.api_file_upload_text, name="api_file_upload_text"),
     path("files/<int:file_id>/download/", views.api_file_download, name="api_file_download"),
+    path("files/<int:file_id>/download-token/", views.api_download_token, name="api_download_token"),
     path("files/<int:file_id>/delete/", views.api_file_delete, name="api_file_delete"),
     path("files/<int:file_id>/update/", views.api_file_update, name="api_file_update"),
     path("files/batch-delete/", views.api_file_batch_delete, name="api_file_batch_delete"),
