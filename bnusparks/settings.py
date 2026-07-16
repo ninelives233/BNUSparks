@@ -22,7 +22,7 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY 未设置！请写入 .env 或环境变量")
 
 DEBUG = True
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # ── 应用 ──
 INSTALLED_APPS = [

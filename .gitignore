@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+# Changelog (not project code)
+CHANGELOG.md
+
 # Python
 __pycache__/
 *.pyc

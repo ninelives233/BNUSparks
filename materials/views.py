@@ -75,14 +75,8 @@ def _jwt_decode(token):
 
 def _get_user(request):
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        # 仅当 Authorization 头为空时才 fallback 到查询参数
-        if not auth:
-            token = request.GET.get("token") or request.POST.get("token") or ""
-            if token:
-                auth = "Bearer " + token
-        if not auth.startswith("Bearer ") or len(auth) < 20:
-            return None
+    if not auth.startswith("Bearer ") or len(auth) < 20:
+        return None
     payload = _jwt_decode(auth[7:])
     if payload is None:
         return None
@@ -90,6 +84,45 @@ def _get_user(request):
         return User.objects.get(id=payload["user_id"])
     except User.DoesNotExist:
         return None
+
+
+# ═══════════════════════════════════════════════════════════════
+# 短时下载令牌（替代 JWT 用于 download URL，避免 token 泄露到日志）
+# ═══════════════════════════════════════════════════════════════
+
+def _generate_download_token(file_id, user_id, ttl=60):
+    """生成短时下载令牌（非 JWT，URL 安全，默认 60s 过期）"""
+    payload = f"{file_id}:{user_id}:{int(time.time()) + ttl}"
+    sig = hmac.new(settings.SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    return base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).rstrip(b"=").decode()
+
+
+def _verify_download_token(token, expected_file_id):
+    """验证短时下载令牌，返回 user_id 或 None"""
+    try:
+        raw = base64.urlsafe_b64decode(token + "==").decode()
+        parts = raw.rsplit(":", 1)
+        if len(parts) != 2:
+            return None
+        data, sig = parts
+        file_id, user_id, exp = data.split(":")
+        expected = hmac.new(settings.SECRET_KEY.encode(), data.encode(), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(expected, sig):
+            return None
+        if int(exp) < time.time():
+            return None
+        if int(file_id) != expected_file_id:
+            return None
+        return int(user_id)
+    except Exception:
+        return None
+
+
+@require_login
+def api_download_token(request, file_id):
+    """GET /api/files/<id>/download-token/ — 生成短时下载令牌"""
+    token = _generate_download_token(file_id, request.user.id)
+    return _ok({"token": token})
 
 
 def require_login(view):
@@ -427,8 +460,8 @@ def api_change_password(request):
 
     if not old_password or not new_password:
         return _err("旧密码和新密码不能为空")
-    if len(new_password) < 6:
-        return _err("新密码长度至少 6 位")
+    if len(new_password) < 8:
+        return _err("新密码长度至少 8 位")
 
     if not request.user.check_password(old_password):
         return _err("当前密码错误")
@@ -493,8 +526,8 @@ def api_reset_password(request):
 
     if not uid or not token or not new_password:
         return _err("参数不完整")
-    if len(new_password) < 6:
-        return _err("密码长度至少 6 位")
+    if len(new_password) < 8:
+        return _err("密码长度至少 8 位")
 
     try:
         user = User.objects.get(id=uid)
@@ -1436,6 +1469,13 @@ def api_file_download(request, file_id):
 
     # 下载权限校验：未登录访客不可下载
     user = _get_user(request)
+    if user is None:
+        # 短时下载令牌（替代 JWT 用于 download URL，不泄露到日志）
+        dtoken = request.GET.get("dtoken")
+        if dtoken:
+            uid = _verify_download_token(dtoken, file_id)
+            if uid:
+                user = User.objects.filter(id=uid).first()
     if user is None:
         return _err("请先登录后再下载", 401)
 
