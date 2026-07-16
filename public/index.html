@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=67">
+<link rel="stylesheet" href="/static/css/style.css?v=75">
 </head>
 <body>
 
@@ -69,6 +69,14 @@
         <span class="stat-pill"><strong id="statGeneral">-</strong> 门通识课</span>
         <span class="stat-pill"><strong id="statMajor">-</strong> 门专业课</span>
       </div>
+      <!-- ═══ 上传按钮（窄屏：hero 内；宽屏：nav-cards 下方）═══ -->
+      <div class="home-upload-section home-upload-section--hero">
+        <button class="home-upload-btn" onclick="openCourseSearchUpload()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          上传文件
+        </button>
+        <p class="home-materials-count">当前已有 <strong class="total-material-count">-</strong> 份资料</p>
+      </div>
       <p class="hero-footer">
         <span>投稿与建议 / 加入我们</span>
         <span class="hf-dot">·</span>
@@ -107,14 +115,14 @@
   </section>
   <hr class="home-divider">
 
-  <!-- ═══ 上传按钮 ═══ -->
-  <section class="home-upload-section">
+  <!-- ═══ 上传按钮（宽屏版：三个卡片下方）═══ -->
+  <div class="home-upload-section home-upload-section--navcards">
     <button class="home-upload-btn" onclick="openCourseSearchUpload()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       上传文件
     </button>
-    <p class="home-materials-count">当前已有 <strong id="totalMaterialCount">-</strong> 份资料</p>
-  </section>
+    <p class="home-materials-count">当前已有 <strong class="total-material-count">-</strong> 份资料</p>
+  </div>
 
   <!-- ═══ Home Content ═══ -->
   <section class="home-content">
@@ -734,7 +742,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/app.js?v=68"></script>
+<script src="/static/js/app.js?v=75"></script>
 
 </body>
 </html>

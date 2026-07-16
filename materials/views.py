@@ -873,7 +873,16 @@ def api_user_rankings(request):
     page = max(1, min(page, 4))  # 最多4页
     per_page = 25
 
-    users = User.objects.filter(is_active=True).select_related("profile")
+    # 排除非用户注册的测试账号（手动创建，不参与排行榜）
+    TEST_USERNAMES = [
+        "dep3@mail.bnu.edu.cn", "depv4@mail.bnu.edu.cn", "zdep5@mail.bnu.edu.cn",
+        "zfinal@mail.bnu.edu.cn", "avtest1@mail.bnu.edu.cn", "avt2@mail.bnu.edu.cn",
+        "testfix@mail.bnu.edu.cn", "vfy1@mail.bnu.edu.cn", "deploytest@mail.bnu.edu.cn",
+        "testuser@mail.bnu.edu.cn", "testsub@mail.bnu.edu.cn", "testmod@mail.bnu.edu.cn",
+        "preview_test@mail.bnu.edu.cn", "114514@mail.bnu.edu.cn", "1919810@mail.bnu.edu.cn",
+        "admin",
+    ]
+    users = User.objects.filter(is_active=True).exclude(username__in=TEST_USERNAMES).select_related("profile")
 
     if rtype == "download":
         # 按被下载总数排序
@@ -937,6 +946,11 @@ def api_user_public(request, uid):
         except Exception:
             pass
 
+    # 统计（与个人资料页数据一致）
+    upload_count = Material.objects.filter(uploader=u).count()
+    dl_agg = Material.objects.filter(uploader=u).aggregate(total=Sum("download_count"))
+    download_count = dl_agg["total"] or 0
+
     # 公开信息（空字段隐藏）
     pub_info = {
         "user_id": u.id,
@@ -945,6 +959,9 @@ def api_user_public(request, uid):
         "bio": profile.bio or "此人神秘，未留简介",
         "contact_email": profile.contact_email if profile.contact_email else "",
         "contact_way": profile.contact_way if profile.contact_way else "",
+        "upload_count": upload_count,
+        "download_count": download_count,
+        "collection_count": 0,
     }
 
     # 上传文件列表（分页，每页20）
