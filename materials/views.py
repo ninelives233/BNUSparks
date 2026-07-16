@@ -118,13 +118,6 @@ def _verify_download_token(token, expected_file_id):
         return None
 
 
-@require_login
-def api_download_token(request, file_id):
-    """GET /api/files/<id>/download-token/ — 生成短时下载令牌"""
-    token = _generate_download_token(file_id, request.user.id)
-    return _ok({"token": token})
-
-
 def require_login(view):
     @wraps(view)
     def wrapper(request, *args, **kwargs):
@@ -1457,6 +1450,15 @@ def api_file_upload_text(request):
         "assigned_moderator_name": material.assigned_moderator.first_name or material.assigned_moderator.username
             if material.assigned_moderator else None,
     })
+
+
+@require_login
+def api_download_token(request, file_id):
+    """GET /api/files/<id>/download-token/ — 生成短时下载令牌"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    token = _generate_download_token(file_id, request.user.id)
+    return _ok({"token": token})
 
 
 def api_file_download(request, file_id):
