@@ -3106,6 +3106,7 @@
     'network': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L22 20H2z"/></svg>',
     'brain': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5L17 5L20 10L16 17L12 23L8 17L4 10L7 5Z"/></svg>',
     'hourglass': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14"/><path d="M5 21h14"/><path d="M6 3v2c0 2 3 4 6 6 3-2 6-4 6-6V3"/><path d="M6 21v-2c0-2 3-4 6-6 3 2 6 4 6 6v2"/></svg>',
+    'ai': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20L9.5 4L14 20"/><path d="M7 13L12 13"/><path d="M19 4V20"/><path d="M17 4H21"/><path d="M17 20H21"/></svg>',
   };
 
   // ── State ──
