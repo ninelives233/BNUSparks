@@ -29,6 +29,13 @@ class UserProfile(models.Model):
     daily_download_count = models.IntegerField("今日已下载", default=0)
     last_download_date = models.DateField("最后下载日期", null=True, blank=True)
     avatar = models.ImageField("头像", upload_to="avatars/", blank=True, null=True)
+
+    # 公开资料字段（Iter 7）
+    contact_email = models.EmailField("联系邮箱", blank=True, default="")
+    contact_way = models.CharField("联系方式", max_length=200, blank=True, default="")
+    bio = models.TextField("个人简介", max_length=200, blank=True, default="",
+        help_text="200字以内")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -229,6 +236,7 @@ class Notification(models.Model):
         REPORT = "report", "举报通知"
         FILE_DELETED = "file_deleted", "用户删除资料"
         OPERATION = "operation", "操作通知"
+        ANNOUNCEMENT = "announcement", "系统公告"
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications",
@@ -310,6 +318,23 @@ class ReviewComment(models.Model):
 
     def __str__(self):
         return f"[{self.commenter.first_name or self.commenter.username}] {self.content[:40]}"
+
+
+class Announcement(models.Model):
+    """系统公告——可动态发布、删除"""
+    title = models.CharField("公告标题", max_length=200)
+    content = models.TextField("公告内容")
+    publisher = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="发布者")
+    is_published = models.BooleanField("已发布", default=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "系统公告"
+        verbose_name_plural = "系统公告"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
 
 
 class DownloadRecord(models.Model):
