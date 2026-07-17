@@ -908,35 +908,78 @@
 
   .search-overlay {
     position: fixed; inset: 0; z-index: 8888;
-    background: oklch(0 0 0 / 0.3);
-    display: flex; align-items: flex-start; justify-content: center;
-    padding: 80px var(--space-md);
-    backdrop-filter: blur(4px);
+    background: oklch(0 0 0 / 0.35);
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--space-md);
+    backdrop-filter: blur(6px);
   }
   .search-overlay-inner {
-    background: var(--raised); border-radius: var(--radius-lg);
-    padding: var(--space-lg);
-    width: 100%; max-width: 540px; max-height: 70vh; overflow-y: auto;
-    box-shadow: 0 8px 40px oklch(0 0 0 / 0.15);
-    animation: modalIn 0.2s ease-out;
+    background: var(--raised); border-radius: var(--radius-xl);
+    padding: var(--space-xl);
+    width: 100%; max-width: 580px;
+    box-shadow: 0 12px 48px oklch(0 0 0 / 0.12);
+    animation: modalIn 0.25s ease-out;
   }
-  .search-overlay-inner h3 { font-family: var(--serif); font-size: 1.1rem; margin-bottom: var(--space-md); }
   .search-overlay-close {
-    float: right; border: none; background: none; font-size: 1.2rem;
-    cursor: pointer; color: var(--ink-faint); line-height: 1;
+    float: right; border: none; background: none; font-size: 1.1rem;
+    cursor: pointer; color: var(--ink-faint); line-height: 1; padding: 4px 6px;
+    border-radius: var(--radius-sm); transition: background 0.15s, color 0.15s;
   }
-  .search-overlay-close:hover { color: var(--ink); }
-  .search-section { margin-bottom: var(--space-md); }
-  .search-section h4 { font-size: 0.82rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .search-item {
-    padding: 8px 12px; border-radius: var(--radius-sm);
-    cursor: pointer; display: flex; align-items: center; gap: var(--space-sm);
-    transition: background 0.15s;
+  .search-overlay-close:hover { color: var(--ink); background: var(--primary-surface); }
+
+  /* ── Upload Search header ── */
+  .so-header { text-align: center; padding-bottom: var(--space-lg); }
+  .so-icon { font-size: 2rem; margin-bottom: var(--space-xs); }
+  .so-title { font-family: var(--serif); font-size: 1.2rem; font-weight: 700; color: var(--ink); }
+  .so-sub { font-size: 0.82rem; color: var(--ink-faint); margin-top: 4px; }
+
+  /* ── Search input ── */
+  .so-input-group {
+    display: flex; align-items: center;
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: var(--radius-full); padding: 0 20px;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .search-item:hover { background: var(--primary-surface); }
-  .si-name { flex: 1; font-size: 0.9rem; }
-  .si-code { font-size: 0.78rem; color: var(--ink-faint); font-family: monospace; }
-  .search-empty { text-align: center; color: var(--ink-faint); padding: var(--space-lg); }
+  .so-input-group:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.1);
+  }
+  .so-input-icon { font-size: 0.95rem; margin-right: 10px; opacity: 0.45; flex-shrink: 0; }
+  #courseSearchInput {
+    flex: 1; border: none; background: transparent;
+    padding: 14px 0; font-size: 0.95rem; outline: none;
+    color: var(--ink); font-family: var(--sans);
+  }
+  #courseSearchInput::placeholder { color: var(--ink-faint); opacity: 0.6; }
+
+  /* ── Results ── */
+  .search-overlay-results { margin-top: var(--space-md); min-height: 60px; }
+  .so-results-list { display: flex; flex-direction: column; gap: 4px; }
+  .so-result-item {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: 12px 16px; border-radius: var(--radius-md);
+    text-decoration: none; transition: background 0.15s;
+    cursor: pointer;
+  }
+  .so-result-item:hover { background: var(--primary-surface); }
+  .so-ri-name { flex: 1; font-size: 0.9rem; font-weight: 500; color: var(--ink); }
+  .so-ri-code { font-size: 0.78rem; color: var(--ink-faint); font-family: monospace; white-space: nowrap; }
+  .so-ri-arrow {
+    font-size: 0.85rem; color: var(--primary); opacity: 0;
+    transform: translateX(-6px); transition: opacity 0.2s, transform 0.2s;
+  }
+  .so-result-item:hover .so-ri-arrow { opacity: 0.6; transform: translateX(0); }
+
+  /* ── Empty / hint states ── */
+  .so-hint {
+    padding: var(--space-md); background: var(--primary-surface);
+    border-radius: var(--radius-md); text-align: center;
+  }
+  .so-hint-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+  .so-hint-text { font-size: 0.82rem; color: var(--ink-faint); line-height: 1.55; }
+  .so-empty { text-align: center; padding: var(--space-lg); }
+  .so-empty-icon { font-size: 1.5rem; margin-bottom: var(--space-xs); }
+  .so-empty-text { font-size: 0.85rem; color: var(--ink-faint); }
 
   /* ═══════════════════════════════════════════
      Grid divider + Math Card (centered)
@@ -2111,9 +2154,18 @@
 .notif-mark-all-btn:hover {
   background: var(--primary-surface);
 }
+/* drawer 内部页面容器 — 必须填满 flex 高度才能让 scrollable body 生效 */
+#drawerMenu, #drawerNotif {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
 .notif-drawer-body {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0;
 }
 .notif-item {
@@ -3136,6 +3188,17 @@
 .fi-preview-btn:hover {
   background: oklch(0.48 0.10 165); color: #fff;
 }
+
+/* ── 按钮组均匀纵向布局 ── */
+.fi-actions {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px;
+  margin-top: var(--space-md);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border-light);
+}
+.fi-actions .fi-preview-btn { margin-bottom: 0; }
+.fi-actions .fi-download-btn { margin-top: 0; }
 
 /* ═══════════════════════════════════════════
    文件列表布局优化 — 扩展内容区
