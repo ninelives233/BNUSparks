@@ -94,6 +94,24 @@ def api_admin_set_role(request, uid):
     profile.role = new_role
     profile.save()
 
+    # 设置新权限（前端在弹窗中提交的管辖范围数据）
+    if new_role == UserProfile.Role.MODERATOR:
+        managed_majors = body.get("managed_majors", [])
+        if managed_majors:
+            profile.managed_majors.set(managed_majors)
+        moderated_sections = body.get("moderated_sections", [])
+        if moderated_sections:
+            profile.moderated_sections.set(moderated_sections)
+        if body.get("can_moderate_general", False):
+            profile.can_moderate_general = True
+        profile.save()
+
+    elif new_role == UserProfile.Role.SUB_MODERATOR:
+        moderated_sections = body.get("moderated_sections", [])
+        if moderated_sections:
+            profile.moderated_sections.set(moderated_sections)
+        profile.save()
+
     return _ok({"message": f"已设置 {target_user.first_name or target_user.username} 为 {new_role}"})
 
 
