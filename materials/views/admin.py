@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.db import connection
+from django.db.models import Q
 
 from .utils import (
     _err, _ok, _get_or_create_profile,
@@ -21,6 +22,13 @@ from .utils import (
 def api_admin_users(request):
     """GET /api/admin/users/ — 用户列表（仅 super_admin）"""
     qs = User.objects.filter(is_active=True).order_by("-date_joined")
+    search = request.GET.get("search", "").strip()
+    if search:
+        qs = qs.filter(
+            Q(first_name__icontains=search) |
+            Q(email__icontains=search) |
+            Q(username__icontains=search)
+        )
     page = int(request.GET.get("page", 1))
     per_page = 20
     total = qs.count()
@@ -40,6 +48,14 @@ def api_admin_users(request):
                 "auto_approve": _get_or_create_profile(u).auto_approve,
                 "can_auto_approve": _get_or_create_profile(u).can_auto_approve,
                 "can_moderate_general": _get_or_create_profile(u).can_moderate_general,
+                "managed_majors_info": [
+                    {"id": c.id, "name": c.name}
+                    for c in _get_or_create_profile(u).managed_majors.all()
+                ],
+                "moderated_sections_info": [
+                    {"id": cat.id, "name": cat.name, "parent_id": cat.parent_id}
+                    for cat in _get_or_create_profile(u).moderated_sections.all()
+                ],
             }
             for u in qs[offset:offset + per_page]
         ],

@@ -30,6 +30,12 @@ urlpatterns = [
     path("files/batch-delete/", views.api_file_batch_delete, name="api_file_batch_delete"),
     path("files/batch-edit/", views.api_file_batch_edit, name="api_file_batch_edit"),
 
+    # 收藏
+    path("files/<int:file_id>/", views.api_file_detail, name="api_file_detail"),
+    path("files/<int:file_id>/favorite/", views.api_favorite_toggle, name="api_favorite_toggle"),
+    path("files/<int:file_id>/favorite-status/", views.api_favorite_status, name="api_favorite_status"),
+    path("user/favorites/", views.api_my_favorites, name="api_my_favorites"),
+
     # 文件夹管理（Iter 6）
     path("folders/create/", views.api_folder_create, name="api_folder_create"),
     path("folders/<int:folder_id>/delete/", views.api_folder_delete, name="api_folder_delete"),

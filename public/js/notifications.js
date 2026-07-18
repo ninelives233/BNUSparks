@@ -120,6 +120,7 @@
       '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span>🔔</span> 通知中心' + notifBadgeHtml + '</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyUploadsPage()"><span>📤</span> 我的上传</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyDownloadsPage()"><span>📥</span> 我的下载</a>' +
+	      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyFavoritesPage()"><span>⭐</span> 我的收藏</a>' +
       '<div class="dm-divider"></div>' +
       (showAdmin ? mgmtToggle + civilianToggle + '<div class="dm-divider"></div>' : '') +
       '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span>🚪</span> 退出登录</a>';
@@ -285,10 +286,17 @@
 
   function navToMaterial(materialId, courseCode, courseName) {
     closeNotifDrawer();
-    if (courseCode) {
+    if (materialId) {
+      // 先尝试从缓存中获取文件数据
+      if (window._fileLookup && window._fileLookup[materialId]) {
+        showFileDetail(window._fileLookup[materialId]);
+        return;
+      }
+      // 否则构建一个最小对象跳转到详情页
+      showFileDetail({ id: materialId, title: courseName || ('#' + materialId), course_code: courseCode || '', course_name: courseName || '' });
+    } else if (courseCode) {
       var type = courseCode.startsWith('GEN') ? '通识课' : '专业课';
       showExplorer(type);
-      // 用 rAF 替代脆弱的 setTimeout，在下一个渲染帧执行导航
       requestAnimationFrame(function() {
         requestAnimationFrame(function() {
           navToLast(courseCode);

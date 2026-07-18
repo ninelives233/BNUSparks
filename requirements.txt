@@ -3,3 +3,4 @@ gunicorn>=22.0
 django-cors-headers>=4.0
 django-cleanup>=9.0
 Pillow>=10.0
+pypdf>=5.0

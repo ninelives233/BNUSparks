@@ -30,6 +30,12 @@ from .courses import (
 from .files import (
     api_file_upload, api_file_upload_text,
     api_download_token, api_file_download, api_file_delete,
+    api_file_detail,
+)
+
+# 收藏
+from .favorites import (
+    api_favorite_toggle, api_favorite_status, api_my_favorites,
 )
 
 # 审核

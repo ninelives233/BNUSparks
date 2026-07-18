@@ -53,7 +53,7 @@
     else if (tab === 'pending') renderAdminPending(content);
     else if (tab === 'history') renderAdminHistory(content, 1);
     else if (tab === 'deletions') renderAdminDeletions(content, 1);
-    else if (tab === 'users') renderAdminUsers(content, '');
+    else if (tab === 'users') renderAdminUsers(content, '', 1);
     else if (tab === 'operations') renderAdminOperations(content);
   }
 
@@ -756,12 +756,17 @@
   }
 
   // ── 用户管理（仅 super_admin） ──
-  function renderAdminUsers(content, search) {
+  var _userPage = 1;
+  function renderAdminUsers(content, search, page) {
+    _userPage = page || 1;
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
-    var url = '/api/admin/users/';
-    if (search) url += '?search=' + encodeURIComponent(search);
-    api(url).then(function(users) {
-      if (!users || users.length === 0) {
+    var params = [];
+    if (search) params.push('search=' + encodeURIComponent(search));
+    params.push('page=' + _userPage);
+    var url = '/api/admin/users/?' + params.join('&');
+    api(url).then(function(resp) {
+      var users = resp.users || [];
+      if (!users.length) {
         content.innerHTML = '<div class="admin-empty">未找到用户</div>';
         return;
       }
@@ -827,11 +832,28 @@
           '<td>' + roleOptions + '</td>' +
           '<td style="font-size:0.78rem;color:var(--text-muted)">' + sections + '</td>' +
           autoApproveCell +
-          '<td>' + (u.file_count || 0) + '</td>' +
+          '<td>' + (u.material_count || 0) + '</td>' +
           '<td>' + u.date_joined + '</td>' +
         '</tr>';
       });
       html += '</tbody></table></div>';
+      // 分页控件
+      var totalPages = resp.total_pages || 1;
+      if (totalPages > 1) {
+        html += '<div class="admin-pagination">';
+        if (_userPage > 1) {
+          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escapeHtml(search) + '\', ' + (_userPage - 1) + ')">← 上一页</button>';
+        } else {
+          html += '<button disabled>← 上一页</button>';
+        }
+        html += '<span class="page-info">第 ' + _userPage + ' / ' + totalPages + ' 页（共 ' + resp.total + ' 条）</span>';
+        if (_userPage < totalPages) {
+          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escapeHtml(search) + '\', ' + (_userPage + 1) + ')">下一页 →</button>';
+        } else {
+          html += '<button disabled>下一页 →</button>';
+        }
+        html += '</div>';
+      }
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
@@ -840,7 +862,7 @@
 
   function adminSearchUsers() {
     var q = document.getElementById('adminUserSearch');
-    renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '');
+    renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '', 1);
   }
 
   function onRoleChange(uid, newRole, nickname) {
@@ -862,7 +884,7 @@
         api('/api/admin/sections/')
       ]).then(function(results) {
         var colleges = results[0];
-        var sections = results[1];
+        var sections = results[1].tree || [];
         if (!colleges || !colleges.length) {
           alert('当前没有可用学院，请在后台添加学院后再分配');
           revertRoleSelect(uid);
@@ -904,7 +926,8 @@
     }
     if (newRole === 'sub_moderator') {
       // 小版主：从课程树选择具体专业/课程（CourseCategory 节点）
-      api('/api/admin/sections/').then(function(sections) {
+      api('/api/admin/sections/').then(function(resp) {
+        var sections = resp.tree || [];
         if (!sections || !sections.length) {
           alert('当前没有可选的课程分类节点');
           revertRoleSelect(uid);

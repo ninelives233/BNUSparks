@@ -26,6 +26,34 @@
     renderExplorer();
   }
 
+  var _fdBreadcrumbPath = null;
+
+  function navToFdBreadcrumbDepth(depth) {
+    var path = _fdBreadcrumbPath;
+    if (!path || !path.length) return;
+    expPath = path.slice(0, depth);
+    // 验证路径在课程树中是否存在
+    var node = getNode(expPath);
+    if (!node) {
+      // 路径无效时，尝试通过课程代码在树中找到正确路径
+      var code = _currentDetailFile && _currentDetailFile.course_code;
+      if (code) {
+        var found = findPathByCourseId(code);
+        if (found && found.length >= depth) {
+          expPath = found.slice(0, depth);
+          node = getNode(expPath);
+        }
+      }
+      // 仍无效，回退到根分类
+      if (!node && path.length > 0) {
+        expPath = [path[0]];
+      }
+    }
+    pushViewState('explorer', { expPath: [...expPath] }, true);
+    switchView('explorer');
+    renderExplorer();
+  }
+
   /* ═══════════════════════════════════════════════════════════
      API：课程文件
      ═══════════════════════════════════════════════════════════ */
@@ -69,11 +97,51 @@
     document.getElementById('uploadError').style.display = 'none';
   }
 
+  // 资料类型选项（与后端 MaterialType 同步）
+  const MATERIAL_TYPES = [
+    { id: 1, name: '课本' },
+    { id: 2, name: '习题' },
+    { id: 3, name: '真题' },
+    { id: 4, name: '课件' },
+    { id: 5, name: '笔记' },
+    { id: 6, name: '汇总' },
+    { id: 7, name: '其他' },
+  ];
+
+  // 文件详情页 SVG 图标
+  const FD_ICONS = {
+    file: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>',
+    tag: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+    calendar: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    storage: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+    teacher: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg>',
+    download: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    star: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg>',
+    starFilled: '<svg width="16" height="16" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg>',
+    trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+    lock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  };
+
+  function populateMaterialTypeDropdown() {
+    var sel = document.getElementById('uploadMaterialType');
+    if (!sel) return;
+    // 只在第一次填充
+    if (sel.options.length > 1) return;
+    sel.innerHTML = '<option value="">请选择类型…</option>';
+    MATERIAL_TYPES.forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      sel.appendChild(opt);
+    });
+  }
+
   function showUploadModal(code, name) {
     if (!currentUser) { showLoginModal(); return; }
     uploadCourseCode = code;
     _uploadMode = 'file';
     document.getElementById('uploadCourse').value = name + ' (' + code + ')';
+    populateMaterialTypeDropdown();
     var ri = document.getElementById('reuploadInfo');
     if (ri) ri.style.display = 'none';
     _reuploadOldId = null;
@@ -108,6 +176,13 @@
     var title = document.getElementById('uploadTitle').value;
     var description = document.getElementById('uploadDesc').value;
     var teacher = document.getElementById('uploadTeacher').value;
+    var materialTypeId = document.getElementById('uploadMaterialType')?.value || '';
+    if (!materialTypeId) {
+      el.textContent = '请选择资料类型';
+      el.style.display = 'block';
+      progress.style.display = 'none';
+      return false;
+    }
     if (!teacher.trim()) {
       el.textContent = '请填写任课教师姓名';
       el.style.display = 'block';
@@ -138,6 +213,7 @@
             content: content,
             description: description,
             teacher: teacher,
+            material_type_id: materialTypeId,
           }),
         });
         const data = await resp.json();
@@ -182,6 +258,7 @@
         formData.append('file', file);
         formData.append('description', description);
         formData.append('teacher', teacher);
+	        if (materialTypeId) formData.append('material_type_id', materialTypeId);
 
         const resp = await fetch('/api/files/upload/', {
           method: 'POST',
@@ -407,27 +484,37 @@
     window.scrollTo({ top: 0 });
   }
 
+  // ── 共享面包屑渲染（renderBC / 文件详情统一使用）──
+  function _renderBreadcrumb(el, path, options) {
+    el.innerHTML = '';
+    var homeLink = document.createElement('a');
+    homeLink.textContent = '首页';
+    homeLink.onclick = function(e) { e.preventDefault(); (options && options.homeOnClick || showHome)(); };
+    el.appendChild(homeLink);
+    for (var i = 0; i < path.length; i++) {
+      var sep = document.createElement('span');
+      sep.className = 'bc-sep'; sep.textContent = ' / ';
+      el.appendChild(sep);
+      var isLast = (i === path.length - 1);
+      if (isLast && options && options.lastStatic) {
+        var cur = document.createElement('span');
+        cur.className = 'bc-current'; cur.textContent = options.lastStatic;
+        el.appendChild(cur);
+      } else if (options && options.onNavigate) {
+        (function(text, depth) {
+          var link = document.createElement('a');
+          link.textContent = text;
+          link.onclick = function(e) { e.preventDefault(); options.onNavigate(depth); };
+          el.appendChild(link);
+        })(path[i], i + 1);
+      }
+    }
+  }
+
   // ── Breadcrumb ──
   function renderBC() {
     const el = document.getElementById('breadcrumb');
-    el.innerHTML = '';
-    const home = document.createElement('a');
-    home.textContent = '首页'; home.onclick = showHome;
-    el.appendChild(home);
-    for (let i = 0; i < expPath.length; i++) {
-      const sep = document.createElement('span');
-      sep.className = 'bc-sep'; sep.textContent = ' / ';
-      el.appendChild(sep);
-      if (i === expPath.length - 1) {
-        const cur = document.createElement('span');
-        cur.className = 'bc-current'; cur.textContent = expPath[i];
-        el.appendChild(cur);
-      } else {
-        const a = document.createElement('a');
-        a.textContent = expPath[i]; a.onclick = () => navTo(i + 1);
-        el.appendChild(a);
-      }
-    }
+    _renderBreadcrumb(el, expPath, { onNavigate: function(depth) { navTo(depth); } });
     // 管理模式：在面包屑同一行最右侧加「新建」按钮
     if (isMgmtActive()) {
       var node = getNode(expPath);
@@ -600,6 +687,12 @@
   }
 
   var _multiSelectMode = false;
+  var _allFilesCache = [];       // 当前课程的全部文件缓存
+  var _typeFilter = '';          // 类型筛选：'' = 全部
+  var _sortBy = 'date';          // 排序：date | download | favorite | teacher
+  var _filterSortPage = 1;       // 筛选排序后的当前页
+  var _filterSortPageSize = 10;  // 筛选排序后的每页条数
+  var _renderCurrentPage = null; // 当前课程的文件列表渲染函数
 
   function toggleMultiSelect() {
     var tbody = document.getElementById('fileTableBody');
@@ -713,14 +806,14 @@
     container.innerHTML =
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
-          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + esc(code) + '\',\'' + esc(course.name) + '\')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn dl-login-prompt" onclick="event.stopPropagation();showLoginModal()" style="border-style:dashed">🔒 登录后上传</button>') + '</div>' : '') + '</div>' +
+          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + esc(code) + '\',\'' + esc(course.name) + '\')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn dl-login-prompt" onclick="event.stopPropagation();showLoginModal()" style="border-style:dashed">🔒 登录后上传</button>') + '</div>' : '') + '</div>' +
           '<div class="file-table-wrap"><div class="batch-dl-bar" id="batchDlBar"><span id="selectedCount">已选 0 个</span>' +
             '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">🗑 删除选中</button>' +
             '<button class="admin-btn admin-btn-sm" onclick="showBatchEditDialog()" id="batchEditBtn" style="display:none">✏️ 编辑选中</button>' +
             '<button class="admin-btn admin-btn-sm" onclick="batchDownloadSelected()" id="batchDlBtn" style="margin-left:auto">⬇ 下载选中</button>' +
           '</div>' +
-          '<div class="file-table-scroll"><table class="file-table" id="fileTable"><thead><tr><th class="th-name">文件名</th><th class="th-type">类型</th><th class="th-size">大小</th><th class="th-uploader">上传者</th><th class="th-teacher">任课教师</th><th class="th-dlcount">下载次数</th><th class="th-download"><span class="dl-normal">下载</span><span class="dl-check"><input type="checkbox" id="selectAllChkHead" onchange="toggleSelectAll(this)"> <span id="selectedCountHead"></span></span></th></tr></thead><tbody id="fileTableBody">' +
-          '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
+          '<div class="file-table-scroll"><table class="file-table" id="fileTable"><thead><tr><th class="th-name">文件名</th><th class="th-type">类型</th><th class="th-size">大小</th><th class="th-uploader">上传者</th><th class="th-teacher">任课教师</th><th class="th-favcount">收藏量</th><th class="th-dlcount">下载量</th><th class="th-download"><span class="dl-normal">下载</span><span class="dl-check"><input type="checkbox" id="selectAllChkHead" onchange="toggleSelectAll(this)"> <span id="selectedCountHead"></span></span></th></tr></thead><tbody id="fileTableBody">' +
+          '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
           '</tbody></table></div></div>' +
         '</div>' +
         (Object.keys(sameNameGroups).length ? '<div class="file-area-side-bottom"><div class="fasb-title">📚 同名课程（相同名称的不同课程代码）</div><div class="fasb-list">' +
@@ -735,6 +828,12 @@
     if (!code) return;
 
     getFiles(code).then(allFiles => {
+      // 缓存全量数据供筛选排序使用
+      _allFilesCache = allFiles;
+      _typeFilter = '';
+      _sortBy = 'date';
+      _renderFilterSortLabels();
+
       const totalFiles = allFiles.length;
       document.getElementById('fileCount').textContent = totalFiles + ' 个文件';
 
@@ -744,8 +843,8 @@
         ppc.innerHTML = ' 每页 <select class="ppc-select" id="ppcSelect"><option value="10">10</option><option value="15">15</option><option value="20">20</option></select> 条';
         ppc.style.display = '';
         document.getElementById('ppcSelect').addEventListener('change', function() {
-          pageSize = parseInt(this.value);
-          currentPage = 1;
+          _filterSortPageSize = parseInt(this.value);
+          _filterSortPage = 1;
           renderPage();
         });
       }
@@ -759,15 +858,19 @@
         const targetIdx = allFiles.findIndex(f => f.id === highlightFileId);
         if (targetIdx >= 0) {
           currentPage = Math.floor(targetIdx / pageSize) + 1;
+          _filterSortPage = currentPage;
         }
       }
       const targetHighlightFileId = highlightFileId;
       highlightFileId = null;
 
       function renderPage() {
+        _renderCurrentPage = renderPage;
+        // 使用筛选排序后的文件列表
+        var filteredFiles = _getFilteredSortedFiles();
         const tbody = document.getElementById('fileTableBody');
-        if (!allFiles.length) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
+        if (!filteredFiles.length) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
           hidePagination();
           if (_multiSelectMode) { _multiSelectMode = false; _selectedIds = {}; var mBtn = document.getElementById('multiSelectToggle'); if (mBtn) mBtn.textContent = '⬇ 批量下载'; }
           var batchBar = document.getElementById('batchDlBar');
@@ -777,10 +880,10 @@
           return;
         }
 
-        const totalPages = Math.ceil(totalFiles / pageSize);
-        if (currentPage > totalPages) currentPage = totalPages;
-        const start = (currentPage - 1) * pageSize;
-        const pageFiles = allFiles.slice(start, start + pageSize);
+        const totalPages = Math.ceil(filteredFiles.length / _filterSortPageSize);
+        if (_filterSortPage > totalPages) _filterSortPage = totalPages;
+        const start = (_filterSortPage - 1) * _filterSortPageSize;
+        const pageFiles = filteredFiles.slice(start, start + _filterSortPageSize);
 
         const fileLookup = {};
         pageFiles.forEach(f => { fileLookup[f.id] = f; });
@@ -811,22 +914,22 @@
             ? ('<span class="mgmt-pen mgmt-del" onclick="event.stopPropagation();deleteFileConfirm(' + f.id + ',this)" title="删除此文件">🗑️</span>')
             : '';
           return '<tr data-file-id="' + f.id + '"><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span class="fn-text" title="' + esc(f.title) + '">' + esc(f.title) + '</span>' + badgeHtml + mgmtPens + mgmtDel + '</span></td>' +
-            '<td class="ft-type-cell">' + esc(f.file_type) + '</td>' +
+            '<td class="ft-type-cell">' + esc(f.user_material_type || f.file_type) + (mgmt && selfOrInScope ? '<span class="mgmt-type-dropdown-wrap"><select class="mgmt-type-select" onchange="mgmtChangeType(' + f.id + ',this)">' + MATERIAL_TYPES.map(function(t) { var sel = (f.user_material_type || '') === t.name ? ' selected' : ''; return '<option value="' + t.id + '"' + sel + '>' + t.name + '</option>'; }).join('') + '</select></span>' : '') + '</td>' +
             '<td class="ft-size-cell">' + formatSize(f.file_size) + '</td>' +
             '<td class="ft-uploader">' + esc(f.uploader) + '</td>' +
             '<td class="ft-teacher">' + esc(f.teacher || '') + teacherPen + '</td>' +
-            '<td class="ft-dlcount">' + f.download_count + ' 次</td>' +
+            '<td class="ft-favcount">' + (f.favorite_count || 0) + '</td><td class="ft-dlcount">' + f.download_count + '</td>' +
             '<td class="ft-download"><span class="dl-normal">' + dlLink + '</span><span class="dl-check"><input type="checkbox" class="dl-chk" data-fid="' + f.id + '"' + (isChecked ? ' checked' : '') + ' onchange="onDlChkChange(this)"></span></td></tr>';
         }).join('');
-        // 点击行显示文件简介
+        // 点击行跳转到文件详情页
         Array.from(tbody.children).forEach(tr => {
           tr.addEventListener('click', function(e) {
             if (e.target.closest('.dl-link, .dl-chk, .dl-check, .pv-link')) return;
             const fileId = parseInt(this.dataset.fileId);
-            if (fileLookup[fileId]) showFileInfoModal(fileLookup[fileId]);
+            if (fileLookup[fileId]) showFileDetail(fileLookup[fileId]);
           });
         });
-        renderPagination(currentPage, totalPages);
+        renderPagination(_filterSortPage, totalPages);
         // 同名课程侧栏存在时折叠次要列
         const mainArea = document.querySelector('.file-area-main');
         const sidePanel = document.querySelector('.file-area-side');
@@ -893,8 +996,8 @@
         pag.querySelectorAll('.fp-num, .fp-prev, .fp-next').forEach(function(btn) {
           btn.addEventListener('click', function() {
             const p = parseInt(this.dataset.page);
-            if (p && p >= 1 && p <= total && p !== currentPage) {
-              currentPage = p;
+            if (p && p >= 1 && p <= total && p !== _filterSortPage) {
+              _filterSortPage = p;
               renderPage();
             }
           });
@@ -936,7 +1039,7 @@
 
         let gridHtml = '<div class="fp-jump-grid">';
         for (let i = 1; i <= total; i++) {
-          gridHtml += '<button class="fp-jump-num' + (i === currentPage ? ' fp-active' : '') + '" data-page="' + i + '">' + i + '</button>';
+          gridHtml += '<button class="fp-jump-num' + (i === _filterSortPage ? ' fp-active' : '') + '" data-page="' + i + '">' + i + '</button>';
         }
         gridHtml += '</div>';
         popup.innerHTML = gridHtml;
@@ -945,8 +1048,8 @@
           var targetBtn = e.target.closest('.fp-jump-num');
           if (targetBtn) {
             var p = parseInt(targetBtn.dataset.page);
-            if (p && p >= 1 && p <= total && p !== currentPage) {
-              currentPage = p;
+            if (p && p >= 1 && p <= total && p !== _filterSortPage) {
+              _filterSortPage = p;
               renderPage();
             }
             popup.remove();
@@ -1028,11 +1131,11 @@
         '<div class="file-info-content">' +
           '<div class="fi-row"><span class="fi-label">课程名称</span><span class="fi-value">' + esc(file.course_name || file.course_code || '') + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">文件名称</span><span class="fi-value">' + esc(file.file_name || '') + '</span></div>' +
-          '<div class="fi-row"><span class="fi-label">文件类型</span><span class="fi-value">' + esc(file.file_type || '') + '</span></div>' +
+          '<div class="fi-row"><span class="fi-label">资料类型</span><span class="fi-value">' + esc(file.user_material_type || file.file_type || '其他') + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">文件大小</span><span class="fi-value">' + formatSize(file.file_size) + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">上传者</span><span class="fi-value">' + esc(file.uploader || '匿名') + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">任课教师</span><span class="fi-value">' + teacherHtml + '</span></div>' +
-          '<div class="fi-row"><span class="fi-label">下载次数</span><span class="fi-value">' + file.download_count + ' 次</span></div>' +
+          '<div class="fi-row"><span class="fi-label">下载量</span><span class="fi-value">' + file.download_count + '</span></div>' +
           '<div class="fi-row"><span class="fi-label">上传日期</span><span class="fi-value">' + esc(file.created_at || '') + '</span></div>' +
           '<div class="fi-row fi-row-desc"><span class="fi-label">简介</span><span class="fi-value">' + descHtml + '</span></div>' +
           '<div class="fi-actions">' +
@@ -1116,6 +1219,21 @@
     });
   }
 
+
+  // 管理模式表格行内快速改类型
+  function mgmtChangeType(fileId, selectEl) {
+    var val = selectEl.value;
+    if (!val) return;
+    api('/api/files/' + fileId + '/update/', {
+      method: 'PATCH',
+      body: { material_type_id: parseInt(val) }
+    }).then(function() {
+      // 刷新视图
+      renderExplorer();
+    }).catch(function(err) {
+      alert('保存失败：' + err.message);
+    });
+  }
   // ── 关闭文件简介弹窗 ──
   function closeFileInfoModal(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -1129,13 +1247,470 @@
     }
   }
 
+  // ── 筛选排序 ──
+  function _getFilteredSortedFiles() {
+    var files = _allFilesCache.slice();
+    // 类型筛选
+    if (_typeFilter) {
+      files = files.filter(function(f) {
+        return (f.user_material_type || f.file_type) === _typeFilter;
+      });
+    }
+    // 排序
+    if (_sortBy === 'download') {
+      files.sort(function(a, b) { return (b.download_count || 0) - (a.download_count || 0); });
+    } else if (_sortBy === 'favorite') {
+      files.sort(function(a, b) { return (b.favorite_count || 0) - (a.favorite_count || 0); });
+    } else if (_sortBy === 'teacher') {
+      files.sort(function(a, b) {
+        var ta = (a.teacher || '').toLowerCase();
+        var tb = (b.teacher || '').toLowerCase();
+        if (ta < tb) return -1;
+        if (ta > tb) return 1;
+        return 0;
+      });
+    }
+    // 默认：上传时间倒序（文件已按 -created_at 排序）
+    return files;
+  }
+
+  function _renderFilterSortLabels() {
+    var typeBtn = document.getElementById('typeFilterBtn');
+    if (typeBtn) {
+      typeBtn.textContent = '类型：' + (_typeFilter || '全部') + ' ▾';
+    }
+    var sortBtn = document.getElementById('sortFilterBtn');
+    if (sortBtn) {
+      var labels = { 'date': '上传时间', 'download': '下载量', 'favorite': '收藏量', 'teacher': '任课教师' };
+      sortBtn.textContent = '排序：' + (labels[_sortBy] || '上传时间') + ' ▾';
+    }
+  }
+
+  function _closeFilterSortDropdowns() {
+    document.querySelectorAll('.filter-dropdown').forEach(function(el) { el.remove(); });
+  }
+
+  function toggleTypeFilterDropdown(event) {
+    event.stopPropagation();
+    _closeFilterSortDropdowns();
+    var btn = document.getElementById('typeFilterBtn');
+    var rect = btn.getBoundingClientRect();
+    var dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown';
+    var html = '<div class="filter-dd-header">类型：</div>';
+    html += '<div class="filter-dd-item' + (!_typeFilter ? ' filter-dd-active' : '') + '" data-value="">全部</div>';
+    MATERIAL_TYPES.forEach(function(t) {
+      html += '<div class="filter-dd-item' + (_typeFilter === t.name ? ' filter-dd-active' : '') + '" data-value="' + esc(t.name) + '">' + esc(t.name) + '</div>';
+    });
+    dropdown.innerHTML = html;
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.left = Math.max(8, rect.left) + 'px';
+    dropdown.style.zIndex = '1000';
+    dropdown.addEventListener('click', function(e) {
+      var item = e.target.closest('.filter-dd-item');
+      if (item) {
+        var val = item.dataset.value;
+        _typeFilter = val;
+        _filterSortPage = 1;
+        _renderFilterSortLabels();
+        _closeFilterSortDropdowns();
+        // 重新渲染页面
+        if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
+      }
+    });
+    document.body.appendChild(dropdown);
+  }
+
+  function toggleSortDropdown(event) {
+    event.stopPropagation();
+    _closeFilterSortDropdowns();
+    var btn = document.getElementById('sortFilterBtn');
+    var rect = btn.getBoundingClientRect();
+    var dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown';
+    var labels = { 'date': '上传时间', 'download': '下载量', 'favorite': '收藏量', 'teacher': '任课教师' };
+    var html = '';
+    ['date', 'download', 'favorite', 'teacher'].forEach(function(key) {
+      html += '<div class="filter-dd-item' + (_sortBy === key ? ' filter-dd-active' : '') + '" data-value="' + key + '">' + labels[key] + '</div>';
+    });
+    dropdown.innerHTML = html;
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.left = Math.max(8, rect.left) + 'px';
+    dropdown.style.zIndex = '1000';
+    dropdown.addEventListener('click', function(e) {
+      var item = e.target.closest('.filter-dd-item');
+      if (item) {
+        var val = item.dataset.value;
+        _sortBy = val;
+        _filterSortPage = 1;
+        _renderFilterSortLabels();
+        _closeFilterSortDropdowns();
+        if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
+      }
+    });
+    document.body.appendChild(dropdown);
+  }
+
+  // 点击页面其他地方关闭筛选排序下拉
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.filter-dropdown') && !e.target.closest('.fa-filter-btn')) {
+      _closeFilterSortDropdowns();
+    }
+  });
+
+
+  // ============================================================
+  // 文件详情页（替换弹窗）
+  // ============================================================
+
+  function _showFileDetailSkeleton() {
+    document.querySelectorAll('.view-section').forEach(function(v) { v.style.display = 'none'; v.classList.remove('active'); });
+    var v = document.getElementById('fileDetailView');
+    if (v) { v.style.display = 'block'; v.classList.add('active'); }
+    var titleEl = document.getElementById('fdTitle');
+    if (titleEl) titleEl.innerHTML = '<span style="color:var(--ink-faint)">加载中…</span>';
+    var meta1 = document.querySelector('.fd-meta1');
+    if (meta1) meta1.innerHTML = '<span style="color:var(--ink-faint);font-size:0.82rem">加载中…</span>';
+    var meta2 = document.querySelector('.fd-meta2');
+    if (meta2) meta2.innerHTML = '';
+    var descEl = document.querySelector('.fd-desc-area');
+    if (descEl) descEl.innerHTML = '';
+    var uploaderEl = document.querySelector('.fd-uploader-card');
+    if (uploaderEl) uploaderEl.innerHTML = '';
+    var actionsEl = document.getElementById('fdActions');
+    if (actionsEl) actionsEl.innerHTML = '';
+    window.scrollTo({ top: 0 });
+  }
+
+  var _currentDetailFile = null;
+
+  var _fdPrevSidebar = null; // 保存进入文件详情前的侧边栏状态
+
+  function showFileDetail(file) {
+    // 保存当前侧边栏状态，保持高亮不丢失
+    var al = document.querySelector('.side-nav a.active');
+    _fdPrevSidebar = al ? al.getAttribute('data-view') : null;
+
+    // 如果数据不完整，从 API 获取
+    if (!file.file_name && file.id) {
+      if (window._fileLookup && window._fileLookup[file.id]) {
+        file = window._fileLookup[file.id];
+      } else {
+        // 异步从 API 获取完整数据
+        var fid = file.id;
+        var fTitle = file.title || '';
+        // 先渲染骨架屏
+        _showFileDetailSkeleton();
+        updateSidebar(_fdPrevSidebar);
+        pushViewState('fileDetail', { fileId: fid, prevView: _fdPrevSidebar });
+        api('/api/files/' + fid + '/').then(function(fullFile) {
+          _currentDetailFile = fullFile;
+          var v = document.getElementById('fileDetailView');
+          if (v) { v.style.display = 'block'; v.classList.add('active'); }
+          _renderFileDetail(fullFile);
+        }).catch(function() {
+          // API 失败时回退到课程页
+          if (file.course_code) {
+            var t = file.course_code.startsWith('GEN') ? '通识课' : '专业课';
+            showExplorer(t);
+            requestAnimationFrame(function() {
+              requestAnimationFrame(function() { navToLast(file.course_code); });
+            });
+          } else { showHome(); }
+        });
+        return;
+      }
+    }
+    _currentDetailFile = file;
+    document.querySelectorAll('.view-section').forEach(function(v) {
+      v.style.display = 'none';
+      v.classList.remove('active');
+    });
+    var v = document.getElementById('fileDetailView');
+    if (v) { v.style.display = 'block'; v.classList.add('active'); }
+    updateSidebar(_fdPrevSidebar);
+    window.scrollTo({ top: 0 });
+    pushViewState('fileDetail', { fileId: file.id, prevView: _fdPrevSidebar });
+    _renderFileDetail(file);
+  }
+
+  function _renderFileDetail(file) {
+    var bc = document.getElementById('fdBreadcrumb');
+    if (bc) {
+      var treePath = null;
+      // 优先用当前导航上下文（expPath），验证最后一个节点是否匹配课程
+      if (expPath && expPath.length > 0) {
+        var lastNode = getNode(expPath);
+        if (lastNode && lastNode.courseId === file.course_code) {
+          treePath = expPath.slice();
+        }
+      }
+      // 回退到全局树搜索
+      if (!treePath) {
+        treePath = findPathByCourseId(file.course_code || '');
+      }
+      if (treePath && treePath.length > 0) {
+        _fdBreadcrumbPath = treePath;
+        _renderBreadcrumb(bc, treePath, {
+          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); }
+        });
+        // 追加静态的"文件详情"（不与课程名重叠）
+        var sep = document.createElement('span');
+        sep.className = 'bc-sep'; sep.textContent = ' / ';
+        bc.appendChild(sep);
+        var cur = document.createElement('span');
+        cur.className = 'bc-current'; cur.textContent = '文件详情';
+        bc.appendChild(cur);
+      } else {
+        var type = file.course_code && file.course_code.startsWith('GEN') ? '通识课' : '专业课';
+        _fdBreadcrumbPath = [type, file.course_name || ''];
+        _renderBreadcrumb(bc, _fdBreadcrumbPath, {
+          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); }
+        });
+        // 追加静态的"文件详情"
+        var sep = document.createElement('span');
+        sep.className = 'bc-sep'; sep.textContent = ' / ';
+        bc.appendChild(sep);
+        var cur = document.createElement('span');
+        cur.className = 'bc-current'; cur.textContent = '文件详情';
+        bc.appendChild(cur);
+      }
+    }
+    var canEdit = currentUser && !_civilianMode && (file.is_uploader || (file.can_delete && currentUser.role !== 'user'));
+    var penIcon = '<button class="fd-pen" onclick="fdEditField(this)" title="点击编辑">\u270f\ufe0f</button>';
+    var typeDropdownHtml = canEdit
+      ? '<span class="fd-type-dropdown-wrap"><select class="fd-type-select" onchange="fdChangeType(' + (file.id || 0) + ',this)">' +
+          MATERIAL_TYPES.map(function(t) {
+            var selected = (file.user_material_type || '') === t.name ? ' selected' : '';
+            return '<option value="' + t.id + '"' + selected + '>' + t.name + '</option>';
+          }).join('') +
+        '</select></span>'
+      : '';
+    var titleEl = document.getElementById('fdTitle');
+    if (titleEl) {
+      var titleHtml = canEdit
+        ? '<span class="fd-editable" data-field="title" data-fid="' + (file.id || 0) + '">' + esc(file.title || '') + '</span>' + penIcon
+        : esc(file.title || '');
+      titleEl.innerHTML = titleHtml;
+    }
+    var meta1 = document.querySelector('.fd-meta1');
+    if (meta1) {
+      var fileNameHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.file + '</span> ' + esc(file.file_name || '') + '</span>';
+      var typeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.tag + '</span> ' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span>';
+      var dateHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.calendar + '</span> ' + esc(file.created_at || '') + '</span>';
+      var sizeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.storage + '</span> ' + formatSize(file.file_size) + '</span>';
+      var teacherHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.teacher + '</span> ' + (canEdit
+        ? '<span class="fd-editable" data-field="teacher" data-fid="' + (file.id || 0) + '">' + esc(file.teacher || '未填写') + '</span>' + penIcon
+        : esc(file.teacher || '未填写')) + '</span>';
+      meta1.innerHTML = '<div class="fd-meta-row">' + fileNameHtml + '<span class="fd-meta-sep">|</span>' + typeHtml + '<span class="fd-meta-sep">|</span>' + dateHtml + '<span class="fd-meta-sep">|</span>' + sizeHtml + '<span class="fd-meta-sep">|</span>' + teacherHtml + '</div>';
+    }
+    var meta2 = document.querySelector('.fd-meta2');
+    if (meta2) {
+      var dlHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.download + '</span> 下载量：' + (file.download_count || 0) + '</span>';
+      var favHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.star + '</span> 收藏量：' + (file.favorite_count || 0) + '</span>';
+      meta2.innerHTML = '<div class="fd-meta-row">' + dlHtml + '<span class="fd-meta-sep">|</span>' + favHtml + '</div>';
+    }
+    var descEl = document.querySelector('.fd-desc-area');
+    if (descEl) {
+      var descContent = canEdit
+        ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description || '暂无简介') + '</span>' + penIcon
+        : esc(file.description || '暂无简介');
+      descEl.innerHTML = '<div class="fd-desc-card">' + descContent + '</div>';
+    }
+    var uploaderEl = document.querySelector('.fd-uploader-card');
+    if (uploaderEl) {
+      var initial = (file.uploader || '?').charAt(0).toUpperCase();
+      var userId = file.uploader_id || 0;
+      var avatarHtml = file.uploader_avatar
+        ? '<img src="' + esc(file.uploader_avatar) + '" class="fdu-avatar-img" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+          '<div class="fdu-avatar" style="display:none">' + esc(initial) + '</div>'
+        : '<div class="fdu-avatar">' + esc(initial) + '</div>';
+      uploaderEl.innerHTML =
+        '<div class="fdu-card" onclick="showUserPublic(' + userId + ')">' +
+          avatarHtml +
+          '<div class="fdu-info">' +
+            '<div class="fdu-name">' + esc(file.uploader || '匿名') + '</div>' +
+            '<div class="fdu-label">上传者</div>' +
+          '</div>' +
+        '</div>';
+    }
+    var actionsEl = document.getElementById('fdActions');
+    if (actionsEl) {
+      var dlBtn = currentUser
+        ? '<button class="fd-btn fd-btn-primary" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载</button>'
+        : '<button class="fd-btn fd-btn-primary" onclick="showLoginModal()">' + FD_ICONS.lock + ' 登录后下载</button>';
+      var favBtn = currentUser
+        ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
+        : '';
+      var delBtn = (file.can_delete && !_civilianMode)
+        ? '<button class="fd-btn fd-btn-danger" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + ' 删除</button>'
+        : '';
+      actionsEl.innerHTML = '<div class="fd-actions-inner">' + dlBtn + favBtn + delBtn + '</div>';
+      // 加载初始收藏状态
+      if (currentUser) {
+        if (file.is_favorited !== undefined) {
+          var fb = document.getElementById('fdFavBtn');
+          if (fb) {
+            fb.innerHTML = file.is_favorited ? FD_ICONS.starFilled + ' 已收藏' : FD_ICONS.star + ' 收藏';
+            fb.classList.toggle('favorited', file.is_favorited);
+          }
+        } else {
+          api('/api/files/' + (file.id || 0) + '/favorite-status/').then(function(fs) {
+            var fb = document.getElementById('fdFavBtn');
+            if (fb) {
+              fb.innerHTML = fs.favorited ? FD_ICONS.starFilled + ' 已收藏' : FD_ICONS.star + ' 收藏';
+              fb.classList.toggle('favorited', fs.favorited);
+            }
+          }).catch(function(){});
+        }
+      }
+    }
+    var badgeEl = document.getElementById('fdPreviewBadge');
+    if (badgeEl) {
+      badgeEl.innerHTML = extBadge(file.file_name);
+    }
+    // 预览提示文字：PDF 显示"预览最多显示前三页"
+    var fdh = document.querySelector('.fd-preview-header');
+    if (fdh) {
+      var hint = fdh.querySelector('.pv-hint');
+      if (!hint) {
+        hint = document.createElement('span');
+        hint.className = 'pv-hint';
+        fdh.appendChild(hint);
+      }
+      var extType = _isPreviewableExt(file.file_name);
+      hint.textContent = extType === 'pdf' ? '预览最多显示前三页' : '';
+    }
+    _loadFdPreview(file.id, file.file_name);
+  }
+
+  async function _loadFdPreview(fileId, fileName) {
+    var body = document.getElementById('fdPreviewBody');
+    if (!body) return;
+    var extType = _isPreviewableExt(fileName);
+    body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">\u23f3</div><div class="pv-unsupported-text">加载预览…</div></div>';
+    try {
+      var previewUrl = await _previewUrl(fileId);
+      if (extType === 'pdf') {
+        body.innerHTML = '<embed src="' + previewUrl + '" type="application/pdf" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer">';
+      } else if (extType === 'image') {
+        body.innerHTML = '<img src="' + previewUrl + '" alt="预览" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
+      } else if (extType === 'text') {
+        body.innerHTML = '<div class="pv-text-wrap"><pre class="pv-text" id="fdPvTextContent">加载中…</pre></div>';
+        fetch(previewUrl).then(function(r) {
+          if (!r.ok) throw new Error('加载失败');
+          return r.text();
+        }).then(function(text) {
+          var pre = document.getElementById('fdPvTextContent');
+          if (pre) {
+            pre.textContent = text.slice(0, 500);
+            var ext = (fileName || '').split('.').pop().toLowerCase();
+            if (['py','js','ts','css','html','json','xml','sh','md','c','cpp','java','go','rs'].includes(ext)) {
+              pre.className = 'pv-text pv-text-code';
+            }
+          }
+        }).catch(function() {
+          var pre = document.getElementById('fdPvTextContent');
+          if (pre) pre.textContent = '无法加载文件内容';
+        });
+      } else {
+        body.innerHTML = '<div class="pv-unsupported">' +
+          '<div class="pv-unsupported-icon">\U0001f4c4</div>' +
+          '<div class="pv-unsupported-text">该文件类型暂不支持在线预览</div>' +
+          '<button class="pv-dl-btn" onclick="handleDownloadClick(' + fileId + ',this,event)">' + FD_ICONS.download + ' 下载文件</button>' +
+        '</div>';
+      }
+    } catch(e) {
+      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">\u26a0\ufe0f</div><div class="pv-unsupported-text">预览加载失败</div></div>';
+    }
+  }
+
+  async function toggleFdFavorite(fileId) {
+    try {
+      var data = await api('/api/files/' + fileId + '/favorite/', { method: 'POST' });
+      var btn = document.getElementById('fdFavBtn');
+      if (btn) {
+        btn.innerHTML = data.favorited ? FD_ICONS.starFilled + ' 已收藏' : FD_ICONS.star + ' 收藏';
+        btn.classList.toggle('favorited', data.favorited);
+      }
+    } catch(e) {
+      alert('操作失败：' + e.message);
+    }
+  }
+
+  function fdEditField(penEl) {
+    var parent = penEl.parentElement;
+    var span = parent.querySelector('.fd-editable');
+    if (!span || span.querySelector('input')) return;
+    var field = span.getAttribute('data-field');
+    var fid = parseInt(span.getAttribute('data-fid'));
+    var currentVal = span.textContent;
+    if (!currentVal || currentVal === '未填写' || currentVal === '暂无简介') currentVal = '';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'fi-edit-input';
+    input.value = currentVal;
+    input.placeholder = field === 'title' ? '输入标题' : (field === 'teacher' ? '输入任课教师' : '输入简介');
+    var original = span.textContent;
+    span.textContent = '';
+    span.appendChild(input);
+    input.focus();
+    input.select();
+    penEl.textContent = '\U0001f4be';
+    penEl.onclick = function(e) {
+      e.stopPropagation();
+      fdSaveField(span, fid, field, input, penEl);
+    };
+    input.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { fdSaveField(span, fid, field, input, penEl); }
+      if (ev.key === 'Escape') { span.textContent = original; penEl.textContent = '\u270f\ufe0f'; penEl.onclick = function(){fdEditField(penEl);}; }
+    });
+    input.addEventListener('blur', function() {
+      setTimeout(function() {
+        if (!penEl.textContent.includes('\u2705')) {
+          span.textContent = original;
+          penEl.textContent = '\u270f\ufe0f';
+          penEl.onclick = function(){fdEditField(penEl);};
+        }
+      }, 200);
+    });
+  }
+
+  function fdSaveField(spanEl, fid, field, input, penEl) {
+    var val = input.value.trim();
+    api('/api/files/' + fid + '/update/', { method: 'PATCH', body: (function(){var o={};o[field]=val;return o;})() }).then(function(data) {
+      spanEl.textContent = data[field] || val || '未填写';
+      penEl.textContent = '\u2705';
+      penEl.onclick = function(){};
+      setTimeout(function() { penEl.textContent = '\u270f\ufe0f'; penEl.onclick = function(){fdEditField(penEl);}; }, 1500);
+    }).catch(function(err) {
+      alert('保存失败：' + err.message);
+    });
+  }
+
+  function fdChangeType(fileId, selectEl) {
+    var val = selectEl.value;
+    if (!val) return;
+    api('/api/files/' + fileId + '/update/', {
+      method: 'PATCH',
+      body: { material_type_id: parseInt(val) }
+    }).then(function() {
+      if (_currentDetailFile) {
+        _currentDetailFile.user_material_type = selectEl.options[selectEl.selectedIndex].text;
+      }
+    }).catch(function(err) {
+      alert('保存失败：' + err.message);
+    });
+  }
   // ── 文件预览 ──
   var _previewModal = null;
 
   function _previewUrl(fileId) {
     // 使用短时下载令牌（异步获取后生成 URL）
     return _getDownloadToken(fileId).then(function(dtoken) {
-      return '/api/files/' + fileId + '/download/?dtoken=' + encodeURIComponent(dtoken) + '&preview=1';
+      return '/api/files/' + fileId + '/download/?dtoken=' + encodeURIComponent(dtoken) + '&preview=1&max_pages=3';
     });
   }
 
@@ -1243,7 +1818,7 @@
           }).then(function(text) {
             var pre = document.getElementById('pvTextContent');
             if (pre) {
-              pre.textContent = text;
+              pre.textContent = text.slice(0, 500);
               var ext = fn.split('.').pop().toLowerCase();
               if (['py','js','ts','jsx','tsx','css','html','json','xml','sh','bash','c','cpp','java','go','rs','rb','php','sql','md'].includes(ext)) {
                 pre.className = 'pv-text pv-text-code';

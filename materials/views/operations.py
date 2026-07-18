@@ -51,9 +51,21 @@ def api_file_update(request, file_id):
     if "description" in body:
         material.description = body["description"].strip()
         updated.append("description")
+    if "material_type_id" in body:
+        mtid = body["material_type_id"]
+        if mtid and str(mtid).isdigit():
+            material.material_type_id = int(mtid)
+            updated.append("material_type")
+        elif mtid == "" or mtid is None:
+            material.material_type = None
+            updated.append("material_type")
     if updated:
         material.save(update_fields=updated)
-    return _ok({"id": material.id, "title": material.title, "teacher": material.teacher, "description": material.description})
+    return _ok({
+        "id": material.id, "title": material.title,
+        "teacher": material.teacher, "description": material.description,
+        "material_type_id": material.material_type_id,
+    })
 
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
@@ -373,14 +385,27 @@ def api_file_batch_edit(request):
             except Exception:
                 continue
             changed = False
+            update_fields = []
             if "teacher" in body:
                 m.teacher = body["teacher"].strip()
                 changed = True
+                update_fields.append("teacher")
             if "description" in body:
                 m.description = body["description"].strip()
                 changed = True
+                update_fields.append("description")
+            if "material_type_id" in body:
+                mtid = body["material_type_id"]
+                if mtid and str(mtid).isdigit():
+                    m.material_type_id = int(mtid)
+                    changed = True
+                    update_fields.append("material_type")
+                elif mtid == "" or mtid is None:
+                    m.material_type = None
+                    changed = True
+                    update_fields.append("material_type")
             if changed:
-                m.save(update_fields=["teacher", "description"])
+                m.save(update_fields=update_fields)
                 updated += 1
         except Material.DoesNotExist:
             continue
