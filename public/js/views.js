@@ -499,12 +499,12 @@
 
     try {
       var data = await api('/api/announcements/');
-      if (!data || !data.length) {
+      if (!data || !data.items || !data.items.length) {
         list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">暂无公告</div>';
         return;
       }
       var html = '';
-      data.forEach(function(a) {
+      data.items.forEach(function(a) {
         var avatarHtml = a.publisher_avatar
           ? '<img src="' + esc(a.publisher_avatar) + '" class="ai-avatar" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">'
           : '<span class="ai-avatar-placeholder" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">' + esc((a.publisher_name || '?').charAt(0).toUpperCase()) + '</span>';
