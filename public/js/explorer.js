@@ -521,6 +521,16 @@
     return false;
   }
 
+  // ── 跳过单节点后的有效子节点数 ──
+  function getEffectiveChildCount(node) {
+    if (!node || !node.children) return 0;
+    // 递归跳过只有一个子节点的中间层
+    while (node.children.length === 1 && node.children[0].children) {
+      node = node.children[0];
+    }
+    return node.children.length;
+  }
+
   // ── Renderers ──
   function renderGrid(items) {
     const parent = document.getElementById('explorerContent');
@@ -533,7 +543,7 @@
         '<div class="folder-card" data-n="' + esc(item.name) + '">' +
           '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
           '<div class="fc-name">' + esc(item.name) + '</div>' +
-          '<div class="fc-count">' + (item.children ? item.children.length + ' 项' : '') + '</div>' +
+          '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
         '</div>'
       ).join('') +
     '</div>';
@@ -577,9 +587,9 @@
         ? '<span class="fli-badge has-data">' + fCount + ' 个文件</span>'
         : '<span class="fli-badge no-data">暂无资料</span>';
     } else if (hasSub) {
-      badge = '<span class="fli-badge has-data">' + item.children.length + ' 项</span>';
+      badge = '<span class="fli-badge has-data">' + getEffectiveChildCount(item) + ' 项</span>';
     }
-    const meta = cId ? '课程代码 ' + cId : (hasSub ? item.children.length + ' 项' : '');
+    const meta = cId ? '课程代码 ' + cId : (hasSub ? getEffectiveChildCount(item) + ' 项' : '');
     return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
       '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
