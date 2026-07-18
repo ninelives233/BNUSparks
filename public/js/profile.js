@@ -226,7 +226,48 @@
     });
   }
 
+
+  function showMyFavoritesPage() {
+    closeNotifDrawer();
+    document.querySelectorAll('.view-section').forEach(function(v) {
+      v.style.display = 'none';
+      v.classList.remove('active');
+    });
+    var v = document.getElementById('myFavoritesView');
+    if (v) { v.style.display = 'block'; v.classList.add('active'); }
+    updateSidebar(null);
+    window.scrollTo({ top: 0 });
+    pushViewState('myfavorites', {});
+    renderMyFavoritesPage();
+    _updateFooterVisibility('myfavorites');
+  }
+
+  function renderMyFavoritesPage() {
+    var list = document.getElementById('myFavoritesPageList');
+    if (!list) return;
+    list.innerHTML = '<div class="admin-loading">加载中...</div>';
+    api('/api/user/favorites/').then(function(data) {
+      var items = data.items || [];
+      if (!items.length) {
+        list.innerHTML = '<div class="admin-empty">暂无收藏记录</div>';
+        return;
+      }
+      list.innerHTML = items.map(function(r) {
+        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.material_id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+          '<div class="hc-item-left">' +
+            '<div class="hc-item-name">' + esc(r.title) + '</div>' +
+            '<div class="hc-item-meta">' + esc(r.course_name) + ' \u00b7 ' + esc(r.favorited_at) + '</div>' +
+          '</div>' +
+          '<span class="hc-item-count">\u2b50</span>' +
+        '</div>';
+      }).join('');
+    }).catch(function(err) {
+      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+    });
+  }
+
   function renderMyDeletedTab(listEl) {
+
     // 从删除记录 API 加载当前用户相关的删除记录
     api('/api/moderation/deletions/?page=1&per_page=100').then(function(data) {
       if (!data.items || !data.items.length) {

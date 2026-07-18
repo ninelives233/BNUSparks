@@ -75,7 +75,7 @@
 
     // 乐观递增前端下载计数（仅在文件表格内有效）
     var tr = el.closest('tr');
-    if (tr) { var c = tr.querySelector('.ft-dlcount'); if (c) { var m = c.textContent.match(/(\d+)/); if (m) { c.textContent = (parseInt(m[1]) + 1) + ' 次'; } } }
+    if (tr) { var c = tr.querySelector('.ft-dlcount'); if (c) { var m = c.textContent.match(/(\d+)/); if (m) { c.textContent = parseInt(m[1]) + 1; } } }
 
     // 即时反馈：按钮显示加载状态
     _showDownloadFeedback(el);
@@ -217,6 +217,11 @@
           '<input type="text" id="batchEditTeacher" placeholder="留空不修改" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.85rem;box-sizing:border-box"></div>' +
         '<div style="margin-bottom:10px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件简介</label>' +
           '<textarea id="batchEditDesc" rows="3" placeholder="留空不修改" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.85rem;box-sizing:border-box;resize:vertical"></textarea></div>' +
+        '<div style="margin-bottom:10px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">资料类型</label>' +
+        '<select id="batchEditType" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.85rem;box-sizing:border-box">' +
+        '<option value="">留空不修改</option>' +
+        (typeof MATERIAL_TYPES !== 'undefined' ? MATERIAL_TYPES.map(function(t){ return '<option value="' + t.id + '">' + t.name + '</option>'; }).join('') : '') +
+        '</select></div>' +
         '<div class="ar-actions">' +
           '<button class="admin-btn admin-btn-primary" onclick="confirmBatchEdit(\'' + selected.join(',') + '\')">确认修改</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
@@ -230,10 +235,12 @@
   function confirmBatchEdit(fileIdsStr) {
     var teacher = document.getElementById('batchEditTeacher').value.trim();
     var description = document.getElementById('batchEditDesc').value.trim();
-    if (!teacher && !description) { alert('请至少填写一项修改内容'); return; }
+    var batchType = (document.getElementById('batchEditType') || {}).value || '';
+    if (!teacher && !description && !batchType) { alert('请至少填写一项修改内容'); return; }
     var body = { file_ids: fileIdsStr.split(',').map(Number) };
     if (teacher) body.teacher = teacher;
     if (description) body.description = description;
+    if (batchType) body.material_type_id = parseInt(batchType);
     var overlay = document.querySelector('.admin-reject-overlay');
     api('/api/files/batch-edit/', { method: 'POST', body: body }).then(function(result) {
       _removeOverlay(overlay);

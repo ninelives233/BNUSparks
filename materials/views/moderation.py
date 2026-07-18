@@ -369,6 +369,7 @@ def api_deletion_records(request):
                 "deleted_by_name": (r.deleted_by.first_name or r.deleted_by.username) if r.deleted_by else "未知",
                 "deleted_at": r.deleted_at.strftime("%Y-%m-%d %H:%M") if r.deleted_at else "",
                 "is_restored": r.is_restored,
+                "can_restore": not r.is_restored and (timezone.now() - r.deleted_at <= timedelta(hours=48)),
             } for r in items
         ],
     })

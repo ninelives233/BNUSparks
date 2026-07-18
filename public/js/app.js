@@ -72,8 +72,22 @@ window.addEventListener('popstate', async function(e) {
       renderExplorer();
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
+    // 文件详情页：重新加载（优先缓存，否则 API）
+    if (state.view === 'fileDetail' && state.fileId) {
+      // 尝试从文件缓存恢复
+      if (window._fileLookup && window._fileLookup[state.fileId]) {
+        showFileDetail(window._fileLookup[state.fileId]);
+      } else {
+        showFileDetail({ id: state.fileId, title: '' });
+      }
+      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+    }
     // 更新侧栏高亮
-    if (typeof updateSidebar === 'function') updateSidebar(state.view);
+    if (state.view === 'fileDetail' && state.prevView) {
+      if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
+    } else if (typeof updateSidebar === 'function') {
+      updateSidebar(state.view);
+    }
     return;
   }
   if (typeof showHome === 'function') showHome(true);
@@ -148,6 +162,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         case 'broad': showBroad(); break;
         case 'myuploads': showMyUploadsPage(); break;
         case 'mydownloads': showMyDownloadsPage(); break;
+        case 'myfavorites': showMyFavoritesPage(); break;
+        case 'fileDetail':
+          // 尝试从文件缓存恢复，否则从 API 获取
+          if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
+            showFileDetail(window._fileLookup[saved.fileId]);
+          } else if (saved.fileId) {
+            showFileDetail({ id: saved.fileId, title: '' });
+          } else {
+            showHome();
+          }
+          break;
         case 'userPublic': showUserPublic(saved.userId); break;
         default: showHome();
       }

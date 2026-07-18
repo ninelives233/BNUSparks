@@ -20,6 +20,7 @@ from .utils import (
     _err, _ok, _get_user, _get_or_create_profile, _strip_exif,
     require_login, Notification, UserProfile, Material, DownloadRecord,
     DeletionRecord, ReviewComment, Course, CourseCategory, F,
+    Favorite,
 )
 
 
@@ -65,6 +66,7 @@ def api_profile(request):
             "sections_display": sections_display,
             "upload_count": Material.objects.filter(uploader=request.user).count(),
             "download_count": DownloadRecord.objects.filter(user=request.user).count(),
+            "collection_count": Favorite.objects.filter(material__uploader=request.user).count(),
         })
 
     elif request.method == "PATCH":

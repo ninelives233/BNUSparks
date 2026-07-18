@@ -5,7 +5,14 @@ file-upload, upload-text, download-token, download, delete
 """
 
 import json
+from io import BytesIO
 from pathlib import Path
+
+try:
+    from pypdf import PdfReader, PdfWriter
+    HAS_PYPDF = True
+except ImportError:
+    HAS_PYPDF = False
 
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -24,6 +31,7 @@ from .utils import (
     UserProfile, Course, Material, Notification,
     DownloadRecord, DeletionRecord, CourseCategory,
 )
+from django.db.models import Count
 
 
 @csrf_exempt
@@ -37,6 +45,7 @@ def api_file_upload(request):
     title = request.POST.get("title", "").strip()
     description = request.POST.get("description", "").strip()
     teacher = request.POST.get("teacher", "").strip()
+    material_type_id = request.POST.get("material_type_id", "").strip()
     uploaded_file = request.FILES.get("file")
 
     if not course_code or not uploaded_file:
@@ -98,6 +107,7 @@ def api_file_upload(request):
     material = Material.objects.create(
         course=course, title=title, description=description,
         teacher=teacher,
+        material_type_id=int(material_type_id) if material_type_id and material_type_id.isdigit() else None,
         file_name=uploaded_file.name,
         file_path=f"{course_code}/{safe_name}",
         file_size=file_size,
@@ -157,6 +167,7 @@ def api_file_upload_text(request):
     title = (data.get("title") or "").strip()
     teacher = (data.get("teacher") or "").strip()
     description = (data.get("description") or "").strip()
+    material_type_id = (data.get("material_type_id") or "").strip()
     content = (data.get("content") or "").strip()
 
     if not course_code or not content:
@@ -214,6 +225,7 @@ def api_file_upload_text(request):
     material = Material.objects.create(
         course=course, title=title, description=description,
         teacher=teacher,
+        material_type_id=int(material_type_id) if material_type_id and material_type_id.isdigit() else None,
         file_name=safe_name,
         file_path=f"{course_code}/{safe_name}",
         file_size=file_size,
@@ -292,6 +304,26 @@ def api_file_download(request, file_id):
 
     is_preview = request.GET.get("preview") == "1"
     if is_preview:
+        # PDF 预览：支持 max_pages=N 裁剪为前 N 页（节省带宽 + 客户端资源）
+        max_pages = request.GET.get("max_pages")
+        if max_pages and HAS_PYPDF and material.file_name and material.file_name.lower().endswith('.pdf'):
+            try:
+                reader = PdfReader(file_path)
+                writer = PdfWriter()
+                n = min(int(max_pages), len(reader.pages))
+                for i in range(n):
+                    writer.add_page(reader.pages[i])
+                buf = BytesIO()
+                writer.write(buf)
+                buf.seek(0)
+                response = FileResponse(
+                    buf, as_attachment=False,
+                    filename=material.file_name or material.title,
+                )
+                response['X-Frame-Options'] = 'SAMEORIGIN'
+                return response
+            except Exception:
+                pass  # 出错时降级为完整 PDF
         response = FileResponse(
             open(file_path, "rb"), as_attachment=False,
             filename=material.file_name or material.title,
@@ -409,3 +441,50 @@ def api_file_delete(request, file_id):
 
     material.delete()
     return _ok({"message": "文件已删除"})
+
+
+@require_login
+def api_file_detail(request, file_id):
+    """GET /api/files/<id>/ — 返回单个文件的完整信息"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    material = get_object_or_404(
+        Material.objects.select_related("material_type", "course", "uploader").annotate(
+            favorite_count=Count("favorited_by")
+        ),
+        id=file_id,
+    )
+    user = request.user
+    from .utils import Favorite
+    is_favorited = Favorite.objects.filter(user=user, material=material).exists() if user.is_authenticated else False
+    rs = material.review_status
+    uploader_profile = getattr(material.uploader, 'profile', None) if material.uploader else None
+    return _ok({
+        "id": material.id,
+        "title": material.title,
+        "file_name": material.file_name,
+        "file_size": material.file_size,
+        "file_type": material.material_type.name if material.material_type else (material.file_type or "其他"),
+        "user_material_type": material.material_type.name if material.material_type else "",
+        "uploader": material.uploader_name or (material.uploader.first_name if material.uploader else "匿名"),
+        "uploader_id": material.uploader_id or 0,
+        "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
+        "teacher": material.teacher,
+        "description": material.description or "",
+        "course_name": material.course.name if material.course else "",
+        "course_code": material.course.code if material.course else "",
+        "download_count": material.download_count,
+        "favorite_count": getattr(material, "favorite_count", 0),
+        "is_favorited": is_favorited,
+        "created_at": material.created_at.strftime("%Y-%m-%d") if material.created_at else "",
+        "review_status": rs,
+        "is_uploader": user.is_authenticated and material.uploader_id == user.id,
+        "can_download": material.is_approved or (user.is_authenticated and material.uploader_id == user.id),
+        "can_delete": user.is_authenticated and (
+            material.uploader_id == user.id
+            or _get_or_create_profile(user).role in (
+                UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR,
+            )
+        ),
+        "is_approved": material.is_approved,
+    })
