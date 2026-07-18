@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile,
-    require_login, UserProfile, Announcement,
+    require_login, UserProfile, Announcement, Notification,
 )
 
 
@@ -36,7 +36,7 @@ def api_announcements(request):
             "content": a.content,
             "publisher_name": a.publisher.first_name or a.publisher.username if a.publisher else "管理员",
             "publisher_id": a.publisher_id,
-            "publisher_avatar": (a.publisher.userprofile.avatar.url if a.publisher.userprofile.avatar else None) if hasattr(a.publisher, 'userprofile') else None,
+            "publisher_avatar": a.publisher.profile.avatar.url if a.publisher.profile.avatar else None,
             "created_at": a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "",
         } for a in qs]
         return _ok({"items": items, "is_admin": is_admin})
@@ -54,10 +54,26 @@ def api_announcements(request):
         content = (body.get("content") or "").strip()
         if not title or not content:
             return _err("标题和内容不能为空")
-        Announcement.objects.create(
+        announcement = Announcement.objects.create(
             title=title, content=content,
             publisher=user, is_published=True,
         )
+
+        # 推送到所有活跃用户的通知中心
+        active_users = User.objects.filter(is_active=True).exclude(id=user.id)
+        notifications = [
+            Notification(
+                recipient=u,
+                type="announcement",
+                title=title,
+                message=content[:200] if content else "",
+                triggered_by=user,
+            )
+            for u in active_users
+        ]
+        if notifications:
+            Notification.objects.bulk_create(notifications)
+
         return _ok({"message": "公告已发布"})
 
     return _err("仅支持 GET/POST", 405)
