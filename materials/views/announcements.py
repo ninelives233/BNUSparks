@@ -35,6 +35,8 @@ def api_announcements(request):
             "title": a.title,
             "content": a.content,
             "publisher_name": a.publisher.first_name or a.publisher.username if a.publisher else "管理员",
+            "publisher_id": a.publisher_id,
+            "publisher_avatar": (a.publisher.userprofile.avatar.url if a.publisher.userprofile.avatar else None) if hasattr(a.publisher, 'userprofile') else None,
             "created_at": a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "",
         } for a in qs]
         return _ok({"items": items, "is_admin": is_admin})
