@@ -337,6 +337,28 @@ class Announcement(models.Model):
         return self.title
 
 
+class Favorite(models.Model):
+    """收藏——用户收藏的资料"""
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="favorites",
+        verbose_name="收藏用户",
+    )
+    material = models.ForeignKey(
+        Material, on_delete=models.CASCADE, related_name="favorited_by",
+        verbose_name="收藏的资料",
+    )
+    created_at = models.DateTimeField("收藏时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "收藏"
+        verbose_name_plural = "收藏"
+        ordering = ["-created_at"]
+        unique_together = ["user", "material"]
+
+    def __str__(self):
+        return f"{self.user.username} → {self.material.title}"
+
+
 class DownloadRecord(models.Model):
     """下载记录——用户每次下载留痕"""
     user = models.ForeignKey(

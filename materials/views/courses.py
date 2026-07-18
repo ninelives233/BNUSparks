@@ -17,7 +17,7 @@ from .utils import (
     _build_tree_node, _get_courses_in_category,
     _create_notification,
     UserProfile, Course, College, CourseCategory, Material,
-    Notification, DownloadRecord,
+    Notification, DownloadRecord, Favorite,
 )
 
 
@@ -87,6 +87,12 @@ def api_course_files(request, course_code):
         "material_type"
     ).order_by("-created_at")
 
+    # 注释收藏数
+    from django.db.models import Count
+    materials = materials.annotate(
+        favorite_count=Count("favorited_by")
+    )
+
     from datetime import timedelta
     delay_boundary = timezone.now() - timedelta(minutes=1)
     user_id = user.id if user is not None else None
@@ -115,15 +121,20 @@ def api_course_files(request, course_code):
                 message=f"你的资料「{m.title}」已通过审核，现在可以下载了。",
                 material=m,
             )
+        uploader_profile = getattr(m.uploader, 'profile', None) if m.uploader else None
         return {
             "id": m.id, "title": m.title,
             "file_name": m.file_name, "file_size": m.file_size,
             "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
+            "user_material_type": m.material_type.name if m.material_type else "",
             "uploader": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
+            "uploader_id": m.uploader_id or 0,
+            "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
             "teacher": m.teacher, "description": m.description or "",
             "course_name": m.course.name if m.course else "",
             "course_code": m.course.code if m.course else "",
             "download_count": m.download_count,
+            "favorite_count": getattr(m, "favorite_count", 0),
             "created_at": m.created_at.strftime("%Y-%m-%d"),
             "review_status": rs,
             "is_uploader": user is not None and m.uploader_id == user.id,

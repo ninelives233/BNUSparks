@@ -32,7 +32,7 @@ from PIL import Image as PILImage
 from ..models import (
     College, Course, CourseType, Material, MaterialType,
     CourseCategory, UserProfile, Notification, ReviewComment,
-    DownloadRecord, DeletionRecord, FolderOperation, Announcement,
+    Favorite, DownloadRecord, DeletionRecord, FolderOperation, Announcement,
 )
 
 
@@ -556,7 +556,7 @@ def _get_managed_sections_display(profile):
 
 def _get_visible_deletion_records(user):
     """获取管理员可见的删除记录（按管辖范围过滤）"""
-    from .models import Course  # noqa: F811 — local import to avoid cycles
+    from ..models import Course  # noqa: F811 — local import to avoid cycles
     profile = _get_or_create_profile(user)
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         return DeletionRecord.objects.all()

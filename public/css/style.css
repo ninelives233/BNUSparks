@@ -710,6 +710,7 @@
     color: var(--ink-soft); margin-bottom: 4px;
     font-weight: 500;
   }
+  .label-required { color: var(--accent); margin-left: 2px; }
   .mf-pwd-wrap {
     position: relative; display: flex; align-items: center;
   }
@@ -1090,17 +1091,18 @@
   .file-table thead th:nth-child(3) { width: 85px; }     /* 大小 */
   .file-table thead th:nth-child(4) { width: 90px; }     /* 上传者 */
   .file-table thead th:nth-child(5) { width: 90px; }     /* 任课教师 */
-  .file-table thead th:nth-child(6) { width: 72px; }     /* 下载次数 */
-  .file-table thead th:nth-child(7) { width: 84px; }     /* 下载按钮 */
+  .file-table thead th:nth-child(6) { width: 72px; }     /* 收藏量 */
+  .file-table thead th:nth-child(7) { width: 72px; }     /* 下载量 */
   .file-table thead th.th-name { text-align: center; }
   .file-table thead th.th-size { width: 85px; }
-  .file-table thead th.th-download { width: 84px; position: relative; text-align: center; }
+  .file-table thead th.th-download { width: 120px; position: relative; text-align: center; }
 
   /* ── 下载按钮 ↔ 多选复选框 切换（绝对定位叠层，不影响行高） ── */
   .ft-download {
     position: relative;
     text-align: right;
     white-space: nowrap;
+    overflow: visible;
   }
   .dl-normal, .dl-check {
     position: absolute;
@@ -1196,12 +1198,20 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .file-table .ft-dlcount {
+  .file-table .ft-favcount {
+  width: 60px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.file-table .ft-dlcount {
     white-space: nowrap; color: var(--ink-faint); font-size: 0.8rem;
   }
   .file-table .ft-download {
     text-align: right;
     white-space: nowrap;
+    overflow: visible;
   }
   .file-table .dl-link {
     display: inline-flex; align-items: center;
@@ -1859,7 +1869,7 @@
     gap: 8px;
   }
   .notif-full-item {
-    background: var(--card-bg, #fff);
+    background: var(--raised);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-md);
     overflow: hidden;
@@ -1933,7 +1943,7 @@
 
 /* ── 个人资料页 ── */
 .profile-card {
-  background: var(--card-bg, #fff);
+  background: var(--raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-xl);
@@ -3225,9 +3235,10 @@
 .file-table thead th:nth-child(2) { width: 55px; }     /* 类型 */
 .file-table thead th:nth-child(3) { width: 75px; }     /* 大小 */
 .file-table thead th:nth-child(4) { width: 90px; }     /* 上传者 */
-.file-table thead th:nth-child(5) { width: 110px; }    /* 任课教师 — 留出铅笔图标空间 */
-.file-table thead th:nth-child(6) { width: 68px; }     /* 下载次数 */
-.file-table thead th:nth-child(7) { width: 160px; }    /* 下载+预览 */
+.file-table thead th:nth-child(5) { width: 100px; }    /* 任课教师 */
+.file-table thead th:nth-child(6) { width: 60px; }     /* 收藏量 */
+.file-table thead th:nth-child(7) { width: 100px; }    /* 下载量 */
+.file-table thead th.th-download { width: 130px; text-align: center; }
 
 /* ── 渐进隐藏列：空间不足时优先显示文件名 ── */
 
@@ -3273,6 +3284,13 @@
   .pv-text { font-size: 0.7rem; padding: var(--space-sm); }
   .preview-header .pv-title { font-size: 0.78rem; }
   .fi-preview-btn { font-size: 0.8rem; padding: 7px 16px; }
+}
+
+/* 文件详情页预览区移动端适配 */
+@media (max-width: 640px) {
+  .fd-preview-body { max-height: 85vh; }
+  .fd-preview-body .pv-viewer { max-height: 75vh; }
+  .fd-preview-body .pv-text { max-height: 70vh; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3934,4 +3952,465 @@
   .user-public-card { flex-direction: column; align-items: center; text-align: center; }
   .announcement-item .ai-header { flex-wrap: wrap; }
   .leaderboard-table th, .leaderboard-table td { padding: 10px 10px; font-size: 0.8rem; }
+}
+/* ═══════════════════════════════════════════════════════════
+   筛选排序下拉
+   ═══════════════════════════════════════════════════════════ */
+
+.fa-filter-bar {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.fa-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  background: var(--raised);
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ink, #333);
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fa-filter-btn:hover {
+  border-color: var(--primary);
+  background: oklch(0.95 0.02 250);
+}
+
+.filter-dropdown {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.12);
+  min-width: 140px;
+  padding: 4px 0;
+  font-size: 0.82rem;
+}
+
+.filter-dd-header {
+  padding: 6px 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  border-bottom: 1px solid #eee;
+}
+
+.filter-dd-item {
+  padding: 7px 12px;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.1s;
+}
+
+.filter-dd-item:hover {
+  background: oklch(0.95 0.02 250);
+}
+
+.filter-dd-item.filter-dd-active {
+  background: oklch(0.92 0.04 250);
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   文件详情页
+   ═══════════════════════════════════════════════════════════ */
+
+.fd-container {
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 32px 40px;
+}
+
+.fd-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .fd-container { padding: 0 20px 40px; }
+}
+
+/* 顶部信息区 — 单列 flex，宽屏时右侧 uploader 绝对定位 */
+.fd-info-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 顶栏：面包屑 + 上传者卡片并排 */
+.fd-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+
+.fd-top-row .breadcrumb {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .fd-top-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* 宽屏：uploader 绝对定位到右侧，不与标题共享行高 */
+@media (min-width: 769px) {
+  .fd-info-area {
+    position: relative;
+    padding-right: 180px;
+    gap: 12px;
+  }
+  .fd-info-area .fd-uploader-card {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 160px;
+  }
+}
+
+/* 窄屏：uploader 置顶 */
+@media (max-width: 768px) {
+  .fd-info-area .fd-uploader-card {
+    order: -1;
+  }
+}
+
+.fd-title-area {
+  align-self: start;
+}
+
+.fd-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.4;
+  color: var(--ink, #222);
+  word-break: break-word;
+}
+
+.fd-editable {
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.15s;
+}
+
+.fd-editable:hover {
+  border-bottom-color: var(--primary);
+}
+
+.fd-pen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+  margin-left: 4px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  vertical-align: middle;
+}
+
+.fd-pen:hover {
+  opacity: 1;
+}
+
+.fd-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 4px;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.fd-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.fd-meta-icon {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.fd-meta-sep {
+  color: #ccc;
+  margin: 0 2px;
+  user-select: none;
+}
+
+/* 类型下拉（管理模式） */
+.fd-type-dropdown-wrap {
+  display: inline-block;
+  margin-left: 4px;
+}
+
+.fd-type-select {
+  font-size: 0.78rem;
+  padding: 1px 4px;
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* 简介卡片 */
+.fd-desc-card {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-height: 60px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+/* 上传者卡片 */
+.fdu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: var(--raised);
+  border: 1px solid var(--border-light, #e0e0e0);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fdu-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.06);
+}
+
+.fdu-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.fdu-info {
+  text-align: center;
+}
+
+.fdu-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink, #333);
+}
+
+.fdu-label {
+  font-size: 0.7rem;
+  color: var(--ink-faint, #999);
+  margin-top: 2px;
+}
+
+/* 窄屏：上传者卡片变为横向 */
+@media (max-width: 768px) {
+  .fdu-card {
+    flex-direction: row;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .fdu-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.9rem;
+  }
+  .fdu-info {
+    text-align: left;
+  }
+}
+
+/* 操作按钮区 */
+.fd-actions {
+  margin: 4px 0;
+}
+
+.fd-actions-inner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.fd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  font-size: 0.88rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.fd-btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.fd-btn-primary:hover {
+  background: color-mix(in srgb, var(--primary) 85%, #000);
+}
+
+.fd-btn-secondary {
+  background: #fff;
+  color: var(--ink, #333);
+  border-color: #ccc;
+}
+
+.fd-btn-secondary:hover {
+  border-color: var(--primary);
+  background: oklch(0.97 0.01 250);
+}
+
+.fd-btn-danger {
+  background: #fff;
+  color: #c23a2b;
+  border-color: #e0b8b4;
+}
+
+.fd-btn-danger:hover {
+  background: #fef2f0;
+  border-color: #c23a2b;
+  box-shadow: 0 0 0 1px rgba(194,58,43,0.2);
+}
+
+/* 收藏按钮动效：已收藏状态 */
+.fd-btn-fav.favorited {
+  background: #FFFBEA;
+  border-color: #D4A843;
+  color: #8B7500;
+}
+
+.fd-btn-fav.favorited:hover {
+  background: #FFF5D6;
+  border-color: #C49A2E;
+}
+
+/* 上传者头像图片 */
+.fdu-avatar-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .fdu-avatar-img {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* 预览区 */
+.fd-preview-area {
+  background: #fff;
+  border: 1px solid var(--border-light, #e0e0e0);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.fd-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink, #333);
+  border-bottom: 1px solid var(--border-light, #e8e8e8);
+}
+
+.pv-hint {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--ink-faint, #999);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.fd-preview-body {
+  min-height: 400px;
+  max-height: calc(100vh - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+
+.fd-preview-body .pv-viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  max-height: calc(100vh - 60px);
+}
+
+.fd-preview-body .pv-text-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+.fd-preview-body .pv-text {
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+}
+
+/* 管理模式类型下拉 */
+.mgmt-type-dropdown-wrap {
+  display: inline-block;
+  margin-left: 3px;
+}
+
+.mgmt-type-select {
+  font-size: 0.72rem;
+  padding: 0px 2px;
+  border: 1px solid var(--border-light, #ddd);
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  max-width: 70px;
+}
+
+/* 收藏量列宽 */
+.file-table th.th-favcount,
+.file-table td.ft-favcount {
+  width: 60px;
+  text-align: center;
 }
