@@ -44,12 +44,21 @@ def api_profile(request):
         if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
             from .utils import _get_managed_sections_display
             sections_display = _get_managed_sections_display(profile)
+        role_labels = {
+            UserProfile.Role.SUPER_ADMIN: "总管理员",
+            UserProfile.Role.MODERATOR: "版主",
+            UserProfile.Role.SUB_MODERATOR: "小版主",
+            UserProfile.Role.USER: "用户",
+        }
         return _ok({
             "id": request.user.id,
             "username": request.user.username,
             "nickname": request.user.first_name or request.user.username,
             "email": request.user.email,
             "role": profile.role,
+            "role_label": role_labels.get(profile.role, "用户"),
+            "date_joined": request.user.date_joined.strftime("%Y-%m-%d") if request.user.date_joined else "",
+            "daily_download_limit": 60,
             "daily_download_remaining": remaining,
             "daily_download_used": daily_download_used,
             "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
