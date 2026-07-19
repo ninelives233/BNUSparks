@@ -50,6 +50,7 @@ from .moderation import (
 # 文件管理 / 文件夹 / 操作
 from .operations import (
     api_file_update, api_folder_create, api_folder_delete,
+    api_folder_rename, api_folder_move, api_folder_set_course,
     api_operations, api_folder_restore,
     api_restore_deletion,
     api_file_batch_delete, api_file_batch_edit,

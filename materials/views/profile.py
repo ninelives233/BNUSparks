@@ -176,7 +176,7 @@ def api_my_uploads(request):
         "review_status": m.review_status,
         "review_notes": (m.review_notes or "") if m.review_status == "rejected" else "",
         "download_count": m.download_count,
-        "created_at": m.created_at.isoformat() if m.created_at else "",
+        "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "",
     } for m in qs])
 
 

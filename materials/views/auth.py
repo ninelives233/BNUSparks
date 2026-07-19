@@ -233,6 +233,7 @@ def api_me(request):
         "role": profile.role,
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
         "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
+        "can_moderate_general": profile.can_moderate_general if profile else False,
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
         "avatar_url": profile.avatar.url if profile.avatar else "",

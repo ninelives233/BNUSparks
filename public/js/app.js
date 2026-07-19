@@ -104,6 +104,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   await checkAuth();
+  // 初始化管理模式 body 类
+  if (typeof isMgmtActive === 'function') document.body.classList.toggle('mgmt-active', isMgmtActive());
 
   // 邮箱验证链接检查
   try {

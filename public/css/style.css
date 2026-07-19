@@ -582,6 +582,103 @@
     font-weight: 500;
   }
 
+  /* ── 管理模式：三点菜单 ─────────────────── */
+  .folder-card .fc-card-menu-btn {
+    position: absolute; top: 6px; right: 6px;
+    width: 26px; height: 26px; display: none;
+    align-items: center; justify-content: center;
+    border-radius: var(--radius-sm);
+    font-size: 1rem; line-height: 1;
+    color: var(--ink-mid); cursor: pointer;
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    z-index: 2;
+    transition: background 0.15s, color 0.15s;
+  }
+  .folder-card .fc-card-menu-btn:hover {
+    background: var(--primary-surface);
+    color: var(--primary);
+  }
+  .folder-card:hover .fc-card-menu-btn { display: flex; }
+  .mgmt-active .folder-card .fc-card-menu-btn { display: flex; }
+  .folder-card .fc-card-menu-btn.is-open { display: flex; background: var(--primary-surface); color: var(--primary); }
+
+  .fc-card-menu {
+    position: fixed; z-index: 1000;
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 32px oklch(0 0 0 / 0.12);
+    min-width: 140px;
+    padding: 4px 0;
+  }
+  .fc-card-menu .fc-menu-item {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.1s;
+    white-space: nowrap;
+  }
+  .fc-card-menu .fc-menu-item:hover {
+    background: var(--primary-surface);
+    color: var(--primary);
+  }
+  .fc-card-menu .fc-menu-item.danger {
+    color: var(--danger, oklch(0.5 0.15 30));
+  }
+  .fc-card-menu .fc-menu-item.danger:hover {
+    background: oklch(0.9 0.05 30);
+  }
+  .fc-menu-overlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: transparent;
+  }
+
+  .folder-list-item .fc-card-menu-btn {
+    width: 24px; height: 24px; display: none;
+    align-items: center; justify-content: center;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    font-size: 1rem; line-height: 1;
+    color: var(--ink-faint); cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    margin-left: auto;
+  }
+  .folder-list-item .fc-card-menu-btn:hover {
+    background: var(--primary-surface);
+    color: var(--primary);
+  }
+  .folder-list-item:hover .fc-card-menu-btn { display: flex; }
+  .mgmt-active .folder-list-item .fc-card-menu-btn { display: flex; }
+
+  /* ── 管理模式弹窗 ─────────────────── */
+  .mgmt-dialog { max-width: 420px; }
+  .mgmt-dialog h3 { margin: 0 0 12px; font-size: 1rem; }
+  .mgmt-dialog label { font-size: 0.85rem; display: block; margin-bottom: 4px; color: var(--ink-mid); }
+  .mgmt-dialog input, .mgmt-dialog select {
+    width: 100%; padding: 8px; border-radius: 6px;
+    border: 1px solid var(--border-light);
+    font-size: 0.9rem; box-sizing: border-box;
+  }
+  .mgmt-dialog .ar-actions { margin-top: 14px; }
+
+  /* ── 新建文件夹：课程代码额外输入（选中类型切换）── */
+  .mgmt-course-fields { display: none; margin-top: 10px; }
+  .mgmt-course-fields.visible { display: block; }
+
+  /* ── 修改课程代码：情况说明 ─── */
+  .mgmt-situation { padding: 10px; margin: 10px 0; background: var(--primary-surface); border-radius: var(--radius-sm); font-size: 0.85rem; }
+  .mgmt-option { padding: 8px 12px; margin: 6px 0; border: 1px solid var(--border-light); border-radius: var(--radius-sm); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .mgmt-option:hover { border-color: var(--primary-light); background: var(--primary-surface); }
+  .mgmt-option input[type="radio"] { margin-right: 8px; }
+  .mgmt-option label { cursor: pointer; }
+  .mgmt-option .mgmt-opt-desc { font-size: 0.8rem; color: var(--ink-faint); margin-top: 2px; }
+  .mgmt-course-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+  .mgmt-course-item { padding: 8px 12px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); cursor: pointer; }
+  .mgmt-course-item:hover { border-color: var(--primary-light); background: var(--primary-surface); }
+  .mgmt-course-item.selected { border-color: var(--primary); background: var(--primary-surface); }
+
   /* ── Level 2+: Bar List ─────────────────── */
   .folder-list {
     display: flex; flex-direction: column; gap: 3px;
@@ -927,6 +1024,118 @@
     border-radius: var(--radius-sm); transition: background 0.15s, color 0.15s;
   }
   .search-overlay-close:hover { color: var(--ink); background: var(--primary-surface); }
+
+  /* ── Search Global Overlay — redesigned ── */
+  .sg-inner { max-width: 520px; padding: 0; overflow: hidden; }
+
+  .sg-header {
+    position: relative; padding: 24px 24px 20px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .sg-close {
+    position: absolute; top: 16px; right: 16px; z-index: 1;
+    width: 32px; height: 32px; border: none;
+    background: var(--bg); border-radius: 50%; font-size: 0.9rem;
+    cursor: pointer; color: var(--ink-faint);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .sg-close:hover { background: var(--primary-surface); color: var(--ink); }
+
+  .sg-title-row { display: flex; align-items: center; gap: 10px; }
+  .sg-title-icon { font-size: 1.15rem; opacity: 0.45; flex-shrink: 0; }
+  .sg-title {
+    font-family: var(--serif); font-size: 1.1rem; font-weight: 700;
+    color: var(--ink); margin: 0; line-height: 1.3;
+  }
+  .sg-subtitle {
+    margin: 4px 0 0 32px; font-size: 0.76rem; color: var(--ink-faint);
+  }
+
+  /* ── Body ── */
+  .sg-body { max-height: 460px; overflow-y: auto; overscroll-behavior: contain; }
+
+  /* ── Section ── */
+  .sg-section + .sg-section { border-top: 1px solid var(--border-light); }
+  .sg-section-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 16px 24px 8px;
+    position: sticky; top: 0;
+    background: var(--raised); z-index: 1;
+  }
+  .sg-section-svg { opacity: 0.4; flex-shrink: 0; }
+  .sg-section-label {
+    font-size: 0.75rem; font-weight: 600; color: var(--ink-muted);
+    letter-spacing: 0.04em;
+  }
+  .sg-section-badge {
+    margin-left: auto; font-size: 0.68rem; font-weight: 600;
+    color: var(--ink-faint); background: var(--bg);
+    padding: 2px 9px; border-radius: 10px; line-height: 1.5;
+  }
+
+  /* ── Items ── */
+  .sg-section-body { padding: 4px 12px 14px; }
+  .sg-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 10px;
+    text-decoration: none; cursor: pointer;
+    transition: background 0.15s; position: relative;
+  }
+  .sg-item:hover { background: var(--primary-surface); }
+  .sg-item::before {
+    content: ''; position: absolute; left: 0; top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 3px; height: 20px;
+    background: var(--primary);
+    border-radius: 0 3px 3px 0;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .sg-item:hover::before { transform: translateY(-50%) scaleY(1); }
+
+  .sg-item-body { flex: 1; min-width: 0; }
+  .sg-item-name {
+    display: block; font-size: 0.88rem; font-weight: 500;
+    color: var(--ink); line-height: 1.4;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sg-item-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .sg-item-code {
+    font-size: 0.74rem; color: var(--ink-faint);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    white-space: nowrap;
+  }
+  .sg-item-arrow {
+    font-size: 0.85rem; color: var(--primary); flex-shrink: 0;
+    opacity: 0; transform: translateX(-6px);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .sg-item:hover .sg-item-arrow { opacity: 0.6; transform: translateX(0); }
+
+  /* ── Course type pills ── */
+  .sg-pill {
+    display: inline-flex; align-items: center;
+    font-size: 0.63rem; font-weight: 600;
+    padding: 1px 7px; border-radius: 4px; line-height: 1.5;
+    letter-spacing: 0.02em; flex-shrink: 0;
+  }
+  .sg-pill-general {
+    background: oklch(0.91 0.035 250);
+    color: oklch(0.38 0.08 250);
+  }
+  .sg-pill-major {
+    background: oklch(0.91 0.05 150);
+    color: oklch(0.36 0.1 150);
+  }
+
+  /* ── Empty state ── */
+  .sg-empty { text-align: center; padding: 48px 24px; }
+  .sg-empty-icon { font-size: 1.8rem; margin-bottom: 12px; opacity: 0.4; }
+  .sg-empty-title {
+    font-size: 0.9rem; font-weight: 600; color: var(--ink-muted);
+    margin-bottom: 4px;
+  }
+  .sg-empty-desc { font-size: 0.78rem; color: var(--ink-faint); }
 
   /* ── Upload Search header ── */
   .so-header { text-align: center; padding-bottom: var(--space-lg); }
