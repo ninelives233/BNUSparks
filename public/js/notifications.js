@@ -141,6 +141,7 @@
       localStorage.setItem('bnusparks_civilian', '0');
     }
     localStorage.setItem('bnusparks_mgmt', _mgmtMode ? '1' : '0');
+    document.body.classList.toggle('mgmt-active', isMgmtActive());
     renderDrawerMenu();
     // 如果当前在 explorer 视图，立刻刷新
     var exp = document.getElementById('explorerView');
@@ -162,6 +163,7 @@
       if (exp && exp.style.display !== 'none') renderExplorer();
     }
     localStorage.setItem('bnusparks_civilian', _civilianMode ? '1' : '0');
+    document.body.classList.toggle('mgmt-active', isMgmtActive());
     renderDrawerMenu();
     // 平民模式：隐藏侧边栏管理入口
     document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {

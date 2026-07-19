@@ -324,12 +324,17 @@ def _build_tree_node(qs):
             continue
 
         node = {}
+        node["id"] = cat.id
+        node["parentId"] = cat.parent_id if cat.parent else None
         if cat.name:
             node["name"] = cat.name
         if cat.icon_class:
             node["iconClass"] = cat.icon_class
         if cat.is_math_card:
             node["mathCard"] = True
+        # 自建文件夹标记（前端菜单显示用）
+        if cat.course_id and str(cat.course.code).startswith("UNB"):
+            node["customBuilt"] = True
 
         children = cat.children.all()
         if children:

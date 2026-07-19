@@ -261,7 +261,7 @@ def api_stats(request):
         "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
         "file_type": m.file_type,
         "uploader_name": m.uploader_name or "",
-        "created_at": m.created_at.isoformat() if m.created_at else "",
+        "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "",
     } for m in recent]
 
     return _ok({

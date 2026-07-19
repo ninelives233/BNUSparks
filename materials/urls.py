@@ -36,9 +36,12 @@ urlpatterns = [
     path("files/<int:file_id>/favorite-status/", views.api_favorite_status, name="api_favorite_status"),
     path("user/favorites/", views.api_my_favorites, name="api_my_favorites"),
 
-    # 文件夹管理（Iter 6）
+    # 文件夹管理（管理模式编辑）
     path("folders/create/", views.api_folder_create, name="api_folder_create"),
     path("folders/<int:folder_id>/delete/", views.api_folder_delete, name="api_folder_delete"),
+    path("folders/<int:folder_id>/rename/", views.api_folder_rename, name="api_folder_rename"),
+    path("folders/<int:folder_id>/move/", views.api_folder_move, name="api_folder_move"),
+    path("folders/<int:folder_id>/set-course/", views.api_folder_set_course, name="api_folder_set_course"),
 
     # 操作记录（Iter 6）
     path("operations/", views.api_operations, name="api_operations"),

@@ -281,25 +281,90 @@
       const results = await api('/api/search/?q=' + encodeURIComponent(q));
       const overlay = document.createElement('div');
       overlay.className = 'search-overlay';
-      let html = '<div class="search-overlay-inner"><button class="search-overlay-close" onclick="this.parentElement.parentElement.remove()">✕</button><h3>搜索「' + esc(q) + '」</h3>';
+
+      /* ---------- 搜索覆层 — 全新设计 ---------- */
+      let html = '<div class="search-overlay-inner sg-inner">';
+
+      /* 头部 */
+      html += '<div class="sg-header">';
+      html += '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>';
+      html += '<div class="sg-title-row">';
+      html += '<span class="sg-title-icon">🔍</span>';
+      html += '<h3 class="sg-title">' + esc(q) + '</h3>';
+      html += '</div>';
+      html += '<p class="sg-subtitle">搜索结果</p>';
+      html += '</div>';
+
+      /* 结果区 */
+      html += '<div class="sg-body">';
+
+      /* ── 课程结果 ── */
       if (results.courses.length) {
-        html += '<div class="search-section"><h4>课程 ' + results.courses.length + '</h4>';
-        results.courses.forEach(c => { html += '<div class="search-item" onclick="this.closest(\'.search-overlay\').remove();showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + esc(c.code) + '\')"><span class="si-name">' + esc(c.name) + '</span> <span class="si-code">' + esc(c.code || '') + '</span></div>'; });
+        html += '<div class="sg-section">';
+        html += '<div class="sg-section-header">';
+        html += '<svg class="sg-section-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="10" x2="14" y2="10"/></svg>';
+        html += '<span class="sg-section-label">课程</span>';
+        html += '<span class="sg-section-badge">' + results.courses.length + '</span>';
+        html += '</div>';
+        html += '<div class="sg-section-body">';
+        results.courses.forEach(function(c) {
+          var typeLabel = c.course_type === 'general' ? '通识' : '专业';
+          var typeClass = c.course_type === 'general' ? 'sg-pill-general' : 'sg-pill-major';
+          html += '<div class="sg-item" onclick="this.closest(\'.search-overlay\').remove();showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + esc(c.code) + '\')">';
+          html += '<div class="sg-item-body">';
+          html += '<span class="sg-item-name">' + esc(c.name) + '</span>';
+          html += '<span class="sg-item-meta">';
+          html += '<span class="sg-pill ' + typeClass + '">' + typeLabel + '</span>';
+          html += '<span class="sg-item-code">' + esc(c.code) + '</span>';
+          html += '</span>';
+          html += '</div>';
+          html += '<span class="sg-item-arrow">→</span>';
+          html += '</div>';
+        });
+        html += '</div>';
         html += '</div>';
       }
+
+      /* ── 资料结果 ── */
       if (results.materials.length) {
-        html += '<div class="search-section"><h4>资料 ' + results.materials.length + '</h4>';
+        html += '<div class="sg-section">';
+        html += '<div class="sg-section-header">';
+        html += '<svg class="sg-section-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/><polyline points="14 2 14 8 10 5 6 8 6 2"/></svg>';
+        html += '<span class="sg-section-label">资料</span>';
+        html += '<span class="sg-section-badge">' + results.materials.length + '</span>';
+        html += '</div>';
+        html += '<div class="sg-section-body">';
         results.materials.forEach(function(m) {
           var badgeHtml = '';
           if (m.review_status && m.review_status !== 'approved') {
-            badgeHtml = ' <span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
+            badgeHtml = '<span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem;margin-left:6px">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          html += '<a href="/api/files/' + m.id + '/download/" class="search-item" style="text-decoration:none" onclick="this.closest(\'.search-overlay\').remove()"><span class="si-name">' + esc(m.title) + badgeHtml + '</span> <span class="si-code">' + esc(m.course_name) + '</span></a>';
+          html += '<a href="/api/files/' + m.id + '/download/" class="sg-item sg-item-link" onclick="this.closest(\'.search-overlay\').remove()">';
+          html += '<div class="sg-item-body">';
+          html += '<span class="sg-item-name">' + esc(m.title) + badgeHtml + '</span>';
+          html += '<span class="sg-item-meta">';
+          html += '<span class="sg-item-code">' + esc(m.course_name) + '</span>';
+          html += '</span>';
+          html += '</div>';
+          html += '<span class="sg-item-arrow">→</span>';
+          html += '</a>';
         });
         html += '</div>';
+        html += '</div>';
       }
-      if (!results.courses.length && !results.materials.length) html += '<p class="search-empty">没有找到相关结果</p>';
-      html += '</div>';
+
+      /* ── 空状态 ── */
+      if (!results.courses.length && !results.materials.length) {
+        html += '<div class="sg-empty">';
+        html += '<div class="sg-empty-icon">🔍</div>';
+        html += '<div class="sg-empty-title">未找到相关结果</div>';
+        html += '<div class="sg-empty-desc">试试其他关键词，或使用课程代码搜索</div>';
+        html += '</div>';
+      }
+
+      html += '</div>'; /* /.sg-body */
+      html += '</div>'; /* /.search-overlay-inner */
+
       overlay.innerHTML = html;
       document.body.appendChild(overlay);
     } catch(e) { /* ignore */ }
