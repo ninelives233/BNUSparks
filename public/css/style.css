@@ -666,6 +666,7 @@
   /* ── 新建文件夹：课程代码额外输入（选中类型切换）── */
   .mgmt-course-fields { display: none; margin-top: 10px; }
   .mgmt-course-fields.visible { display: block; }
+  .mgmt-auto-code { display: flex; align-items: center; padding: 10px 12px; background: var(--bg-subtle); border: 1px dashed var(--border-light); border-radius: 6px; font-size: 0.85rem; color: var(--ink-faint); font-family: monospace; }
 
   /* ── 修改课程代码：情况说明 ─── */
   .mgmt-situation { padding: 10px; margin: 10px 0; background: var(--primary-surface); border-radius: var(--radius-sm); font-size: 0.85rem; }

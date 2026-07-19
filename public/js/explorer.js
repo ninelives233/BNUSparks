@@ -491,6 +491,16 @@
     if (ov) ov.remove();
   }
 
+  // ── 管理模式：错误提示（管辖范围外友好提示）──
+  function _showScopeError(prefix, err) {
+    var msg = err && (err.message || err.error);
+    if (msg && (msg.indexOf('无权') !== -1 || msg.indexOf('权限不足') !== -1)) {
+      alert(prefix + '：此操作在管辖范围之外且非本人上传');
+    } else {
+      alert(prefix + '：' + msg);
+    }
+  }
+
   // ── 管理模式：操作弹窗 ──
 
   function _showRenameDialog(catId, currentName) {
@@ -498,7 +508,7 @@
     if (!name || name === currentName) return;
     api('/api/folders/' + catId + '/rename/', { method: 'POST', body: { name: name } })
       .then(function() { renderExplorer(); })
-      .catch(function(err) { alert('重命名失败：' + (err.message || err.error)); });
+      .catch(function(err) { _showScopeError('重命名失败', err); });
   }
 
   function _showSetCourseDialog(catId) {
@@ -576,12 +586,12 @@
           .then(function() {
             if (overlay) _removeOverlay(overlay);
             renderExplorer();
-          }).catch(function(err) { alert('操作失败：' + (err.message || err.error)); });
+          }).catch(function(err) { _showScopeError('操作失败', err); });
       } else {
         // 阶段1：查询
         api('/api/folders/' + targetCatId + '/set-course/', { method: 'POST', body: { course_code: code, course_name: name } })
           .then(function(r) { _renderSetCourseSituation(r, code, name, targetCatId); })
-          .catch(function(err) { alert('查询失败：' + (err.message || err.error)); });
+          .catch(function(err) { _showScopeError('查询失败', err); });
       }
       return;
     }
@@ -647,7 +657,7 @@
     if (isNaN(pid)) { alert('请输入有效的节点 ID'); return; }
     api('/api/folders/' + catId + '/move/', { method: 'POST', body: { parent_id: pid } })
       .then(function() { renderExplorer(); })
-      .catch(function(err) { alert('移动失败：' + (err.message || err.error)); });
+      .catch(function(err) { _showScopeError('移动失败', err); });
   }
 
   function _showDeleteDialog(catId, node) {
@@ -665,7 +675,7 @@
         peelNote +
         '<p style="font-size:0.8rem;color:var(--ink-faint)">仅删除目录节点，关联课程和文件不受影响</p>' +
         '<div class="ar-actions">' +
-          '<button class="admin-btn admin-btn-primary" onclick="(function(){var ov=this.closest(\'.admin-reject-overlay\');api(\'/api/folders/' + catId + '/delete/\',{method:\'DELETE\'}).then(function(){if(ov)_removeOverlay(ov);renderExplorer()}).catch(function(err){alert(\'删除失败：\'+(err.message||err.error))})})()">确认删除</button>' +
+          '<button class="admin-btn admin-btn-primary" onclick="(function(){var ov=this.closest(\'.admin-reject-overlay\');api(\'/api/folders/' + catId + '/delete/\',{method:\'DELETE\'}).then(function(){if(ov)_removeOverlay(ov);renderExplorer()}).catch(function(err){_showScopeError(\'删除失败\',err)})})()">确认删除</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
@@ -741,12 +751,11 @@
     // 管理模式：在面包屑同一行最右侧加「新建」按钮
     if (isMgmtActive()) {
       var node = getNode(expPath);
-      var hasCourse = node && (node.courseId || (node.children && node.children.some(function(c) { return c.courseId; })));
       var showNewBtn = true;
       // 最后一层（有course关联的节点）不显示
       if (node && node.courseId) showNewBtn = false;
-      // 小版主在管辖范围外的层级不显示
-      if (currentUser && currentUser.role === 'sub_moderator' && !_userInScope(expPath)) showNewBtn = false;
+      // 管辖范围外不显示
+      if (showNewBtn && currentUser && !_userInScope(expPath)) showNewBtn = false;
       if (showNewBtn) {
         var newBtn = document.createElement('button');
         newBtn.className = 'mgmt-new-btn';
@@ -761,22 +770,15 @@
     var overlay = document.createElement('div');
     overlay.className = 'admin-reject-overlay';
     overlay.innerHTML =
-      '<div class="admin-reject-dialog" style="max-width:400px">' +
+      '<div class="admin-reject-dialog" style="max-width:420px">' +
         '<h3>📁 新建文件夹</h3>' +
-        '<div style="margin:12px 0"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹名称</label>' +
-          '<input type="text" id="newFolderName" placeholder="输入名称" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
         '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹类型</label>' +
-          '<select id="newFolderType" onchange="document.getElementById(\'mgmtCourseFields\').classList.toggle(\'visible\',this.value===\'course\')" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem">' +
+          '<select id="newFolderType" onchange="updateNewFolderFields()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem">' +
             '<option value="intermediate">中间节点（可建子文件夹，不绑定课程）</option>' +
             '<option value="course">课程节点（需填课程代码，可上传文件）</option>' +
             '<option value="custom">自建文件夹（自动编号 UNB，可上传文件）</option>' +
           '</select></div>' +
-        '<div id="mgmtCourseFields" class="mgmt-course-fields">' +
-          '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程代码</label>' +
-            '<input type="text" id="newFolderCode" placeholder="如 PSY301" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
-          '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程名称</label>' +
-            '<input type="text" id="newFolderCourseName" placeholder="如 普通心理学" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
-        '</div>' +
+        '<div id="newFolderFields"></div>' +
         '<div class="ar-actions">' +
           '<button class="admin-btn admin-btn-primary" onclick="confirmNewFolder(' + (parentId || 'null') + ')">创建</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
@@ -785,67 +787,128 @@
     document.body.appendChild(overlay);
     overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
     lockScroll();
-    setTimeout(function() { document.getElementById('newFolderName').focus(); }, 100);
+    // 注册字段更新函数
+    window.updateNewFolderFields = function() {
+      var type = document.getElementById('newFolderType').value;
+      var container = document.getElementById('newFolderFields');
+      if (type === 'intermediate') {
+        container.innerHTML = '<div style="margin:12px 0"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹名称</label>' +
+          '<input type="text" id="newFolderName" placeholder="输入名称" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>';
+        setTimeout(function() { var el = document.getElementById('newFolderName'); if (el) el.focus(); }, 100);
+      } else if (type === 'course') {
+        container.innerHTML =
+          '<div style="margin-bottom:8px;margin-top:12px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程代码</label>' +
+            '<input type="text" id="newFolderCode" placeholder="三个字母加五位数字，如 PSY30201" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
+          '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程名称</label>' +
+            '<input type="text" id="newFolderCourseName" placeholder="如 普通心理学" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
+          '<div style="font-size:0.75rem;color:var(--ink-faint);margin-bottom:4px">课程名称将作为文件夹显示名称</div>';
+        setTimeout(function() { var el = document.getElementById('newFolderCode'); if (el) el.focus(); }, 100);
+      } else if (type === 'custom') {
+        container.innerHTML =
+          '<div style="margin:12px 0"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹名称</label>' +
+            '<input type="text" id="newFolderName" placeholder="如 普通心理学补充资料" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
+          '<div style="margin:8px 0"><label style="font-size:0.85rem;display:block;margin-bottom:4px">自动编号（创建时生成）</label>' +
+            '<div class="mgmt-auto-code">UNBxxxxx（创建后自动分配）</div></div>';
+        setTimeout(function() { var el = document.getElementById('newFolderName'); if (el) el.focus(); }, 100);
+      }
+    };
+    updateNewFolderFields();
+    setTimeout(function() { var el = document.getElementById('newFolderName'); if (el) el.focus(); }, 100);
   }
 
   function confirmNewFolder(parentId) {
-    var name = document.getElementById('newFolderName').value.trim();
     var type = document.getElementById('newFolderType').value;
-    if (!name) { alert('请输入文件夹名称'); return; }
-    var body = { name: name, parent_id: parentId, folder_type: type };
-    if (type === 'course') {
+    var body = { parent_id: parentId, folder_type: type };
+
+    if (type === 'intermediate') {
+      var name = document.getElementById('newFolderName').value.trim();
+      if (!name) { alert('请输入文件夹名称'); return; }
+      body.name = name;
+    } else if (type === 'course') {
       var code = document.getElementById('newFolderCode').value.trim();
       var cname = document.getElementById('newFolderCourseName').value.trim();
       if (!code) { alert('请填写课程代码'); return; }
       if (!cname) { alert('请填写课程名称'); return; }
+      body.name = cname;       // 课程名称作为文件夹显示名
       body.course_code = code;
       body.course_name = cname;
+    } else if (type === 'custom') {
+      var name = document.getElementById('newFolderName').value.trim();
+      if (!name) { alert('请输入文件夹名称'); return; }
+      body.name = name;
     }
+
     var overlay = document.querySelector('.admin-reject-overlay');
     api('/api/folders/create/', { method: 'POST', body: body }).then(function() {
       _removeOverlay(overlay);
       renderExplorer();
     }).catch(function(err) {
-      alert('创建失败：' + err.message);
+      _showScopeError('创建失败', err);
     });
   }
 
+  function _nodeInScope(item, rootCategory) {
+    // 检查单个课程树节点是否在用户管辖范围内
+    if (!currentUser || !item) return false;
+    if (currentUser.role === 'super_admin') return true;
+    if (currentUser.role === 'user') return false;
+
+    var moderatedSections = currentUser.moderated_sections || [];
+
+    if (currentUser.role === 'moderator') {
+      // 通识课：有 can_moderate_general 权限即可
+      if (rootCategory === '通识课') return !!currentUser.can_moderate_general;
+      // 专业课：检查 collegeId 是否在 managed_majors
+      var managedMajors = currentUser.managed_majors || [];
+      if (item.collegeId && managedMajors.indexOf(item.collegeId) !== -1) return true;
+      // 检查 category id 是否在 moderated_sections
+      if (item.id && moderatedSections.indexOf(item.id) !== -1) return true;
+      return false;
+    }
+
+    if (currentUser.role === 'sub_moderator') {
+      if (!moderatedSections.length) return false;
+      // 小版主：只检查 category id
+      if (item.id && moderatedSections.indexOf(item.id) !== -1) return true;
+      return false;
+    }
+
+    return false;
+  }
+
   function _userInScope(path) {
-    // 检查当前用户的管辖范围是否包含给定路径
+    // 检查当前导航路径是否在用户管辖范围内
     if (!currentUser) return false;
     if (currentUser.role === 'super_admin') return true;
     if (currentUser.role === 'user') return false;
-    // 从 path 推断所属的一级分类（专业课/通识课）
     if (!path || !path.length) return false;
-    var rootCategory = path[0]; // '通识课' 或 '专业课'
-    // 版主/小版主需要权限
-    if (currentUser.role === 'moderator') {
-      // 版主：检查 managed_majors + can_moderate_general + moderated_sections
-      // 通识课全域：有 can_moderate_general 权限
-      if (rootCategory === '通识课' && currentUser.can_moderate_general) return true;
-      // 检查 moderated_sections（通识课子类等）
-      if (currentUser.moderated_sections && currentUser.moderated_sections.length) {
-        // 如果能匹配到任何管辖分类的路径，返回 true
-        // 简化处理：有管辖板块的版主在通识课/专业课的二级目录有权限
-        return true;
+
+    var rootCategory = path[0];
+    var managedMajors = currentUser.managed_majors || [];
+    var moderatedSections = currentUser.moderated_sections || [];
+    var depth = path.length;
+
+    // 逐层遍历路径上的节点
+    for (var i = 0; i < depth; i++) {
+      var partPath = path.slice(0, i + 1);
+      var node = getNode(partPath);
+      if (!node) continue;
+
+      if (currentUser.role === 'moderator') {
+        // 通识课
+        if (rootCategory === '通识课') {
+          if (currentUser.can_moderate_general) return true;
+        }
+        // managed_majors
+        if (node.collegeId && managedMajors.indexOf(node.collegeId) !== -1) return true;
+        // moderated_sections
+        if (node.id && moderatedSections.indexOf(node.id) !== -1) return true;
       }
-      // 检查 managed_majors（管辖学院）
-      if (currentUser.managed_majors && currentUser.managed_majors.length) {
-        // 在专业课根下有管辖学院的版主有权限
-        if (rootCategory === '专业课') return true;
+
+      if (currentUser.role === 'sub_moderator') {
+        if (!moderatedSections.length) return false;
+        if (node.id && moderatedSections.indexOf(node.id) !== -1) return true;
       }
-      return false;
-    }
-    if (currentUser.role === 'sub_moderator') {
-      // 小版主：仅可在管辖的 CourseCategory 路径下操作
-      if (!courseTree) return false;
-      // 小版主只在具体专业层级及以下才可操作
-      // 在一级目录（专业课/通识课）下不应看到新建按钮
-      if (path.length <= 1) return false;
-      // 如果有 moderated_sections 数据，尝试匹配
-      if (!currentUser.moderated_sections || !currentUser.moderated_sections.length) return false;
-      // 小版主在二级及以下有管辖权
-      return true;
     }
     return false;
   }
@@ -874,7 +937,7 @@
           '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
           '<div class="fc-name">' + esc(item.name) + '</div>' +
           '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
-          (mgmt && item.id ? _mgmtCardMenuHtml(item) : '') +
+          (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0])) ? _mgmtCardMenuHtml(item) : '') +
         '</div>'
       ).join('') +
     '</div>';
@@ -939,7 +1002,7 @@
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
       '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
       badge +
-      (mgmt && item.id ? _mgmtCardMenuHtml(item) : '') + '</div>';
+      (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0])) ? _mgmtCardMenuHtml(item) : '') + '</div>';
   }
 
   var _multiSelectMode = false;

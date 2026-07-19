@@ -139,6 +139,7 @@ def _is_descendant(cat, ancestor):
     return False
 
 
+@csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_folder_create(request):
     """POST /api/folders/create/ — 新建文件夹（支持三种类型）
@@ -213,6 +214,7 @@ def api_folder_create(request):
     })
 
 
+@csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_folder_delete(request, folder_id):
     """DELETE /api/folders/<id>/ — 删除文件夹（去皮式：子节点上提给祖父）"""

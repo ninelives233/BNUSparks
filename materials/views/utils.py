@@ -335,6 +335,9 @@ def _build_tree_node(qs):
         # 自建文件夹标记（前端菜单显示用）
         if cat.course_id and str(cat.course.code).startswith("UNB"):
             node["customBuilt"] = True
+        # 学院 ID（用于前端权限匹配）
+        if cat.course_id and cat.course.college_id:
+            node["collegeId"] = cat.course.college_id
 
         children = cat.children.all()
         if children:
@@ -351,6 +354,8 @@ def _build_tree_node(qs):
                     real = Course.objects.filter(code__startswith=code)
                     if real.count() == 1:
                         node["courseId"] = real[0].code
+                        if real[0].college_id:
+                            node["collegeId"] = real[0].college_id
                     else:
                         node["courseId"] = cat.course_text
                 else:
