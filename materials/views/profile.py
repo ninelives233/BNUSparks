@@ -214,17 +214,25 @@ def api_my_downloads(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_user_rankings(request):
-    """GET /api/user/rankings/?type=upload|download"""
+    """GET /api/user/rankings/?type=upload|download|collection"""
     rank_type = request.GET.get("type", "upload")
 
     if rank_type == "upload":
         qs = User.objects.filter(is_active=True, uploads__isnull=False) \
+            .select_related('profile') \
             .annotate(count=Count("uploads")) \
+            .filter(count__gt=0) \
+            .order_by("-count")[:50]
+    elif rank_type == "collection":
+        qs = User.objects.filter(is_active=True, uploads__favorited_by__isnull=False) \
+            .select_related('profile') \
+            .annotate(count=Count("uploads__favorited_by", distinct=True)) \
             .filter(count__gt=0) \
             .order_by("-count")[:50]
     else:
         # download: 按用户上传资料的总下载次数降序
         qs = User.objects.filter(is_active=True, uploads__download_count__gt=0) \
+            .select_related('profile') \
             .annotate(count=Sum("uploads__download_count")) \
             .filter(count__gt=0) \
             .order_by("-count")[:50]

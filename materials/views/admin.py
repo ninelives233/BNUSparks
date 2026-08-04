@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.db import connection
-from django.db.models import Q
+from django.db.models import Q, Count
 
 from .utils import (
     _err, _ok, _get_or_create_profile,
@@ -21,7 +21,13 @@ from .utils import (
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_users(request):
     """GET /api/admin/users/ — 用户列表（仅 super_admin）"""
-    qs = User.objects.filter(is_active=True).order_by("-date_joined")
+    qs = User.objects.filter(is_active=True).select_related(
+        'profile'
+    ).prefetch_related(
+        'profile__managed_majors', 'profile__moderated_sections'
+    ).annotate(
+        material_count=Count('uploads')
+    ).order_by("-date_joined")
     search = request.GET.get("search", "").strip()
     if search:
         qs = qs.filter(
@@ -42,19 +48,19 @@ def api_admin_users(request):
                 "id": u.id,
                 "nickname": u.first_name or u.username,
                 "email": u.email,
-                "role": _get_or_create_profile(u).role,
+                "role": u.profile.role,
                 "date_joined": u.date_joined.strftime("%Y-%m-%d"),
-                "material_count": u.uploads.count(),
-                "auto_approve": _get_or_create_profile(u).auto_approve,
-                "can_auto_approve": _get_or_create_profile(u).can_auto_approve,
-                "can_moderate_general": _get_or_create_profile(u).can_moderate_general,
+                "material_count": u.material_count,
+                "auto_approve": u.profile.auto_approve,
+                "can_auto_approve": u.profile.can_auto_approve,
+                "can_moderate_general": u.profile.can_moderate_general,
                 "managed_majors_info": [
                     {"id": c.id, "name": c.name}
-                    for c in _get_or_create_profile(u).managed_majors.all()
+                    for c in u.profile.managed_majors.all()
                 ],
                 "moderated_sections_info": [
                     {"id": cat.id, "name": cat.name, "parent_id": cat.parent_id}
-                    for cat in _get_or_create_profile(u).moderated_sections.all()
+                    for cat in u.profile.moderated_sections.all()
                 ],
             }
             for u in qs[offset:offset + per_page]
@@ -117,15 +123,17 @@ def api_admin_set_role(request, uid):
 
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_sections(request):
-    """GET /api/admin/sections/ — 板块列表（含管辖分配数据）"""
-    sections = CourseCategory.objects.filter(parent__isnull=True).prefetch_related("children")
-    all_mods = UserProfile.objects.filter(
-        role__in=[UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR]
-    ).select_related("user")
+    """GET /api/admin/sections/ — 板块列表（含管辖分配数据，内存组装版）"""
+    # 一次性加载所有节点，在内存中按 parent_id 组装
+    all_nodes = CourseCategory.objects.all().order_by('order')
+    child_map = {}
+    for n in all_nodes:
+        pid = n.parent_id if n.parent_id else None
+        child_map.setdefault(pid, []).append(n)
 
-    def build_tree(cats, depth=0):
+    def build_tree(parent_id=None, depth=0):
         result = []
-        for cat in cats:
+        for cat in child_map.get(parent_id, []):
             node = {
                 "id": cat.id,
                 "name": cat.name or "(未命名)",
@@ -138,14 +146,18 @@ def api_admin_sections(request):
                 node["type"] = "divider"
             else:
                 node["type"] = "folder"
-            children = cat.children.all()
+            children = child_map.get(cat.id)
             if children:
-                node["children"] = build_tree(children, depth + 1)
+                node["children"] = build_tree(cat.id, depth + 1)
             result.append(node)
         return result
 
+    all_mods = UserProfile.objects.filter(
+        role__in=[UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR]
+    ).select_related("user")
+
     return _ok({
-        "tree": build_tree(sections),
+        "tree": build_tree(None),
         "moderators": [
             {
                 "id": pu.id,

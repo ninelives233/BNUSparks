@@ -21,6 +21,7 @@ from django.utils import timezone
 from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
     _check_moderator_access, _get_courses_in_category,
+    _get_category_preload,
     require_login, require_role,
     UserProfile, Material, Course, CourseCategory, College,
     Notification, FolderOperation, DeletionRecord,
@@ -91,6 +92,8 @@ def _check_category_scope(user, cat):
         return True
     if profile.role == UserProfile.Role.USER:
         return False
+
+    _get_category_preload()  # 预热分类缓存，后续 3 次 _get_courses_in_category 走内存版
 
     # 收集该节点下的关联课程
     related_courses = _get_courses_in_category(cat)

@@ -18,6 +18,7 @@ from .utils import (
     _get_moderated_material_qs, _get_subordinate_covered_course_ids,
     _get_courses_in_category, _check_moderator_access,
     _get_visible_deletion_records, require_role,
+    _get_category_preload,
     UserProfile, Material, CourseCategory, Notification,
     ReviewComment, DeletionRecord, Course,
 )
@@ -28,6 +29,7 @@ def api_moderation_pending(request):
     """GET /api/moderation/pending/ — 待审核列表"""
     recently = timezone.now() - timedelta(hours=24)
     include_subordinate = request.GET.get("include_subordinate") == "1"
+    _get_category_preload()  # 预热分类缓存
     qs = _get_moderated_material_qs(request.user).filter(
         Q(review_status="pending") |
         (Q(review_status="approved", reviewed_at__gte=recently) & ~Q(reviewed_by=request.user))
@@ -87,6 +89,7 @@ def api_moderation_batch_approve(request):
     """POST /api/moderation/batch-approve/ — 一键通过全部待审核"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
+    _get_category_preload()  # 预热分类缓存
     qs = _get_moderated_material_qs(request.user).filter(
         review_status="pending"
     ).exclude(uploader=request.user)
@@ -277,6 +280,7 @@ def api_review_comments(request, file_id):
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_history(request):
     """GET /api/moderation/history/ — 审核历史"""
+    _get_category_preload()  # 预热分类缓存
     qs = _get_moderated_material_qs(request.user).filter(
         review_status__in=["approved", "rejected"]
     )
@@ -325,17 +329,20 @@ def api_moderation_history(request):
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_stats(request):
-    """GET /api/moderation/stats/ — 审核统计概览"""
+    """GET /api/moderation/stats/ — 审核统计概览（单次聚合）"""
+    _get_category_preload()  # 预热分类缓存
     qs = _get_moderated_material_qs(request.user)
     today = date.today()
 
-    return _ok({
-        "pending_count": qs.filter(review_status="pending").count(),
-        "approved_today": qs.filter(review_status="approved", reviewed_at__date=today).count(),
-        "rejected_today": qs.filter(review_status="rejected", reviewed_at__date=today).count(),
-        "total_approved": qs.filter(review_status="approved").count(),
-        "total_materials": qs.count(),
-    })
+    from django.db.models import Count, Q
+    stats = qs.aggregate(
+        pending_count=Count('pk', filter=Q(review_status='pending')),
+        approved_today=Count('pk', filter=Q(review_status='approved', reviewed_at__date=today)),
+        rejected_today=Count('pk', filter=Q(review_status='rejected', reviewed_at__date=today)),
+        total_approved=Count('pk', filter=Q(review_status='approved')),
+        total_materials=Count('pk'),
+    )
+    return _ok(stats)
 
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)

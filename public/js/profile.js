@@ -41,8 +41,8 @@
       var sectionsRow = document.getElementById('profileSectionsRow');
       var sectionsEl = document.getElementById('profileSections');
       if (sectionsRow && sectionsEl) {
-        if (data.managed_sections && data.managed_sections.length) {
-          sectionsEl.textContent = data.managed_sections.join('、');
+        if (data.sections_display && data.sections_display.length) {
+          sectionsEl.textContent = data.sections_display.join('、');
           sectionsRow.style.display = '';
         } else {
           sectionsRow.style.display = 'none';

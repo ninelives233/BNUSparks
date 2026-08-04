@@ -444,6 +444,9 @@
     display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-sm);
   }
   .footer-bottom p { font-size: 0.8rem; color: var(--ink-faint); }
+  .footer-bottom .icp-info { font-size: 0.75rem; }
+  .footer-bottom .icp-info a { color: var(--ink-faint); text-decoration: underline transparent; transition: color 0.15s, text-decoration-color 0.15s; }
+  .footer-bottom .icp-info a:hover { color: var(--accent); text-decoration-color: var(--accent); }
   .footer-bottom .footer-social { display: flex; gap: var(--space-sm); }
 
   /* ════════════════════════════════════════════════════════════
@@ -786,6 +789,7 @@
     animation: modalIn 0.2s ease-out;
   }
   .modal-card-wide { max-width: 520px; }
+  .modal-card, .modal-card-wide { max-height: 85vh; overflow-y: auto; }
   @keyframes modalIn {
     from { opacity: 0; transform: scale(0.95) translateY(10px); }
     to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -1417,6 +1421,7 @@
 
 .file-table .ft-dlcount {
     white-space: nowrap; color: var(--ink-faint); font-size: 0.8rem;
+    text-align: center;
   }
   .file-table .ft-download {
     text-align: right;
@@ -1925,13 +1930,35 @@
     .file-table thead th.th-type,
     .file-table thead th.th-uploader,
     .file-table thead th.th-teacher,
+    .file-table thead th.th-favcount,
     .file-table thead th.th-dlcount,
     .file-table tbody td.ft-type-cell,
     .file-table tbody td.ft-uploader,
     .file-table tbody td.ft-teacher,
+    .file-table tbody td.ft-favcount,
     .file-table tbody td.ft-dlcount {
       display: none;
       width: 0;
+    }
+    .file-table thead th.th-size,
+    .file-table tbody td.ft-size-cell {
+      min-width: 6ch;
+      width: 60px;
+    }
+    .file-table tbody td.ft-name {
+      max-width: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-table thead th.th-download,
+    .file-table tbody td.ft-download {
+      width: 56px;
+      min-width: 56px;
+    }
+    .file-table .dl-link {
+      padding: 3px 8px;
+      font-size: 0.7rem;
     }
     .file-table-scroll {
       overflow-x: visible;
@@ -1973,6 +2000,13 @@
     .file-table thead th,
     .file-table tbody td { white-space: nowrap; }
     .file-table tbody td.ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+
+  @media (max-width: 480px) {
+    .file-table thead th.th-dlcount,
+    .file-table tbody td.ft-dlcount {
+      display: none;
+    }
   }
 
   /* ═══════════════════════════════════════════
@@ -3394,6 +3428,41 @@
 .pv-unsupported-text { font-size: 1.1rem; font-weight: 500; margin-bottom: 4px; }
 .pv-unsupported-sub { font-size: 0.82rem; opacity: 0.5; margin-bottom: var(--space-lg); }
 
+/* ZIP 文件结构树预览 */
+.pv-zip-loading {
+  text-align: center; padding: var(--space-lg);
+  color: var(--ink-faint, #999); font-size: 0.85rem;
+}
+.pv-zip-header {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-light, #e8e8e8);
+  display: flex; align-items: center; gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.pv-zip-filename { font-weight: 600; font-size: 0.85rem; }
+.pv-zip-stats { font-size: 0.75rem; color: var(--ink-faint, #999); margin-left: auto; }
+.pv-zip-tree {
+  padding: var(--space-xs) 0;
+  overflow: auto; max-height: 50vh;
+  font-size: 0.78rem; font-family: "SF Mono", "Fira Code", monospace;
+  line-height: 1.8;
+}
+.pv-zip-dir { color: var(--ink-muted, #666); white-space: nowrap; }
+.pv-zip-file {
+  display: flex; align-items: center; gap: var(--space-sm);
+  white-space: nowrap;
+}
+.pv-zip-fname { color: var(--ink, #333); }
+.pv-zip-fsize {
+  font-size: 0.7rem; color: var(--ink-faint, #aaa);
+  margin-left: auto; padding-right: var(--space-md);
+}
+.pv-zip-footer {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border-light, #e8e8e8);
+  text-align: center;
+}
+
 /* 文件详情弹窗预览按钮 */
 .fi-preview-btn {
   display: inline-flex; align-items: center; gap: 6px;
@@ -3447,8 +3516,10 @@
 .file-table thead th:nth-child(4) { width: 90px; }     /* 上传者 */
 .file-table thead th:nth-child(5) { width: 100px; }    /* 任课教师 */
 .file-table thead th:nth-child(6) { width: 60px; }     /* 收藏量 */
-.file-table thead th:nth-child(7) { width: 100px; }    /* 下载量 */
-.file-table thead th.th-download { width: 130px; text-align: center; }
+.file-table thead th:nth-child(7) { width: 100px; text-align: center; }    /* 下载量 */
+@media (min-width: 721px) {
+  .file-table thead th.th-download { width: 170px; text-align: center; }
+}
 
 /* ── 渐进隐藏列：空间不足时优先显示文件名 ── */
 
@@ -3488,7 +3559,6 @@
 /* 预览弹窗移动端适配 */
 @media (max-width: 640px) {
   .preview-overlay { padding: var(--space-xs); }
-  .preview-body embed,
   .preview-body iframe { border-radius: var(--radius-sm); }
   .pv-text-wrap { max-width: 100%; }
   .pv-text { font-size: 0.7rem; padding: var(--space-sm); }
@@ -3501,6 +3571,9 @@
   .fd-preview-body { max-height: 85vh; }
   .fd-preview-body .pv-viewer { max-height: 75vh; }
   .fd-preview-body .pv-text { max-height: 70vh; }
+  .pv-zip-tree { font-size: 0.7rem; max-height: 40vh; }
+  .pv-zip-header { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .pv-zip-stats { margin-left: 0; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4291,10 +4364,14 @@
   }
 }
 
-/* 窄屏：uploader 置顶 */
+/* 窄屏：uploader 移到文件信息和简介之间 */
 @media (max-width: 768px) {
   .fd-info-area .fd-uploader-card {
-    order: -1;
+    order: 1;
+    margin-top: 12px;
+  }
+  .fd-desc-area {
+    order: 2;
   }
 }
 

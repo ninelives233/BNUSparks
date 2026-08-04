@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BNU Sparks · 木铎星火 · 学术资源共享平台</title>
-<link rel="stylesheet" href="/static/css/style.css?v=117">
+<title>BNUSparks · 资料共享</title>
+<link rel="stylesheet" href="/static/css/style.css?v=129">
 </head>
 <body>
 
@@ -14,7 +14,10 @@
     <a href="javascript:void(0)" class="header-logo-area"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
     <button class="menu-toggle" id="menuOpen" aria-label="菜单">☰</button>
     <div class="search-hero-wrap">
-      <div class="search-box"><input type="text" placeholder="搜索课程、资料、课程代码…"><button aria-label="搜索">→</button></div>
+      <!-- Chrome 自动填充欺骗 -->
+      <input type="text" style="display:none" aria-hidden="true" tabindex="-1">
+      <input type="password" style="display:none" aria-hidden="true" tabindex="-1">
+      <div class="search-box"><input type="text" placeholder="搜索课程、资料、课程代码…" autocomplete="off"><button aria-label="搜索">→</button></div>
     </div>
     <div class="header-login" id="headerLogin"></div>
   </div>
@@ -553,12 +556,10 @@
       </div>
       <!-- 操作按钮区 -->
       <div class="fd-actions" id="fdActions"></div>
-      <!-- 预览区 -->
+      <!-- 预览区（JS 动态填充） -->
       <div class="fd-preview-area" id="fdPreviewArea">
         <div class="fd-preview-header"><span class="pv-badge" id="fdPreviewBadge"></span> 文件预览</div>
-        <div class="fd-preview-body" id="fdPreviewBody">
-          <div class="pv-unsupported"><div class="pv-unsupported-icon">📄</div><div class="pv-unsupported-text">加载中…</div></div>
-        </div>
+        <div class="fd-preview-body" id="fdPreviewBody"></div>
       </div>
     </div>
   </div>
@@ -592,6 +593,10 @@
     </div>
     <div class="footer-bottom">
       <p>© 2026 BNU Sparks · 木铎星火 · 学术资源共享平台</p>
+      <p class="icp-info">
+        <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">鲁ICP备2026040195号</a>
+        <!-- 公安联网备案通过后在此添加：<a href="http://www.beian.gov.cn" target="_blank" rel="noopener">鲁公网安备 XXXXXXXXXXXX号</a> -->
+      </p>
     </div>
   </div>
 </footer>
@@ -793,14 +798,14 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=117"></script>
-<script src="/static/js/auth.js?v=117"></script>
-<script src="/static/js/profile.js?v=117"></script>
-<script src="/static/js/notifications.js?v=117"></script>
-<script src="/static/js/admin.js?v=117"></script>
-<script src="/static/js/views.js?v=117"></script>
-<script src="/static/js/explorer.js?v=117"></script>
-<script src="/static/js/app.js?v=117"></script>
+<script src="/static/js/utils.js?v=129"></script>
+<script src="/static/js/auth.js?v=129"></script>
+<script src="/static/js/profile.js?v=129"></script>
+<script src="/static/js/notifications.js?v=129"></script>
+<script src="/static/js/admin.js?v=129"></script>
+<script src="/static/js/views.js?v=129"></script>
+<script src="/static/js/explorer.js?v=129"></script>
+<script src="/static/js/app.js?v=129"></script>
 
 </body>
 </html>

@@ -1900,7 +1900,7 @@
         fdh.appendChild(hint);
       }
       var extType = _isPreviewableExt(file.file_name);
-      hint.textContent = extType === 'pdf' ? '预览最多显示前三页' : '';
+      hint.textContent = extType === 'pdf' ? '预览最多显示前三页' : (extType === 'zip' ? '文件清单' : '');
     }
     _loadFdPreview(file.id, file.file_name);
   }
@@ -1908,12 +1908,38 @@
   async function _loadFdPreview(fileId, fileName) {
     var body = document.getElementById('fdPreviewBody');
     if (!body) return;
+    var area = document.getElementById('fdPreviewArea');
     var extType = _isPreviewableExt(fileName);
-    body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">\u23f3</div><div class="pv-unsupported-text">加载预览…</div></div>';
+
+    // Zip 文件：读取内部结构并展示文件树
+    if (extType === 'zip') {
+      if (area) area.style.display = '';
+      body.innerHTML = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
+      try {
+        var data = await api('/api/files/' + fileId + '/zip-structure/');
+        if (data.ok && data.data) {
+          renderZipTree(body, data.data.items, fileId, fileName);
+          return;
+        }
+      } catch(e) {}
+      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">📦</div><div class="pv-unsupported-text">压缩包文件结构读取失败，文件可能已损坏</div></div>';
+      return;
+    }
+
+    // 非可预览类型 — 隐藏整个预览区域，干净利落
+    if (extType === 'other' || extType === 'ppt') {
+      if (area) area.style.display = 'none';
+      return;
+    }
+
+    // 可预览类型：确保预览区域可见
+    if (area) area.style.display = '';
+
+    body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon" style="font-size:1rem">\u27f3</div><div class="pv-unsupported-text" style="font-size:0.85rem">正在加载预览…</div></div>';
     try {
       var previewUrl = await _previewUrl(fileId);
       if (extType === 'pdf') {
-        body.innerHTML = '<embed src="' + previewUrl + '" type="application/pdf" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer">';
+        body.innerHTML = '<iframe src="' + previewUrl + '" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>';
       } else if (extType === 'image') {
         body.innerHTML = '<img src="' + previewUrl + '" alt="预览" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
       } else if (extType === 'text') {
@@ -1934,15 +1960,9 @@
           var pre = document.getElementById('fdPvTextContent');
           if (pre) pre.textContent = '无法加载文件内容';
         });
-      } else {
-        body.innerHTML = '<div class="pv-unsupported">' +
-          '<div class="pv-unsupported-icon">\U0001f4c4</div>' +
-          '<div class="pv-unsupported-text">该文件类型暂不支持在线预览</div>' +
-          '<button class="pv-dl-btn" onclick="handleDownloadClick(' + fileId + ',this,event)">' + FD_ICONS.download + ' 下载文件</button>' +
-        '</div>';
       }
     } catch(e) {
-      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">\u26a0\ufe0f</div><div class="pv-unsupported-text">预览加载失败</div></div>';
+      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">\u26a0\ufe0f</div><div class="pv-unsupported-text">预览加载失败，请尝试下载后查看</div></div>';
     }
   }
 
@@ -2048,6 +2068,7 @@
   function _isPreviewableExt(fileName) {
     if (!fileName) return 'other';
     var ext = fileName.split('.').pop().toLowerCase();
+    if (['zip'].includes(ext)) return 'zip';
     if (['pdf'].includes(ext)) return 'pdf';
     if (['ppt','pptx'].includes(ext)) return 'ppt';
     if (['jpg','jpeg','png','gif','webp','bmp','svg','ico'].includes(ext)) return 'image';
@@ -2090,7 +2111,7 @@
       _previewUrl(fileId).then(function(previewUrl) {
         var bodyHtml = '';
         if (extType === 'pdf') {
-          bodyHtml = '<embed src="' + previewUrl + '" type="application/pdf" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer">';
+          bodyHtml = '<iframe src="' + previewUrl + '" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>';
         } else if (extType === 'image') {
           bodyHtml = '<img src="' + previewUrl + '" alt="' + esc(fn) + '" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
         } else if (extType === 'text') {
@@ -2098,14 +2119,25 @@
         } else if (extType === 'ppt') {
           bodyHtml = '<div class="pv-unsupported">' +
             '<div class="pv-unsupported-icon">📊</div>' +
-            '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
+            '<div class="pv-unsupported-text">此格式暂不支持在线预览</div>' +
             '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
             '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
           '</div>';
+        } else if (extType === 'zip') {
+          bodyHtml = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
+          // Zip 结构稍后通过 API 填充
+          api('/api/files/' + fileId + '/zip-structure/').then(function(zipData) {
+            if (zipData.ok && zipData.data) {
+              var pv = document.getElementById('previewBody');
+              if (pv) {
+                renderZipTree(pv, zipData.data.items, fileId, fn);
+              }
+            }
+          }).catch(function() {});
         } else {
           bodyHtml = '<div class="pv-unsupported">' +
             '<div class="pv-unsupported-icon">📄</div>' +
-            '<div class="pv-unsupported-text">此功能对服务器性能要求过高，暂不支持</div>' +
+            '<div class="pv-unsupported-text">此格式暂不支持在线预览</div>' +
             '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
             '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
           '</div>';
@@ -2164,5 +2196,63 @@
       history.back();
     }
   }
+
+
+  // ── ZIP 文件结构树渲染 ──
+  function renderZipTree(container, items, fileId, fileName) {
+    // 构建目录树
+    var tree = {};
+    items.forEach(function(item) {
+      if (item.is_dir) return;
+      var parts = item.name.split('/');
+      var current = tree;
+      for (var i = 0; i < parts.length - 1; i++) {
+        var dir = parts[i];
+        if (!current[dir]) current[dir] = { __children: {} };
+        if (!current[dir].__children) current[dir].__children = {};
+        current = current[dir].__children;
+      }
+      var leafName = parts[parts.length - 1];
+      if (leafName) {
+        current[leafName] = { __size: item.size, __compressed: item.compressed_size };
+      }
+    });
+
+    // 统计文件数 + 总大小
+    var fileCount = items.filter(function(i) { return !i.is_dir; }).length;
+    var totalSize = items.reduce(function(sum, i) { return sum + (i.is_dir ? 0 : i.size); }, 0);
+
+    var html = '<div class="pv-zip-header">' +
+      '<span class="pv-zip-filename">📦 ' + esc(fileName || '') + '</span>' +
+      '<span class="pv-zip-stats">' + fileCount + ' 个文件，共 ' + formatSize(totalSize) + '</span>' +
+    '</div><div class="pv-zip-tree">';
+
+    function renderNode(node, indent) {
+      var keys = Object.keys(node).sort();
+      var out = '';
+      keys.forEach(function(key) {
+        if (key === '__children' || key === '__size' || key === '__compressed') return;
+        var val = node[key];
+        if (val.__children) {
+          // 目录
+          out += '<div class="pv-zip-dir" style="padding-left:' + (indent * 16) + 'px">📁 ' + esc(key) + '/</div>';
+          out += renderNode(val.__children, indent + 1);
+        } else {
+          var sizeStr = val.__size !== undefined ? formatSize(val.__size) : '';
+          out += '<div class="pv-zip-file" style="padding-left:' + (indent * 16) + 'px">' +
+            '<span class="pv-zip-fname">' + esc(key) + '</span>' +
+            (sizeStr ? '<span class="pv-zip-fsize">' + sizeStr + '</span>' : '') +
+          '</div>';
+        }
+      });
+      return out;
+    }
+    html += renderNode(tree, 0);
+    html += '</div>' +
+      '<div class="pv-zip-footer"><button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button></div>';
+
+    container.innerHTML = html;
+  }
+
 
   /* renderEmpty moved to views.js */
