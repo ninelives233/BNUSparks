@@ -297,9 +297,14 @@ def api_file_download(request, file_id):
     if user is None:
         return _err("请先登录后再下载", 401)
 
-    if not material.is_approved:
+    if material.review_status != "approved":
         try:
-            _check_moderator_access(user, material)
+            # 已驳回：上传者本人也无权下载（防止普通用户绕过审核取回被驳回文件）
+            # 待审核：上传者可预览/下载自己刚传的文件（自动托管 1 分钟延迟窗口内）
+            if material.review_status == "rejected":
+                _check_moderator_access(user, material, allow_uploader=False)
+            else:
+                _check_moderator_access(user, material)
         except Exception:
             return _err("该资料未通过审核，暂不可下载", 403)
 
@@ -528,9 +533,12 @@ def api_zip_structure(request, file_id):
     file_path = Path(settings.MEDIA_ROOT) / material.file_path
     if not file_path.exists():
         return _err("文件不存在", 404)
-    if not material.is_approved:
+    if material.review_status != "approved":
         try:
-            _check_moderator_access(user, material)
+            if material.review_status == "rejected":
+                _check_moderator_access(user, material, allow_uploader=False)
+            else:
+                _check_moderator_access(user, material)
         except Exception:
             return _err("该资料未通过审核", 403)
 

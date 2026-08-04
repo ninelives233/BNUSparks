@@ -626,13 +626,18 @@ def _user_can_edit_material(user, material):
     return False
 
 
-def _check_moderator_access(user, material):
-    """校验 moderator / sub_moderator 是否有权操作该资料（含自己上传的）"""
+def _check_moderator_access(user, material, allow_uploader=True):
+    """校验 moderator / sub_moderator 是否有权操作该资料
+
+    allow_uploader=True: 上传者本人始终可访问（编辑/删除/审核上下文默认）
+    allow_uploader=False: 上传者本人不算权限（「驳回资料下载」场景专用，
+                          防止普通用户绕过审核下载自己被驳回的文件）
+    """
     profile = _get_or_create_profile(user)
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         return
-    # 自己上传的始终可访问
-    if material.uploader_id == user.id:
+    # 自己上传的始终可访问（驳回下载时关闭）
+    if allow_uploader and material.uploader_id == user.id:
         return
     if profile.role == UserProfile.Role.SUB_MODERATOR:
         # 缓存全量课程集合在同一次请求内的 user 对象上（避免每文件重复查询）

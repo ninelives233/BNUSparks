@@ -447,6 +447,9 @@
   .footer-bottom .icp-info { font-size: 0.75rem; }
   .footer-bottom .icp-info a { color: var(--ink-faint); text-decoration: underline transparent; transition: color 0.15s, text-decoration-color 0.15s; }
   .footer-bottom .icp-info a:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  /* 公安联网备案徽章 */
+  .footer-bottom .gongan-link { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; }
+  .footer-bottom .gongan-icon { width: 14px; height: auto; vertical-align: middle; }
   .footer-bottom .footer-social { display: flex; gap: var(--space-sm); }
 
   /* ════════════════════════════════════════════════════════════
