@@ -369,11 +369,17 @@
     if (name.length > 50) { errEl.textContent = '昵称不能超过 50 字'; errEl.style.display = 'block'; return; }
     try {
       const data = await api('/api/auth/profile/', { method: 'PATCH', body: { nickname: name } });
-      document.getElementById('profileNickname').textContent = data.nickname;
-      document.getElementById('profileAvatar').textContent = data.nickname.charAt(0) || '🧑';
+      // 兜底：即使后端响应缺 nickname 字段也不会抛错
+      const nick = (data && data.nickname) || name;
+      document.getElementById('profileNickname').textContent = nick;
+      // 有真实头像时保留 <img>，否则更新首字母
+      const avatarEl = document.getElementById('profileAvatar');
+      if (avatarEl && !avatarEl.querySelector('img')) {
+        avatarEl.textContent = nick.charAt(0) || '🧑';
+      }
       cancelEditNickname();
       // 更新全局 currentUser 和头部显示
-      if (currentUser) { currentUser.nickname = data.nickname; }
+      if (currentUser) { currentUser.nickname = nick; }
       updateAuthUI();
     } catch (err) {
       errEl.textContent = err.message;

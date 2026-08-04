@@ -28,55 +28,60 @@ from .utils import (
 # 个人资料
 # ═══════════════════════════════════════════════════════════════
 
+def _profile_payload(request, profile):
+    """序列化当前用户完整资料（GET/PATCH 共用，保证字段一致）"""
+    remaining = 60
+    today = date.today()
+    if profile.role == UserProfile.Role.USER:
+        if profile.last_download_date == today:
+            remaining = max(0, 60 - profile.daily_download_count)
+    daily_download_used = profile.daily_download_count if profile.last_download_date == today else 0
+    sections_display = []
+    if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+        from .utils import _get_managed_sections_display
+        sections_display = _get_managed_sections_display(profile)
+    role_labels = {
+        UserProfile.Role.SUPER_ADMIN: "总管理员",
+        UserProfile.Role.MODERATOR: "版主",
+        UserProfile.Role.SUB_MODERATOR: "小版主",
+        UserProfile.Role.USER: "用户",
+    }
+    return {
+        "id": request.user.id,
+        "username": request.user.username,
+        "nickname": request.user.first_name or request.user.username,
+        "email": request.user.email,
+        "role": profile.role,
+        "role_label": role_labels.get(profile.role, "用户"),
+        "date_joined": request.user.date_joined.strftime("%Y-%m-%d") if request.user.date_joined else "",
+        "daily_download_limit": 60,
+        "daily_download_remaining": remaining,
+        "daily_download_used": daily_download_used,
+        "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
+        "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
+        "avatar_url": profile.avatar.url if profile.avatar else "",
+        "daily_download_count": profile.daily_download_count,
+        "last_download_date": str(profile.last_download_date) if profile.last_download_date else "",
+        "auto_approve": profile.auto_approve,
+        "can_auto_approve": profile.can_auto_approve,
+        "can_moderate_general": profile.can_moderate_general,
+        "contact_email": profile.contact_email or "",
+        "contact_way": profile.contact_way or "",
+        "bio": profile.bio or "",
+        "sections_display": sections_display,
+        "upload_count": Material.objects.filter(uploader=request.user).count(),
+        "download_count": DownloadRecord.objects.filter(user=request.user).count(),
+        "collection_count": Favorite.objects.filter(material__uploader=request.user).count(),
+    }
+
+
 @csrf_exempt
 @require_login
 def api_profile(request):
     """GET/PATCH /api/auth/profile/"""
     if request.method == "GET":
         profile = _get_or_create_profile(request.user)
-        remaining = 60
-        today = date.today()
-        if profile.role == UserProfile.Role.USER:
-            if profile.last_download_date == today:
-                remaining = max(0, 60 - profile.daily_download_count)
-        daily_download_used = profile.daily_download_count if profile.last_download_date == today else 0
-        sections_display = []
-        if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
-            from .utils import _get_managed_sections_display
-            sections_display = _get_managed_sections_display(profile)
-        role_labels = {
-            UserProfile.Role.SUPER_ADMIN: "总管理员",
-            UserProfile.Role.MODERATOR: "版主",
-            UserProfile.Role.SUB_MODERATOR: "小版主",
-            UserProfile.Role.USER: "用户",
-        }
-        return _ok({
-            "id": request.user.id,
-            "username": request.user.username,
-            "nickname": request.user.first_name or request.user.username,
-            "email": request.user.email,
-            "role": profile.role,
-            "role_label": role_labels.get(profile.role, "用户"),
-            "date_joined": request.user.date_joined.strftime("%Y-%m-%d") if request.user.date_joined else "",
-            "daily_download_limit": 60,
-            "daily_download_remaining": remaining,
-            "daily_download_used": daily_download_used,
-            "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
-            "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
-            "avatar_url": profile.avatar.url if profile.avatar else "",
-            "daily_download_count": profile.daily_download_count,
-            "last_download_date": str(profile.last_download_date) if profile.last_download_date else "",
-            "auto_approve": profile.auto_approve,
-            "can_auto_approve": profile.can_auto_approve,
-            "can_moderate_general": profile.can_moderate_general,
-            "contact_email": profile.contact_email or "",
-            "contact_way": profile.contact_way or "",
-            "bio": profile.bio or "",
-            "sections_display": sections_display,
-            "upload_count": Material.objects.filter(uploader=request.user).count(),
-            "download_count": DownloadRecord.objects.filter(user=request.user).count(),
-            "collection_count": Favorite.objects.filter(material__uploader=request.user).count(),
-        })
+        return _ok(_profile_payload(request, profile))
 
     elif request.method == "PATCH":
         try:
@@ -104,7 +109,11 @@ def api_profile(request):
 
         if changed:
             profile.save(update_fields=list(allowed_fields & set(changed)))
-        return _ok({"message": "已更新" if changed else "无变化", "changed": changed})
+        # 返回完整资料，前端可直接用 data.nickname 等字段即时刷新，无需 reload
+        payload = _profile_payload(request, profile)
+        payload["message"] = "已更新" if changed else "无变化"
+        payload["changed"] = changed
+        return _ok(payload)
 
     return _err("仅支持 GET/PATCH", 405)
 
