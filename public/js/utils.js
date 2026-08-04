@@ -1,12 +1,58 @@
+  // ── Token 缓存 + API 内存缓存 ──
+  let _cachedToken = null;
+  const _apiCache = {};
+  const API_CACHE_TTL = {
+    '/api/courses/tree/': 60000,
+    '/api/stats/': 120000,
+    '/api/colleges/': 300000,
+    '/api/search/': 30000,
+  };
+
   async function api(url, opts = {}) {
-    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    // GET 请求内存缓存
+    if (!opts.method || opts.method === 'GET') {
+      const entry = _apiCache[url];
+      if (entry && Date.now() - entry.ts < (entry.ttl || 0)) {
+        return entry.data;
+      }
+    }
+
+    // Token 缓存（避免每次读取 storage）
+    if (!_cachedToken) {
+      _cachedToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+    }
     const headers = { ...opts.headers };
     if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-    if (token) headers['Authorization'] = 'Bearer ' + token;
+    if (_cachedToken) headers['Authorization'] = 'Bearer ' + _cachedToken;
     if (opts.body && !(opts.body instanceof FormData)) opts.body = JSON.stringify(opts.body);
-    const resp = await fetch(url, { ...opts, headers });
+
+    // 超时控制（默认 10 秒）
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), opts.timeout || 10000);
+    if (!opts.signal) opts.signal = controller.signal;
+
+    let resp;
+    try {
+      resp = await fetch(url, { ...opts, headers });
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err.name === 'AbortError') throw new Error('请求超时');
+      throw err;
+    }
+    clearTimeout(timeout);
+
     const data = await resp.json();
     if (!data.ok) throw new Error(data.error || '请求失败');
+
+    // 缓存 GET 响应
+    if (!opts.method || opts.method === 'GET') {
+      _apiCache[url] = {
+        data: data.data,
+        ts: Date.now(),
+        ttl: API_CACHE_TTL[url] || 0,
+      };
+    }
+
     return data.data;
   }
 
@@ -339,7 +385,7 @@
           if (m.review_status && m.review_status !== 'approved') {
             badgeHtml = '<span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem;margin-left:6px">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          html += '<a href="/api/files/' + m.id + '/download/" class="sg-item sg-item-link" onclick="this.closest(\'.search-overlay\').remove()">';
+          html += '<div class="sg-item sg-item-link" onclick="this.closest(\'.search-overlay\').remove();showFileDetail({id:' + m.id + ',title:\'' + esc(m.title) + '\',course_code:\'' + esc(m.course_code) + '\',course_name:\'' + esc(m.course_name) + '\'})">';
           html += '<div class="sg-item-body">';
           html += '<span class="sg-item-name">' + esc(m.title) + badgeHtml + '</span>';
           html += '<span class="sg-item-meta">';
@@ -347,7 +393,7 @@
           html += '</span>';
           html += '</div>';
           html += '<span class="sg-item-arrow">→</span>';
-          html += '</a>';
+          html += '</div>';
         });
         html += '</div>';
         html += '</div>';

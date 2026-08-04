@@ -28,6 +28,7 @@
       renderDrawerMenu();
       if (currentUser) refreshCurrentUser();
       lockScroll();
+      pushViewState('drawer', {});
     }
   }
 
@@ -45,7 +46,8 @@
   function showDrawerNotif() {
     document.getElementById('drawerMenu').style.display = 'none';
     document.getElementById('drawerNotif').style.display = '';
-    if (!_notifLoaded) { loadNotifications(); _notifLoaded = true; }
+    loadNotifications();
+    pushViewState('drawer', { sub: 'notif' });
   }
 
   async function showDrawerDownloads() {

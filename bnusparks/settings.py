@@ -75,6 +75,15 @@ DATABASES = {
     }
 }
 
+# ── 缓存 ──
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'bnusparks-cache',
+        'TIMEOUT': 300,  # 5 分钟默认超时
+    }
+}
+
 # ── 密码验证 ──
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

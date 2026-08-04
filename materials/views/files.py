@@ -27,7 +27,8 @@ from .utils import (
     _generate_download_token, _verify_download_token,
     _strip_exif, _check_auto_approve, _check_download_quota,
     _check_moderator_access, _calculate_review_assignment,
-    _create_notification, require_login,
+    _create_notification, _user_can_edit_material,
+    require_login,
     UserProfile, Course, Material, Notification,
     DownloadRecord, DeletionRecord, CourseCategory,
 )
@@ -400,6 +401,37 @@ def api_file_delete(request, file_id):
         delete_reason=delete_reason,
     )
 
+    # 非自删时通知辖区的版主/小版主
+    if not is_self_delete and material.course:
+        college_id = material.course.college_id
+        local_users = User.objects.filter(
+            profile__role__in=[UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR]
+        ).exclude(id=request.user.id).distinct()
+        notified = set()
+        for u in local_users:
+            p = _get_or_create_profile(u)
+            in_scope = False
+            if p.role == UserProfile.Role.MODERATOR and college_id:
+                if p.managed_majors.filter(id=college_id).exists():
+                    in_scope = True
+                if p.can_moderate_general and material.course.course_type == 'general':
+                    in_scope = True
+            if p.role == UserProfile.Role.SUB_MODERATOR:
+                if material.course and p.moderated_sections.filter(course=material.course).exists():
+                    in_scope = True
+            if in_scope and u.id not in notified:
+                notified.add(u.id)
+                _create_notification(
+                    recipient=u,
+                    type=Notification.Type.FILE_DELETED,
+                    title="辖区内的资料被删除",
+                    message=f"管理员{request.user.first_name or request.user.username}删除了你辖区内的资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
+                    material=material,
+                    course_code=material.course.code if material.course else "",
+                    course_name=material.course.name if material.course else "",
+                    triggered_by=request.user,
+                )
+
     if not is_self_delete and delete_reason and material.uploader and material.uploader_id != request.user.id:
         _create_notification(
             recipient=material.uploader,
@@ -480,11 +512,46 @@ def api_file_detail(request, file_id):
         "review_status": rs,
         "is_uploader": user.is_authenticated and material.uploader_id == user.id,
         "can_download": material.is_approved or (user.is_authenticated and material.uploader_id == user.id),
-        "can_delete": user.is_authenticated and (
-            material.uploader_id == user.id
-            or _get_or_create_profile(user).role in (
-                UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR,
-            )
-        ),
+        "can_delete": user.is_authenticated and _user_can_edit_material(user, material),
         "is_approved": material.is_approved,
     })
+
+@csrf_exempt
+def api_zip_structure(request, file_id):
+    """GET /api/files/<id>/zip-structure/ — 返回ZIP文件内部文件列表"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    material = get_object_or_404(Material, id=file_id)
+    user = _get_user(request)
+    if user is None:
+        return _err("请先登录", 401)
+    file_path = Path(settings.MEDIA_ROOT) / material.file_path
+    if not file_path.exists():
+        return _err("文件不存在", 404)
+    if not material.is_approved:
+        try:
+            _check_moderator_access(user, material)
+        except Exception:
+            return _err("该资料未通过审核", 403)
+
+    import zipfile
+    try:
+        with zipfile.ZipFile(str(file_path), 'r') as zf:
+            items = []
+            for info in zf.infolist():
+                items.append({
+                    'name': info.filename,
+                    'size': info.file_size,
+                    'compressed_size': info.compress_size,
+                    'is_dir': info.is_dir(),
+                })
+            items.sort(key=lambda x: (0 if x['is_dir'] else 1, x['name']))
+            return _ok({
+                'file_name': material.file_name,
+                'total': len(items),
+                'items': items,
+            })
+    except zipfile.BadZipFile:
+        return _err("文件已损坏或不是有效的ZIP文件", 400)
+    except Exception:
+        return _err("读取ZIP文件失败", 500)

@@ -106,11 +106,15 @@
     tutorial: {
       title: '使用教程',
       sections: [
-        { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks 学术资源共享平台！以下教程将帮助你快速上手。' },
-        { heading: '🔎 搜索资料', text: '在顶栏的搜索框中输入课程名称、课程代码或资料标题，直接回车即可搜索。搜索结果会显示关联的课程和资料文件。' },
-        { heading: '📁 浏览课程', text: '通过左侧导航栏选择"通识课"或"专业课"，逐层进入课程分类，点击课程卡片即可查看该课程的所有资料。' },
-        { heading: '⬆️ 如何上传', text: '登录账号后，进入任意课程页面，点击页面上方的"上传资料"按钮，填写标题、选择文件即可分享你的学习资源。上传需要使用北师大校内邮箱(@mail.bnu.edu.cn)注册。' },
-        { heading: '📱 移动端使用', text: '在手机或平板上，点击左上角的菜单按钮打开导航抽屉，即可像桌面端一样浏览全部功能。' },
+        { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享各门课程的教材、讲义、PPT、试卷等学习资料。以下按使用顺序介绍常用功能。' },
+        { heading: '🔑 注册与登录', text: '平台用北师大校内邮箱注册：在「注册」页填写学号（系统自动补全 @mail.bnu.edu.cn）、昵称，并设置至少 8 位的密码。提交后去校内邮箱查收验证邮件，点击链接激活账号后才能登录。登录时只需输入学号，勾选「记住我」可保持登录状态；忘记密码时在登录页点「忘记密码」，按邮件链接重置即可。如果新生不知道如何使用师大邮箱，一般来说直接登录数字京师，首页即有直达入口；若无，可能需按照录取通知书随附的指示进行激活。' },
+        { heading: '🔎 搜索资料', text: '顶栏搜索框支持按课程名称、课程代码或资料标题查找。输入关键词回车，结果会同时列出匹配的课程和资料：点课程直达课程目录，点资料直接打开文件详情页。记不清代码时直接搜课程名即可（通识课代码以 GEN 开头）。' },
+        { heading: '📁 浏览课程', text: '从首页或左侧导航进入「浏览课程」，选择「通识课」或「专业课」，按「学院 → 专业 → 课程」逐层展开。进入课程后可见该课程的全部资料，顶部可按类型筛选、按上传时间/下载量/收藏量排序。' },
+        { heading: '⬇️ 下载资料', text: '每份资料右侧都有「下载」按钮，点击即可保存。每位用户每天有 60 次下载额度，建议控制在20次以内。考虑到服务器性能，今后应该会继续下调下载量。一次要下多份时，可在列表中勾选多行后点「⬇ 批量下载」。注意：部分浏览器（如 Edge）对批量下载有限制，可能出现漏下，建议用 Chrome 或分小批下载。' },
+        { heading: '📄 文件详情与收藏', text: '点击文件所在行进入详情页，可查看资料类型、大小、任课教师、上传者、下载量与收藏量。觉得有用的资料可点「收藏」，之后在右上角头像菜单 →「我的收藏」里随时查看，无需重复搜索。手机浏览器天然不支持预览PDF文件，出现显示问题请谅解。' },
+        { heading: '⬆️ 上传资料', text: '登录后进入任意课程页面，点「+ 上传资料」，填写标题、任课教师并选择文件即可提交。资料进入审核队列，通过后对所有人可见；被驳回时可在通知中查看原因并重新上传。建议上传前确认文件归属课程正确、命名清晰，审核会更快通过。' },
+        { heading: '🔔 通知中心', text: '点击右上角头像打开菜单，即可进入「通知中心」。审核通过/驳回、文件被删除等消息都会推送在这里，点击通知可直接跳转到对应课程或文件处理。' },
+        { heading: '📱 移动端', text: '在手机上点击左上角的 ☰ 菜单按钮，即可像桌面端一样浏览课程、搜索、上传和下载全部功能。更加推荐使用电脑或平板进行浏览，信息显示更全，操作更加方便。' },
       ]
     },
     announcements: {
@@ -124,10 +128,7 @@
     broad: {
       title: '关于大类招生',
       sections: [
-        { heading: '📋 什么是大类招生', text: '大类招生是高校将相同或相近学科门类（通常是同一学院内的多个专业）合并为一个大类进行招生。学生入学后前 1-2 年学习通识课程和大类基础课程，之后根据学业成绩和个人意愿进行专业分流。' },
-        { heading: '📚 通识课程安排', text: '大类招生下，全校通识教育课程包括思想政治理论类、体育与健康类、军事理论与军事技能、大学外语类、教师素养类、家国情怀与价值理想模块等 11 个类别，所有本科生统一修读。' },
-        { heading: '🧭 专业分流', text: '大一下或大二上，学生根据学业成绩（GPA）和个人意愿，在大类涵盖的专业中选择具体专业方向。分流标准因学院而异，通常包括绩点排名、面试表现等。' },
-        { heading: '🏫 北京师范大学的大类招生', text: 'BNU 目前多个学院实行大类招生，如经济与工商管理学院按"经济学类"招生（含金融学、经济学励耘、金融科技、工商管理、会计学），法学院按"法学"招生等。' },
+        { heading: '', text: '大类招生一般在大一的第一期学期末分流，基本都能够满足第一志愿，而在此期间的课程安排需要参考所属学院发布的大类招生专用培养方案，并主要依靠意向专业的培养方案进行选课。比如说，如果你确定了自己要在社会科学实验班中分流到法学专业，那么直接参照法学的培养方案来进行选课和资料搜集是最方便的做法。' }
       ]
     }
   };
@@ -137,7 +138,7 @@
     const container = document.getElementById(viewKey + 'Content');
     if (!container) return;
     container.innerHTML = data.sections.map(s =>
-      '<section class="about-section"><h3>' + esc(s.heading) + '</h3><p>' + esc(s.text) + '</p></section>'
+      '<section class="about-section">' + (s.heading ? '<h3>' + esc(s.heading) + '</h3>' : '') + '<p>' + esc(s.text) + '</p></section>'
     ).join('');
   }
 
@@ -316,10 +317,6 @@
   }
 
   function switchLeaderboardTab(type) {
-    if (type === 'collection') {
-      alert('该功能开发中');
-      return;
-    }
     _lbType = type;
     _lbPage = 1;
     document.querySelectorAll('.lb-tab').forEach(function(t) { t.classList.remove('active'); });
@@ -339,7 +336,8 @@
         container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">暂无数据</div>';
         return;
       }
-      var html = '<div class="leaderboard-table-wrap"><table class="leaderboard-table"><thead><tr><th>排名</th><th>用户</th><th>' + (type === 'download' ? '被下载次数' : '上传文件数') + '</th></tr></thead><tbody>';
+      var columnHeader = type === 'download' ? '被下载次数' : (type === 'collection' ? '被收藏次数' : '上传文件数');
+      var html = '<div class="leaderboard-table-wrap"><table class="leaderboard-table"><thead><tr><th>排名</th><th>用户</th><th>' + columnHeader + '</th></tr></thead><tbody>';
       items.forEach(function(u) {
         var rankClass = 'lb-rank';
         if (u.rank === 1) rankClass += ' top-1';

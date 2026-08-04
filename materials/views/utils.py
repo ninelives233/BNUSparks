@@ -12,6 +12,7 @@ import base64
 import io
 import os
 import time
+import threading
 from pathlib import Path
 from functools import wraps
 
@@ -34,6 +35,74 @@ from ..models import (
     CourseCategory, UserProfile, Notification, ReviewComment,
     Favorite, DownloadRecord, DeletionRecord, FolderOperation, Announcement,
 )
+
+
+# ── Category/Course batch preload (request-scoped) ──
+_thread_local = threading.local()
+
+
+def _get_category_preload():
+    """惰性加载全部 CourseCategory + Course 到线程局部存储。
+
+    首次调用执行 2 次查询（全部 cat + 全部 course），
+    后续同请求内直接返回缓存数据。
+    """
+    if hasattr(_thread_local, 'cat_preload'):
+        return _thread_local.cat_preload
+
+    all_cats = list(CourseCategory.objects.select_related('course').all())
+    child_map = {}
+    cat_by_id = {}
+    for c in all_cats:
+        cat_by_id[c.id] = c
+        child_map.setdefault(c.parent_id, []).append(c)
+
+    all_courses = list(Course.objects.all())
+    course_by_code = {c.code: c for c in all_courses}
+
+    _thread_local.cat_preload = {
+        'child_map': child_map,
+        'cat_by_id': cat_by_id,
+        'course_by_code': course_by_code,
+    }
+    return _thread_local.cat_preload
+
+
+def _clear_category_preload():
+    """清除线程局部预加载数据（主要用于测试隔离）"""
+    if hasattr(_thread_local, 'cat_preload'):
+        del _thread_local.cat_preload
+
+
+def _get_courses_in_category_preloaded(cat, preload):
+    """纯内存递归遍历分类树 — 0 次 SQL。
+
+    使用 preload 中的 child_map/cat_by_id/course_by_code
+    替代所有 DB 查询。cat_by_id 确保 FK 安全的课程访问。
+    """
+    child_map = preload['child_map']
+    cat_by_id = preload['cat_by_id']
+    course_by_code = preload['course_by_code']
+
+    courses = []
+
+    if cat.course_id:
+        preloaded_cat = cat_by_id.get(cat.id)
+        if preloaded_cat and preloaded_cat.course_id:
+            courses.append(preloaded_cat.course)
+
+    if cat.course_text:
+        code = cat.course_text.replace("*", "").replace("-", "")
+        if code:
+            courses.extend(
+                c for c in course_by_code.values()
+                if c.code.startswith(code)
+            )
+
+    for child in child_map.get(cat.id, []):
+        courses.extend(_get_courses_in_category_preloaded(child, preload))
+
+    return courses
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -271,18 +340,19 @@ def _strip_exif(file_path):
 def _check_auto_approve(course):
     """检查是否有开启了自动托管的版主/小版主管辖该课程。
     返回自动审核人 User 或 None。"""
+    preload = _get_category_preload()
+    cat_by_id = preload['cat_by_id']
     for p in UserProfile.objects.filter(
         role=UserProfile.Role.SUB_MODERATOR, auto_approve=True
     ).select_related('user'):
         cat_ids = set(p.moderated_sections.values_list('id', flat=True))
         for cat_id in cat_ids:
-            try:
-                cat = CourseCategory.objects.get(id=cat_id)
-                courses = _get_courses_in_category(cat)
-                if course in set(courses):
-                    return p.user
-            except CourseCategory.DoesNotExist:
+            cat = cat_by_id.get(cat_id)
+            if cat is None:
                 continue
+            courses = _get_courses_in_category(cat)
+            if course in set(courses):
+                return p.user
     for p in UserProfile.objects.filter(
         role=UserProfile.Role.MODERATOR, auto_approve=True
     ).select_related('user'):
@@ -305,8 +375,13 @@ def _get_subordinate_covered_course_ids(request_user):
     ).exclude(user=request_user).values_list('moderated_sections__id', flat=True).distinct())
     if not sub_cat_ids:
         return set()
+    preload = _get_category_preload()
+    cat_by_id = preload['cat_by_id']
     course_ids = set()
-    for cat in CourseCategory.objects.filter(id__in=sub_cat_ids):
+    for cat_id in sub_cat_ids:
+        cat = cat_by_id.get(cat_id)
+        if cat is None:
+            continue
         course_ids.update(c.id for c in _get_courses_in_category(cat))
     return course_ids
 
@@ -315,9 +390,21 @@ def _get_subordinate_covered_course_ids(request_user):
 # 课程树
 # ═══════════════════════════════════════════════════════════════
 
-def _build_tree_node(qs):
-    """递归构建课程树节点"""
+def _build_tree_node(qs, *, preload=None):
+    """递归构建课程树节点
+
+    当提供 preload 参数时，使用预加载数据避免 N+1 查询。
+    preload = {
+        'child_map': {parent_id: [CourseCategory]},
+        'course_by_code': {code: Course},
+        'material_counts': {code: int},
+    }
+    """
     result = []
+    child_map = preload.get('child_map') if preload else None
+    course_by_code = preload.get('course_by_code') if preload else None
+    material_counts = preload.get('material_counts') if preload else None
+
     for cat in qs:
         if cat.is_divider:
             result.append({"divider": True})
@@ -325,7 +412,7 @@ def _build_tree_node(qs):
 
         node = {}
         node["id"] = cat.id
-        node["parentId"] = cat.parent_id if cat.parent else None
+        node["parentId"] = cat.parent_id  # 直接取 FK 值，不触发 query
         if cat.name:
             node["name"] = cat.name
         if cat.icon_class:
@@ -339,18 +426,48 @@ def _build_tree_node(qs):
         if cat.course_id and cat.course.college_id:
             node["collegeId"] = cat.course.college_id
 
-        children = cat.children.all()
+        if child_map is not None:
+            children = child_map.get(cat.id, [])
+        else:
+            children = list(cat.children.all())
+
         if children:
-            node["children"] = _build_tree_node(children)
+            built = _build_tree_node(children, preload=preload)
+            node["children"] = built
+            # 从子节点传播 collegeId 向上
+            if "collegeId" not in node:
+                for child in built:
+                    cid = child.get("collegeId")
+                    if cid:
+                        node["collegeId"] = cid
+                        break
         elif cat.course_id:
             node["courseId"] = cat.course.code
-            node["fileCount"] = Material.objects.filter(
-                course__code=cat.course.code, is_approved=True
-            ).count()
+            if material_counts is not None:
+                node["fileCount"] = material_counts.get(cat.course.code, 0)
+            else:
+                node["fileCount"] = Material.objects.filter(
+                    course__code=cat.course.code, is_approved=True
+                ).count()
         elif cat.course_text:
             code = cat.course_text.replace("*", "").replace("-", "")
             if code:
-                if "*" not in cat.course_text:
+                if "*" not in cat.course_text and material_counts is not None:
+                    # 通过 preload 数据匹配课程
+                    matched = []
+                    for cc in course_by_code.values():
+                        if cc.code.startswith(code):
+                            matched.append(cc)
+                    if len(matched) == 1:
+                        node["courseId"] = matched[0].code
+                        if matched[0].college_id:
+                            node["collegeId"] = matched[0].college_id
+                    else:
+                        node["courseId"] = cat.course_text
+                    node["fileCount"] = sum(
+                        material_counts.get(c.code, 0) for c in matched
+                    )
+                elif "*" not in cat.course_text:
                     real = Course.objects.filter(code__startswith=code)
                     if real.count() == 1:
                         node["courseId"] = real[0].code
@@ -358,11 +475,23 @@ def _build_tree_node(qs):
                             node["collegeId"] = real[0].college_id
                     else:
                         node["courseId"] = cat.course_text
+                    node["fileCount"] = Material.objects.filter(
+                        course__code__startswith=code, is_approved=True
+                    ).count()
                 else:
                     node["courseId"] = cat.course_text
-                node["fileCount"] = Material.objects.filter(
-                    course__code__startswith=code, is_approved=True
-                ).count()
+                    if material_counts is not None:
+                        matched = []
+                        for cc in course_by_code.values():
+                            if cc.code.startswith(code):
+                                matched.append(cc)
+                        node["fileCount"] = sum(
+                            material_counts.get(c.code, 0) for c in matched
+                        )
+                    else:
+                        node["fileCount"] = Material.objects.filter(
+                            course__code__startswith=code, is_approved=True
+                        ).count()
 
         result.append(node)
 
@@ -428,7 +557,11 @@ def _calculate_review_assignment(material):
 
 
 def _get_courses_in_category(cat):
-    """递归获取分类节点下所有 Course 实例"""
+    """递归获取分类节点下所有 Course 实例（自动使用预加载数据，若可用）"""
+    preload = getattr(_thread_local, 'cat_preload', None)
+    if preload is not None:
+        return _get_courses_in_category_preloaded(cat, preload)
+
     courses = []
     if cat.course_id:
         courses.append(cat.course)
@@ -447,6 +580,8 @@ def _get_moderated_material_qs(user, include_assigned=True):
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         qs = Material.objects.select_related("course", "uploader")
         return qs if include_assigned else qs
+
+    _get_category_preload()  # 预热 preload，后续 _get_courses_in_category 走内存
 
     if profile.role == UserProfile.Role.SUB_MODERATOR:
         all_courses = []
@@ -472,6 +607,25 @@ def _get_moderated_material_qs(user, include_assigned=True):
     return Material.objects.filter(q).select_related("course", "uploader")
 
 
+def _user_can_edit_material(user, material):
+    """返回当前用户是否有权编辑/删除该资料（用于 can_delete 字段，不抛异常）"""
+    if not user.is_authenticated:
+        return False
+    # 自己上传的始终可编辑
+    if material.uploader_id == user.id:
+        return True
+    profile = _get_or_create_profile(user)
+    if profile.role == UserProfile.Role.SUPER_ADMIN:
+        return True
+    if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+        try:
+            _check_moderator_access(user, material)
+            return True
+        except Exception:
+            return False
+    return False
+
+
 def _check_moderator_access(user, material):
     """校验 moderator / sub_moderator 是否有权操作该资料（含自己上传的）"""
     profile = _get_or_create_profile(user)
@@ -481,19 +635,27 @@ def _check_moderator_access(user, material):
     if material.uploader_id == user.id:
         return
     if profile.role == UserProfile.Role.SUB_MODERATOR:
-        cat_ids = set(profile.moderated_sections.values_list("id", flat=True))
-        all_courses = []
-        for cat_id in cat_ids:
-            try:
-                cat = CourseCategory.objects.get(id=cat_id)
+        # 缓存全量课程集合在同一次请求内的 user 对象上（避免每文件重复查询）
+        if not hasattr(user, '_sub_managed_courses'):
+            preload = _get_category_preload()
+            cat_by_id = preload['cat_by_id']
+            cat_ids = set(profile.moderated_sections.values_list("id", flat=True))
+            all_courses = []
+            for cat_id in cat_ids:
+                cat = cat_by_id.get(cat_id)
+                if cat is None:
+                    continue
                 all_courses.extend(_get_courses_in_category(cat))
-            except CourseCategory.DoesNotExist:
-                continue
-        if material.course not in set(all_courses) and material.assigned_moderator_id != user.id:
+            user._sub_managed_courses = set(all_courses)
+        if material.course not in user._sub_managed_courses and material.assigned_moderator_id != user.id:
             from django.http import Http404
             raise Http404("无权操作该资料")
         return
-    colleges = set(profile.managed_majors.values_list("id", flat=True))
+    # MODERATOR 分支：预热 preload，后续 _get_courses_in_category 走内存版
+    _get_category_preload()
+    if not hasattr(user, '_mod_colleges'):
+        user._mod_colleges = set(profile.managed_majors.values_list("id", flat=True))
+    colleges = user._mod_colleges
     if material.course.college_id is None:
         if profile.can_moderate_general:
             return
@@ -571,6 +733,8 @@ def _get_visible_deletion_records(user):
     if profile.role == UserProfile.Role.SUPER_ADMIN:
         return DeletionRecord.objects.all()
 
+    preload = _get_category_preload()
+    cat_by_id = preload['cat_by_id']
     visible_codes = set()
     if profile.role == UserProfile.Role.MODERATOR:
         college_ids = list(profile.managed_majors.values_list("id", flat=True))
@@ -580,20 +744,18 @@ def _get_visible_deletion_records(user):
             for c in Course.objects.filter(college__isnull=True).only("code"):
                 if c.code: visible_codes.add(c.code)
         for cat_id in profile.moderated_sections.values_list("id", flat=True):
-            try:
-                cat = CourseCategory.objects.get(id=cat_id)
-                for c in _get_courses_in_category(cat):
-                    if c.code: visible_codes.add(c.code)
-            except CourseCategory.DoesNotExist:
+            cat = cat_by_id.get(cat_id)
+            if cat is None:
                 continue
+            for c in _get_courses_in_category(cat):
+                if c.code: visible_codes.add(c.code)
     elif profile.role == UserProfile.Role.SUB_MODERATOR:
         for cat_id in profile.moderated_sections.values_list("id", flat=True):
-            try:
-                cat = CourseCategory.objects.get(id=cat_id)
-                for c in _get_courses_in_category(cat):
-                    if c.code: visible_codes.add(c.code)
-            except CourseCategory.DoesNotExist:
+            cat = cat_by_id.get(cat_id)
+            if cat is None:
                 continue
+            for c in _get_courses_in_category(cat):
+                if c.code: visible_codes.add(c.code)
 
     if visible_codes:
         return DeletionRecord.objects.filter(course_code__in=visible_codes)

@@ -30,7 +30,7 @@ from .courses import (
 from .files import (
     api_file_upload, api_file_upload_text,
     api_download_token, api_file_download, api_file_delete,
-    api_file_detail,
+    api_file_detail, api_zip_structure,
 )
 
 # 收藏

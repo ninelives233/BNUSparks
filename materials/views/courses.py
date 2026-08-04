@@ -11,11 +11,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count, Q
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.core.cache import cache
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile,
     _build_tree_node, _get_courses_in_category,
-    _create_notification,
+    _create_notification, _user_can_edit_material,
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
@@ -27,7 +28,9 @@ from .utils import (
 
 def api_courses(request):
     """GET /api/courses/ — 课程列表（支持 ?type=general|major&search=&college=）"""
-    qs = Course.objects.all()
+    qs = Course.objects.select_related('college').annotate(
+        _material_count=Count('materials', filter=Q(materials__review_status='approved'))
+    )
     t = request.GET.get("type")
     s = request.GET.get("search", "").strip()
     college_id = request.GET.get("college")
@@ -46,7 +49,7 @@ def api_courses(request):
         "name": c.name,
         "course_type": c.course_type,
         "college_name": c.college.short_name if c.college_id else "",
-        "material_count": Material.objects.filter(course_id=c.id, review_status="approved").count(),
+        "material_count": c._material_count,
     } for c in qs])
 
 
@@ -84,7 +87,7 @@ def api_course_files(request, course_code):
         q_filter |= Q(course=course, uploader=user, review_status__in=["pending", "approved"])
 
     materials = Material.objects.filter(q_filter).select_related(
-        "material_type"
+        "material_type", "course", "uploader", "uploader__profile"
     ).order_by("-created_at")
 
     # 注释收藏数
@@ -104,13 +107,15 @@ def api_course_files(request, course_code):
                 and m.uploader_id == user.id
                 and m.reviewed_by_id is not None
                 and m.reviewed_by_id != user.id
-                and m.created_at > delay_boundary):
+                and m.uploader_id != m.reviewed_by_id
+              and m.created_at > delay_boundary):
             rs = "pending"
         elif (rs == "approved"
               and user is not None
               and m.uploader_id == user.id
               and m.reviewed_by_id is not None
               and m.reviewed_by_id != user.id
+              and m.uploader_id != m.reviewed_by_id
               and not Notification.objects.filter(
                   recipient=user, material=m,
                   type=Notification.Type.APPROVED,
@@ -142,12 +147,7 @@ def api_course_files(request, course_code):
                 UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR
             ),
             "can_download": m.is_approved or (user is not None and m.uploader_id == user.id),
-            "can_delete": user is not None and (
-                m.uploader_id == user.id
-                or _get_or_create_profile(user).role == UserProfile.Role.SUPER_ADMIN
-                or _get_or_create_profile(user).role == UserProfile.Role.MODERATOR
-                or _get_or_create_profile(user).role == UserProfile.Role.SUB_MODERATOR
-            ),
+            "can_delete": user is not None and _user_can_edit_material(user, m),
         }
 
     return _ok([_serialize_file(m) for m in materials])
@@ -158,13 +158,42 @@ def api_course_files(request, course_code):
 # ═══════════════════════════════════════════════════════════════
 
 def api_course_tree(request):
-    """GET /api/courses/tree — 课程导航树"""
-    roots = CourseCategory.objects.filter(parent=None).order_by("order")
+    """GET /api/courses/tree — 课程导航树（预加载优化版，4次查询代替400次，缓存60s）"""
+    CACHE_KEY = 'api_course_tree_data'
+    cached = cache.get(CACHE_KEY)
+    if cached is not None:
+        return _ok(cached)
+
+    # 1. 一次性加载所有 CourseCategory（带 select_related('course') 避免 FK N+1）
+    all_cats = CourseCategory.objects.select_related('course').all()
+    child_map = {}
+    for c in all_cats:
+        pid = c.parent_id if c.parent_id else None
+        child_map.setdefault(pid, []).append(c)
+
+    # 2. 预聚合每个课程的已审核资料数
+    count_qs = Material.objects.filter(is_approved=True).values('course__code').annotate(count=Count('id'))
+    material_counts = {item['course__code']: item['count'] for item in count_qs}
+
+    # 3. 预加载所有 Course（含 college FK，用于 course_text 前缀匹配）
+    all_courses = list(Course.objects.select_related('college').all())
+    course_by_code = {c.code: c for c in all_courses}
+
+    preload = {
+        'child_map': child_map,
+        'course_by_code': course_by_code,
+        'material_counts': material_counts,
+    }
+
+    roots = child_map.get(None, [])
+    roots.sort(key=lambda c: c.order)
     tree = {}
     for root in roots:
-        children = root.children.all()
+        children = child_map.get(root.id, [])
         if children:
-            tree[root.name] = {"children": _build_tree_node(children)}
+            tree[root.name] = {"children": _build_tree_node(children, preload=preload)}
+
+    cache.set(CACHE_KEY, tree, 60)
     return _ok(tree)
 
 
@@ -183,7 +212,7 @@ def api_search(request):
     results = {"courses": [], "materials": []}
 
     if search_type in ("all", "course"):
-        courses_qs = Course.objects.filter(
+        courses_qs = Course.objects.select_related('college').filter(
             Q(code__icontains=query) | Q(name__icontains=query)
         ).order_by("code")
         seen = set()
@@ -219,7 +248,12 @@ def api_search(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_stats(request):
-    """GET /api/stats/ — 首页统计"""
+    """GET /api/stats/ — 首页统计（缓存120s）"""
+    CACHE_KEY = 'api_stats_data'
+    cached = cache.get(CACHE_KEY)
+    if cached is not None:
+        return _ok(cached)
+
     total_courses = Course.objects.count()
     total_materials = Material.objects.filter(review_status="approved").count()
     total_users = User.objects.filter(is_active=True).count()
@@ -264,7 +298,7 @@ def api_stats(request):
         "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "",
     } for m in recent]
 
-    return _ok({
+    result = {
         "total_courses": total_courses,
         "total_files": total_materials,
         "total_users": total_users,
@@ -274,7 +308,9 @@ def api_stats(request):
         "material_count": total_materials,
         "top_downloaded": top_downloaded,
         "recent_uploads": recent_uploads,
-    })
+    }
+    cache.set(CACHE_KEY, result, 120)
+    return _ok(result)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -282,11 +318,18 @@ def api_stats(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_colleges(request):
-    """GET /api/colleges/ — 学院列表"""
+    """GET /api/colleges/ — 学院列表（缓存600s）"""
+    CACHE_KEY = 'api_colleges_data'
+    cached = cache.get(CACHE_KEY)
+    if cached is not None:
+        return _ok(cached)
+
     colleges = College.objects.order_by("order")
-    return _ok([{
+    result = [{
         "id": c.id,
         "name": c.name,
         "short_name": c.short_name,
         "slug": c.slug,
-    } for c in colleges])
+    } for c in colleges]
+    cache.set(CACHE_KEY, result, 600)
+    return _ok(result)

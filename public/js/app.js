@@ -63,6 +63,38 @@ window.addEventListener('popstate', async function(e) {
     return;
   }
 
+  // ── 抽屉状态：智能判断层级 ──
+  if (state && state.view === 'drawer') {
+    var _dc = document.getElementById('notifDrawer');
+    var _ne = document.getElementById('drawerNotif');
+
+    // 抽屉已关闭（从二级页面返回）→ 打开抽屉回到首页
+    if (_dc && _dc.style.display !== 'flex') {
+      switchView('home');
+      updateSidebar('home');
+      _dc.style.display = 'flex';
+      showDrawerMenu();
+      renderDrawerMenu();
+      if (typeof refreshCurrentUser === 'function' && currentUser) refreshCurrentUser();
+      lockScroll();
+      return;
+    }
+
+    // 抽屉处于通知子视图 → 回到菜单
+    if (_ne && _ne.style.display !== 'none' && _ne.style.display !== '') {
+      showDrawerMenu();
+      return;
+    }
+
+    // 抽屉菜单层级 → 关闭抽屉
+    closeNotifDrawer();
+    return;
+  }
+
+  // ── 导航到非抽屉状态时，关闭打开的抽屉 ──
+  var _dc2 = document.getElementById('notifDrawer');
+  if (_dc2 && _dc2.style.display === 'flex') closeNotifDrawer();
+
   // ── 正常视图切换 + 恢复内部状态 ──
   if (state && state.view && typeof switchView === 'function') {
     switchView(state.view, true);
@@ -95,19 +127,26 @@ window.addEventListener('popstate', async function(e) {
 
 // ── 启动 ──
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadCourseTree();
-  buildSameNameMap();
+  // 并行触发所有独立请求（串行 800ms → 并行 ~200ms）
+  const treePromise = loadCourseTree();
+  const authPromise = checkAuth().then(() => {
+    loadNotifCount();
+    if (typeof isMgmtActive === 'function') document.body.classList.toggle('mgmt-active', isMgmtActive());
+  });
+  const statsPromise = loadStats();
+
+  // 树加载后构建同名映射
+  treePromise.then(() => buildSameNameMap());
+
+  // Admin 侧栏链接基于 token 存储立即显示，不等待 auth API
   var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
   if (hasToken) {
     document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
       link.style.display = '';
     });
   }
-  await checkAuth();
-  // 初始化管理模式 body 类
-  if (typeof isMgmtActive === 'function') document.body.classList.toggle('mgmt-active', isMgmtActive());
 
-  // 邮箱验证链接检查
+  // 邮箱验证链接检查（不阻塞其他加载，用 then/catch 非阻塞）
   try {
     (function() {
       var params = new URLSearchParams(window.location.search);
@@ -136,7 +175,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     })();
   } catch(e) {}
 
-  setupSearch(); loadStats();
+  setupSearch();
+
+  // 等待关键数据就绪后再恢复视图
+  await Promise.all([treePromise, authPromise, statsPromise]).catch(function(){});
+
   // 恢复刷新前的视图
   try {
     var saved = JSON.parse(sessionStorage.getItem('bnusparks_view'));
@@ -184,4 +227,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch(e) {}
   // 默认首页
   showHome();
+
+  // 每 30 秒刷新通知徽章
+  setInterval(function() {
+    if (currentUser) loadNotifCount();
+  }, 30000);
 });
