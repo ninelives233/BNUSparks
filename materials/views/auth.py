@@ -45,8 +45,8 @@ def api_register(request):
         return _err("密码不能为空")
     if len(password) < 8:
         return _err("密码长度至少 8 位")
-    if not email.endswith("@mail.bnu.edu.cn"):
-        return _err("请使用北师大校内邮箱（@mail.bnu.edu.cn）")
+    if not (email.endswith("@bnu.edu.cn") or email.endswith("@mail.bnu.edu.cn")):
+        return _err("请使用北师大校内邮箱（@bnu.edu.cn / @mail.bnu.edu.cn）")
 
     existing = User.objects.filter(username=email).first()
     if existing:
@@ -128,6 +128,22 @@ def api_verify_email(request):
     user.is_active = True
     user.save(update_fields=["is_active"])
 
+    # 注册完成（邮箱验证通过）后发送感谢邮件，失败不影响注册结果
+    try:
+        send_mail(
+            "BNU Sparks — 感谢您的注册",
+            f"你好 {user.first_name or user.username}，\n\n"
+            f"感谢您的注册！\n\n"
+            f"建议添加微信 Rsun1949，以直接反馈任何遇到的问题。\n\n"
+            f"这能够让我们以更快的速度和更高的质量来完善网站的功能。\n\n"
+            f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn",
+            "bnusparks@163.com",
+            [user.email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
     jwt_token = _jwt_encode({
         "user_id": user.id,
         "exp": time.time() + 7 * 86400,
@@ -164,27 +180,40 @@ def api_login(request):
     if not username or not password:
         return _err("邮箱和密码不能为空")
 
-    user = authenticate(username=username, password=password)
-    if user is None:
-        try:
-            user_obj = User.objects.get(email__iexact=username)
-            user = authenticate(username=user_obj.username, password=password)
-        except User.DoesNotExist:
-            pass
+    # 支持两种师大邮箱后缀：输入纯学号（如 2024xxxxxx）时依次尝试
+    # @mail.bnu.edu.cn 与 @bnu.edu.cn，保证任一后缀注册的用户都能登录
+    if "@" not in username:
+        candidates = [username, f"{username}@mail.bnu.edu.cn", f"{username}@bnu.edu.cn"]
+    else:
+        candidates = [username]
+
+    user = None
+    for cand in candidates:
+        user = authenticate(username=cand, password=password)
+        if user is None:
+            try:
+                user_obj = User.objects.get(email__iexact=cand)
+                user = authenticate(username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                pass
+        if user is not None:
+            username = cand
+            break
 
     if user is None:
-        try:
-            inactive_user = User.objects.get(username=username)
-            if inactive_user.check_password(password) and not inactive_user.is_active:
-                return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
-        except User.DoesNotExist:
-            pass
-        try:
-            inactive_user = User.objects.get(email__iexact=username)
-            if inactive_user.check_password(password) and not inactive_user.is_active:
-                return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
-        except User.DoesNotExist:
-            pass
+        for cand in candidates:
+            try:
+                inactive_user = User.objects.get(username=cand)
+                if inactive_user.check_password(password) and not inactive_user.is_active:
+                    return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
+            except User.DoesNotExist:
+                pass
+            try:
+                inactive_user = User.objects.get(email__iexact=cand)
+                if inactive_user.check_password(password) and not inactive_user.is_active:
+                    return _err("请先验证邮箱后再登录。验证邮件已发送到你的校园邮箱（可能需要检查垃圾邮件箱）。")
+            except User.DoesNotExist:
+                pass
         return _err("邮箱或密码错误")
 
     if not user.is_active:
@@ -285,9 +314,21 @@ def api_forgot_password(request):
     if not email:
         return _err("邮箱不能为空")
 
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
+    # 支持两种师大邮箱后缀：输入纯学号时依次尝试 @mail.bnu.edu.cn 与 @bnu.edu.cn
+    if "@" not in email:
+        candidates = [f"{email}@mail.bnu.edu.cn", f"{email}@bnu.edu.cn"]
+    else:
+        candidates = [email]
+
+    user = None
+    for cand in candidates:
+        try:
+            user = User.objects.get(email=cand)
+            email = cand
+            break
+        except User.DoesNotExist:
+            continue
+    if user is None:
         return _ok({"message": "如果该邮箱已注册，重置链接已发送到你的邮箱"})
 
     token = default_token_generator.make_token(user)

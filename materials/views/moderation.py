@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import F, Q
 from django.utils import timezone
 from django.contrib.auth.models import User
+from django.core.cache import cache
 
 from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
@@ -20,8 +21,9 @@ from .utils import (
     _get_visible_deletion_records, require_role,
     _get_category_preload,
     UserProfile, Material, CourseCategory, Notification,
-    ReviewComment, DeletionRecord, Course,
+    ReviewComment, DeletionRecord, Course, _bump_user_public_gen,
 )
+from ..models import COURSE_TREE_CACHE_KEY
 
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
@@ -94,11 +96,18 @@ def api_moderation_batch_approve(request):
         review_status="pending"
     ).exclude(uploader=request.user)
     count = qs.count()
+    if count == 0:
+        return _ok({"approved_count": 0})
+    uploader_ids = list(qs.values_list("uploader_id", flat=True).distinct())
     now = timezone.now()
     qs.update(
         is_approved=True, review_status="approved",
         reviewed_by=request.user, reviewed_at=now,
     )
+    # qs.update() 不触发 post_save 信号，手动失效树缓存 + 递增上传者公开页代际
+    cache.delete(COURSE_TREE_CACHE_KEY)
+    for uid in uploader_ids:
+        _bump_user_public_gen(uid)
     return _ok({"approved_count": count})
 
 

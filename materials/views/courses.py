@@ -20,6 +20,7 @@ from .utils import (
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
+from ..models import COURSE_TREE_CACHE_KEY
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -132,7 +133,7 @@ def api_course_files(request, course_code):
             "file_name": m.file_name, "file_size": m.file_size,
             "file_type": m.material_type.name if m.material_type else (m.file_type or "其他"),
             "user_material_type": m.material_type.name if m.material_type else "",
-            "uploader": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
+            "uploader": (m.uploader.first_name if m.uploader else m.uploader_name) or "匿名",
             "uploader_id": m.uploader_id or 0,
             "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
             "teacher": m.teacher, "description": m.description or "",
@@ -158,8 +159,8 @@ def api_course_files(request, course_code):
 # ═══════════════════════════════════════════════════════════════
 
 def api_course_tree(request):
-    """GET /api/courses/tree — 课程导航树（预加载优化版，4次查询代替400次，缓存60s）"""
-    CACHE_KEY = 'api_course_tree_data'
+    """GET /api/courses/tree — 课程导航树（预加载优化版，4次查询代替400次，缓存10min，变更时信号清缓存）"""
+    CACHE_KEY = COURSE_TREE_CACHE_KEY
     cached = cache.get(CACHE_KEY)
     if cached is not None:
         return _ok(cached)
@@ -193,7 +194,7 @@ def api_course_tree(request):
         if children:
             tree[root.name] = {"children": _build_tree_node(children, preload=preload)}
 
-    cache.set(CACHE_KEY, tree, 60)
+    cache.set(CACHE_KEY, tree, 600)
     return _ok(tree)
 
 
@@ -286,7 +287,7 @@ def api_stats(request):
 
     recent = Material.objects.filter(review_status="approved") \
         .order_by("-created_at") \
-        .select_related("course")[:limit]
+        .select_related("course", "uploader")[:limit]
     recent_uploads = [{
         "id": m.id,
         "title": m.title,
@@ -294,7 +295,7 @@ def api_stats(request):
         "course_name": m.course.name if m.course_id else "",
         "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
         "file_type": m.file_type,
-        "uploader_name": m.uploader_name or "",
+        "uploader_name": (m.uploader.first_name if m.uploader else m.uploader_name) or "",
         "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "",
     } for m in recent]
 

@@ -127,6 +127,9 @@ window.addEventListener('popstate', async function(e) {
 
 // ── 启动 ──
 document.addEventListener('DOMContentLoaded', async () => {
+  // 关闭浏览器原生滚动恢复，滚动位置完全由 JS 显式控制，
+  // 避免其与视图切换的平滑滚动竞争导致刷新后页面自动下滑
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   // 并行触发所有独立请求（串行 800ms → 并行 ~200ms）
   const treePromise = loadCourseTree();
   const authPromise = checkAuth().then(() => {
@@ -195,9 +198,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
           if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
           break;
-        case 'rankings': showTopDownloaded(saved.scrollY); break;
+        // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
+        // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
+        case 'rankings': showTopDownloaded(); break;
         case 'leaderboard': showLeaderboard(); break;
-        case 'recentAll': showRecentAll(saved.scrollY); break;
+        case 'recentAll': showRecentAll(); break;
         case 'profile': showProfile(); break;
         case 'notif': showNotifFull(); break;
         case 'admin': showAdminPanel(); break;

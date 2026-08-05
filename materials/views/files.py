@@ -5,6 +5,8 @@ file-upload, upload-text, download-token, download, delete
 """
 
 import json
+import os
+import hashlib
 from io import BytesIO
 from pathlib import Path
 
@@ -503,7 +505,7 @@ def api_file_detail(request, file_id):
         "file_size": material.file_size,
         "file_type": material.material_type.name if material.material_type else (material.file_type or "其他"),
         "user_material_type": material.material_type.name if material.material_type else "",
-        "uploader": material.uploader_name or (material.uploader.first_name if material.uploader else "匿名"),
+        "uploader": (material.uploader.first_name if material.uploader else material.uploader_name) or "匿名",
         "uploader_id": material.uploader_id or 0,
         "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
         "teacher": material.teacher,
@@ -521,9 +523,32 @@ def api_file_detail(request, file_id):
         "is_approved": material.is_approved,
     })
 
+_ZIP_CACHE_MAX = 5000  # 单次响应上限（超过截断提示；正常课程资料远低于此）
+
+
+def _zip_structure_cache_path(file_id, file_path):
+    """计算 ZIP 结构缓存文件路径。
+
+    键含 文件id+大小+mtime 指纹：文件被替换/更新时自动失效，未变则复用。
+    存在 data/.zip_cache/（MEDIA_ROOT 同级），跨进程共享，避免每次预览重新解析。
+    """
+    try:
+        st = file_path.stat()
+        key = f"{file_id}:{st.st_size}:{int(st.st_mtime)}"
+    except OSError:
+        return None
+    digest = hashlib.md5(key.encode('utf-8')).hexdigest()[:16]
+    cache_dir = Path(settings.MEDIA_ROOT).parent / '.zip_cache'
+    return cache_dir / f"z{file_id}_{digest}.json"
+
+
 @csrf_exempt
 def api_zip_structure(request, file_id):
-    """GET /api/files/<id>/zip-structure/ — 返回ZIP文件内部文件列表"""
+    """GET /api/files/<id>/zip-structure/ — 返回ZIP文件内部文件列表。
+
+    结构按文件指纹缓存到 data/.zip_cache/：同一文件第一个用户解析一次，
+    后续预览直接读缓存 JSON，不再重复解压中央目录。
+    """
     if request.method != "GET":
         return _err("仅支持 GET", 405)
     material = get_object_or_404(Material, id=file_id)
@@ -542,23 +567,46 @@ def api_zip_structure(request, file_id):
         except Exception:
             return _err("该资料未通过审核", 403)
 
+    # 命中缓存 → 直接返回，跳过 ZIP 解析
+    cache_path = _zip_structure_cache_path(file_id, file_path)
+    if cache_path and cache_path.exists():
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                return _ok(json.load(f))
+        except (OSError, ValueError):
+            pass  # 缓存损坏则回退重新解析
+
     import zipfile
     try:
         with zipfile.ZipFile(str(file_path), 'r') as zf:
             items = []
             for info in zf.infolist():
+                if info.is_dir():
+                    continue  # 目录由前端从路径推导，无需下发
                 items.append({
                     'name': info.filename,
                     'size': info.file_size,
                     'compressed_size': info.compress_size,
-                    'is_dir': info.is_dir(),
                 })
-            items.sort(key=lambda x: (0 if x['is_dir'] else 1, x['name']))
-            return _ok({
-                'file_name': material.file_name,
-                'total': len(items),
-                'items': items,
-            })
+        items.sort(key=lambda x: x['name'].lower())
+        total = len(items)
+        payload = {
+            'file_name': material.file_name,
+            'total': total,
+            'items': items[: _ZIP_CACHE_MAX],
+            'truncated': total > _ZIP_CACHE_MAX,
+        }
+        # 原子写缓存，供后续预览复用
+        if cache_path:
+            try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = cache_path.with_suffix('.tmp')
+                with open(tmp, 'w', encoding='utf-8') as f:
+                    json.dump(payload, f, ensure_ascii=False)
+                os.replace(tmp, cache_path)
+            except OSError:
+                pass  # 缓存写入失败不影响主流程
+        return _ok(payload)
     except zipfile.BadZipFile:
         return _err("文件已损坏或不是有效的ZIP文件", 400)
     except Exception:

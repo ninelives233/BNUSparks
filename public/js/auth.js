@@ -96,9 +96,9 @@
       var sid = document.getElementById('loginSid').value.trim();
       var remember = document.getElementById('loginRemember').checked;
       if (!sid) throw new Error('请输入学号');
-      var username = sid + '@mail.bnu.edu.cn';
+      // 发送纯学号，后端依次尝试 @mail.bnu.edu.cn 与 @bnu.edu.cn 两种后缀
       const data = await api('/api/auth/login/', { method: 'POST',
-        body: { username: username, password: document.getElementById('loginPassword').value, remember: remember } });
+        body: { username: sid, password: document.getElementById('loginPassword').value, remember: remember } });
       _persistToken(data.token, remember, data.user && data.user.id);
       currentUser = data.user;
       closeAuthModal(); updateAuthUI();
@@ -134,9 +134,9 @@
     try {
       var sid = document.getElementById('forgotSid').value.trim();
       if (!sid) throw new Error('请输入学号');
-      var email = sid + '@mail.bnu.edu.cn';
+      // 发送纯学号，后端依次尝试两种师大邮箱后缀
       const data = await api('/api/auth/forgot-password/', { method: 'POST',
-        body: { email: email } });
+        body: { email: sid } });
       document.getElementById('forgotPwdMsg').textContent = data.message;
       el.style.display = 'none';
       form.style.display = 'none';
@@ -232,7 +232,8 @@
     try {
       var sid = document.getElementById('regSid').value.trim();
       if (!sid) throw new Error('请输入学号');
-      var email = sid + '@mail.bnu.edu.cn';
+      var suffix = document.getElementById('regEmailSuffix') ? document.getElementById('regEmailSuffix').value : '@mail.bnu.edu.cn';
+      var email = sid + suffix;
       var password = document.getElementById('regPassword').value;
       var passwordConfirm = document.getElementById('regPasswordConfirm').value;
       if (password.length < 8) throw new Error('密码长度至少 8 位');
