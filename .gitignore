@@ -47,6 +47,7 @@ bnusparks/settings_prod.py
 # Data
 data/materials/
 data/*.sqlite3
+data/备案图标.png
 
 # Source archives (batch import sources, not repo content)
 data/资料的压缩包们/

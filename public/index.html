@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/style.css?v=131">
+<link rel="stylesheet" href="/static/css/style.css?v=135">
 </head>
 <body>
 
@@ -644,8 +644,12 @@
         <label>北师大邮箱</label>
         <div class="mf-email-wrap">
           <input type="text" id="regSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
-          <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
+          <select id="regEmailSuffix" class="mf-email-suffix-select" aria-label="邮箱后缀">
+            <option value="@mail.bnu.edu.cn" selected>@mail.bnu.edu.cn</option>
+            <option value="@bnu.edu.cn">@bnu.edu.cn</option>
+          </select>
         </div>
+        <p class="mf-email-hint">新生可能暂时无法使用师大邮箱，建议关注即将推出的新生专区，无需登录也可浏览。可联系微信：Rsun1949进行人工核验，直接发放账号。</p>
       </div>
       <div class="mf-group">
         <label>昵称</label>
@@ -800,14 +804,14 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=131"></script>
-<script src="/static/js/auth.js?v=131"></script>
-<script src="/static/js/profile.js?v=131"></script>
-<script src="/static/js/notifications.js?v=131"></script>
-<script src="/static/js/admin.js?v=131"></script>
-<script src="/static/js/views.js?v=131"></script>
-<script src="/static/js/explorer.js?v=131"></script>
-<script src="/static/js/app.js?v=131"></script>
+<script src="/static/js/utils.js?v=135"></script>
+<script src="/static/js/auth.js?v=135"></script>
+<script src="/static/js/profile.js?v=135"></script>
+<script src="/static/js/notifications.js?v=135"></script>
+<script src="/static/js/admin.js?v=135"></script>
+<script src="/static/js/views.js?v=135"></script>
+<script src="/static/js/explorer.js?v=135"></script>
+<script src="/static/js/app.js?v=135"></script>
 
 </body>
 </html>

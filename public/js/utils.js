@@ -2,11 +2,21 @@
   let _cachedToken = null;
   const _apiCache = {};
   const API_CACHE_TTL = {
-    '/api/courses/tree/': 60000,
+    '/api/courses/tree/': 600000,
     '/api/stats/': 120000,
     '/api/colleges/': 300000,
     '/api/search/': 30000,
+    '/api/user/rankings/': 30000,
   };
+
+  // 清除 GET 内存缓存中 url 以 prefix 开头的项（上传/删除/审核等变更后调用，
+  // 保证课程树 fileCount / 排行榜等数据即时刷新，无需硬刷新）
+  function clearApiCache(prefix) {
+    if (!prefix) return;
+    Object.keys(_apiCache).forEach(function(url) {
+      if (url.indexOf(prefix) === 0) delete _apiCache[url];
+    });
+  }
 
   async function api(url, opts = {}) {
     // GET 请求内存缓存
@@ -241,7 +251,9 @@
     if (btn) { btn.disabled = true; btn.textContent = '⏳ 处理中…'; }
     api('/api/files/batch-delete/', { method: 'POST', body: { file_ids: selected, reason: reason } }).then(function(result) {
       alert('已删除 ' + (result.deleted || 0) + ' 个文件' + (result.errors && result.errors.length ? '，' + result.errors.length + ' 个失败' : ''));
-      // 刷新当前视图
+      // 刷新当前视图（课程树 fileCount 同步更新）
+      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
       renderExplorer();
     }).catch(function(err) {
       alert('批量删除失败：' + err.message);

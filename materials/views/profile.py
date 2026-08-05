@@ -14,13 +14,14 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Count, Sum
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile, _strip_exif,
     require_login, Notification, UserProfile, Material, DownloadRecord,
     DeletionRecord, ReviewComment, Course, CourseCategory, F,
-    Favorite,
+    Favorite, _bump_user_public_gen,
 )
 
 
@@ -98,6 +99,10 @@ def api_profile(request):
             if val and val != request.user.first_name:
                 request.user.first_name = val
                 request.user.save(update_fields=["first_name"])
+                # 同步冗余的上传者昵称，保证文件列表/详情页/审核记录显示新昵称
+                Material.objects.filter(uploader=request.user).update(uploader_name=val)
+                # 递增公开页代际计数，让公开页缓存的旧昵称即时失效
+                _bump_user_public_gen(request.user.id)
                 changed.append("nickname")
 
         for field in allowed_fields:
@@ -223,8 +228,12 @@ def api_my_downloads(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_user_rankings(request):
-    """GET /api/user/rankings/?type=upload|download|collection"""
+    """GET /api/user/rankings/?type=upload|download|collection（缓存60s）"""
     rank_type = request.GET.get("type", "upload")
+    CACHE_KEY = f"user_rankings_{rank_type}"
+    cached = cache.get(CACHE_KEY)
+    if cached is not None:
+        return _ok(cached)
 
     if rank_type == "upload":
         qs = User.objects.filter(is_active=True, uploads__isnull=False) \
@@ -265,12 +274,14 @@ def api_user_rankings(request):
             "avatar_url": profile.avatar.url if profile.avatar else "",
         })
 
-    return _ok({
+    result = {
         "items": top,
         "total_pages": 1,
         "page": 1,
         "total": len(top),
-    })
+    }
+    cache.set(CACHE_KEY, result, 60)
+    return _ok(result)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -278,15 +289,26 @@ def api_user_rankings(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_user_public(request, uid):
-    """GET /api/user/public/{uid}/ — 用户公开页（含上传的文件列表）"""
+    """GET /api/user/public/{uid}/ — 用户公开页（含上传的文件列表，缓存60s）"""
+    page = int(request.GET.get("page", 1))
+    # 缓存键含上传者公开页「代际」：资料增删/审核状态/昵称变化时递增，
+    # 旧键 60s TTL 自然过期，保证公开页删除自传后不再残留显示
+    gen = cache.get(f"user_public_gen_{uid}") or 0
+    CACHE_KEY = f"user_public_{uid}_{gen}_{page}"
+    cached = cache.get(CACHE_KEY)
+    if cached is not None:
+        return _ok(cached)
+
     user = get_object_or_404(User, id=uid, is_active=True)
     profile = _get_or_create_profile(user)
     upload_count = Material.objects.filter(uploader=user, review_status="approved").count()
-    download_count = DownloadRecord.objects.filter(user=user).count()
+    # 被下载次数 = 该用户已通过资料被下载的总次数（此前误统计为用户自己的下载记录）
+    download_count = Material.objects.filter(
+        uploader=user, review_status="approved"
+    ).aggregate(total=Sum("download_count"))["total"] or 0
     contact_email = profile.contact_email if profile.contact_email and profile.role != UserProfile.Role.USER else ""
 
     # 分页查询该用户上传的文件
-    page = int(request.GET.get("page", 1))
     per_page = 20
     materials_qs = Material.objects.filter(
         uploader=user, review_status="approved"
@@ -308,7 +330,7 @@ def api_user_public(request, uid):
             "created_at": m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
         })
 
-    return _ok({
+    result = {
         "user": {
             "nickname": user.first_name or user.username,
             "avatar_url": profile.avatar.url if profile.avatar else "",
@@ -324,4 +346,6 @@ def api_user_public(request, uid):
         "total_pages": total_pages,
         "page": page,
         "total": total,
-    })
+    }
+    cache.set(CACHE_KEY, result, 60)
+    return _ok(result)

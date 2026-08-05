@@ -403,69 +403,97 @@
     }
   }
 
+  var _userPublicCache = {}; // {userId: {page: {ts, data}}} — 60s 前端缓存
+
+  // 文件删除/资料变更后调用，清空公开页前端缓存，避免删除自传后仍残留显示
+  function clearUserPublicCache() {
+    _userPublicCache = {};
+  }
+
+  function _renderUserPublicHTML(container, userId, page, data) {
+    var u = data.user;
+    if (!u) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">用户不存在</div>'; return; }
+
+    // 用户名片
+    var initial = (u.nickname || '?').charAt(0).toUpperCase();
+    var avatarHtml = u.avatar_url
+      ? '<img src="' + esc(u.avatar_url) + '" class="user-public-avatar">'
+      : '<div class="user-public-avatar-placeholder">' + esc(initial) + '</div>';
+    var contactHtml = '';
+    if (u.contact_email || u.contact_way) {
+      contactHtml = '<div class="upi-contact">';
+      if (u.contact_email) contactHtml += '📧 ' + esc(u.contact_email) + ' ';
+      if (u.contact_way) contactHtml += '💬 ' + esc(u.contact_way);
+      contactHtml += '</div>';
+    }
+    // 注册时间（member_since 形如 "2026-08"）
+    var memberHtml = '';
+    if (u.member_since && /^\d{4}-\d{2}$/.test(u.member_since)) {
+      var ms = u.member_since.split('-');
+      memberHtml = '<div class="upi-member">🕰️ 注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</div>';
+    }
+    var html = '<div class="user-public-card">' + avatarHtml +
+      '<div class="user-public-info">' +
+        '<div class="upi-name">' + esc(u.nickname) + '</div>' +
+        '<div class="upi-bio">' + esc(u.bio || '此人神秘，未留简介') + '</div>' +
+        memberHtml +
+        contactHtml +
+      '</div></div>';
+
+    // 统计数据
+    html += '<div class="user-stats-row">' +
+      '<div class="user-stat-card"><div class="usc-value">' + (u.upload_count || 0) + '</div><div class="usc-label">上传文件</div></div>' +
+      '<div class="user-stat-card"><div class="usc-value">' + (u.download_count || 0) + '</div><div class="usc-label">被下载次数</div></div>' +
+      '<div class="user-stat-card"><div class="usc-value">' + (u.collection_count || 0) + '</div><div class="usc-label">被收藏次数</div></div>' +
+    '</div>';
+
+    // 文件列表
+    if (data.materials && data.materials.length) {
+      html += '<h3 style="font-size:0.95rem;font-weight:600;margin-bottom:var(--space-sm);color:var(--ink)">上传的文件</h3>';
+      html += '<div class="user-public-materials">';
+      data.materials.forEach(function(m) {
+        // 点击直接打开文件详情（修复此前 showHome();navToLast 落到首页）
+        var stamp = (m.file_type || '').replace(/^\./, '').toUpperCase();
+        html += '<div class="hc-item user-public-file-item" style="cursor:pointer" onclick="event.preventDefault();showFileDetail({id:' + m.id + ',title:\'' + esc(m.title) + '\',course_code:\'' + esc(m.course_code) + '\',course_name:\'' + esc(m.course_name) + '\'})">' +
+          '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div>' +
+          '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + m.created_at + ' · ' + m.download_count + ' 次下载</div></div>' +
+          '<span class="user-file-type-stamp">' + (stamp ? esc(stamp) : '文件') + '</span></div>';
+      });
+      html += '</div>';
+
+      // 翻页
+      var totalPages = data.total_pages || 1;
+      if (totalPages > 1) {
+        html += '<div class="leaderboard-pagination" style="margin-top:var(--space-md)">';
+        html += '<button onclick="renderUserPublic(' + userId + ',' + Math.max(1, page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') + '>‹</button>';
+        for (var p = 1; p <= totalPages; p++) {
+          html += '<button class="' + (p === page ? 'active' : '') + '" onclick="renderUserPublic(' + userId + ',' + p + ')">' + p + '</button>';
+        }
+        html += '<button onclick="renderUserPublic(' + userId + ',' + Math.min(totalPages, page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') + '>›</button>';
+        html += '</div>';
+      }
+    } else {
+      html += '<div style="text-align:center;padding:24px;color:var(--ink-faint);font-size:0.85rem">该用户尚未上传资料</div>';
+    }
+
+    container.innerHTML = html;
+  }
+
   async function renderUserPublic(userId, page) {
     var container = document.getElementById('userPublicContent');
     if (!container) return;
+    // 前端缓存命中（60s 内）直接渲染，跳过网络请求
+    var entry = _userPublicCache[userId] && _userPublicCache[userId][page];
+    if (entry && Date.now() - entry.ts < 60000) {
+      _renderUserPublicHTML(container, userId, page, entry.data);
+      return;
+    }
     container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
     try {
       var data = await api('/api/user/public/' + userId + '/?page=' + page);
-      var u = data.user;
-      if (!u) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">用户不存在</div>'; return; }
-
-      // 用户名片
-      var initial = (u.nickname || '?').charAt(0).toUpperCase();
-      var avatarHtml = u.avatar_url
-        ? '<img src="' + esc(u.avatar_url) + '" class="user-public-avatar">'
-        : '<div class="user-public-avatar-placeholder">' + esc(initial) + '</div>';
-      var contactHtml = '';
-      if (u.contact_email || u.contact_way) {
-        contactHtml = '<div class="upi-contact">';
-        if (u.contact_email) contactHtml += '📧 ' + esc(u.contact_email) + ' ';
-        if (u.contact_way) contactHtml += '💬 ' + esc(u.contact_way);
-        contactHtml += '</div>';
-      }
-      var html = '<div class="user-public-card">' + avatarHtml +
-        '<div class="user-public-info">' +
-          '<div class="upi-name">' + esc(u.nickname) + '</div>' +
-          '<div class="upi-bio">' + esc(u.bio || '此人神秘，未留简介') + '</div>' +
-          contactHtml +
-        '</div></div>';
-
-      // 统计数据
-      html += '<div class="user-stats-row">' +
-        '<div class="user-stat-card"><div class="usc-value">' + (u.upload_count || 0) + '</div><div class="usc-label">上传文件</div></div>' +
-        '<div class="user-stat-card"><div class="usc-value">' + (u.download_count || 0) + '</div><div class="usc-label">被下载次数</div></div>' +
-        '<div class="user-stat-card"><div class="usc-value">' + (u.collection_count || 0) + '</div><div class="usc-label">被收藏次数</div></div>' +
-      '</div>';
-
-      // 文件列表
-      if (data.materials && data.materials.length) {
-        html += '<h3 style="font-size:0.95rem;font-weight:600;margin-bottom:var(--space-sm);color:var(--ink)">上传的文件</h3>';
-        html += '<div class="user-public-materials">';
-        data.materials.forEach(function(m) {
-          html += '<div class="hc-item" style="cursor:pointer" onclick="showHome();navToLast(\'' + esc(m.course_code) + '\')">' +
-            '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div>' +
-            '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + m.created_at + ' · ' + m.download_count + ' 次下载</div></div>' +
-            '<span class="hc-item-count">📄</span></div>';
-        });
-        html += '</div>';
-
-        // 翻页
-        var totalPages = data.total_pages || 1;
-        if (totalPages > 1) {
-          html += '<div class="leaderboard-pagination" style="margin-top:var(--space-md)">';
-          html += '<button onclick="renderUserPublic(' + userId + ',' + Math.max(1, page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') + '>‹</button>';
-          for (var p = 1; p <= totalPages; p++) {
-            html += '<button class="' + (p === page ? 'active' : '') + '" onclick="renderUserPublic(' + userId + ',' + p + ')">' + p + '</button>';
-          }
-          html += '<button onclick="renderUserPublic(' + userId + ',' + Math.min(totalPages, page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') + '>›</button>';
-          html += '</div>';
-        }
-      } else {
-        html += '<div style="text-align:center;padding:24px;color:var(--ink-faint);font-size:0.85rem">该用户尚未上传资料</div>';
-      }
-
-      container.innerHTML = html;
+      if (!_userPublicCache[userId]) _userPublicCache[userId] = {};
+      _userPublicCache[userId][page] = { ts: Date.now(), data: data };
+      _renderUserPublicHTML(container, userId, page, data);
     } catch(e) {
       container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
     }

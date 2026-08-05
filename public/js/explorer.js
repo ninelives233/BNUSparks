@@ -221,7 +221,7 @@
 
         fill.style.width = '100%';
         text.textContent = '✅ 文字录入成功！';
-        setTimeout(function() { closeUploadModal(); renderExplorer(); }, 1500);
+        setTimeout(function() { closeUploadModal(); refreshCourseTree(); }, 1500);
       } catch (err) {
         fill.style.width = '100%';
         text.textContent = '❌ 失败: ' + err.message;
@@ -284,7 +284,7 @@
 
     fill.style.width = '100%';
     text.textContent = '完成！成功 ' + successCount + ' 个' + (failCount > 0 ? '，失败 ' + failCount + ' 个' : '');
-    setTimeout(function() { closeUploadModal(); renderExplorer(); }, 1500);
+    setTimeout(function() { closeUploadModal(); refreshCourseTree(); }, 1500);
     return false;
   }
 
@@ -350,6 +350,20 @@
     } catch(e) {
       console.warn('课程树加载失败，使用备用空树', e);
       courseTree = {};
+    }
+  }
+
+  // 上传/删除/审核等变更后强制刷新课程树：清内存缓存 → 重新拉取 →
+  // 重建同名映射 → 若浏览器视图可见则重渲染，目录「暂无资料」即时更新
+  async function refreshCourseTree() {
+    try {
+      clearApiCache('/api/courses/tree/');
+      courseTree = await api('/api/courses/tree/');
+      if (typeof buildSameNameMap === 'function') buildSameNameMap();
+      var expView = document.getElementById('explorerView');
+      if (expView && expView.classList.contains('active')) renderExplorer();
+    } catch(e) {
+      console.warn('课程树刷新失败，保留旧树', e);
     }
   }
 
@@ -507,7 +521,7 @@
     var name = prompt('输入新名称', currentName || '');
     if (!name || name === currentName) return;
     api('/api/folders/' + catId + '/rename/', { method: 'POST', body: { name: name } })
-      .then(function() { renderExplorer(); })
+      .then(function() { refreshCourseTree(); })
       .catch(function(err) { _showScopeError('重命名失败', err); });
   }
 
@@ -585,7 +599,7 @@
         api('/api/folders/' + targetCatId + '/set-course/', { method: 'POST', body: body })
           .then(function() {
             if (overlay) _removeOverlay(overlay);
-            renderExplorer();
+            refreshCourseTree();
           }).catch(function(err) { _showScopeError('操作失败', err); });
       } else {
         // 阶段1：查询
@@ -643,7 +657,7 @@
 
     // 追加确认按钮
     html += '<div class="ar-actions" style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">' +
-      '<button class="admin-btn admin-btn-primary" id="confirmBtn" onclick="(function(){var code=document.getElementById(\'mgmtCourseCode\').value.trim();var name=document.getElementById(\'mgmtCourseName\').value.trim();if(!code){alert(\'请输入课程代码\');return}var sa=document.querySelector(\'input[name=\\"mgmtAction\\"]:checked\');var st=document.querySelector(\'input[name=\\"mgmtTargetCourse\\"]:checked\');if(sa){var body={course_code:code,course_name:name,action_id:sa.value};if(st)body.target_course_id=parseInt(st.value);api(\'/api/folders/' + catId + '/set-course/\',{method:\'POST\',body:body}).then(function(){var ov=document.querySelector(\'.admin-reject-overlay\');if(ov)_removeOverlay(ov);renderExplorer()}).catch(function(err){alert(\'操作失败：\'+(err.message||err.error))})}else{alert(\'请选择一个操作\')}})()">确认执行</button>' +
+      '<button class="admin-btn admin-btn-primary" id="confirmBtn" onclick="(function(){var code=document.getElementById(\'mgmtCourseCode\').value.trim();var name=document.getElementById(\'mgmtCourseName\').value.trim();if(!code){alert(\'请输入课程代码\');return}var sa=document.querySelector(\'input[name=\\"mgmtAction\\"]:checked\');var st=document.querySelector(\'input[name=\\"mgmtTargetCourse\\"]:checked\');if(sa){var body={course_code:code,course_name:name,action_id:sa.value};if(st)body.target_course_id=parseInt(st.value);api(\'/api/folders/' + catId + '/set-course/\',{method:\'POST\',body:body}).then(function(){var ov=document.querySelector(\'.admin-reject-overlay\');if(ov)_removeOverlay(ov);refreshCourseTree()}).catch(function(err){alert(\'操作失败：\'+(err.message||err.error))})}else{alert(\'请选择一个操作\')}})()">确认执行</button>' +
       '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
     '</div>';
 
@@ -656,7 +670,7 @@
     var pid = parseInt(parentId);
     if (isNaN(pid)) { alert('请输入有效的节点 ID'); return; }
     api('/api/folders/' + catId + '/move/', { method: 'POST', body: { parent_id: pid } })
-      .then(function() { renderExplorer(); })
+      .then(function() { refreshCourseTree(); })
       .catch(function(err) { _showScopeError('移动失败', err); });
   }
 
@@ -675,7 +689,7 @@
         peelNote +
         '<p style="font-size:0.8rem;color:var(--ink-faint)">仅删除目录节点，关联课程和文件不受影响</p>' +
         '<div class="ar-actions">' +
-          '<button class="admin-btn admin-btn-primary" onclick="(function(){var ov=this.closest(\'.admin-reject-overlay\');api(\'/api/folders/' + catId + '/delete/\',{method:\'DELETE\'}).then(function(){if(ov)_removeOverlay(ov);renderExplorer()}).catch(function(err){_showScopeError(\'删除失败\',err)})})()">确认删除</button>' +
+          '<button class="admin-btn admin-btn-primary" onclick="(function(){var ov=this.closest(\'.admin-reject-overlay\');api(\'/api/folders/' + catId + '/delete/\',{method:\'DELETE\'}).then(function(){if(ov)_removeOverlay(ov);refreshCourseTree()}).catch(function(err){_showScopeError(\'删除失败\',err)})})()">确认删除</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
@@ -841,7 +855,7 @@
     var overlay = document.querySelector('.admin-reject-overlay');
     api('/api/folders/create/', { method: 'POST', body: body }).then(function() {
       _removeOverlay(overlay);
-      renderExplorer();
+      refreshCourseTree();
     }).catch(function(err) {
       _showScopeError('创建失败', err);
     });
@@ -1151,6 +1165,7 @@
       _allFilesCache = allFiles;
       _typeFilter = '';
       _sortBy = 'date';
+      _filterSortPage = 1;  // 切换课程时重置页码，避免翻页状态残留
       _renderFilterSortLabels();
 
       const totalFiles = allFiles.length;
@@ -1916,9 +1931,9 @@
       if (area) area.style.display = '';
       body.innerHTML = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
       try {
-        var data = await api('/api/files/' + fileId + '/zip-structure/');
-        if (data.ok && data.data) {
-          renderZipTree(body, data.data.items, fileId, fileName);
+        var zdata = await _loadZipStructure(fileId);
+        if (zdata && Array.isArray(zdata.items)) {
+          renderZipTree(body, zdata.items, fileId, fileName, zdata.truncated);
           return;
         }
       } catch(e) {}
@@ -2125,13 +2140,11 @@
           '</div>';
         } else if (extType === 'zip') {
           bodyHtml = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
-          // Zip 结构稍后通过 API 填充
-          api('/api/files/' + fileId + '/zip-structure/').then(function(zipData) {
-            if (zipData.ok && zipData.data) {
-              var pv = document.getElementById('previewBody');
-              if (pv) {
-                renderZipTree(pv, zipData.data.items, fileId, fn);
-              }
+          // Zip 结构稍后填充（带客户端内存缓存，重复打开不重复请求）
+          _loadZipStructure(fileId).then(function(zdata) {
+            var pv = document.getElementById('previewBody');
+            if (pv && zdata && Array.isArray(zdata.items)) {
+              renderZipTree(pv, zdata.items, fileId, fn, zdata.truncated);
             }
           }).catch(function() {});
         } else {
@@ -2198,58 +2211,95 @@
   }
 
 
-  // ── ZIP 文件结构树渲染 ──
-  function renderZipTree(container, items, fileId, fileName) {
-    // 构建目录树
-    var tree = {};
-    items.forEach(function(item) {
-      if (item.is_dir) return;
-      var parts = item.name.split('/');
-      var current = tree;
-      for (var i = 0; i < parts.length - 1; i++) {
-        var dir = parts[i];
-        if (!current[dir]) current[dir] = { __children: {} };
-        if (!current[dir].__children) current[dir].__children = {};
-        current = current[dir].__children;
-      }
-      var leafName = parts[parts.length - 1];
-      if (leafName) {
-        current[leafName] = { __size: item.size, __compressed: item.compressed_size };
-      }
-    });
+  // ── ZIP 结构读取（客户端内存缓存：同一会话内重复打开不重复请求） ──
+  var _zipCache = {};
+  async function _loadZipStructure(fileId) {
+    if (_zipCache[fileId]) return _zipCache[fileId];
+    var data = await api('/api/files/' + fileId + '/zip-structure/');
+    if (data && Array.isArray(data.items)) {
+      _zipCache[fileId] = data;   // 缓存整个响应（含 truncated 标记）
+      return data;
+    }
+    throw new Error('压缩包结构数据为空');
+  }
 
-    // 统计文件数 + 总大小
-    var fileCount = items.filter(function(i) { return !i.is_dir; }).length;
-    var totalSize = items.reduce(function(sum, i) { return sum + (i.is_dir ? 0 : i.size); }, 0);
+  // ── ZIP 文件结构树渲染（可折叠目录树） ──
+  function renderZipTree(container, items, fileId, fileName, truncated) {
+    // 构建目录树，插入时顺带累计每个目录的文件数/大小（单趟完成，无重复遍历）
+    var root = { __children: {}, __count: 0, __size: 0 };
+    var fileCount = 0, totalSize = 0;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      fileCount += 1;
+      totalSize += it.size || 0;
+      var parts = String(it.name).split('/').filter(function(p) { return p; });
+      var cur = root;
+      for (var j = 0; j < parts.length - 1; j++) {
+        var d = parts[j];
+        if (!cur[d]) cur[d] = { __children: {}, __count: 0, __size: 0 };
+        cur = cur[d];
+        cur.__count += 1;
+        cur.__size += it.size || 0;
+      }
+      var leaf = parts[parts.length - 1];
+      if (leaf) cur[leaf] = { __size: it.size || 0, __compressed: it.compressed_size || 0 };
+    }
+
+    var inOverlay = !!document.querySelector('.preview-overlay');
+
+    // 空压缩包
+    if (!fileCount) {
+      container.innerHTML =
+        '<div class="pv-zip-header"><span class="pv-zip-filename">📦 ' + esc(fileName || '') + '</span></div>' +
+        '<div class="pv-zip-empty">压缩包内没有文件</div>';
+      return;
+    }
+
+    // 目录优先、不区分大小写字母序
+    function sortKeys(node) {
+      return Object.keys(node).sort(function(a, b) {
+        var aIsDir = !!node[a].__children, bIsDir = !!node[b].__children;
+        if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+        var la = a.toLowerCase(), lb = b.toLowerCase();
+        return la < lb ? -1 : (la > lb ? 1 : 0);
+      });
+    }
 
     var html = '<div class="pv-zip-header">' +
-      '<span class="pv-zip-filename">📦 ' + esc(fileName || '') + '</span>' +
-      '<span class="pv-zip-stats">' + fileCount + ' 个文件，共 ' + formatSize(totalSize) + '</span>' +
+      '<span class="pv-zip-filename" title="' + esc(fileName || '') + '">📦 ' + esc(fileName || '') + '</span>' +
+      '<span class="pv-zip-stats">' + fileCount + ' 个文件 · 共 ' + formatSize(totalSize) + '</span>' +
+      (truncated ? '<span class="pv-zip-trunc">仅显示前 ' + items.length + ' 项</span>' : '') +
     '</div><div class="pv-zip-tree">';
 
-    function renderNode(node, indent) {
-      var keys = Object.keys(node).sort();
+    function renderNode(node, depth) {
       var out = '';
-      keys.forEach(function(key) {
-        if (key === '__children' || key === '__size' || key === '__compressed') return;
+      var keys = sortKeys(node);
+      for (var k = 0; k < keys.length; k++) {
+        var key = keys[k];
         var val = node[key];
         if (val.__children) {
-          // 目录
-          out += '<div class="pv-zip-dir" style="padding-left:' + (indent * 16) + 'px">📁 ' + esc(key) + '/</div>';
-          out += renderNode(val.__children, indent + 1);
+          // 目录：<details> 原生折叠，顶层两级默认展开
+          out += '<details class="pv-zip-dir"' + (depth < 2 ? ' open' : '') + '>' +
+            '<summary><span class="pzd-arrow">▸</span>' +
+            '<span class="pzd-icon">📁</span><span class="pzd-name">' + esc(key) + '</span>' +
+            '<span class="pzd-meta">' + val.__count + ' 项 · ' + formatSize(val.__size) + '</span></summary>' +
+            '<div class="pzd-children">' + renderNode(val.__children, depth + 1) + '</div>' +
+          '</details>';
         } else {
-          var sizeStr = val.__size !== undefined ? formatSize(val.__size) : '';
-          out += '<div class="pv-zip-file" style="padding-left:' + (indent * 16) + 'px">' +
+          out += '<div class="pv-zip-file" title="' + esc(key) + '">' +
+            '<span class="pzf-icon">📄</span>' +
             '<span class="pv-zip-fname">' + esc(key) + '</span>' +
-            (sizeStr ? '<span class="pv-zip-fsize">' + sizeStr + '</span>' : '') +
+            '<span class="pv-zip-fsize">' + formatSize(val.__size) + '</span>' +
           '</div>';
         }
-      });
+      }
       return out;
     }
-    html += renderNode(tree, 0);
+
+    html += renderNode(root.__children, 0);
     html += '</div>' +
-      '<div class="pv-zip-footer"><button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button></div>';
+      '<div class="pv-zip-footer"><button class="pv-dl-btn" onclick="' +
+        (inOverlay ? 'closePreview();' : '') + 'doDirectDownload(' + fileId + ')">⬇ 下载文件</button></div>';
 
     container.innerHTML = html;
   }

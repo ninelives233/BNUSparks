@@ -95,6 +95,7 @@
   var _pendingIncludeSub = false;
   var _pendingHidePeerApproved = true;
   var _highlightDisputeMaterialId = null;
+  var _pendingItems = {}; // {id: 原始待审核项} — 详情弹窗直接取原始数据（file_size 为字节）
 
   function renderAdminPending(content) {
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
@@ -110,6 +111,8 @@
     ]).then(function(results) {
       var list = results[0];
       var profile = results[1];
+      _pendingItems = {};
+      (list || []).forEach(function(m) { _pendingItems[m.id] = m; });
 
       var html = '';
 
@@ -229,6 +232,7 @@
   function batchApprovePending(btn) {
     if (btn) { btn.textContent = '⏳ 处理中…'; btn.disabled = true; }
     api('/api/moderation/batch-approve/', { method: 'POST' }).then(function(result) {
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert('批量过审失败：' + err.message);
@@ -240,6 +244,7 @@
     api('/api/moderation/' + id + '/approve/', { method: 'POST', body: {} }).then(function() {
       var card = document.getElementById('pc-' + id);
       if (card) card.style.opacity = '0.3';
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert('操作失败：' + err.message);
@@ -300,6 +305,7 @@
     api('/api/moderation/' + id + '/reject/', { method: 'POST', body: { notes: notes } }).then(function() {
       var overlay = document.querySelector('.admin-reject-overlay');
       _removeOverlay(overlay);
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert('操作失败：' + err.message);
@@ -312,6 +318,9 @@
     var overlay = btn && btn.closest('.file-info-overlay');
     api('/api/files/' + fileId + '/delete/', { method: 'DELETE' }).then(function() {
       if (overlay) overlay.remove();
+      // 删除成功后：清公开页前端缓存 + 刷新课程树（fileCount 即时更新）
+      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
       // 删除成功后刷新当前课程的文件列表
       var tbody = document.getElementById('fileTableBody');
       if (tbody) {
@@ -334,64 +343,34 @@
 
   // ── 审核界面查看待审资料详情 ──
   function showPendingFileDetail(materialId) {
-    // 尝试从当前 pending list 卡片中获取数据
-    var card = document.getElementById('pc-' + materialId);
-    if (card) {
-      // 从卡片提取信息
-      var title = card.querySelector('.pc-title') ? card.querySelector('.pc-title').textContent : '';
-      var metaEls = card.querySelectorAll('.pc-meta span');
-      var courseName = '', uploader = '', createdAt = '', fileSize = '';
-      if (metaEls[0]) courseName = metaEls[0].textContent.replace(/^📚 /, '');
-      if (metaEls[1]) uploader = metaEls[1].textContent.replace(/^👤 /, '');
-      if (metaEls[2]) createdAt = metaEls[2].textContent.replace(/^📅 /, '');
-      if (metaEls[3]) fileSize = metaEls[3].textContent.replace(/^📄 /, '');
+    // 从 /api/files/<id>/ 拉取完整数据：file_size 为原始字节、file_name 为真实文件名，
+    // 修复此前 DOM 抓取 + parseInt("3.5 MB") 导致的错误大小与无法预览
+    api('/api/files/' + materialId + '/').then(function(full) {
+      if (window._fileLookup) window._fileLookup[full.id] = full; // 供 showPreview 识别真实扩展名
+      if (typeof full.can_delete !== 'boolean') full.can_delete = true; // 审核员可删
+      showFileInfoModal(full);
+    }).catch(function() {
+      // 降级：用待审核列表原始项（file_size 为字节，非格式化文本）
+      var item = _pendingItems[materialId];
+      if (!item) { alert('无法加载文件详情'); return; }
       var fileObj = {
-        id: materialId,
-        title: title,
-        course_name: courseName,
-        course_code: '',
-        file_name: title,
-        file_size: parseInt(fileSize) || 0,
-        file_type: '未知',
-        uploader: uploader,
-        teacher: '待填',
+        id: item.id,
+        title: item.title,
+        course_name: item.course_name,
+        course_code: item.course_code,
+        file_name: item.file_name || item.title,
+        file_size: item.file_size,
+        file_type: item.file_type || '未知',
+        uploader: item.uploader_name || '匿名',
+        teacher: '',
         description: '',
         download_count: 0,
-        created_at: createdAt,
+        created_at: item.created_at || '',
         is_uploader: false,
         can_delete: currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'moderator' || currentUser.role === 'sub_moderator'),
         is_admin_uploaded: false,
       };
       showFileInfoModal(fileObj);
-      return;
-    }
-    // 降级：尝试从 API 加载
-    api('/api/user/uploads/').then(function(data) {
-      var item = data ? data.find(function(m) { return m.id === materialId; }) : null;
-      if (item) {
-        var fileObj = {
-          id: item.id,
-          title: item.title,
-          course_name: item.course_name,
-          course_code: item.course_code,
-          file_name: item.file_name || item.title,
-          file_size: item.file_size,
-          file_type: item.file_type || '未知',
-          uploader: item.uploader_name || '匿名',
-          teacher: item.teacher || '',
-          description: item.description || '',
-          download_count: item.download_count || 0,
-          created_at: item.created_at || '',
-          is_uploader: false,
-          can_delete: currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'moderator' || currentUser.role === 'sub_moderator'),
-          is_admin_uploaded: false,
-        };
-        showFileInfoModal(fileObj);
-      } else {
-        alert('无法加载文件详情');
-      }
-    }).catch(function() {
-      alert('无法加载文件详情');
     });
   }
 
@@ -548,6 +527,7 @@
       if (btn) btn.disabled = true;
       api('/api/moderation/deletions/' + delId + '/restore/', { method: 'POST', body: {} }).then(function() {
         alert('✅ 文件已恢复');
+        if (typeof refreshCourseTree === 'function') refreshCourseTree();
         renderAdminDeletions(document.getElementById('adminContent'), _delPage);
       }).catch(function(err) {
         alert('恢复失败：' + err.message);
@@ -586,6 +566,7 @@
       await api('/api/moderation/deletions/' + delId + '/restore/', { method: 'POST', body: { reason: reason } });
       _removeOverlay(overlay);
       alert('✅ 文件已恢复，撤销理由已通知相关用户');
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
       renderAdminDeletions(document.getElementById('adminContent'), _delPage);
     } catch(err) {
       alert('恢复失败：' + err.message);
@@ -662,11 +643,13 @@
 
   // ── 用户管理（仅 super_admin） ──
   var _userPage = 1;
+  var _userRoleFilter = ''; // '' | 'admin' | 'user'
   function renderAdminUsers(content, search, page) {
     _userPage = page || 1;
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
     var params = [];
     if (search) params.push('search=' + encodeURIComponent(search));
+    if (_userRoleFilter) params.push('role=' + encodeURIComponent(_userRoleFilter));
     params.push('page=' + _userPage);
     var url = '/api/admin/users/?' + params.join('&');
     api(url).then(function(resp) {
@@ -677,12 +660,17 @@
       }
       var html = '<div class="admin-search-box">' +
         '<input type="text" id="adminUserSearch" placeholder="搜索昵称 / 邮箱…" value="' + escapeHtml(search) + '" onkeydown="if(event.key===\'Enter\')adminSearchUsers()">' +
+        '<select class="admin-role-filter" onchange="adminFilterUsers(this.value)">' +
+          '<option value=""' + (!_userRoleFilter ? ' selected' : '') + '>全部角色</option>' +
+          '<option value="admin"' + (_userRoleFilter === 'admin' ? ' selected' : '') + '>管理员（版主/小版主）</option>' +
+          '<option value="user"' + (_userRoleFilter === 'user' ? ' selected' : '') + '>普通用户</option>' +
+        '</select>' +
         '<button onclick="adminSearchUsers()">搜索</button>' +
         '</div>';
       var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
       html += '<div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr>' +
-          '<th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>注册时间</th>' +
+          '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>注册时间</th>' +
         '</tr></thead><tbody>';
       users.forEach(function(u) {
         var canChange = u.id !== (currentUser ? currentUser.id : -1) && u.role !== 'super_admin';
@@ -731,8 +719,13 @@
             autoApproveCell = '<td style="font-size:0.75rem;color:var(--text-muted)">—</td>';
           }
         }
+        // 头像 + 点击昵称跳转公开页
+        var avatarCell = u.avatar_url
+          ? '<img src="' + escapeHtml(u.avatar_url) + '" class="admin-user-avatar" onclick="showUserPublic(' + u.id + ')" title="查看公开主页" style="cursor:pointer">'
+          : '<div class="admin-user-avatar-placeholder" onclick="showUserPublic(' + u.id + ')" title="查看公开主页" style="cursor:pointer">' + escapeHtml((u.nickname || '?').charAt(0).toUpperCase()) + '</div>';
         html += '<tr>' +
-          '<td>' + escapeHtml(u.nickname) + '</td>' +
+          '<td>' + avatarCell + '</td>' +
+          '<td><a href="javascript:void(0)" class="admin-user-name" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">' + escapeHtml(u.nickname) + '</a></td>' +
           '<td style="font-size:0.8rem">' + escapeHtml(u.email) + '</td>' +
           '<td>' + roleOptions + '</td>' +
           '<td style="font-size:0.78rem;color:var(--text-muted)">' + sections + '</td>' +
@@ -766,6 +759,12 @@
   }
 
   function adminSearchUsers() {
+    var q = document.getElementById('adminUserSearch');
+    renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '', 1);
+  }
+
+  function adminFilterUsers(value) {
+    _userRoleFilter = value;
     var q = document.getElementById('adminUserSearch');
     renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '', 1);
   }

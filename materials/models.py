@@ -381,3 +381,49 @@ class DownloadRecord(models.Model):
 
     def __str__(self):
         return f"{self.user.username} → {self.material_title}"
+
+
+# ═══════════════════════════════════════════════════════════════
+# 课程树缓存失效信号
+# CourseCategory 任何增删改（新建/删除/移动/改名/绑定课程等）→
+# 清除 /api/courses/tree/ 缓存，管理员改树即时生效（TTL 10min 兜底）
+# ═══════════════════════════════════════════════════════════════
+
+COURSE_TREE_CACHE_KEY = "api_course_tree_data"
+
+from django.core.cache import cache
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender=CourseCategory)
+@receiver(post_delete, sender=CourseCategory)
+def _invalidate_course_tree_cache(sender, **kwargs):
+    cache.delete(COURSE_TREE_CACHE_KEY)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Material 变更信号
+# 资料任何增删改（上传/删除/审核通过·驳回/编辑）→
+#   1. 失效 /api/courses/tree/ 缓存（fileCount 即时更新，修「暂无资料」陈旧）
+#   2. 递增上传者公开页代际计数 user_public_gen_{uid}，公开页缓存即时失效
+#      （缓存键含代际，旧键 60s TTL 自然过期，删除自传后不再残留显示）
+# ═══════════════════════════════════════════════════════════════
+
+USER_PUBLIC_GEN_PREFIX = "user_public_gen_"
+
+
+def _bump_user_public_gen(user_id):
+    """递增用户公开页代际计数，使 api_user_public 的旧缓存键即时失效。"""
+    if not user_id:
+        return
+    key = f"{USER_PUBLIC_GEN_PREFIX}{user_id}"
+    gen = cache.get(key) or 0
+    cache.set(key, gen + 1)
+
+
+@receiver(post_save, sender=Material)
+@receiver(post_delete, sender=Material)
+def _invalidate_material_caches(sender, instance, **kwargs):
+    cache.delete(COURSE_TREE_CACHE_KEY)
+    _bump_user_public_gen(getattr(instance, "uploader_id", None))

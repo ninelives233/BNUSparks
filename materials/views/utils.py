@@ -34,6 +34,7 @@ from ..models import (
     College, Course, CourseType, Material, MaterialType,
     CourseCategory, UserProfile, Notification, ReviewComment,
     Favorite, DownloadRecord, DeletionRecord, FolderOperation, Announcement,
+    _bump_user_public_gen,
 )
 
 
@@ -412,16 +413,12 @@ def _build_tree_node(qs, *, preload=None):
 
         node = {}
         node["id"] = cat.id
-        node["parentId"] = cat.parent_id  # 直接取 FK 值，不触发 query
         if cat.name:
             node["name"] = cat.name
         if cat.icon_class:
             node["iconClass"] = cat.icon_class
         if cat.is_math_card:
             node["mathCard"] = True
-        # 自建文件夹标记（前端菜单显示用）
-        if cat.course_id and str(cat.course.code).startswith("UNB"):
-            node["customBuilt"] = True
         # 学院 ID（用于前端权限匹配）
         if cat.course_id and cat.course.college_id:
             node["collegeId"] = cat.course.college_id
@@ -578,7 +575,7 @@ def _get_moderated_material_qs(user, include_assigned=True):
     """获取用户权限范围内的 Material QuerySet"""
     profile = _get_or_create_profile(user)
     if profile.role == UserProfile.Role.SUPER_ADMIN:
-        qs = Material.objects.select_related("course", "uploader")
+        qs = Material.objects.select_related("course", "uploader", "material_type", "reviewed_by")
         return qs if include_assigned else qs
 
     _get_category_preload()  # 预热 preload，后续 _get_courses_in_category 走内存
@@ -591,7 +588,7 @@ def _get_moderated_material_qs(user, include_assigned=True):
         q |= Q(uploader=user)
         if include_assigned:
             q |= Q(assigned_moderator=user)
-        return Material.objects.filter(q).select_related("course", "uploader")
+        return Material.objects.filter(q).select_related("course", "uploader", "material_type", "reviewed_by")
 
     all_courses = set()
     for college in profile.managed_majors.all():
@@ -604,7 +601,7 @@ def _get_moderated_material_qs(user, include_assigned=True):
     q |= Q(uploader=user)
     if include_assigned:
         q |= Q(assigned_moderator=user)
-    return Material.objects.filter(q).select_related("course", "uploader")
+    return Material.objects.filter(q).select_related("course", "uploader", "material_type", "reviewed_by")
 
 
 def _user_can_edit_material(user, material):

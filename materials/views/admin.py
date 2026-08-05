@@ -35,6 +35,14 @@ def api_admin_users(request):
             Q(email__icontains=search) |
             Q(username__icontains=search)
         )
+    # 角色分类：admin = 管理员（版主/小版主/总管理员），user = 普通用户
+    role_filter = request.GET.get("role", "").strip()
+    if role_filter == "admin":
+        qs = qs.filter(profile__role__in=[
+            UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN,
+        ])
+    elif role_filter == "user":
+        qs = qs.filter(profile__role=UserProfile.Role.USER)
     page = int(request.GET.get("page", 1))
     per_page = 20
     total = qs.count()
@@ -48,6 +56,7 @@ def api_admin_users(request):
                 "id": u.id,
                 "nickname": u.first_name or u.username,
                 "email": u.email,
+                "avatar_url": u.profile.avatar.url if u.profile.avatar else "",
                 "role": u.profile.role,
                 "date_joined": u.date_joined.strftime("%Y-%m-%d"),
                 "material_count": u.material_count,
