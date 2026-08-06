@@ -890,6 +890,9 @@
   .mf-switch a { color: var(--primary); font-weight: 500; }
   .mf-error { margin-top: var(--space-sm); padding: 8px 12px; border-radius: var(--radius-sm);
     background: oklch(0.95 0.06 30); color: oklch(0.4 0.12 30); font-size: 0.85rem; display: none; }
+  .mf-error.warn { /* 上传超限等：高亮强调 */
+    background: oklch(0.94 0.09 75); color: oklch(0.42 0.14 45);
+    font-weight: 600; border: 1px solid oklch(0.8 0.13 60); }
   .mf-progress { margin-top: var(--space-sm); display: flex; align-items: center; gap: var(--space-sm); }
   .mf-progress-bar { flex: 1; height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
   .mf-progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.3s; border-radius: 3px; }

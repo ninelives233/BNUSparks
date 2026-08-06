@@ -76,10 +76,14 @@ DATABASES = {
 }
 
 # ── 缓存 ──
+# DatabaseCache：跨 gunicorn 进程共享（共享 SQLite 库），课程树/代际计数等信号失效真正生效
+# （LocMemCache 是 per-process，删除/新建文件夹后其他 worker 仍返回旧缓存导致界面「没反应」；
+#   FileBasedCache 与测试中 mock builtins.open 冲突且存在并发写脆弱性，均弃用）
+# 部署时需创建 django_cache 表（deploy.sh 里 createcachetable；测试环境自动创建）
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'bnusparks-cache',
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
         'TIMEOUT': 300,  # 5 分钟默认超时
     }
 }

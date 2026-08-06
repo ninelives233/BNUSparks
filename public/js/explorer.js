@@ -74,6 +74,8 @@
     var fileInput = document.getElementById('uploadFile');
     var titleInput = document.getElementById('uploadTitle');
     if (!fileInput || !titleInput) return;
+    // 选中文件即提示超限（非阻断，提交时才会真正拦截）
+    if (fileInput.files.length && _hasOversizeFile(fileInput.files)) _showSizeLimitError();
     if (titleInput.value.trim()) return;
     if (fileInput.files.length === 1) {
       titleInput.value = fileInput.files[0].name.replace(/\.[^.]+$/, '');
@@ -134,6 +136,25 @@
       opt.textContent = t.name;
       sel.appendChild(opt);
     });
+  }
+
+  // ── 上传大小限制（与后端 DATA_UPLOAD_MAX_MEMORY_SIZE 对齐）──
+  const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;
+  const SIZE_LIMIT_MSG = '文件大小超出限制，建议使用文件瘦身、压缩、拆分等方式处理后上传';
+
+  function _hasOversizeFile(files) {
+    for (var i = 0; i < (files ? files.length : 0); i++) {
+      if (files[i].size > MAX_UPLOAD_SIZE) return true;
+    }
+    return false;
+  }
+
+  function _showSizeLimitError() {
+    var el = document.getElementById('uploadError');
+    if (!el) return;
+    el.textContent = SIZE_LIMIT_MSG;
+    el.classList.add('warn');
+    el.style.display = 'block';
   }
 
   function showUploadModal(code, name) {
@@ -233,6 +254,13 @@
     const files = document.getElementById('uploadFile').files;
     if (!files || !files.length) { el.textContent = '请选择文件'; el.style.display = 'block'; return false; }
 
+    // 超限阻断：任一文件 >50MB → 下方高亮提示，不发请求
+    if (_hasOversizeFile(files)) {
+      _showSizeLimitError();
+      progress.style.display = 'none';
+      return false;
+    }
+
     progress.style.display = 'flex';
     var successCount = 0, failCount = 0;
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -265,8 +293,12 @@
           headers: token ? { 'Authorization': 'Bearer ' + token } : {},
           body: formData,
         });
-        const data = await resp.json();
-        if (!data.ok) throw new Error(data.error || '上传失败');
+        let data = null;
+        try { data = await resp.json(); } catch (e) { data = null; }
+        // 400 默认页（非 JSON，通常是请求体超限）→ 显示友好超限文案而非「Unexpected token」
+        if (!resp.ok || !data || !data.ok) {
+          throw new Error((data && data.error) || SIZE_LIMIT_MSG);
+        }
         successCount++;
       } catch (err) {
         failCount++;
@@ -284,7 +316,10 @@
 
     fill.style.width = '100%';
     text.textContent = '完成！成功 ' + successCount + ' 个' + (failCount > 0 ? '，失败 ' + failCount + ' 个' : '');
-    setTimeout(function() { closeUploadModal(); refreshCourseTree(); }, 1500);
+    // 全部失败时不自动关闭弹窗，让用户看到失败原因
+    if (successCount > 0) {
+      setTimeout(function() { closeUploadModal(); refreshCourseTree(); }, 1500);
+    }
     return false;
   }
 
@@ -315,6 +350,8 @@
     'hourglass': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14"/><path d="M5 21h14"/><path d="M6 3v2c0 2 3 4 6 6 3-2 6-4 6-6V3"/><path d="M6 21v-2c0-2 3-4 6-6 3 2 6 4 6 6v2"/></svg>',
     'ai': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20L9.5 4L14 20"/><path d="M7 13L12 13"/><path d="M19 4V20"/><path d="M17 4H21"/><path d="M17 20H21"/></svg>',
     'atom': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2" fill="currentColor"/><ellipse cx="12" cy="12" rx="9" ry="3.5"/><ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(-60 12 12)"/></svg>',
+    'sigma': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 7V5H6l6 7-6 7h12v-2"/></svg>',
+    'cap': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5L2 9z"/><path d="M6 11v5c0 2 3 3 6 3s6-1 6-3v-5"/><path d="M22 9v5"/></svg>',
     'flask': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v4l-5 12a2 2 0 002 2h10a2 2 0 002-2l-5-12V3"/></svg>',
     'dna': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4c4 2 4 6 0 8c4 2 4 6 0 8"/><path d="M16 4c-4 2 -4 6 0 8c-4 2 -4 6 0 8"/><line x1="10" y1="6" x2="14" y2="6"/><line x1="10" y1="11" x2="14" y2="11"/><line x1="10" y1="17" x2="14" y2="17"/></svg>',
     'key': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3.5"/><line x1="12" y1="8.5" x2="12" y2="21"/><line x1="12" y1="21" x2="9" y2="21"/><line x1="12" y1="18" x2="9" y2="18"/><line x1="12" y1="15" x2="10" y2="15"/></svg>',
@@ -689,13 +726,40 @@
         peelNote +
         '<p style="font-size:0.8rem;color:var(--ink-faint)">仅删除目录节点，关联课程和文件不受影响</p>' +
         '<div class="ar-actions">' +
-          '<button class="admin-btn admin-btn-primary" onclick="(function(){var ov=this.closest(\'.admin-reject-overlay\');api(\'/api/folders/' + catId + '/delete/\',{method:\'DELETE\'}).then(function(){if(ov)_removeOverlay(ov);refreshCourseTree()}).catch(function(err){_showScopeError(\'删除失败\',err)})})()">确认删除</button>' +
+          '<button class="admin-btn admin-btn-primary" onclick="_doDeleteFolder(' + catId + ', this.closest(\'.admin-reject-overlay\'))">确认删除</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
     overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
     lockScroll();
+  }
+
+  // 从内存课程树中移除节点（删除成功后立即反馈，不等服务端缓存生效）
+  function _removeNodeFromTree(catId) {
+    function walk(nodes) {
+      if (!nodes) return false;
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].id === catId) { nodes.splice(i, 1); return true; }
+        if (walk(nodes[i].children)) return true;
+      }
+      return false;
+    }
+    walk(Object.values(courseTree || {}));
+  }
+
+  function _doDeleteFolder(catId, overlay) {
+    api('/api/folders/' + catId + '/delete/', { method: 'DELETE' })
+      .then(function() {
+        if (overlay) _removeOverlay(overlay);
+        _removeNodeFromTree(catId);
+        // 若当前导航路径指向被删子树，向上回到最近有效祖先
+        while (expPath.length && !getNode(expPath)) expPath.pop();
+        if (expPath.length) pushViewState('explorer', { expPath: [...expPath] });
+        renderExplorer();
+        refreshCourseTree();
+      })
+      .catch(function(err) { _showScopeError('删除失败', err); });
   }
 
   function getNode(path) {
@@ -861,8 +925,9 @@
     });
   }
 
-  function _nodeInScope(item, rootCategory) {
+  function _nodeInScope(item, rootCategory, isCollegeLevel) {
     // 检查单个课程树节点是否在用户管辖范围内
+    // isCollegeLevel：当前渲染的是「专业课」一级目录（学院节点）时由 renderGrid/renderList 传入 true
     if (!currentUser || !item) return false;
     if (currentUser.role === 'super_admin') return true;
     if (currentUser.role === 'user') return false;
@@ -872,8 +937,12 @@
     if (currentUser.role === 'moderator') {
       // 通识课：有 can_moderate_general 权限即可
       if (rootCategory === '通识课') return !!currentUser.can_moderate_general;
-      // 专业课：检查 collegeId 是否在 managed_majors
       var managedMajors = currentUser.managed_majors || [];
+      // 专业课一级目录（学院节点）：版主无权编辑（除非显式分配）——统一「版主可管辖学院下全部内容但不含学院节点本身」
+      if (isCollegeLevel && item.collegeId && managedMajors.indexOf(item.collegeId) !== -1) {
+        if (moderatedSections.indexOf(item.id) === -1) return false;
+      }
+      // 专业课：检查 collegeId 是否在 managed_majors
       if (item.collegeId && managedMajors.indexOf(item.collegeId) !== -1) return true;
       // 检查 category id 是否在 moderated_sections
       if (item.id && moderatedSections.indexOf(item.id) !== -1) return true;
@@ -913,8 +982,13 @@
         if (rootCategory === '通识课') {
           if (currentUser.can_moderate_general) return true;
         }
-        // managed_majors
-        if (node.collegeId && managedMajors.indexOf(node.collegeId) !== -1) return true;
+        // managed_majors：版主可管辖学院下全部内容，但路径末端是学院一级节点时拒绝（无权编辑一级目录）
+        if (node.collegeId && managedMajors.indexOf(node.collegeId) !== -1) {
+          if (rootCategory === '专业课' && path.length === 2 && i === depth - 1) {
+            if (moderatedSections.indexOf(node.id) === -1) continue; // 学院节点，除非显式分配
+          }
+          return true;
+        }
         // moderated_sections
         if (node.id && moderatedSections.indexOf(node.id) !== -1) return true;
       }
@@ -951,7 +1025,7 @@
           '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
           '<div class="fc-name">' + esc(item.name) + '</div>' +
           '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
-          (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0])) ? _mgmtCardMenuHtml(item) : '') +
+          (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') +
         '</div>'
       ).join('') +
     '</div>';
@@ -1016,7 +1090,7 @@
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
       '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
       badge +
-      (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0])) ? _mgmtCardMenuHtml(item) : '') + '</div>';
+      (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') + '</div>';
   }
 
   var _multiSelectMode = false;
@@ -1112,12 +1186,17 @@
       return;
     }
 
-    // 无课程代码 → 展示空状态（避免表格永久停留在"加载中"）
+    // 无课程代码 → 中间节点/无课程分类：文件夹空态（管理模式可新建子文件夹）
     if (!code) {
+      var _mgmt = isMgmtActive();
+      var _inScope = _mgmt && _userInScope(expPath);
       container.innerHTML =
         '<div class="file-area">' +
           '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + '</h3></div>' +
-          '<div class="empty-state"><div class="es-text">该课程暂无资料</div><div class="es-sub">可能是课程尚未开始，或资料正在征集中</div></div>' +
+          '<div class="empty-state"><div class="es-text">该分类下暂无内容</div>' +
+          '<div class="es-sub">' + (_mgmt ? '可在管理模式中新建子文件夹或上传资料' : '可能是内容尚未创建，或正在征集中') + '</div>' +
+          (_inScope && course.id ? '<button class="mgmt-new-btn" onclick="showNewFolderDialog(' + course.id + ')">＋ 新建文件夹</button>' : '') +
+          '</div>' +
         '</div>';
       return;
     }
