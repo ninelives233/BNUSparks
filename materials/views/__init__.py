@@ -36,6 +36,7 @@ from .files import (
 # 收藏
 from .favorites import (
     api_favorite_toggle, api_favorite_status, api_my_favorites,
+    api_course_favorite_toggle, api_my_course_favorites,
 )
 
 # 审核
@@ -50,10 +51,18 @@ from .moderation import (
 # 文件管理 / 文件夹 / 操作
 from .operations import (
     api_file_update, api_folder_create, api_folder_delete,
-    api_folder_rename, api_folder_move, api_folder_set_course,
+    api_folder_rename, api_folder_set_course,
     api_operations, api_folder_restore,
     api_restore_deletion,
     api_file_batch_delete, api_file_batch_edit,
+)
+
+# 新建课程申请
+from .course_requests import (
+    api_course_request_create, api_course_request_upload_file,
+    api_moderation_course_requests,
+    api_moderation_course_request_approve, api_moderation_course_request_reject,
+    api_moderation_course_requests_batch_approve,
 )
 
 # 管理员

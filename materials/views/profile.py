@@ -189,8 +189,12 @@ def api_my_uploads(request):
     return _ok([{
         "id": m.id,
         "title": m.title,
-        "course_code": m.course.code if m.course_id else "",
-        "course_name": m.course.name if m.course_id else "",
+        "course_code": m.course.code if m.course_id else (
+            m.creation_request.course_code if m.creation_request_id else ""
+        ),
+        "course_name": m.course.name if m.course_id else (
+            m.creation_request.course_name if m.creation_request_id else ""
+        ),
         "course_type": m.course.course_type if m.course_id else "",
         "file_type": m.file_type,
         "file_name": m.file_name,

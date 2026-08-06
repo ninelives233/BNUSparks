@@ -65,11 +65,18 @@ def api_moderation_pending(request):
     def _serialize(m):
         is_peer_approved = m.review_status == "approved" and m.reviewed_by_id != request.user.id
         is_sub = (m.review_status == "pending" and m.course_id in subordinate_course_ids)
+        # 新建课程申请随附文件 course 可为 NULL，回退到申请信息
+        _cname = m.course.name if m.course_id else (
+            m.creation_request.course_name if m.creation_request_id else "新建课程申请"
+        )
+        _ccode = m.course.code if m.course_id else (
+            m.creation_request.course_code if m.creation_request_id else ""
+        )
         return {
             "id": m.id,
             "title": m.title,
-            "course_name": m.course.name,
-            "course_code": m.course.code,
+            "course_name": _cname,
+            "course_code": _ccode,
             "uploader_name": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
             "file_size": m.file_size,
             "file_type": m.material_type.name if hasattr(m, "material_type") and m.material_type else (m.file_type or "其他"),
@@ -321,8 +328,12 @@ def api_moderation_history(request):
             {
                 "id": m.id,
                 "title": m.title,
-                "course_name": m.course.name,
-                "course_code": m.course.code,
+                "course_name": m.course.name if m.course_id else (
+                    m.creation_request.course_name if m.creation_request_id else "新建课程申请"
+                ),
+                "course_code": m.course.code if m.course_id else (
+                    m.creation_request.course_code if m.creation_request_id else ""
+                ),
                 "uploader_name": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
                 "review_status": m.review_status,
                 "review_notes": m.review_notes,

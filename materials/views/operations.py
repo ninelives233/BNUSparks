@@ -708,63 +708,6 @@ def api_folder_rename(request, folder_id):
     return _ok({"id": cat.id, "name": cat.name})
 
 
-@csrf_exempt
-@require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
-def api_folder_move(request, folder_id):
-    """POST /api/folders/<id>/move/ — 移动到（更换父节点）"""
-    if request.method != "POST":
-        return _err("仅支持 POST", 405)
-    cat = get_object_or_404(CourseCategory, id=folder_id)
-
-    if not _check_category_scope(request.user, cat):
-        return _err("无权操作", 403)
-
-    try:
-        body = json.loads(request.body)
-    except Exception:
-        return _err("请求格式错误")
-
-    new_parent_id = body.get("parent_id")
-    if new_parent_id is None:
-        return _err("请指定目标父节点")
-    if new_parent_id == cat.id:
-        return _err("不能移动到自身")
-    if new_parent_id == cat.parent_id:
-        return _err("已在目标位置")
-
-    new_parent = get_object_or_404(CourseCategory, id=new_parent_id)
-
-    # 检查循环引用：新父节点不能是该节点自身或其后代
-    p = new_parent
-    while p:
-        if p.id == cat.id:
-            return _err("不能移动到自己的子节点下", 400)
-        p = p.parent
-
-    old_parent_id = cat.parent_id
-    cat.parent = new_parent
-
-    # 自动设置排序到尾位
-    max_order = CourseCategory.objects.filter(parent=new_parent).aggregate(
-        m=Max("order")
-    )["m"] or 0
-    cat.order = max_order + 1
-    cat.save(update_fields=["parent_id", "order"])
-
-    path_parts = []
-    p = cat.parent
-    while p:
-        path_parts.append(p.name or f"#{p.id}")
-        p = p.parent
-    parent_path = "/".join(reversed(path_parts))
-
-    FolderOperation.objects.create(
-        user=request.user, action="move", folder_type="",
-        category_id=cat.id, category_name=cat.name or f"#{cat.id}",
-        parent_path=parent_path,
-        reason=f"从父节点 #{old_parent_id} 移动到 #{new_parent_id}",
-    )
-    return _ok({"id": cat.id, "parent_id": cat.parent_id})
 
 
 @csrf_exempt

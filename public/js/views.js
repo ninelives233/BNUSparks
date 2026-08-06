@@ -618,6 +618,10 @@
           '<span class="so-input-icon">🔍</span>' +
           '<input type="text" id="courseSearchInput" placeholder="课程名称或代码…" autofocus>' +
         '</div>' +
+        '<div class="so-new-course">' +
+          '<div class="so-new-hint">没有要找的学院/专业/课程？点击↓</div>' +
+          '<button class="so-new-btn" onclick="_removeOverlay(this.closest(\'.search-overlay\'));showNewCourse()">新建课程</button>' +
+        '</div>' +
         '<div class="search-overlay-results" id="courseSearchResults">' +
           '<div class="so-hint">' +
             '<div class="so-hint-text">💡 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div>' +
