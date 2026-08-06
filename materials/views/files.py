@@ -313,17 +313,37 @@ def api_file_download(request, file_id):
     is_preview = request.GET.get("preview") == "1"
     if is_preview:
         # PDF 预览：支持 max_pages=N 裁剪为前 N 页（节省带宽 + 客户端资源）
+        # 切割结果按「文件指纹 + max_pages」缓存到 data/.pdf_cache/，
+        # 命中直接返回，避免每次预览都全量解析整个 PDF 进内存
         max_pages = request.GET.get("max_pages")
         if max_pages and HAS_PYPDF and material.file_name and material.file_name.lower().endswith('.pdf'):
             try:
+                n = max(1, min(int(max_pages), 50))
+                cache_path = _pdf_preview_cache_path(material.id, file_path, n)
+                if cache_path and cache_path.exists():
+                    response = FileResponse(
+                        open(cache_path, "rb"), as_attachment=False,
+                        filename=material.file_name or material.title,
+                    )
+                    response['X-Frame-Options'] = 'SAMEORIGIN'
+                    return response
                 reader = PdfReader(file_path)
                 writer = PdfWriter()
-                n = min(int(max_pages), len(reader.pages))
-                for i in range(n):
+                page_count = min(n, len(reader.pages))
+                for i in range(page_count):
                     writer.add_page(reader.pages[i])
                 buf = BytesIO()
                 writer.write(buf)
                 buf.seek(0)
+                if cache_path:
+                    try:
+                        cache_path.parent.mkdir(parents=True, exist_ok=True)
+                        tmp = cache_path.with_suffix('.tmp')
+                        with open(tmp, 'wb') as f:
+                            f.write(buf.getvalue())
+                        os.replace(tmp, cache_path)
+                    except OSError:
+                        pass  # 缓存写入失败不影响主流程
                 response = FileResponse(
                     buf, as_attachment=False,
                     filename=material.file_name or material.title,
@@ -331,7 +351,7 @@ def api_file_download(request, file_id):
                 response['X-Frame-Options'] = 'SAMEORIGIN'
                 return response
             except Exception:
-                pass  # 出错时降级为完整 PDF
+                pass  # 出错时降级为完整 PDF（不写垃圾缓存）
         response = FileResponse(
             open(file_path, "rb"), as_attachment=False,
             filename=material.file_name or material.title,
@@ -524,6 +544,22 @@ def api_file_detail(request, file_id):
     })
 
 _ZIP_CACHE_MAX = 5000  # 单次响应上限（超过截断提示；正常课程资料远低于此）
+
+
+def _pdf_preview_cache_path(file_id, file_path, max_pages):
+    """计算 PDF 预览切割缓存文件路径。
+
+    键含 文件id+大小+mtime+max_pages 指纹：文件被替换/更新时自动失效，未变则复用。
+    存在 data/.pdf_cache/（MEDIA_ROOT 同级），跨进程共享，避免每次预览重复全量解析。
+    """
+    try:
+        st = file_path.stat()
+        key = f"{file_id}:{st.st_size}:{int(st.st_mtime)}:{max_pages}"
+    except OSError:
+        return None
+    digest = hashlib.md5(key.encode('utf-8')).hexdigest()[:16]
+    cache_dir = Path(settings.MEDIA_ROOT).parent / '.pdf_cache'
+    return cache_dir / f"p{file_id}_{digest}.pdf"
 
 
 def _zip_structure_cache_path(file_id, file_path):

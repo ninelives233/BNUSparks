@@ -92,6 +92,8 @@ def _check_category_scope(user, cat):
         return True
     if profile.role == UserProfile.Role.USER:
         return False
+    if cat.parent is None:
+        return False  # 根节点（专业课/通识课）仅 super_admin 可编辑
 
     _get_category_preload()  # 预热分类缓存，后续 3 次 _get_courses_in_category 走内存版
 
@@ -112,6 +114,19 @@ def _check_category_scope(user, cat):
         return False
 
     if profile.role == UserProfile.Role.MODERATOR:
+        # 一级节点（根的直接子节点 = 学院/通识分类）：版主不能编辑自己管辖学院的一级目录
+        college_node = _find_college_node(cat)
+        if college_node is not None and college_node.pk == cat.pk:
+            if not profile.moderated_sections.filter(id=cat.pk).exists():
+                ccourses = _get_courses_in_category(college_node)
+                if any(
+                    rc.college_id
+                    and profile.managed_majors.filter(id=rc.college_id).exists()
+                    for rc in ccourses
+                ):
+                    return False
+
+        # 有课程节点：按课程学院匹配
         for rc in related_courses:
             if rc.college_id and profile.managed_majors.filter(id=rc.college_id).exists():
                 return True
@@ -121,7 +136,17 @@ def _check_category_scope(user, cat):
                 section_courses = _get_courses_in_category(section)
                 if rc in section_courses:
                     return True
+
+        # 无课程纯节点：属某管辖学院子树的严格后代也可操作（含版主新建的中间节点）
         if not related_courses:
+            if college_node is not None and college_node.pk != cat.pk:
+                ccourses = _get_courses_in_category(college_node)
+                if any(
+                    rc.college_id
+                    and profile.managed_majors.filter(id=rc.college_id).exists()
+                    for rc in ccourses
+                ):
+                    return True
             if profile.can_moderate_general:
                 return True
             for section in profile.moderated_sections.all():
@@ -140,6 +165,52 @@ def _is_descendant(cat, ancestor):
             return True
         p = p.parent
     return False
+
+
+def _find_college_node(cat):
+    """返回 cat 所属的最顶层一级节点（根的直接子节点 = 学院/通识分类节点）。
+
+    cat 本身就是一级节点时返回自身；cat 是根时返回 None。
+    """
+    chain = []
+    p = cat
+    while p:
+        chain.append(p)
+        p = p.parent
+    if len(chain) < 2:
+        return None
+    return chain[-2]  # 根的直属子节点
+
+
+def _managed_college_subtree_ids(college_ids):
+    """返回版主管辖学院子树内的全部 CourseCategory id（含学院一级节点自身）。
+
+    学院一级节点 = 根（parent=None）的直接子节点；某一级节点属于管辖学院 ⟺ 其子树内
+    课程 college_id ∈ college_ids。用 _get_category_preload 内存模式遍历，避免 N+1。
+    """
+    college_ids = set(college_ids or [])
+    if not college_ids:
+        return set()
+    _get_category_preload()
+    all_cats = list(CourseCategory.objects.all())
+    child_map = {}
+    root_ids = set()
+    for c in all_cats:
+        child_map.setdefault(c.parent_id, []).append(c)
+        if c.parent_id is None:
+            root_ids.add(c.id)
+    result = set()
+    for c in all_cats:
+        if c.parent_id is not None and c.parent_id in root_ids:
+            ccourses = _get_courses_in_category(c)
+            if any(rc.college_id and rc.college_id in college_ids for rc in ccourses):
+                result.add(c.id)
+                stack = list(child_map.get(c.id, []))
+                while stack:
+                    node = stack.pop()
+                    result.add(node.id)
+                    stack.extend(child_map.get(node.id, []))
+    return result
 
 
 @csrf_exempt
@@ -166,6 +237,8 @@ def api_folder_create(request):
 
     if parent_id:
         parent = get_object_or_404(CourseCategory, id=parent_id)
+        if not _check_category_scope(request.user, parent):
+            return _err("无权在该目录下创建文件夹", 403)
     else:
         parent = None
 
@@ -296,11 +369,7 @@ def api_operations(request):
         visible_cat_ids = set(profile.moderated_sections.values_list("id", flat=True))
         if profile.role == UserProfile.Role.MODERATOR:
             college_ids = list(profile.managed_majors.values_list("id", flat=True))
-            for cc in College.objects.filter(id__in=college_ids):
-                for cat in CourseCategory.objects.filter(
-                    Q(course_text__startswith=cc.slug.upper()[:3]) | Q(name=cc.short_name)
-                ):
-                    visible_cat_ids.add(cat.id)
+            visible_cat_ids |= _managed_college_subtree_ids(college_ids)
         if visible_cat_ids:
             qs = qs.filter(category_id__in=visible_cat_ids)
         else:

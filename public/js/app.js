@@ -100,8 +100,20 @@ window.addEventListener('popstate', async function(e) {
     switchView(state.view, true);
     // 课程浏览器：恢复导航路径
     if (state.view === 'explorer' && state.expPath && Array.isArray(state.expPath)) {
-      expPath = state.expPath.slice();
-      renderExplorer();
+      // 关闭上传等弹窗后 popstate 回到同一视图：expPath 未变且视图已激活 → 跳过冗余重渲染
+      // （避免文件列表重新拉取 + 侧边栏高亮丢失）
+      var _samePath = expPath.length === state.expPath.length &&
+        expPath.every(function(p, i) { return p === state.expPath[i]; });
+      var _expEl = document.getElementById('explorerView');
+      var _expActive = _expEl && _expEl.classList.contains('active');
+      if (!(_samePath && _expActive)) {
+        expPath = state.expPath.slice();
+        renderExplorer();
+      }
+      // 恢复侧边栏高亮：侧边栏无 data-view="explorer"，需映射到 通识课/专业课
+      if (typeof updateSidebar === 'function') {
+        updateSidebar(state.expPath[0] === '通识课' ? 'general' : 'major');
+      }
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
     // 文件详情页：重新加载（优先缓存，否则 API）
