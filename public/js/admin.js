@@ -975,24 +975,24 @@
         }
         var html = '<div class="admin-reject-dialog"><h3>选择「' + nickname + '」的管辖范围</h3><p style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 12px">小版主可审核具体专业层级及以下目录的资料。<br>📌 上级分类节点仅作导航，具体专业层级以下可选。<br>💡 选中上级分类将自动勾选所有下级，防止冲突。</p>';
         html += '<div class="section-check-list" style="max-height:min(60vh,350px);overflow-y:auto">';
-        // 递归渲染可展开树
+        // 递归渲染可展开树（v=144 视觉重构：结构不变，.section-tree-node 后紧跟 .tree-children 兄弟节点）
         function renderSectionTree(nodes, indent) {
           nodes.forEach(function(s) {
             if (s.is_divider) return;
-            var hasChildren = s.children && s.children.length;
+            var hasChildren = !!(s.children && s.children.length);
             var selectable = indent >= 1;  // 具体专业级及以上可选
-            html += '<div class="section-tree-node" style="padding-left:' + (indent * 20) + 'px">';
+            html += '<div class="section-tree-node' + (selectable ? '' : ' is-guide') + '">';
             if (hasChildren) {
-              html += '<span class="tree-expand-btn" onclick="var n=this.parentElement.nextElementSibling;if(n){var v=n.style.display;n.style.display=v===\'block\'?\'none\':\'block\';this.textContent=v===\'block\'?\'▶\':\'▼\';}" style="cursor:pointer;margin-right:2px">▶</span>';
+              html += '<span class="tree-expand-btn" onclick="sectionTreeToggle(this)">▸</span>';
             } else {
-              html += '<span style="margin-right:2px;opacity:0.3">·</span>';
+              html += '<span class="tree-expand-btn" style="cursor:default;opacity:0.22">·</span>';
             }
+            html += '<span class="tree-node-icon">' + (hasChildren ? '📁' : '📄') + '</span>';
             if (selectable) {
               html += '<input type="checkbox" value="' + s.id + '" onchange="treeCheckPropagate(this)"> ';
               html += '<label>' + esc(s.name) + '</label>';
             } else {
-              html += '<span style="opacity:0.3;margin-right:4px">▸ </span>';
-              html += '<span style="color:var(--text-muted);font-size:0.8rem">' + esc(s.name) + '</span>';
+              html += '<span class="tree-node-guide">' + esc(s.name) + '</span>';
             }
             html += '</div>';
             if (hasChildren) {
@@ -1004,12 +1004,16 @@
         }
         // 根节点渲染
         sections.forEach(function(root) {
-          html += '<div style="font-weight:600;padding:6px 0 2px 4px;font-size:0.85rem;color:var(--ink)">' + esc(root.name) + '</div>';
+          var rootId = 'secroot_' + uid + '_' + root.id;
+          html += '<div class="section-tree-root"><span>' + esc(root.name) + '</span>';
+          if (root.children) {
+            html += '<a href="javascript:void(0)" class="tree-toggle-link" onclick="sectionRootToggle(this)">展开分类 ▾</a>';
+          }
+          html += '</div>';
           if (root.children) {
             html += '<div class="tree-children" style="display:none">';
             renderSectionTree(root.children, 0);
             html += '</div>';
-            html += '<div style="padding-left:4px"><a href="javascript:void(0)" style="font-size:0.7rem;color:var(--accent)" onclick="var n=this.parentElement.previousElementSibling;n.style.display=n.style.display===\'none\'?\'block\':\'none\';this.textContent=this.textContent===\'展开此分类 ›\'?\'收起 ‹\':\'展开此分类 ›\'">展开此分类 ›</a></div>';
           }
         });
         html += '</div>';
@@ -1062,6 +1066,27 @@
     var next = node.nextElementSibling;
     if (next && next.classList.contains('tree-children')) {
       next.querySelectorAll('input[type=checkbox]').forEach(function(c) { c.checked = cb.checked; });
+    }
+  }
+
+  // ── 辖区分配树：展开/收起（v=144 视觉重构配套，结构与功能不变） ──
+  function sectionTreeToggle(btn) {
+    var node = btn.closest('.section-tree-node');
+    var next = node && node.nextElementSibling;
+    if (next && next.classList.contains('tree-children')) {
+      var open = next.style.display !== 'none';
+      next.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? '▸' : '▾';
+    }
+  }
+
+  function sectionRootToggle(link) {
+    var root = link.closest('.section-tree-root');
+    var next = root && root.nextElementSibling;
+    if (next && next.classList.contains('tree-children')) {
+      var open = next.style.display !== 'none';
+      next.style.display = open ? 'none' : 'block';
+      link.textContent = open ? '展开分类 ▾' : '收起分类 ▴';
     }
   }
 
