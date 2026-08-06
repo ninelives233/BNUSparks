@@ -89,7 +89,9 @@
   function _populateColleges() {
     if (_ncColleges.length) return;
     api('/api/colleges/').then(function(list) {
-      _ncColleges = Array.isArray(list) ? list : [];
+      // 默认按学院创建顺序（pk 升序）排列，让最早创建的学院排在最前
+      _ncColleges = (Array.isArray(list) ? list : []).slice()
+        .sort(function(a, b) { return (a.id || 0) - (b.id || 0); });
     }).catch(function() { _ncColleges = []; });
   }
 
@@ -137,7 +139,11 @@
       _ncState.majorNode = null;
       return;
     }
-    var majors = (colNode.children || []).filter(function(c) { return !c.divider; });
+    // 只抓取「父节点」（有子节点的目录）。叶子文件夹（如版主手建的「经管实用材料」）
+    // 内部无法新建课程，不能作为专业选项。
+    var majors = (colNode.children || []).filter(function(c) {
+      return !c.divider && c.children && c.children.length;
+    });
     majorSel.innerHTML = '<option value="">请选择专业…</option>' + majors.map(function(m) {
       return '<option value="' + m.id + '" data-id="' + m.id + '">' + esc(m.name) + '</option>';
     }).join('');
@@ -172,7 +178,21 @@
     levelBtn.disabled = !_ncState.majorNode;
   }
 
-  // ── 专业课：层级选择弹窗（真实课程树）──
+  // ── 专业课：层级选择弹窗（真实课程树，只到「含课程的倒数第二级目录」）──
+  // 叶子课程节点（courseId 非通配符）不展示、不可选；可选目标是「直接含课程」的文件夹。
+  function _isCourseLeaf(n) {
+    return !!(n.courseId && n.courseId.indexOf('*') === -1) && !(n.children && n.children.length);
+  }
+  function _hasDirectCourses(n) {
+    return (n.children || []).some(function(c) { return _isCourseLeaf(c); });
+  }
+  function _hasSubFolders(n) {
+    return (n.children || []).some(function(c) { return !_isCourseLeaf(c) && !c.divider; });
+  }
+  function _countDirectCourses(n) {
+    return (n.children || []).filter(function(c) { return _isCourseLeaf(c); }).length;
+  }
+
   function _openLevelPicker() {
     var major = _ncState.majorNode;
     if (!major) { alert('请先选择专业'); return; }
@@ -181,11 +201,12 @@
     overlay.id = 'ncLevelPicker';
     overlay.innerHTML =
       '<div class="search-overlay-inner lp-inner">' +
-        '<button class="search-overlay-close" onclick="_closeLevelPicker()">✕</button>' +
+        '<button class="search-overlay-close" onclick="_closeLevelPicker()" aria-label="关闭">✕</button>' +
         '<div class="so-header"><div class="so-icon">🗂️</div>' +
           '<div class="so-title">选择课程层级</div>' +
-          '<div class="so-sub">选择该课程所属的模块（必修/选修/实践环节…）</div>' +
+          '<div class="so-sub">' + esc(major.name) + ' 目录下，选择该课程应归属的文件夹</div>' +
         '</div>' +
+        '<div class="lp-hint">树只展示到「直接含课程的文件夹」一层；点击文件夹即选为课程归属层级</div>' +
         '<div class="lp-tree" id="ncLevelTree"></div>' +
         '<div class="lp-actions">' +
           '<button class="admin-btn admin-btn-secondary" onclick="_closeLevelPicker()">取消</button>' +
@@ -193,7 +214,11 @@
       '</div>';
     document.body.appendChild(overlay);
     lockScroll();
-    _renderLevelTree(_ncEl('ncLevelTree'), major.children || [], 0, null, []);
+    var treeEl = _ncEl('ncLevelTree');
+    _renderLevelTree(treeEl, major.children || [], 0, [major.name]);
+    if (treeEl && !treeEl.querySelector('.lp-node.is-select')) {
+      treeEl.innerHTML = '<div class="lp-hint">该专业目录下暂无可新建课程的文件夹层级，可联系管理员调整课程树。</div>';
+    }
   }
 
   function _closeLevelPicker() {
@@ -201,48 +226,63 @@
     if (ov) { ov.remove(); unlockScroll(); }
   }
 
-  function _renderLevelTree(container, nodes, depth, parent, pathNames) {
+  function _selectLevel(node, pathNames) {
+    if (!node || !node.id) { alert('该位置不可选，请选择包含课程的文件夹'); return; }
+    _ncState.targetCatId = node.id;
+    _ncState.targetPath = pathNames.join(' / ');
+    var btn = _ncEl('ncMLevelBtn');
+    btn.textContent = '✓ 已选层级';
+    btn.classList.add('is-set');
+    _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+    _closeLevelPicker();
+  }
+
+  function _renderLevelTree(container, nodes, depth, pathNames) {
     (nodes || []).forEach(function(n) {
       if (n.divider) return;
-      var hasChildren = !!(n.children && n.children.length);
-      var isLeafCourse = !!(n.courseId && n.courseId.indexOf('*') === -1);
+      var hasCourses = _hasDirectCourses(n);
+      var hasSubs = _hasSubFolders(n);
+      var usable = hasCourses || hasSubs;
+
+      var group = document.createElement('div');
+      group.className = 'lp-group';
+
       var row = document.createElement('div');
-      row.className = 'lp-node' + (hasChildren ? ' lp-parent' : ' lp-leaf');
-      row.style.paddingLeft = (14 + depth * 18) + 'px';
-      var icon = hasChildren ? '▸' : (isLeafCourse ? '·' : '▪');
-      row.innerHTML =
-        '<span class="lp-node-icon">' + icon + '</span>' +
-        '<span class="lp-node-name">' + esc(n.name) + '</span>' +
-        (isLeafCourse ? '<span class="lp-node-code">' + esc(n.courseId) + '</span>' : '');
-      var childPath = pathNames.concat([n.name || ('#' + n.id)]);
-      if (hasChildren) {
+      row.className = 'lp-node' +
+        (hasCourses ? ' is-select' : '') +
+        (hasSubs ? ' is-parent' : '') +
+        (!usable ? ' is-disabled' : '');
+      var caretHtml = hasSubs
+        ? '<span class="lp-caret is-caret">▸</span>'
+        : '<span class="lp-caret lp-caret-none"></span>';
+      var iconHtml = '<span class="lp-node-icon">' + (hasCourses ? '🗂' : (hasSubs ? '📁' : '📄')) + '</span>';
+      var nameHtml = '<span class="lp-node-name">' + esc(n.name) + '</span>';
+      var countHtml = hasCourses ? '<span class="lp-count">' + _countDirectCourses(n) + ' 门课</span>' : '';
+      row.innerHTML = caretHtml + iconHtml + nameHtml + countHtml;
+
+      var rowPath = pathNames.concat([n.name || ('#' + n.id)]);
+      if (hasCourses) {
+        row.onclick = function() { _selectLevel(n, rowPath); };
+      }
+      group.appendChild(row);
+      container.appendChild(group);
+
+      if (hasSubs) {
         var childWrap = document.createElement('div');
         childWrap.className = 'lp-children';
         childWrap.style.display = 'none';
-        row.appendChild(childWrap);
-        row.querySelector('.lp-node-name').onclick = function(e) {
-          e.stopPropagation();
-          var open = childWrap.style.display !== 'none';
-          childWrap.style.display = open ? 'none' : '';
-          row.querySelector('.lp-node-icon').textContent = open ? '▸' : '▾';
-        };
-        _renderLevelTree(childWrap, n.children, depth + 1, n, childPath);
-        row.classList.add('lp-selectable');
-      } else {
-        // 叶子课程节点：目标 = 其父节点
-        row.classList.add('lp-selectable');
+        group.appendChild(childWrap);
+        var caret = row.querySelector('.lp-caret');
+        if (caret) {
+          caret.onclick = function(e) {
+            e.stopPropagation();
+            var open = childWrap.style.display !== 'none';
+            childWrap.style.display = open ? 'none' : '';
+            caret.textContent = open ? '▸' : '▾';
+          };
+        }
+        _renderLevelTree(childWrap, n.children, depth + 1, rowPath);
       }
-      row.onclick = function() {
-        // 选中该节点（叶子取其父）为目标
-        var target = hasChildren ? n : parent;
-        if (!target || !target.id) { alert('该位置不可选，请选择文件夹层级'); return; }
-        _ncState.targetCatId = target.id;
-        _ncState.targetPath = childPath.join(' / ');
-        _ncEl('ncMLevelBtn').textContent = '已选层级';
-        _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
-        _closeLevelPicker();
-      };
-      container.appendChild(row);
     });
   }
 
