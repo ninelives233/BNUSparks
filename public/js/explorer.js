@@ -990,11 +990,10 @@
           if (node.id && moderatedSections.indexOf(node.id) !== -1) return true;
           continue;
         }
-        // managed_majors：版主可管辖学院下全部内容，但路径末端是学院一级节点时拒绝（无权编辑一级目录）
+        // managed_majors：版主可管辖学院下全部内容。路径处于学院一级节点那一行时
+        // 也视为在管辖内 → 面包屑「＋ 新建」可见，可在学院下新建专业文件夹。
+        // （学院卡片本身的编辑仍由 _nodeInScope 的 isCollegeLevel 拦截，不受影响）
         if (node.collegeId && managedMajors.indexOf(node.collegeId) !== -1) {
-          if (path.length === 2 && i === depth - 1) {
-            if (moderatedSections.indexOf(node.id) === -1) continue; // 学院节点，除非显式分配
-          }
           return true;
         }
         // moderated_sections
