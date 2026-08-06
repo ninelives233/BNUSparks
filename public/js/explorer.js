@@ -982,9 +982,17 @@
         if (rootCategory === '通识课') {
           if (currentUser.can_moderate_general) return true;
         }
+        // 专业课根节点（i===0）：collegeId 是从子节点向上传播的，不代表管辖范围。
+        // 版主对「专业课」根本身永远无编辑权（后端同样只放行 super_admin），
+        // 必须跳过，否则根节点的传播 collegeId 一旦命中管辖学院，会让整棵专业课树
+        // （含所有学院卡片）都被判定在管辖内。
+        if (rootCategory === '专业课' && i === 0) {
+          if (node.id && moderatedSections.indexOf(node.id) !== -1) return true;
+          continue;
+        }
         // managed_majors：版主可管辖学院下全部内容，但路径末端是学院一级节点时拒绝（无权编辑一级目录）
         if (node.collegeId && managedMajors.indexOf(node.collegeId) !== -1) {
-          if (rootCategory === '专业课' && path.length === 2 && i === depth - 1) {
+          if (path.length === 2 && i === depth - 1) {
             if (moderatedSections.indexOf(node.id) === -1) continue; // 学院节点，除非显式分配
           }
           return true;
