@@ -938,9 +938,9 @@
       // 通识课：有 can_moderate_general 权限即可
       if (rootCategory === '通识课') return !!currentUser.can_moderate_general;
       var managedMajors = currentUser.managed_majors || [];
-      // 专业课一级目录（学院节点）：版主无权编辑（除非显式分配）——统一「版主可管辖学院下全部内容但不含学院节点本身」
+      // 专业课一级目录（学院节点）：版主无权编辑——统一「版主可管辖学院下全部内容但不含学院节点本身」
       if (isCollegeLevel && item.collegeId && managedMajors.indexOf(item.collegeId) !== -1) {
-        if (moderatedSections.indexOf(item.id) === -1) return false;
+        return false;
       }
       // 专业课：检查 collegeId 是否在 managed_majors
       if (item.collegeId && managedMajors.indexOf(item.collegeId) !== -1) return true;

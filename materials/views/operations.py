@@ -101,11 +101,10 @@ def _check_category_scope(user, cat):
     related_courses = _get_courses_in_category(cat)
 
     if profile.role == UserProfile.Role.SUB_MODERATOR:
-        # 学院一级节点（根的直属子节点）：小版主同样不能编辑（除非显式分配）
+        # 学院一级节点（根的直属子节点）：小版主一律不可编辑
         college_node = _find_college_node(cat)
         if college_node is not None and college_node.pk == cat.pk:
-            if not profile.moderated_sections.filter(id=cat.pk).exists():
-                return False
+            return False
         for section in profile.moderated_sections.all():
             section_courses = _get_courses_in_category(section)
             for rc in related_courses:
@@ -122,14 +121,13 @@ def _check_category_scope(user, cat):
         # 一级节点（根的直接子节点 = 学院/通识分类）：版主不能编辑自己管辖学院的一级目录
         college_node = _find_college_node(cat)
         if college_node is not None and college_node.pk == cat.pk:
-            if not profile.moderated_sections.filter(id=cat.pk).exists():
-                ccourses = _get_courses_in_category(college_node)
-                if any(
-                    rc.college_id
-                    and profile.managed_majors.filter(id=rc.college_id).exists()
-                    for rc in ccourses
-                ):
-                    return False
+            ccourses = _get_courses_in_category(college_node)
+            if any(
+                rc.college_id
+                and profile.managed_majors.filter(id=rc.college_id).exists()
+                for rc in ccourses
+            ):
+                return False
 
         # 有课程节点：按课程学院匹配
         for rc in related_courses:
