@@ -363,6 +363,8 @@
   let courseTree = null;  // 从 API 动态加载
   let highlightFileId = null;  // 从排行榜/最近上传跳转时高亮目标文件
   var returnState = null;      // { view:'home'|'rankings'|'recentAll', scrollY } 供"返回"按钮使用
+  // 我收藏的课程代码集合（不进课程树缓存，前端单独拉取）
+  let _favoritedCourses = new Set();
 
   // ── 浏览器历史导航 ──
   let _suppressingPushState = false;
@@ -401,6 +403,28 @@
       if (expView && expView.classList.contains('active')) renderExplorer();
     } catch(e) {
       console.warn('课程树刷新失败，保留旧树', e);
+    }
+  }
+
+  // ── 我的课程收藏 ──
+  // 登录后加载收藏课程代码集合；星星状态在本地 Set 维护，树缓存不变
+  async function loadCourseFavorites() {
+    try {
+      var d = await api('/api/user/course-favorites/');
+      _favoritedCourses = new Set((d.items || []).map(i => i.course_code));
+    } catch(e) { _favoritedCourses = new Set(); }
+  }
+
+  async function toggleCourseFavorite(starEl) {
+    var code = starEl.getAttribute('data-code');
+    if (!code) return;
+    try {
+      var r = await api('/api/courses/' + encodeURIComponent(code) + '/favorite/', { method: 'POST' });
+      if (r.favorited) _favoritedCourses.add(code); else _favoritedCourses.delete(code);
+      starEl.classList.toggle('favorited', !!r.favorited);
+      starEl.innerHTML = FD_ICONS[r.favorited ? 'starFilled' : 'star'];
+    } catch(err) {
+      alert('操作失败：' + (err && (err.message || err.error) || '请稍后再试'));
     }
   }
 
@@ -509,10 +533,10 @@
   function _mgmtMenuItemsHtml(node) {
     if (!node) return '';
     var isCourse = !!(node.courseId);
-    var items = isCourse ? ['rename', 'set_course', 'move', 'delete']
-                         : ['rename', 'move', 'delete'];
+    var items = isCourse ? ['rename', 'set_course', 'delete']
+                         : ['rename', 'delete'];
     return items.map(function(a) {
-      var label = { rename: '✏️ 重命名', set_course: '📎 修改课程代码', move: '📂 移动到…', delete: '🗑 删除' }[a] || a;
+      var label = { rename: '✏️ 重命名', set_course: '📎 修改课程代码', delete: '🗑 删除' }[a] || a;
       var cls = a === 'delete' ? 'fc-menu-item danger' : 'fc-menu-item';
       return '<div class="' + cls + '" data-action="' + a + '">' + label + '</div>';
     }).join('');
@@ -609,7 +633,6 @@
 
       if (action === 'rename') { _showRenameDialog(catId, currentNode ? currentNode.name : ''); }
       else if (action === 'set_course') { _showSetCourseDialog(catId); }
-      else if (action === 'move') { _showMoveDialog(catId); }
       else if (action === 'delete') { _showDeleteDialog(catId, currentNode); }
       return;
     }
@@ -699,16 +722,6 @@
     '</div>';
 
     area.innerHTML = html;
-  }
-
-  function _showMoveDialog(catId) {
-    var parentId = prompt('输入目标父节点 ID（将移入该节点下）：');
-    if (!parentId) return;
-    var pid = parseInt(parentId);
-    if (isNaN(pid)) { alert('请输入有效的节点 ID'); return; }
-    api('/api/folders/' + catId + '/move/', { method: 'POST', body: { parent_id: pid } })
-      .then(function() { refreshCourseTree(); })
-      .catch(function(err) { _showScopeError('移动失败', err); });
   }
 
   function _showDeleteDialog(catId, node) {
@@ -1073,7 +1086,7 @@
     parent.innerHTML = html;
     parent.querySelectorAll('.folder-list-item').forEach(el => {
       el.addEventListener('click', function(e) {
-        if (e.target.closest('.fc-card-menu-btn, .fc-card-menu')) return;
+        if (e.target.closest('.fc-card-menu-btn, .fc-card-menu, .fli-fav-star')) return;
         navIn(el.dataset.n);
       });
     });
@@ -1093,10 +1106,18 @@
       badge = '<span class="fli-badge has-data">' + getEffectiveChildCount(item) + ' 项</span>';
     }
     const meta = cId ? '课程代码 ' + cId : (hasSub ? getEffectiveChildCount(item) + ' 项' : '');
+    // 收藏课程星星：仅叶子课程节点（有真实课程代码，非通配符）
+    let favStar = '';
+    if (cId && cId.indexOf('*') === -1) {
+      const fav = _favoritedCourses.has(cId);
+      favStar = '<span class="fli-fav-star' + (fav ? ' favorited' : '') + '" data-code="' + esc(cId) +
+        '" title="收藏课程" onclick="event.stopPropagation();toggleCourseFavorite(this)">' +
+        FD_ICONS[fav ? 'starFilled' : 'star'] + '</span>';
+    }
     return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
       '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
-      badge +
+      badge + favStar +
       (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') + '</div>';
   }
 

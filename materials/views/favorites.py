@@ -1,7 +1,7 @@
 """
 BNU Sparks · 木铎星火 — 收藏 API
 
-favorite toggle, list favorites
+favorite toggle, list favorites (资料收藏 + 课程收藏)
 """
 
 from django.views.decorators.csrf import csrf_exempt
@@ -11,6 +11,7 @@ from .utils import (
     _err, _ok, _get_or_create_profile, require_login,
     Favorite, Material,
 )
+from ..models import Course, CourseFavorite
 
 
 @csrf_exempt
@@ -88,3 +89,68 @@ def api_my_favorites(request):
             "favorited_at": fav.created_at.strftime("%Y-%m-%d"),
         } for fav in items],
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# 课程收藏（收藏课程 = 叶子课程节点）
+# ═══════════════════════════════════════════════════════════════
+
+def _resolve_course_by_code(code):
+    """课程代码解析：精确唯一→通配前缀唯一→歧义/无 → None"""
+    try:
+        return Course.objects.get(code=code)
+    except Course.DoesNotExist:
+        cleaned = code.replace("*", "").replace("-", "")
+        matched = Course.objects.filter(code__startswith=cleaned)
+        if matched.count() == 1:
+            return matched.first()
+        return None
+    except Course.MultipleObjectsReturned:
+        courses = list(Course.objects.filter(code=code).order_by("id"))
+        if not courses:
+            return None
+        with_files = [c for c in courses if c.materials.filter(is_approved=True).exists()]
+        return (with_files or courses)[0]
+
+
+@csrf_exempt
+@require_login
+def api_course_favorite_toggle(request, course_code):
+    """POST /api/courses/<code>/favorite/ — 切换课程收藏状态"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    if "*" in course_code:
+        return _err("无效的课程代码", 400)
+    course = _resolve_course_by_code(course_code)
+    if course is None:
+        return _err("课程不存在", 404)
+
+    fav = CourseFavorite.objects.filter(user=request.user, course=course)
+    if fav.exists():
+        fav.delete()
+        return _ok({"favorited": False})
+    CourseFavorite.objects.create(user=request.user, course=course)
+    return _ok({"favorited": True})
+
+
+@require_login
+def api_my_course_favorites(request):
+    """GET /api/user/course-favorites/ — 我收藏的课程（按 code 去重，同名分拆课程合并）"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    favs = CourseFavorite.objects.filter(
+        user=request.user
+    ).select_related("course").order_by("-created_at")
+
+    seen = {}
+    for fav in favs:
+        code = fav.course.code
+        if not code or code in seen:
+            continue
+        seen[code] = {
+            "course_code": code,
+            "course_name": fav.course.name,
+            "college_name": fav.course.college.name if fav.course.college_id else "",
+            "favorited_at": fav.created_at.strftime("%Y-%m-%d"),
+        }
+    return _ok({"items": list(seen.values())})

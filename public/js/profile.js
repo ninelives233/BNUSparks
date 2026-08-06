@@ -242,26 +242,70 @@
     _updateFooterVisibility('myfavorites');
   }
 
+  var _myFavTab = 'course';
+
+  function switchMyFavTab(tab) {
+    _myFavTab = tab;
+    document.querySelectorAll('.mu-tab[data-favtab]').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-favtab') === tab);
+    });
+    renderMyFavoritesPage();
+  }
+
   function renderMyFavoritesPage() {
     var list = document.getElementById('myFavoritesPageList');
     if (!list) return;
+    // 重新断言胶囊选中态（从其他页面进入时恢复）
+    document.querySelectorAll('.mu-tab[data-favtab]').forEach(function(b) {
+      b.classList.toggle('active', b.getAttribute('data-favtab') === _myFavTab);
+    });
+    if (_myFavTab === 'course') {
+      _renderMyCourseFavorites(list);
+    } else {
+      _renderMyFileFavorites(list);
+    }
+  }
+
+  function _renderMyCourseFavorites(list) {
+    list.innerHTML = '<div class="admin-loading">加载中...</div>';
+    api('/api/user/course-favorites/').then(function(data) {
+      var items = data.items || [];
+      if (!items.length) {
+        list.innerHTML = '<div class="admin-empty">暂无收藏课程，去课程目录点击星星收藏吧</div>';
+        return;
+      }
+      list.innerHTML = items.map(function(r) {
+        return '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'通识课\');navToLast(\'' + esc(r.course_code) + '\')">' +
+          '<div class="hc-item-left">' +
+            '<div class="hc-item-name">' + esc(r.course_name) + '</div>' +
+            '<div class="hc-item-meta">' + esc(r.course_code) + (r.college_name ? ' · ' + esc(r.college_name) : '') + ' · ' + esc(r.favorited_at) + '</div>' +
+          '</div>' +
+          '<span class="hc-item-count">⭐</span>' +
+        '</div>';
+      }).join('');
+    }).catch(function() {
+      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+    });
+  }
+
+  function _renderMyFileFavorites(list) {
     list.innerHTML = '<div class="admin-loading">加载中...</div>';
     api('/api/user/favorites/').then(function(data) {
       var items = data.items || [];
       if (!items.length) {
-        list.innerHTML = '<div class="admin-empty">暂无收藏记录</div>';
+        list.innerHTML = '<div class="admin-empty">暂无收藏的文件</div>';
         return;
       }
       list.innerHTML = items.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.material_id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
           '<div class="hc-item-left">' +
             '<div class="hc-item-name">' + esc(r.title) + '</div>' +
-            '<div class="hc-item-meta">' + esc(r.course_name) + ' \u00b7 ' + esc(r.favorited_at) + '</div>' +
+            '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + esc(r.favorited_at) + '</div>' +
           '</div>' +
-          '<span class="hc-item-count">\u2b50</span>' +
+          '<span class="hc-item-count">⭐</span>' +
         '</div>';
       }).join('');
-    }).catch(function(err) {
+    }).catch(function() {
       list.innerHTML = '<div class="admin-empty">加载失败</div>';
     });
   }

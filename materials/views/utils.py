@@ -492,7 +492,10 @@ def _build_tree_node(qs, *, preload=None):
 
         result.append(node)
 
-    if result and not any("children" in r for r in result):
+    # 显示次序：中间文件夹（有子节点）优先于叶子节点，各自保持原 order 相对顺序（稳定分区）
+    if result and any("children" in r for r in result):
+        result.sort(key=lambda r: 0 if "children" in r else 1)
+    elif result:
         result.sort(key=lambda r: (0 if r.get("fileCount", 0) else 1, r.get("name", "")))
 
     return result
@@ -655,6 +658,13 @@ def _check_moderator_access(user, material, allow_uploader=True):
         return
     # MODERATOR 分支：预热 preload，后续 _get_courses_in_category 走内存版
     _get_category_preload()
+    # 新建课程申请随附文件（course 为 NULL）：仅指派审核人可操作，
+    # 不得经由「can_moderate_general」等课程作用域分支触碰
+    if material.course_id is None:
+        if material.assigned_moderator_id != user.id:
+            from django.http import Http404
+            raise Http404("无权操作该资料")
+        return
     if not hasattr(user, '_mod_colleges'):
         user._mod_colleges = set(profile.managed_majors.values_list("id", flat=True))
     colleges = user._mod_colleges

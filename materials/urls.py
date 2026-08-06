@@ -18,7 +18,10 @@ urlpatterns = [
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
     path("courses/tree/", views.api_course_tree, name="api_course_tree"),
+    path("courses/request/", views.api_course_request_create, name="api_course_request_create"),
+    path("courses/request/<int:request_id>/files/", views.api_course_request_upload_file, name="api_course_request_upload_file"),
     path("courses/<str:course_code>/files/", views.api_course_files, name="api_course_files"),
+    path("courses/<str:course_code>/favorite/", views.api_course_favorite_toggle, name="api_course_favorite_toggle"),
 
     # 文件
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
@@ -36,12 +39,12 @@ urlpatterns = [
     path("files/<int:file_id>/zip-structure/", views.api_zip_structure, name="api_zip_structure"),
     path("files/<int:file_id>/favorite-status/", views.api_favorite_status, name="api_favorite_status"),
     path("user/favorites/", views.api_my_favorites, name="api_my_favorites"),
+    path("user/course-favorites/", views.api_my_course_favorites, name="api_my_course_favorites"),
 
     # 文件夹管理（管理模式编辑）
     path("folders/create/", views.api_folder_create, name="api_folder_create"),
     path("folders/<int:folder_id>/delete/", views.api_folder_delete, name="api_folder_delete"),
     path("folders/<int:folder_id>/rename/", views.api_folder_rename, name="api_folder_rename"),
-    path("folders/<int:folder_id>/move/", views.api_folder_move, name="api_folder_move"),
     path("folders/<int:folder_id>/set-course/", views.api_folder_set_course, name="api_folder_set_course"),
 
     # 操作记录（Iter 6）
@@ -70,6 +73,10 @@ urlpatterns = [
     # 审核（Iter 3）
     path("moderation/pending/", views.api_moderation_pending, name="api_moderation_pending"),
     path("moderation/batch-approve/", views.api_moderation_batch_approve, name="api_moderation_batch_approve"),
+    path("moderation/course-requests/", views.api_moderation_course_requests, name="api_moderation_course_requests"),
+    path("moderation/course-requests/batch-approve/", views.api_moderation_course_requests_batch_approve, name="api_moderation_course_requests_batch_approve"),
+    path("moderation/course-requests/<int:request_id>/approve/", views.api_moderation_course_request_approve, name="api_moderation_course_request_approve"),
+    path("moderation/course-requests/<int:request_id>/reject/", views.api_moderation_course_request_reject, name="api_moderation_course_request_reject"),
     path("moderation/<int:file_id>/approve/", views.api_moderation_approve, name="api_moderation_approve"),
     path("moderation/<int:file_id>/reject/", views.api_moderation_reject, name="api_moderation_reject"),
     path("moderation/<int:file_id>/reassign/", views.api_moderation_reassign, name="api_moderation_reassign"),

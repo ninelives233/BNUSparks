@@ -126,6 +126,11 @@ window.addEventListener('popstate', async function(e) {
       }
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
+    // 新建课程页：重渲染面包屑与表单
+    if (state.view === 'newCourse' && typeof renderNewCourseView === 'function') {
+      renderNewCourseView();
+      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+    }
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
@@ -146,6 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const treePromise = loadCourseTree();
   const authPromise = checkAuth().then(() => {
     loadNotifCount();
+    if (typeof loadCourseFavorites === 'function') loadCourseFavorites();
     if (typeof isMgmtActive === 'function') document.body.classList.toggle('mgmt-active', isMgmtActive());
   });
   const statsPromise = loadStats();
@@ -236,6 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
           break;
         case 'userPublic': showUserPublic(saved.userId); break;
+        case 'newCourse': renderNewCourseView(); break;
         default: showHome();
       }
       _suppressingPushState = false;

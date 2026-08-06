@@ -114,8 +114,9 @@ class MaterialType(models.Model):
 
 class Material(models.Model):
     course = models.ForeignKey(
-        Course, on_delete=models.CASCADE,
+        Course, on_delete=models.CASCADE, null=True, blank=True,
         verbose_name="所属课程", related_name="materials",
+        help_text="新建课程申请随附文件在申请批准前为 NULL",
     )
     title = models.CharField("资料标题", max_length=200)
     teacher = models.CharField("任课教师", max_length=100, blank=True)
@@ -156,6 +157,12 @@ class Material(models.Model):
         verbose_name="审核人", related_name="reviews",
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    # 新建课程申请随附文件（course 在申请批准前为 NULL）
+    creation_request = models.ForeignKey(
+        "CourseCreationRequest", on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="新建课程申请", related_name="materials",
+    )
 
     created_at = models.DateTimeField("上传时间", auto_now_add=True)
 
@@ -381,6 +388,86 @@ class DownloadRecord(models.Model):
 
     def __str__(self):
         return f"{self.user.username} → {self.material_title}"
+
+
+class CourseCreationRequest(models.Model):
+    """新建课程申请——用户申请创建新课程，管理员审批后在目标位置创建课程文件夹"""
+    class Type(models.TextChoices):
+        GENERAL = "general", "通识课"
+        MAJOR = "major", "专业课"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "待审核"
+        APPROVED = "approved", "已通过"
+        REJECTED = "rejected", "已驳回"
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="course_requests",
+        verbose_name="申请人",
+    )
+    course_type = models.CharField("课程类型", max_length=10, choices=Type.choices)
+    course_name = models.CharField("课程名称", max_length=200)
+    course_code = models.CharField("课程代码", max_length=50, blank=True)
+    college = models.ForeignKey(
+        College, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="学院", related_name="+",
+    )
+    # 专业课：目标父节点（用户在课程树中选定的层级）
+    target_category = models.ForeignKey(
+        CourseCategory, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="目标父节点", related_name="+",
+    )
+    # 通识课：所选通识分类
+    general_category = models.ForeignKey(
+        CourseCategory, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="通识分类", related_name="+",
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING,
+        verbose_name="审核状态",
+    )
+    assigned_moderator = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="指派审核人", related_name="+",
+        help_text="按审核路由原则自动指派；null=未指派（仅总管理员可见）",
+    )
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="审核人", related_name="+",
+    )
+    reviewed_at = models.DateTimeField("审核时间", null=True, blank=True)
+    review_notes = models.TextField("审核备注", blank=True)
+    created_at = models.DateTimeField("申请时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "新建课程申请"
+        verbose_name_plural = "新建课程申请"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.get_course_type_display()}] {self.course_name} by {self.user}"
+
+
+class CourseFavorite(models.Model):
+    """收藏——用户收藏的课程（叶子课程节点，与资料收藏 Favorite 并列）"""
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="course_favorites",
+        verbose_name="收藏用户",
+    )
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name="favorited_by",
+        verbose_name="收藏的课程",
+    )
+    created_at = models.DateTimeField("收藏时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "课程收藏"
+        verbose_name_plural = "课程收藏"
+        ordering = ["-created_at"]
+        unique_together = ["user", "course"]
+
+    def __str__(self):
+        return f"{self.user.username} → {self.course.name}"
 
 
 # ═══════════════════════════════════════════════════════════════

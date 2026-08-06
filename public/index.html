@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/style.css?v=141">
+<link rel="stylesheet" href="/static/css/style.css?v=142">
 </head>
 <body>
 
@@ -529,6 +529,10 @@
       <span class="bc-sep"> / </span>
       <span class="bc-current">我的收藏</span>
     </div>
+    <div class="mu-tabs" style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="mu-tab active" data-favtab="course" onclick="switchMyFavTab('course')">📚 课程</button>
+      <button class="mu-tab" data-favtab="file" onclick="switchMyFavTab('file')">📄 文件</button>
+    </div>
     <div id="myFavoritesPageList"></div>
   </div>
 </div>
@@ -764,7 +768,7 @@
         <div class="mf-group">
           <label>文件</label>
           <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg" onchange="autoFillUploadTitle()">
-          <div class="mf-hint">单个文件大小不超过 50MB</div>
+          <div class="mf-hint">支持多选文件 · 单个文件大小不超过 50MB</div>
         </div>
       </div>
       <!-- 文字录入模式 -->
@@ -803,15 +807,215 @@
   </div>
 </div>
 
+<!-- ═══ 新建课程（v=142） ═══ -->
+<div class="view-section" id="newCourseView" style="display:none">
+  <div class="container" style="max-width:760px;margin:0 auto;padding:20px 16px">
+    <div class="breadcrumb" id="ncBreadcrumb" style="margin-bottom:12px"></div>
+
+    <div class="nc-card">
+      <div class="nc-card-head">
+        <h2 class="nc-card-title">新建课程</h2>
+        <div class="nc-card-sub">填写开课信息，提交后由管理员审核创建课程文件夹</div>
+      </div>
+
+      <!-- 分段控制器：通识课 / 专业课 -->
+      <div class="nc-seg">
+        <button class="nc-seg-btn active" data-nc-type="general" onclick="switchNewCourseType('general')">通识课</button>
+        <button class="nc-seg-btn" data-nc-type="major" onclick="switchNewCourseType('major')">专业课</button>
+      </div>
+
+      <!-- ── 通识课面板 ── -->
+      <div id="ncGeneralPane" class="nc-pane">
+        <div class="nc-step">
+          <span class="nc-step-no">01</span>
+          <div class="nc-step-body">
+            <div class="nc-step-title">课程信息</div>
+            <div class="nc-step-sub">先选课程类型，再填写课程名称与代码</div>
+          </div>
+        </div>
+        <div class="mf-group">
+          <label>课程类型</label>
+          <select id="ncGeneralCategory" class="mf-input" onchange="onGeneralCategoryChange()">
+            <option value="">请选择课程类型…</option>
+          </select>
+          <div class="mf-hint nc-math-hint" id="ncMathHint" style="display:none">「数学类」是为了方便非数学专业的同学备考高数的快捷分类，建议确定该课程满足「是大量非数学专业的必修课」之后再放入此分类，方便后续管理。</div>
+        </div>
+        <div class="mf-group">
+          <label>课程名称</label>
+          <input type="text" id="ncGeneralName" class="mf-input" placeholder="如：学术英语写作">
+        </div>
+        <div class="mf-group">
+          <label>课程代码</label>
+          <input type="text" id="ncGeneralCode" class="mf-input" placeholder="如：GEN02201">
+          <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
+        </div>
+
+        <div class="nc-step">
+          <span class="nc-step-no">02</span>
+          <div class="nc-step-body">
+            <div class="nc-step-title">随附资料（选填）</div>
+            <div class="nc-step-sub">可只创建课程不传资料，审核通过后随时可上传</div>
+          </div>
+        </div>
+        <div class="nc-upload">
+          <div class="upload-mode-tabs">
+            <button class="um-tab um-tab-active" data-mode="file" data-pane="G" onclick="switchNewCourseUploadMode('file','G')">📁 上传文件</button>
+            <button class="um-tab" data-mode="text" data-pane="G" onclick="switchNewCourseUploadMode('text','G')">✏️ 文字录入</button>
+          </div>
+          <div id="ncGModeFile">
+            <div class="mf-group">
+              <label>文件</label>
+              <input type="file" id="ncGFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg">
+              <div class="mf-hint">支持多选文件 · 单个文件大小不超过 50MB</div>
+            </div>
+          </div>
+          <div id="ncGModeText" style="display:none">
+            <div class="mf-group">
+              <label>内容</label>
+              <textarea id="ncGText" class="mf-input mf-textarea mf-textarea-lg" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等（将保存为 .txt 文件）"></textarea>
+            </div>
+          </div>
+          <div class="mf-group">
+            <label>资料标题</label>
+            <input type="text" id="ncGTitle" class="mf-input" placeholder="留空则自动使用文件名">
+          </div>
+          <div class="mf-group">
+            <label>资料类型</label>
+            <select id="ncGMaterialType" class="mf-input"><option value="">请选择类型…</option></select>
+          </div>
+          <div class="mf-group">
+            <label>任课教师</label>
+            <input type="text" id="ncGTeacher" class="mf-input" placeholder="如：张老师">
+          </div>
+          <div class="mf-group">
+            <label>描述（选填）</label>
+            <textarea id="ncGDesc" class="mf-input mf-textarea" placeholder="简述资料内容..."></textarea>
+          </div>
+        </div>
+        <button class="nc-submit" onclick="submitCourseRequest('general')">提交新建课程申请</button>
+        <div id="ncGError" class="mf-error"></div>
+      </div>
+
+      <!-- ── 专业课面板 ── -->
+      <div id="ncMajorPane" class="nc-pane" style="display:none">
+        <div class="mf-group">
+          <label>创建方式</label>
+          <select id="ncMajorMode" class="mf-input" onchange="onMajorModeChange()">
+            <option value="course">新建专业课</option>
+            <option value="college">新建学院 / 专业</option>
+          </select>
+        </div>
+
+        <!-- 新建专业课 -->
+        <div id="ncMajorCoursePane">
+          <div class="nc-step">
+            <span class="nc-step-no">01</span>
+            <div class="nc-step-body">
+              <div class="nc-step-title">课程信息</div>
+              <div class="nc-step-sub">选学院 → 选专业 → 选择课程所属层级</div>
+            </div>
+          </div>
+          <div class="mf-group">
+            <label>学院</label>
+            <div class="nc-combo">
+              <input type="text" id="ncMCollegeSearch" class="mf-input" placeholder="输入学院名称搜索…" onfocus="onCollegeFocus()" oninput="onCollegeSearchInput()">
+              <div class="nc-combo-list" id="ncMCollegeOptions" style="display:none"></div>
+            </div>
+          </div>
+          <div class="mf-group">
+            <label>专业</label>
+            <select id="ncMMajor" class="mf-input" onchange="onMajorChange()">
+              <option value="">请先选择学院</option>
+            </select>
+          </div>
+          <div class="mf-group">
+            <label>层级</label>
+            <div class="nc-level-row">
+              <button type="button" class="nc-level-btn" onclick="_openLevelPicker()" id="ncMLevelBtn" disabled>点击选择具体层级</button>
+              <span class="nc-level-path" id="ncMTargetPath"></span>
+            </div>
+          </div>
+          <div class="mf-group">
+            <label>课程名称</label>
+            <input type="text" id="ncMName" class="mf-input" placeholder="如：理论力学">
+          </div>
+          <div class="mf-group">
+            <label>课程代码</label>
+            <input type="text" id="ncMCode" class="mf-input" placeholder="如：PHY210">
+            <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
+          </div>
+
+          <div class="nc-step">
+            <span class="nc-step-no">02</span>
+            <div class="nc-step-body">
+              <div class="nc-step-title">随附资料（选填）</div>
+              <div class="nc-step-sub">可只创建课程不传资料，审核通过后随时可上传</div>
+            </div>
+          </div>
+          <div class="nc-upload">
+            <div class="upload-mode-tabs">
+              <button class="um-tab um-tab-active" data-mode="file" data-pane="M" onclick="switchNewCourseUploadMode('file','M')">📁 上传文件</button>
+              <button class="um-tab" data-mode="text" data-pane="M" onclick="switchNewCourseUploadMode('text','M')">✏️ 文字录入</button>
+            </div>
+            <div id="ncMModeFile">
+              <div class="mf-group">
+                <label>文件</label>
+                <input type="file" id="ncMFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg">
+                <div class="mf-hint">支持多选文件 · 单个文件大小不超过 50MB</div>
+              </div>
+            </div>
+            <div id="ncMModeText" style="display:none">
+              <div class="mf-group">
+                <label>内容</label>
+                <textarea id="ncMText" class="mf-input mf-textarea mf-textarea-lg" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等（将保存为 .txt 文件）"></textarea>
+              </div>
+            </div>
+            <div class="mf-group">
+              <label>资料标题</label>
+              <input type="text" id="ncMTitle" class="mf-input" placeholder="留空则自动使用文件名">
+            </div>
+            <div class="mf-group">
+              <label>资料类型</label>
+              <select id="ncMMaterialType" class="mf-input"><option value="">请选择类型…</option></select>
+            </div>
+            <div class="mf-group">
+              <label>任课教师</label>
+              <input type="text" id="ncMTeacher" class="mf-input" placeholder="如：张老师">
+            </div>
+            <div class="mf-group">
+              <label>描述（选填）</label>
+              <textarea id="ncMDesc" class="mf-input mf-textarea" placeholder="简述资料内容..."></textarea>
+            </div>
+          </div>
+          <button class="nc-submit" onclick="submitCourseRequest('major')">提交新建课程申请</button>
+          <div id="ncMError" class="mf-error"></div>
+        </div>
+
+        <!-- 新建学院 / 专业 -->
+        <div id="ncMajorCollegePane" style="display:none">
+          <div class="nc-tip">
+            目前网站内的课程构建原则为通过培养方案直接生成完整的课程树。若您的学院或专业并没有被收录，请在北京师范大学课程中心下载 2023 版的培养方案（从 2026 级开始适用的培养方案产生的变动将由管理员做单独适配）。如果您希望我们在更新中加入新的学院，请将该学院内所有普通全日制本科生的培养方案打包发送至我们的邮箱（或微信）；如果您希望我们在已有学院中补齐漏掉的专业，也请将该专业的培养方案发送至我们的邮箱（或微信）。如果您是硕士研究生或博士研究生，开发者将十分乐意了解您的需求，请您直接联系我们，以协助开发面对研究生群体的模块。
+          </div>
+          <div class="nc-tip-actions">
+            <a class="nc-btn-primary" href="https://kczx.bnu.edu.cn/" target="_blank" rel="noopener noreferrer">前往课程中心</a>
+            <button type="button" class="nc-btn-secondary" onclick="submitToDeveloper()">提交至开发者</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=141"></script>
-<script src="/static/js/auth.js?v=141"></script>
-<script src="/static/js/profile.js?v=141"></script>
-<script src="/static/js/notifications.js?v=141"></script>
-<script src="/static/js/admin.js?v=141"></script>
-<script src="/static/js/views.js?v=141"></script>
-<script src="/static/js/explorer.js?v=141"></script>
-<script src="/static/js/app.js?v=141"></script>
+<script src="/static/js/utils.js?v=142"></script>
+<script src="/static/js/auth.js?v=142"></script>
+<script src="/static/js/profile.js?v=142"></script>
+<script src="/static/js/notifications.js?v=142"></script>
+<script src="/static/js/admin.js?v=142"></script>
+<script src="/static/js/views.js?v=142"></script>
+<script src="/static/js/explorer.js?v=142"></script>
+<script src="/static/js/newcourse.js?v=142"></script>
+<script src="/static/js/app.js?v=142"></script>
 
 </body>
 </html>

@@ -107,10 +107,12 @@
     // 同时加载待审核数据和当前用户资料（自动托管状态）
     Promise.all([
       api(url),
-      api('/api/auth/profile/')
+      api('/api/auth/profile/'),
+      api('/api/moderation/course-requests/')
     ]).then(function(results) {
       var list = results[0];
       var profile = results[1];
+      var courseRequests = results[2] || [];
       _pendingItems = {};
       (list || []).forEach(function(m) { _pendingItems[m.id] = m; });
 
@@ -146,8 +148,15 @@
       }
       html += '</div>';
 
+      // 新建课程申请区块（待审核 tab 顶部）
+      if (courseRequests.length) {
+        html += _courseRequestsSectionHtml(courseRequests);
+      }
+
       if (!list || list.length === 0) {
-        html += '<div class="admin-empty">🎉 没有待审核的资料</div>';
+        if (!courseRequests.length) {
+          html += '<div class="admin-empty">🎉 没有待审核的资料</div>';
+        }
         content.innerHTML = html;
         return;
       }
@@ -216,6 +225,133 @@
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  // ── 新建课程申请（v=142）──
+  // 卡片随后端「卡片消失规则」：pending 一直显示；approved 且随附文件仍在待审 → 等待态
+  function _courseRequestsSectionHtml(requests) {
+    var pendingCount = requests.filter(function(r) { return r.status === 'pending'; }).length;
+    var approvable = requests.filter(function(r) { return r.status === 'pending' && !r.is_own; });
+    var html = '<div class="pc-section-label cr-section-label">📚 新建课程申请' +
+      (pendingCount ? '<span class="cr-count">' + pendingCount + '</span>' : '') + '</div>';
+    if (approvable.length) {
+      html += '<div style="margin:0 0 10px"><button class="admin-btn admin-btn-approve" onclick="batchApproveCourseRequests(this)">⚡ 一键通过全部申请</button></div>';
+    }
+    html += '<div class="admin-pending-list">';
+    requests.forEach(function(r) { html += _courseRequestCardHtml(r); });
+    html += '</div>';
+    html += '<div class="pc-section-divider"></div>';
+    return html;
+  }
+
+  function _courseRequestCardHtml(req) {
+    var isGeneral = req.course_type === 'general';
+    var files = (req.materials || []).map(function(m) {
+      var stCls = m.review_status === 'approved' ? 'cr-st-approved'
+        : m.review_status === 'rejected' ? 'cr-st-rejected' : 'cr-st-pending';
+      var stLabel = m.review_status === 'approved' ? '已通过'
+        : m.review_status === 'rejected' ? '已驳回' : '待审';
+      var size = m.file_size ? formatFileSize(m.file_size) : '';
+      return '<div class="cr-file">' +
+        '<span class="cr-file-name">📄 ' + esc(m.title) + (size ? ' <span class="cr-file-size">' + size + '</span>' : '') + '</span>' +
+        '<span class="cr-file-status ' + stCls + '">' + stLabel + '</span>' +
+      '</div>';
+    }).join('');
+
+    var meta = '<span>👤 ' + esc(req.uploader_name) + '</span>' +
+      '<span>📅 ' + esc(req.created_at) + '</span>';
+    if (req.college_name) meta += '<span>🏫 ' + esc(req.college_name) + '</span>';
+    if (req.assigned_moderator_name) meta += '<span>↗ ' + esc(req.assigned_moderator_name) + '</span>';
+
+    var body = '<div class="cr-path">📂 <span>' + esc(req.target_path || '（目标位置缺失）') + '</span></div>';
+    if (files) {
+      body += '<div class="cr-files">' +
+        '<div class="cr-files-label">随附文件（' + (req.materials || []).length + '）</div>' + files +
+      '</div>';
+    }
+
+    var actions = '';
+    if (req.is_own) {
+      actions = '<div class="pc-own">你的申请，等待其他审核员处理</div>';
+    } else if (req.status === 'pending') {
+      actions = '<div class="pc-actions">' +
+        '<button class="admin-btn admin-btn-approve" onclick="approveCourseRequest(' + req.id + ', this)">✓ 批准并创建文件夹</button>' +
+        '<button class="admin-btn admin-btn-reject" onclick="showCourseRequestReject(' + req.id + ')">✗ 驳回</button>' +
+      '</div>';
+    } else if (req.is_waiting_files) {
+      actions = '<div class="cr-waiting">⏳ 申请已批准，随附文件审核完毕后自动消失</div>';
+    }
+
+    var waitingTag = req.is_waiting_files ? '<span class="cr-waiting-tag">⏳ 等待随附文件</span>' : '';
+
+    return '<div class="admin-pending-card cr-card' + (req.is_waiting_files ? ' cr-waiting-card' : '') + '">' +
+      '<div class="cr-head">' +
+        '<span class="cr-tag ' + (isGeneral ? 'cr-tag-general' : 'cr-tag-major') + '">' + (isGeneral ? '通识课' : '专业课') + '</span>' +
+        '<span class="cr-title">' + esc(req.course_name) + '</span>' +
+        '<span class="cr-code">' + esc(req.course_code) + '</span>' +
+        waitingTag +
+      '</div>' +
+      '<div class="cr-meta">' + meta + '</div>' +
+      body +
+      actions +
+    '</div>';
+  }
+
+  function approveCourseRequest(id, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    api('/api/moderation/course-requests/' + id + '/approve/', { method: 'POST' }).then(function() {
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('操作失败：' + (err && err.message));
+      renderAdminPending(document.getElementById('adminContent'));
+    });
+  }
+
+  function showCourseRequestReject(id) {
+    var old = document.querySelector('.admin-reject-overlay');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.className = 'admin-reject-overlay';
+    overlay.innerHTML =
+      '<div class="admin-reject-dialog">' +
+        '<h3>驳回新建课程申请</h3>' +
+        '<textarea id="rejectNotes" placeholder="请填写驳回理由（必填）"></textarea>' +
+        '<div class="ar-error" id="rejectError">驳回理由不能为空</div>' +
+        '<div class="ar-actions">' +
+          '<button class="admin-btn admin-btn-reject" onclick="confirmCourseRequestReject(' + id + ')">确认驳回</button>' +
+          '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
+    lockScroll();
+    setTimeout(function() { document.getElementById('rejectNotes').focus(); }, 100);
+  }
+
+  function confirmCourseRequestReject(id) {
+    var notes = document.getElementById('rejectNotes').value.trim();
+    var errEl = document.getElementById('rejectError');
+    if (!notes) { if (errEl) errEl.style.display = 'block'; return; }
+    if (errEl) errEl.style.display = 'none';
+    api('/api/moderation/course-requests/' + id + '/reject/', { method: 'POST', body: { notes: notes } }).then(function() {
+      var overlay = document.querySelector('.admin-reject-overlay');
+      _removeOverlay(overlay);
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('操作失败：' + err.message);
+    });
+  }
+
+  function batchApproveCourseRequests(btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 处理中…'; }
+    api('/api/moderation/course-requests/batch-approve/', { method: 'POST' }).then(function() {
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('批量过审失败：' + err.message);
+      renderAdminPending(document.getElementById('adminContent'));
     });
   }
 
