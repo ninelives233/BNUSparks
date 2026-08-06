@@ -101,6 +101,11 @@ def _check_category_scope(user, cat):
     related_courses = _get_courses_in_category(cat)
 
     if profile.role == UserProfile.Role.SUB_MODERATOR:
+        # 学院一级节点（根的直属子节点）：小版主同样不能编辑（除非显式分配）
+        college_node = _find_college_node(cat)
+        if college_node is not None and college_node.pk == cat.pk:
+            if not profile.moderated_sections.filter(id=cat.pk).exists():
+                return False
         for section in profile.moderated_sections.all():
             section_courses = _get_courses_in_category(section)
             for rc in related_courses:
@@ -182,6 +187,38 @@ def _find_college_node(cat):
     return chain[-2]  # 根的直属子节点
 
 
+def _can_create_under(user, cat):
+    """判断用户是否可以在 cat 下创建子文件夹。
+
+    与编辑节点本身（_check_category_scope）是两回事：
+    - 版主可在「所管辖学院的一级节点」下新建专业文件夹，但**不能**重命名/移动/
+      删除该学院节点本身（那由 _check_category_scope 拦截，保证学院卡不可编辑）。
+    - 其余场景（学院下级、通识课、小版主板块内）复用 _check_category_scope。
+    """
+    profile = _get_or_create_profile(user)
+    if profile.role == UserProfile.Role.SUPER_ADMIN:
+        return True
+    if profile.role == UserProfile.Role.USER:
+        return False
+    if cat.parent is None:
+        return False  # 根下新建（学院）仅 super_admin
+
+    if profile.role == UserProfile.Role.MODERATOR:
+        # 专业课学院一级节点：属管辖学院 → 允许在其下新建
+        college_node = _find_college_node(cat)
+        if college_node is not None and college_node.pk == cat.pk:
+            if cat.parent.name == '专业课':
+                ccourses = _get_courses_in_category(college_node)
+                if any(
+                    rc.college_id
+                    and profile.managed_majors.filter(id=rc.college_id).exists()
+                    for rc in ccourses
+                ):
+                    return True
+
+    return _check_category_scope(user, cat)
+
+
 def _managed_college_subtree_ids(college_ids):
     """返回版主管辖学院子树内的全部 CourseCategory id（含学院一级节点自身）。
 
@@ -237,9 +274,13 @@ def api_folder_create(request):
 
     if parent_id:
         parent = get_object_or_404(CourseCategory, id=parent_id)
-        if not _check_category_scope(request.user, parent):
+        if not _can_create_under(request.user, parent):
             return _err("无权在该目录下创建文件夹", 403)
     else:
+        # 根下新建（学院一级节点）仅 super_admin
+        profile = _get_or_create_profile(request.user)
+        if profile.role != UserProfile.Role.SUPER_ADMIN:
+            return _err("无权在根目录下创建文件夹", 403)
         parent = None
 
     course = None
