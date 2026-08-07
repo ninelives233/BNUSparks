@@ -96,6 +96,12 @@
   var _pendingHidePeerApproved = true;
   var _highlightDisputeMaterialId = null;
   var _pendingItems = {}; // {id: 原始待审核项} — 详情弹窗直接取原始数据（file_size 为字节）
+  var _pendingType = 'file'; // 审核类型分段控制器：'file' 文件上传 | 'course' 课程创建
+
+  function switchPendingType(type) {
+    _pendingType = type;
+    renderAdminPending(document.getElementById('adminContent'));
+  }
 
   function renderAdminPending(content) {
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
@@ -127,36 +133,47 @@
         '</div>';
       }
 
-      // 工具条：下级板块切换 + 一键过审
+      // 审核类型分段控制器（文件上传 / 课程创建）
       var isMod = currentUser && (currentUser.role === 'moderator' || currentUser.role === 'super_admin');
-      var hasSubItems = list && list.some(function(m) { return m.is_subordinate_handled; });
-      html += '<div class="pc-toolbar">';
+      var fileCount = (list || []).length;
+      html += '<div class="pc-type-bar">' +
+        '<span class="pc-type-label">审核类型</span>' +
+        '<div class="pc-seg" role="tablist">' +
+          '<button class="pc-seg-btn' + (_pendingType === 'file' ? ' active' : '') + '" data-type="file" onclick="switchPendingType(\'file\')">📄 文件上传<span class="pc-seg-count">' + fileCount + '</span></button>' +
+          '<button class="pc-seg-btn' + (_pendingType === 'course' ? ' active' : '') + '" data-type="course" onclick="switchPendingType(\'course\')">✏️ 课程创建<span class="pc-seg-count">' + courseRequests.length + '</span></button>' +
+        '</div>';
       if (isMod) {
-        html += '<label class="pc-toolbar-toggle" title="启用后显示下级版主管辖板块的待审核资料">' +
-          '<input type="checkbox" ' + (_pendingIncludeSub ? 'checked' : '') + ' onchange="togglePendingIncludeSub(this.checked)"> 显示下级板块' +
-        '</label>' +
-        '<label class="pc-toolbar-toggle" title="默认隐藏同僚已通过的记录，勾选后显示">' +
-          '<input type="checkbox" ' + (!_pendingHidePeerApproved ? 'checked' : '') + ' onchange="togglePendingHidePeerApproved(!this.checked)"> 显示同僚已通过' +
-        '</label>';
-      } else {
-        html += '<span></span>';
-      }
-      // 一键过审（仅当有待审核且非自己的上传时显示）
-      var hasApprovable = list && list.some(function(m) { return !m.is_peer_approved && !m.is_own; });
-      if (hasApprovable) {
-        html += '<button class="admin-btn admin-btn-approve" onclick="batchApprovePending(this)">⚡ 一键通过全部</button>';
+        html += '<span class="pc-seg-right">' +
+          '<label class="pc-toolbar-toggle" title="启用后显示下级版主管辖板块的待审核资料">' +
+            '<input type="checkbox" ' + (_pendingIncludeSub ? 'checked' : '') + ' onchange="togglePendingIncludeSub(this.checked)"> 显示下级板块' +
+          '</label>' +
+          '<label class="pc-toolbar-toggle" title="默认隐藏同僚已通过的记录，勾选后显示">' +
+            '<input type="checkbox" ' + (!_pendingHidePeerApproved ? 'checked' : '') + ' onchange="togglePendingHidePeerApproved(!this.checked)"> 显示同僚已通过' +
+          '</label>' +
+        '</span>';
       }
       html += '</div>';
 
-      // 新建课程申请区块（待审核 tab 顶部）
-      if (courseRequests.length) {
-        html += _courseRequestsSectionHtml(courseRequests);
+      // ── 课程创建审核视图 ──
+      if (_pendingType === 'course') {
+        if (courseRequests.length) {
+          html += _courseRequestsSectionHtml(courseRequests);
+        } else {
+          html += '<div class="admin-empty">🎉 没有待审核的课程创建申请</div>';
+        }
+        content.innerHTML = html;
+        return;
+      }
+
+      // ── 文件上传审核视图 ──
+      // 一键过审（仅当有待审核且非自己的上传时显示）
+      var hasApprovable = list && list.some(function(m) { return !m.is_peer_approved && !m.is_own; });
+      if (hasApprovable) {
+        html += '<div class="pc-toolbar"><button class="admin-btn admin-btn-approve" onclick="batchApprovePending(this)">⚡ 一键通过全部</button></div>';
       }
 
       if (!list || list.length === 0) {
-        if (!courseRequests.length) {
-          html += '<div class="admin-empty">🎉 没有待审核的资料</div>';
-        }
+        html += '<div class="admin-empty">🎉 没有待审核的资料</div>';
         content.innerHTML = html;
         return;
       }
@@ -228,32 +245,32 @@
     });
   }
 
-  // ── 新建课程申请（v=142）──
+  // ── 新建课程申请（v=142，v=145 改版：分段控制器「课程创建」分类下展示）──
   // 卡片随后端「卡片消失规则」：pending 一直显示；approved 且随附文件仍在待审 → 等待态
   function _courseRequestsSectionHtml(requests) {
-    var pendingCount = requests.filter(function(r) { return r.status === 'pending'; }).length;
     var approvable = requests.filter(function(r) { return r.status === 'pending' && !r.is_own; });
-    var html = '<div class="pc-section-label cr-section-label">📚 新建课程申请' +
-      (pendingCount ? '<span class="cr-count">' + pendingCount + '</span>' : '') + '</div>';
+    var html = '';
     if (approvable.length) {
       html += '<div style="margin:0 0 10px"><button class="admin-btn admin-btn-approve" onclick="batchApproveCourseRequests(this)">⚡ 一键通过全部申请</button></div>';
     }
     html += '<div class="admin-pending-list">';
     requests.forEach(function(r) { html += _courseRequestCardHtml(r); });
     html += '</div>';
-    html += '<div class="pc-section-divider"></div>';
     return html;
   }
 
   function _courseRequestCardHtml(req) {
     var isGeneral = req.course_type === 'general';
-    var files = (req.materials || []).map(function(m) {
+    var mats = req.materials || [];
+    var files = mats.map(function(m, idx) {
       var stCls = m.review_status === 'approved' ? 'cr-st-approved'
         : m.review_status === 'rejected' ? 'cr-st-rejected' : 'cr-st-pending';
       var stLabel = m.review_status === 'approved' ? '已通过'
         : m.review_status === 'rejected' ? '已驳回' : '待审';
       var size = m.file_size ? formatFileSize(m.file_size) : '';
+      var branch = idx === mats.length - 1 ? '└─' : '├─';
       return '<div class="cr-file">' +
+        '<span class="cr-file-branch">' + branch + '</span>' +
         '<span class="cr-file-name">📄 ' + esc(m.title) + (size ? ' <span class="cr-file-size">' + size + '</span>' : '') + '</span>' +
         '<span class="cr-file-status ' + stCls + '">' + stLabel + '</span>' +
       '</div>';
@@ -267,7 +284,8 @@
     var body = '<div class="cr-path">📂 <span>' + esc(req.target_path || '（目标位置缺失）') + '</span></div>';
     if (files) {
       body += '<div class="cr-files">' +
-        '<div class="cr-files-label">随附文件（' + (req.materials || []).length + '）</div>' + files +
+        '<div class="cr-files-label">随附文件（' + mats.length + '）</div>' +
+        '<div class="cr-files-list">' + files + '</div>' +
       '</div>';
     }
 
@@ -280,7 +298,7 @@
         '<button class="admin-btn admin-btn-reject" onclick="showCourseRequestReject(' + req.id + ')">✗ 驳回</button>' +
       '</div>';
     } else if (req.is_waiting_files) {
-      actions = '<div class="cr-waiting">⏳ 申请已批准，随附文件审核完毕后自动消失</div>';
+      actions = '<div class="cr-waiting">⏳ 申请已批准，课程文件夹已创建；待随附文件全部审核通过后本申请自动消失</div>';
     }
 
     var waitingTag = req.is_waiting_files ? '<span class="cr-waiting-tag">⏳ 等待随附文件</span>' : '';

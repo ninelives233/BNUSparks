@@ -2122,7 +2122,7 @@
   .pc-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     margin-bottom: 12px;
     gap: 8px;
     flex-wrap: wrap;
@@ -2140,6 +2140,84 @@
     width: 14px;
     height: 14px;
     cursor: pointer;
+  }
+
+  /* ── 审核类型分段控制器（v=145）── */
+  .pc-type-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+  }
+  .pc-type-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  .pc-seg {
+    display: inline-flex;
+    background: oklch(0.93 0.005 60);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    gap: 2px;
+  }
+  .pc-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .pc-seg-btn:hover {
+    background: oklch(0.9 0.005 60);
+    color: var(--ink);
+  }
+  .pc-seg-btn.active {
+    background: var(--raised);
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: 0 1px 3px oklch(0.3 0.01 60 / 0.12);
+  }
+  .pc-seg-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+    background: oklch(0.9 0.005 60);
+  }
+  .pc-seg-btn.active .pc-seg-count {
+    color: var(--accent);
+    background: oklch(0.93 0.05 60);
+  }
+  .pc-seg-right {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 640px) {
+    .pc-seg-right { margin-left: 0; }
   }
 
   /* ── 通知中心完整页 ── */
@@ -3076,7 +3154,7 @@
   margin-bottom: 4px;
 }
 
-/* ── 新建课程申请卡片（v=142）── */
+/* ── 新建课程申请卡片（v=142 / v=145 放大 + 随附文件层级）── */
 .cr-section-label { display: flex; align-items: center; gap: 8px; }
 .cr-count {
   display: inline-flex; align-items: center; justify-content: center;
@@ -3086,49 +3164,66 @@
 }
 .cr-card {
   border-left: 3px solid oklch(0.62 0.12 60);
+  padding: 20px 24px;
+  gap: 12px;
+  background: oklch(1 0 0 / 0.75);
 }
 .cr-card.cr-waiting-card {
   border-left: 3px solid oklch(0.6 0.12 265);
+  background: oklch(0.985 0.006 265 / 0.35);
 }
-.cr-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cr-tag {
-  display: inline-block; font-size: 0.7rem; padding: 1px 8px; border-radius: 4px;
+  display: inline-block; font-size: 0.7rem; padding: 2px 10px; border-radius: 5px;
   font-weight: 600; flex-shrink: 0;
 }
 .cr-tag-general { background: oklch(0.93 0.06 85 / 0.4); color: oklch(0.52 0.13 45); }
 .cr-tag-major  { background: oklch(0.93 0.05 250 / 0.4); color: oklch(0.45 0.1 250); }
-.cr-title { font-weight: 600; font-size: 1rem; color: var(--ink); }
+.cr-title { font-weight: 700; font-size: 1.1rem; color: var(--ink); }
 .cr-code {
   font-family: ui-monospace, "SF Mono", monospace; font-size: 0.76rem;
   color: var(--ink-faint); background: var(--surface);
-  border: 1px solid var(--border-light); padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--border-light); padding: 2px 8px; border-radius: 4px;
 }
 .cr-waiting-tag {
   display: inline-block; font-size: 0.7rem; padding: 1px 8px; border-radius: 4px;
   background: oklch(0.94 0.03 250 / 0.5); color: oklch(0.5 0.1 250);
 }
-.cr-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--ink-faint); }
+.cr-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.84rem; color: var(--ink-faint); }
 .cr-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .cr-path {
   display: flex; align-items: center; gap: 6px;
-  font-size: 0.82rem; color: var(--ink);
+  font-size: 0.84rem; color: var(--ink);
   background: oklch(0.96 0.015 60 / 0.35);
   border: 1px dashed oklch(0.7 0.06 60 / 0.4);
-  border-radius: 6px; padding: 6px 10px;
+  border-radius: 6px; padding: 8px 12px;
   overflow: hidden;
 }
 .cr-path span {
   font-family: ui-monospace, "SF Mono", monospace;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cr-files { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-.cr-files-label { font-size: 0.74rem; font-weight: 600; color: var(--ink-faint); }
-.cr-file {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;
-  background: oklch(0.98 0.005 250 / 0.4);
+.cr-files {
+  display: flex; flex-direction: column;
+  margin-top: 4px; padding: 10px 12px;
+  background: oklch(0.98 0.005 250 / 0.35);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
 }
-.cr-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cr-files-label { font-size: 0.74rem; font-weight: 600; color: var(--ink-faint); margin-bottom: 6px; }
+.cr-files-list { display: flex; flex-direction: column; gap: 3px; }
+.cr-file {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.82rem; padding: 5px 8px; border-radius: 6px;
+  background: oklch(0.995 0.003 60 / 0.6);
+}
+.cr-file-branch {
+  font-family: ui-monospace, "SF Mono", monospace;
+  color: oklch(0.6 0.02 60);
+  flex-shrink: 0;
+  font-size: 0.78rem;
+}
+.cr-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .cr-file-size { font-size: 0.7rem; color: var(--ink-faint); margin-left: 4px; }
 .cr-file-status { flex-shrink: 0; font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; font-weight: 500; }
 .cr-st-pending  { background: oklch(0.93 0.06 85 / 0.4); color: oklch(0.52 0.13 45); }
