@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 
 from .utils import (
-    _err, _ok, _get_or_create_profile, require_login,
+    _err, _ok, _get_or_create_profile, require_login, _safe_int,
     Favorite, Material,
 )
 from ..models import Course, CourseFavorite
@@ -60,7 +60,7 @@ def api_my_favorites(request):
     if request.method != "GET":
         return _err("仅支持 GET", 405)
 
-    page = int(request.GET.get("page", 1))
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
     page_size = int(request.GET.get("page_size", 20))
     offset = (page - 1) * page_size
 

@@ -29,6 +29,8 @@ class UserProfile(models.Model):
     daily_download_count = models.IntegerField("今日已下载", default=0)
     last_download_date = models.DateField("最后下载日期", null=True, blank=True)
     avatar = models.ImageField("头像", upload_to="avatars/", blank=True, null=True)
+    token_version = models.IntegerField("JWT 令牌版本", default=0,
+        help_text="改密/重置后 +1，使旧 JWT 立即失效（P2.5）")
 
     # 公开资料字段（Iter 7）
     contact_email = models.EmailField("联系邮箱", blank=True, default="")

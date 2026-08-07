@@ -18,7 +18,7 @@ from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
     _get_moderated_material_qs, _get_subordinate_covered_course_ids,
     _get_courses_in_category, _check_moderator_access,
-    _get_visible_deletion_records, require_role,
+    _get_visible_deletion_records, require_role, _safe_int,
     _get_category_preload,
     UserProfile, Material, CourseCategory, Notification,
     ReviewComment, DeletionRecord, Course, _bump_user_public_gen,
@@ -311,8 +311,8 @@ def api_moderation_history(request):
 
     qs = qs.order_by(F("reviewed_at").desc(nulls_first=True))
 
-    page = int(request.GET.get("page", 1))
-    per_page = int(request.GET.get("per_page", 20))
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
+    per_page = min(_safe_int(request.GET.get("per_page"), 20, lo=1), 100)
     page = max(1, page)
     per_page = min(100, max(1, per_page))
     total = qs.count()
@@ -368,8 +368,8 @@ def api_moderation_stats(request):
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_deletion_records(request):
     """GET /api/moderation/deletions/ — 删除记录列表"""
-    page = int(request.GET.get("page", 1))
-    per_page = int(request.GET.get("per_page", 20))
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
+    per_page = min(_safe_int(request.GET.get("per_page"), 20, lo=1), 100)
     page = max(1, page)
     per_page = min(100, max(1, per_page))
 

@@ -454,7 +454,7 @@
       data.materials.forEach(function(m) {
         // 点击直接打开文件详情（修复此前 showHome();navToLast 落到首页）
         var stamp = (m.file_type || '').replace(/^\./, '').toUpperCase();
-        html += '<div class="hc-item user-public-file-item" style="cursor:pointer" onclick="event.preventDefault();showFileDetail({id:' + m.id + ',title:\'' + esc(m.title) + '\',course_code:\'' + esc(m.course_code) + '\',course_name:\'' + esc(m.course_name) + '\'})">' +
+        html += '<div class="hc-item user-public-file-item" style="cursor:pointer" onclick="event.preventDefault();showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})">' +
           '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div>' +
           '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + m.created_at + ' · ' + m.download_count + ' 次下载</div></div>' +
           '<span class="user-file-type-stamp">' + (stamp ? esc(stamp) : '文件') + '</span></div>';
@@ -659,7 +659,7 @@
       var html = '<div class="so-results-list">';
       courses.forEach(function(c) {
         var typeLabel = c.course_type === 'general' ? '通识课' : '专业课';
-        html += '<a href="#" class="so-result-item" onclick="event.preventDefault();_removeOverlay(this.closest(\'.search-overlay\'));showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + esc(c.code) + '\')">' +
+        html += '<a href="#" class="so-result-item" onclick="event.preventDefault();_removeOverlay(this.closest(\'.search-overlay\'));showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(c.code) + '\')">' +
           '<span class="so-ri-name">' + esc(c.name) + '</span>' +
           '<span class="so-ri-code">' + esc(c.code) + ' · ' + typeLabel + '</span>' +
           '<span class="so-ri-arrow">→</span></a>';

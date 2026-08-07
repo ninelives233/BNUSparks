@@ -21,7 +21,8 @@ from django.utils import timezone
 from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
     _check_moderator_access, _get_courses_in_category,
-    _get_category_preload,
+    _get_category_preload, _safe_dir_name, _get_visible_deletion_records,
+    _safe_int,
     require_login, require_role,
     UserProfile, Material, Course, CourseCategory, College,
     Notification, FolderOperation, DeletionRecord,
@@ -414,8 +415,8 @@ def api_operations(request):
         else:
             qs = qs.none()
 
-    page = int(request.GET.get("page", 1))
-    per_page = min(int(request.GET.get("per_page", 20)), 100)
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
+    per_page = min(_safe_int(request.GET.get("per_page"), 20, lo=1), 100)
     total = qs.count()
     total_pages = (total + per_page - 1) // per_page if total > 0 else 1
     start = (page - 1) * per_page
@@ -457,6 +458,10 @@ def api_folder_restore(request, operation_id):
     op = get_object_or_404(FolderOperation, id=operation_id)
     if op.is_restored:
         return _err("该操作已撤销", 400)
+    # 作用域校验：与列表端 can_restore 规则一致——仅超管或操作者本人可撤销
+    profile = _get_or_create_profile(request.user)
+    if profile.role != UserProfile.Role.SUPER_ADMIN and op.user_id != request.user.id:
+        return _err("无权撤销该操作", 403)
     if timezone.now() - op.created_at > timedelta(hours=48):
         return _err("已超过48小时，无法撤销", 400)
     try:
@@ -504,6 +509,12 @@ def api_restore_deletion(request, deletion_id):
         return _err("该文件已恢复", 400)
     if timezone.now() - dr.deleted_at > timedelta(hours=48):
         return _err("已超过48小时，无法恢复", 400)
+    # 作用域校验：与列表端 _get_visible_deletion_records 一致，防止越权恢复管辖外记录
+    profile = _get_or_create_profile(request.user)
+    if profile.role != UserProfile.Role.SUPER_ADMIN:
+        visible_ids = set(_get_visible_deletion_records(request.user).values_list("id", flat=True))
+        if dr.id not in visible_ids:
+            return _err("无权恢复该记录", 403)
     try:
         body = json.loads(request.body) if request.body else {}
     except Exception:
@@ -737,6 +748,13 @@ def api_folder_set_course(request, folder_id):
     action_id = body.get("action_id", "")
     if not course_code:
         return _err("课程代码不能为空")
+
+    # 课程代码既作目录名又作 Course.code：拒绝一切路径穿越字符（/ \ .. 及空白），
+    # 防止重命名后 file_path 前缀带 .. 逃逸出 MEDIA_ROOT
+    safe_code = _safe_dir_name(course_code)
+    if safe_code != course_code or "/" in course_code or "\\" in course_code or ".." in course_code:
+        return _err("课程代码包含非法字符（仅允许字母、数字、-、_、*）", 400)
+    course_code = safe_code
 
     # 阶段 1：只查询→返回情况（前端未选 action 时）
     if not action_id:

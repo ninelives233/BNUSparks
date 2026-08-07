@@ -18,6 +18,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .utils import (
     _err, _ok, _get_or_create_profile, _strip_exif, _create_notification,
     _get_category_preload, require_login, require_role,
+    _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
 )
 from ..models import (
     Course, CourseCategory, CourseCreationRequest, UserProfile, Material,
@@ -220,7 +221,10 @@ def api_course_request_upload_file(request, request_id):
         title = Path(uploaded_file.name).stem
 
     ext = Path(uploaded_file.name).suffix
-    safe_name = f"{uuid4().hex[:12]}_{title[:40]}{ext}"
+    if _blocked_upload_ext(ext):
+        return _err("该文件类型不允许上传（可能包含可执行/活动内容）", 400)
+    clean_title = _sanitize_filename_part(title) or _sanitize_filename_part(Path(uploaded_file.name).stem) or "file"
+    safe_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
     save_dir = Path(settings.MEDIA_ROOT) / "requests" / f"req_{req.id}"
     save_dir.mkdir(parents=True, exist_ok=True)
     with open(save_dir / safe_name, "wb") as f:
@@ -366,8 +370,9 @@ def _approve_request(req, reviewer):
             old = Path(settings.MEDIA_ROOT) / m.file_path
             if old.exists():
                 ext = Path(m.file_name).suffix
-                new_name = f"{uuid4().hex[:12]}_{m.title[:40]}{ext}"
-                new_dir = Path(settings.MEDIA_ROOT) / course.code
+                clean_title = _sanitize_filename_part(m.title) or "file"
+                new_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
+                new_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(course.code)
                 new_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(old), str(new_dir / new_name))
                 m.file_path = f"{course.code}/{new_name}"

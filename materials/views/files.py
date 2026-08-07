@@ -6,9 +6,12 @@ file-upload, upload-text, download-token, download, delete
 
 import json
 import os
+import re
+import mimetypes
 import hashlib
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 try:
     from pypdf import PdfReader, PdfWriter
@@ -19,7 +22,7 @@ except ImportError:
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import F
@@ -30,6 +33,7 @@ from .utils import (
     _strip_exif, _check_auto_approve, _check_download_quota,
     _check_moderator_access, _calculate_review_assignment,
     _create_notification, _user_can_edit_material,
+    _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
     require_login,
     UserProfile, Course, Material, Notification,
     DownloadRecord, DeletionRecord, CourseCategory,
@@ -81,9 +85,13 @@ def api_file_upload(request):
             course = courses.first()
 
     from uuid import uuid4
+    course_dir = _safe_dir_name(course_code)
     ext = Path(uploaded_file.name).suffix
-    safe_name = f"{uuid4().hex[:12]}_{title[:40]}{ext}"
-    save_dir = Path(settings.MEDIA_ROOT) / course_code
+    if _blocked_upload_ext(ext):
+        return _err("该文件类型不允许上传（可能包含可执行/活动内容）", 400)
+    clean_title = _sanitize_filename_part(title) or _sanitize_filename_part(Path(uploaded_file.name).stem) or "file"
+    safe_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
+    save_dir = Path(settings.MEDIA_ROOT) / course_dir
     save_dir.mkdir(parents=True, exist_ok=True)
 
     with open(save_dir / safe_name, "wb") as f:
@@ -112,7 +120,7 @@ def api_file_upload(request):
         teacher=teacher,
         material_type_id=int(material_type_id) if material_type_id and material_type_id.isdigit() else None,
         file_name=uploaded_file.name,
-        file_path=f"{course_code}/{safe_name}",
+        file_path=f"{course_dir}/{safe_name}",
         file_size=file_size,
         uploader=request.user,
         uploader_name=request.user.first_name or request.user.username,
@@ -204,8 +212,10 @@ def api_file_upload_text(request):
             course = courses.first()
 
     from uuid import uuid4
-    safe_name = f"text_{uuid4().hex[:12]}_{title[:40]}.txt"
-    save_dir = Path(settings.MEDIA_ROOT) / course_code
+    course_dir = _safe_dir_name(course_code)
+    clean_title = _sanitize_filename_part(title) or "text"
+    safe_name = f"text_{uuid4().hex[:12]}_{clean_title}.txt"
+    save_dir = Path(settings.MEDIA_ROOT) / course_dir
     save_dir.mkdir(parents=True, exist_ok=True)
 
     (save_dir / safe_name).write_text(content, encoding="utf-8")
@@ -230,7 +240,7 @@ def api_file_upload_text(request):
         teacher=teacher,
         material_type_id=int(material_type_id) if material_type_id and material_type_id.isdigit() else None,
         file_name=safe_name,
-        file_path=f"{course_code}/{safe_name}",
+        file_path=f"{course_dir}/{safe_name}",
         file_size=file_size,
         uploader=request.user,
         uploader_name=request.user.first_name or request.user.username,
@@ -281,8 +291,87 @@ def api_download_token(request, file_id):
     return _ok({"token": token})
 
 
+# ═══════════════════════════════════════════════════════════════
+# X-Accel-Redirect 文件服务（P3.1）
+# 生产（USE_X_ACCEL=True）：Django 完成全部鉴权/配额/计数后返回 bodyless
+#   HttpResponse + X-Accel-Redirect，由 nginx internal location 直接流式送文件，
+#   释放 gunicorn 线程；本地/测试（USE_X_ACCEL=False）回退 Django FileResponse。
+# ═══════════════════════════════════════════════════════════════
+
+# 可内联预览的 MIME（其余一律 attachment，防止 .html/.svg 等源内执行）
+_INLINE_SAFE_MIME = {
+    "application/pdf", "image/jpeg", "image/png", "image/gif",
+    "image/webp", "image/bmp",
+}
+
+
+def _content_disposition_header(filename, attachment=True):
+    """RFC 5987 Content-Disposition：ASCII filename= 兜底 + filename*=UTF-8''（中文）。"""
+    filename = (filename or "download").replace('"', '').replace(';', '')
+    ascii_name = re.sub(r'[^\x20-\x7e]', '_', filename) or "download"
+    kind = "attachment" if attachment else "inline"
+    hdr = f'{kind}; filename="{ascii_name}"'
+    try:
+        hdr += f"; filename*=UTF-8''{quote(filename.encode('utf-8'), safe='')}"
+    except Exception:
+        pass
+    return hdr
+
+
+def _serve_file_response(request, abs_path, *, display_filename, inline=False, preview_cache=False):
+    """统一文件出口：X-Accel 模式 → nginx internal 转发；否则 FileResponse。
+
+    preview_cache=True：文件在 MEDIA_ROOT 上级（data/.pdf_cache/），走 /protected-preview/。
+    防越界：abs_path 必须 resolve 后仍位于对应根目录内，否则 400。
+    """
+    abs_path = Path(abs_path)
+    disk_name = abs_path.name
+    ctype = mimetypes.guess_type(disk_name)[0] or "application/octet-stream"
+    # 内联预览只允许 PDF/图片；可执行/活动内容一律降级为下载式 MIME
+    if inline and ctype not in _INLINE_SAFE_MIME:
+        ctype = "application/octet-stream"
+
+    if getattr(settings, "USE_X_ACCEL", False):
+        root = Path(settings.MEDIA_ROOT).parent if preview_cache else Path(settings.MEDIA_ROOT)
+        prefix = "/protected-preview/" if preview_cache else "/protected/"
+        try:
+            rel = abs_path.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            return _err("非法文件路径", 400)  # 越界（含 .. 逃逸）即拒绝
+        resp = HttpResponse()
+        resp["X-Accel-Redirect"] = prefix + rel
+        resp["Content-Type"] = ctype
+        resp["Content-Disposition"] = _content_disposition_header(display_filename, attachment=not inline)
+        resp["X-Content-Type-Options"] = "nosniff"
+        if inline:
+            resp["X-Frame-Options"] = "SAMEORIGIN"
+        return resp
+
+    # 本地/测试：Django 直接流式发送（行为与重构前一致）
+    resp = FileResponse(open(abs_path, "rb"), as_attachment=not inline,
+                        filename=display_filename, content_type=ctype)
+    if inline:
+        resp["X-Frame-Options"] = "SAMEORIGIN"
+    return resp
+
+
+def _increment_download(user, material, file_id):
+    """下载计数（F() 原子递增）+ 下载留痕，同步执行（X-Accel 前完成）。"""
+    Material.objects.filter(id=file_id).update(download_count=F('download_count') + 1)
+    try:
+        DownloadRecord.objects.create(
+            user=user, material=material,
+            course_code=material.course.code if material.course_id else "",
+            course_name=material.course.name if material.course_id else "",
+            material_title=material.title,
+            file_name=material.file_name,
+        )
+    except Exception:
+        pass
+
+
 def api_file_download(request, file_id):
-    """GET /api/files/<id>/download — 支持 ?preview=1 内联预览"""
+    """GET /api/files/<id>/download — 支持 ?preview=1 内联预览（X-Accel）"""
     material = get_object_or_404(Material, id=file_id)
     file_path = Path(settings.MEDIA_ROOT) / material.file_path
 
@@ -310,23 +399,20 @@ def api_file_download(request, file_id):
         except Exception:
             return _err("该资料未通过审核，暂不可下载", 403)
 
+    display = material.file_name or material.title
+
     is_preview = request.GET.get("preview") == "1"
     if is_preview:
-        # PDF 预览：支持 max_pages=N 裁剪为前 N 页（节省带宽 + 客户端资源）
-        # 切割结果按「文件指纹 + max_pages」缓存到 data/.pdf_cache/，
-        # 命中直接返回，避免每次预览都全量解析整个 PDF 进内存
+        # PDF 预览：max_pages=N 裁剪前 N 页（节省带宽 + 客户端资源）
+        # 切割结果按「文件指纹 + max_pages」缓存到 data/.pdf_cache/，命中免配额免计数
         max_pages = request.GET.get("max_pages")
         if max_pages and HAS_PYPDF and material.file_name and material.file_name.lower().endswith('.pdf'):
             try:
                 n = max(1, min(int(max_pages), 50))
                 cache_path = _pdf_preview_cache_path(material.id, file_path, n)
                 if cache_path and cache_path.exists():
-                    response = FileResponse(
-                        open(cache_path, "rb"), as_attachment=False,
-                        filename=material.file_name or material.title,
-                    )
-                    response['X-Frame-Options'] = 'SAMEORIGIN'
-                    return response
+                    return _serve_file_response(request, cache_path,
+                                                display_filename=display, inline=True, preview_cache=True)
                 reader = PdfReader(file_path)
                 writer = PdfWriter()
                 page_count = min(n, len(reader.pages))
@@ -342,46 +428,28 @@ def api_file_download(request, file_id):
                         with open(tmp, 'wb') as f:
                             f.write(buf.getvalue())
                         os.replace(tmp, cache_path)
+                        return _serve_file_response(request, cache_path,
+                                                    display_filename=display, inline=True, preview_cache=True)
                     except OSError:
-                        pass  # 缓存写入失败不影响主流程
-                response = FileResponse(
-                    buf, as_attachment=False,
-                    filename=material.file_name or material.title,
-                )
-                response['X-Frame-Options'] = 'SAMEORIGIN'
-                return response
+                        pass  # 缓存写入失败 → 降级为完整文件预览（计入配额）
             except Exception:
-                pass  # 出错时降级为完整 PDF（不写垃圾缓存）
-        response = FileResponse(
-            open(file_path, "rb"), as_attachment=False,
-            filename=material.file_name or material.title,
-        )
-        response['X-Frame-Options'] = 'SAMEORIGIN'
-        return response
+                pass  # 解析失败 → 降级为完整文件预览（计入配额）
+        # 完整文件预览（图片/PPT/文本/切页失败降级）→ 与下载同权：扣配额、计数，
+        # 堵住原先 preview=1 绕过每日下载限额的洞
+        allowed, remaining, msg = _check_download_quota(user)
+        if not allowed:
+            return _err(msg, 429)
+        _increment_download(user, material, file_id)
+        return _serve_file_response(request, file_path,
+                                    display_filename=display, inline=True, preview_cache=False)
 
+    # 正式下载：配额 + 计数后交给 nginx 直接送文件
     allowed, remaining, msg = _check_download_quota(user)
     if not allowed:
         return _err(msg, 429)
-
-    Material.objects.filter(id=file_id).update(
-        download_count=F('download_count') + 1
-    )
-
-    try:
-        DownloadRecord.objects.create(
-            user=user, material=material,
-            course_code=material.course.code if material.course_id else "",
-            course_name=material.course.name if material.course_id else "",
-            material_title=material.title,
-            file_name=material.file_name,
-        )
-    except Exception:
-        pass
-
-    return FileResponse(
-        open(file_path, "rb"), as_attachment=True,
-        filename=material.file_name or material.title,
-    )
+    _increment_download(user, material, file_id)
+    return _serve_file_response(request, file_path,
+                                display_filename=display, inline=False, preview_cache=False)
 
 
 @csrf_exempt

@@ -13,7 +13,7 @@ from django.db import connection
 from django.db.models import Q, Count
 
 from .utils import (
-    _err, _ok, _get_or_create_profile,
+    _err, _ok, _get_or_create_profile, _safe_int,
     require_login, require_role, UserProfile, CourseCategory,
 )
 
@@ -43,7 +43,7 @@ def api_admin_users(request):
         ])
     elif role_filter == "user":
         qs = qs.filter(profile__role=UserProfile.Role.USER)
-    page = int(request.GET.get("page", 1))
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
     per_page = 20
     total = qs.count()
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -180,9 +180,9 @@ def api_admin_sections(request):
 
 
 @csrf_exempt
-@require_login
+@require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_auto_approve_toggle(request, uid):
-    """POST /api/admin/users/<uid>/auto-approve/ — 切换自动托管"""
+    """POST /api/admin/users/<uid>/auto-approve/ — 切换自动托管（仅总管理员）"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
 

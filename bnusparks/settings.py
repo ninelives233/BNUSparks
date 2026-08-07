@@ -72,8 +72,16 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'data' / 'db.sqlite3',
+        'OPTIONS': {'timeout': 20},  # 锁等待上限，配合 materials/apps.py 的 WAL 信号
     }
 }
+
+# ── PIL 解码上限（防解压炸弹 DoS，P2.7） ──
+try:
+    from PIL import Image as _PILImage
+    _PILImage.MAX_IMAGE_PIXELS = 40_000_000  # ~40MP，超过抛 DecompressionBombError
+except Exception:
+    pass
 
 # ── 缓存 ──
 # DatabaseCache：跨 gunicorn 进程共享（共享 SQLite 库），课程树/代际计数等信号失效真正生效
@@ -113,14 +121,18 @@ STATICFILES_DIRS = [
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'data' / 'materials'
 
+# ── X-Accel-Redirect：生产由 Nginx 内部转发直接送文件（释放 gunicorn 线程） ──
+# 开发/测试（DEBUG）保持 Django FileResponse；仅 settings_prod 开启。
+USE_X_ACCEL = False
+
 # ── CORS ──
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
+    # 本地开发（HTTP）
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://bnusparks.cn",
-    "http://www.bnusparks.cn",
+    # 生产仅 HTTPS（HTTP 已被 HSTS 重定向，不列入 CORS）
     "https://bnusparks.cn",
     "https://www.bnusparks.cn",
 ]
