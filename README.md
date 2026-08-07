@@ -23,6 +23,7 @@
 - **投稿**：注册后直接在各课程页面上传，系统自动进入审核流程
 - **Bug / 建议**：提交 [GitHub Issue](https://github.com/ninelives233/BNUSparks/issues)
 - **贡献代码**：Fork → PR，欢迎任何形式的参与
+- **🔒 安全漏洞**：见 [SECURITY.md](SECURITY.md)（私有漏洞披露，请勿公开 Issue）
 
 ---
 
@@ -160,7 +161,7 @@ BNUSparks/
 │   │   └── ...            # 通知/个人资料/公告/工具
 │   ├── models.py          # 12 个数据模型（383 行）
 │   ├── urls.py            # API 路由（57 条）
-│   └── tests/             # 测试套件（10 个文件）
+│   └── tests/             # 测试套件（本地保留，公开仓库不含）
 ├── public/                # 前端 SPA（8 模块，~6,200 行）
 │   ├── index.html         # 入口 + 视图 DOM
 │   ├── css/style.css      # 设计系统（OKLCH）

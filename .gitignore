@@ -88,5 +88,11 @@ materials/management/
 # 空测试模板（不用于生产）
 materials/tests.py
 
+# ═══ 安全去敏（公开仓库不追踪，本地保留）═══
+# 测试文件含权限链/XSS向量/路径穿越边界等攻击面细节，等同"攻击手册"，仅本地保留
+materials/tests/
+# 服务器架构配置（internal 路径/限流策略），仅本地 + 服务器保留
+deploy/
+
 # 项目元信息（不用于运行网站）
 
