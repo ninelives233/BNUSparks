@@ -107,21 +107,15 @@ def _can_review_request(user, req):
 
 
 def _resolve_course_or_err(course_code, course_name, course_type, college):
-    """复用文件上传的课程代码匹配逻辑：唯一→复用；歧义→(None, err)；无→创建"""
+    """新建课程申请的课程解析（v=147 修复前缀误配）。
+
+    只做「精确代码」匹配：唯一 → 复用；多条同码 → 取有资料者/最早者；
+    不存在 → 新建 Course。**禁用 startswith 前缀匹配**——否则 ECO11451/ECO1145
+    会命中已有的 ECO11451222，导致多个不同代码的申请共享同一 Course 文件夹。
+    """
     from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
     try:
         return Course.objects.get(code=course_code), None
-    except ObjectDoesNotExist:
-        cleaned = course_code.replace("*", "").replace("-", "")
-        matched = Course.objects.filter(code__startswith=cleaned)
-        if matched.count() == 1:
-            return matched.first(), None
-        if matched.count() > 1:
-            return None, "课程代码不明确，请联系管理员"
-        return Course.objects.create(
-            code=course_code, name=course_name,
-            course_type=course_type, college=college,
-        ), None
     except MultipleObjectsReturned:
         courses = Course.objects.filter(code=course_code).order_by("id")
         with_files = courses.filter(materials__is_approved=True).distinct()
@@ -130,6 +124,11 @@ def _resolve_course_or_err(course_code, course_name, course_type, college):
         if with_files.count() > 1:
             return None, "课程代码不明确，请联系管理员"
         return courses.first(), None
+    except ObjectDoesNotExist:
+        return Course.objects.create(
+            code=course_code, name=course_name,
+            course_type=course_type, college=college,
+        ), None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -269,6 +268,36 @@ def api_course_request_upload_file(request, request_id):
     return _ok({"id": material.id, "title": material.title, "file_size": file_size})
 
 
+@csrf_exempt
+@require_login
+def api_course_request_delete(request, request_id):
+    """DELETE /api/courses/request/<id>/ — 取消未审核的申请（仅本人、pending）。
+
+    v=147：随附文件上传中途失败时，前端用它清理半成品申请，
+    避免重试时同一批文件被重复挂到多个新申请上。
+    """
+    if request.method != "DELETE":
+        return _err("仅支持 DELETE", 405)
+    req = CourseCreationRequest.objects.filter(
+        id=request_id, user=request.user
+    ).first()
+    if req is None:
+        return _err("申请不存在", 404)
+    if req.status != CourseCreationRequest.Status.PENDING:
+        return _err("申请已处理，无法取消")
+
+    for m in req.materials.all():
+        try:
+            p = Path(settings.MEDIA_ROOT) / m.file_path
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
+        m.delete()
+    req.delete()
+    return _ok({"message": "已取消"})
+
+
 # ═══════════════════════════════════════════════════════════════
 # 管理端
 # ═══════════════════════════════════════════════════════════════
@@ -323,6 +352,10 @@ def api_moderation_course_requests(request):
             "target_path": _category_path(target) if target else "",
             "uploader_name": req.user.first_name or req.user.username,
             "uploader_id": req.user_id,
+            "uploader_avatar": (
+                req.user.profile.avatar.url
+                if getattr(req.user, "profile", None) and req.user.profile.avatar else ""
+            ),
             "created_at": req.created_at.strftime("%Y-%m-%d %H:%M") if req.created_at else "",
             "status": req.status,
             "is_waiting_files": is_waiting_files,

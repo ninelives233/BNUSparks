@@ -50,6 +50,12 @@
     --border: oklch(0.86 0.012 65);
     --border-light: oklch(0.91 0.008 65);
 
+    /* 待审核暖纸色（v=148）：上传者 pill / 随附文件行 */
+    --pill-bg: oklch(0.985 0.004 80);
+    --pill-border: oklch(0.945 0.008 80);
+    --pill-hover: oklch(0.965 0.006 80);
+    --file-row-bg: oklch(0.99 0.003 80);
+
     --serif: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
     --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
 
@@ -193,7 +199,7 @@
   .user-avatar-circle {
     display: flex; align-items: center; justify-content: center;
     width: 34px; height: 34px; border-radius: 50%;
-    background: linear-gradient(135deg, oklch(0.55 0.12 280), oklch(0.45 0.15 320));
+    background: oklch(0.46 0.04 250); /* v=148：莫兰迪低亮纯色（灰蓝），替代渐变 */
     color: #fff; font-size: 0.85rem; font-weight: 700;
     font-family: inherit; line-height: 1; user-select: none;
     transition: transform 0.15s;
@@ -2052,6 +2058,10 @@
      文件简介模态框
      ═══════════════════════════════════════════ */
 
+  .file-info-card {
+    max-width: 600px; /* v=148：告别 400px 细长条，加宽容纳文件信息 */
+  }
+
   .file-info-content {
     padding: var(--space-sm) 0;
   }
@@ -3214,25 +3224,98 @@
   border-radius: 8px;
 }
 .cr-files-label { font-size: 0.74rem; font-weight: 600; color: var(--ink-faint); margin-bottom: 6px; }
-.cr-files-list { display: flex; flex-direction: column; gap: 3px; }
+.cr-files-list { display: flex; flex-direction: column; gap: 8px; }
 .cr-file {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 0.82rem; padding: 5px 8px; border-radius: 6px;
-  background: oklch(0.995 0.003 60 / 0.6);
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.82rem; padding: 10px 14px; border-radius: 8px;
+  border: 1px solid var(--pill-border);
+  background: var(--file-row-bg);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.cr-file-branch {
-  font-family: ui-monospace, "SF Mono", monospace;
-  color: oklch(0.6 0.02 60);
-  flex-shrink: 0;
-  font-size: 0.78rem;
+.cr-file:hover {
+  border-color: oklch(0.88 0.015 80);
+  box-shadow: 0 2px 10px oklch(0.4 0.02 60 / 0.06);
+}
+.cr-file-icon { flex-shrink: 0; display: inline-flex; }
+/* 随附文件行内 32px 类型图标（复用 .pc-glyph 类型色） */
+.cr-file-icon .pc-glyph {
+  width: 32px; height: 32px;
+  font-size: 0.58rem; letter-spacing: 0.04em;
+  border-width: 1px; border-radius: 6px;
 }
 .cr-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .cr-file-size { font-size: 0.7rem; color: var(--ink-faint); margin-left: 4px; }
+.cr-file-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .cr-file-status { flex-shrink: 0; font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; font-weight: 500; }
+.cr-file-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: oklch(0.90 0.012 70);
+  color: var(--ink);
+  font-size: 0.74rem; font-weight: 500;
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cr-file-btn:hover { background: oklch(0.86 0.02 70); }
+.cr-file-btn-approve { background: oklch(0.90 0.07 150); color: oklch(0.35 0.11 150); border-color: oklch(0.85 0.08 150); }
+.cr-file-btn-approve:hover { background: oklch(0.85 0.10 150); }
+.cr-file-btn-reject { background: oklch(0.92 0.05 25); color: oklch(0.45 0.11 25); border-color: oklch(0.88 0.06 25); }
+.cr-file-btn-reject:hover { background: oklch(0.88 0.08 25); }
 .cr-st-pending  { background: oklch(0.93 0.06 85 / 0.4); color: oklch(0.52 0.13 45); }
 .cr-st-approved { background: oklch(0.9 0.08 150 / 0.4); color: oklch(0.42 0.11 150); }
 .cr-st-rejected { background: oklch(0.92 0.05 25 / 0.4); color: oklch(0.5 0.1 25); }
 .cr-waiting { font-size: 0.82rem; color: var(--ink-faint); font-style: italic; }
+
+/* ── 上传者 pill（v=148）：头像+名字合一，点击跳用户主页 ── */
+.cr-user-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 2px 12px 2px 3px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cr-user-pill:hover { background: var(--pill-hover); border-color: oklch(0.90 0.012 80); }
+.cr-pill-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  object-fit: cover; flex-shrink: 0; display: inline-flex;
+  align-items: center; justify-content: center;
+}
+.cr-pill-avatar-ph {
+  background: var(--primary-surface); color: var(--primary);
+  font-size: 0.72rem; font-weight: 700;
+}
+.cr-pill-name { font-size: 0.8rem; color: var(--ink); font-weight: 500; }
+
+/* 待审核卡片灵动化（v=148）：hover 轻上浮 + 边框提亮 */
+.admin-pending-card {
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.admin-pending-card:hover {
+  transform: translateY(-2px);
+  border-color: oklch(0.82 0.03 250 / 0.35);
+  box-shadow: 0 6px 24px oklch(0.3 0.02 250 / 0.08);
+}
+
+/* 同僚已通过卡片：柔和绿色胶囊说明 */
+.pc-peer-approved .pc-peer-approved-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  width: fit-content;
+  font-size: 0.8rem; font-weight: 500;
+  color: oklch(0.35 0.1 150);
+  background: oklch(0.90 0.08 150 / 0.35);
+  border: 1px solid oklch(0.85 0.08 150 / 0.4);
+  border-radius: var(--radius-full);
+  padding: 3px 12px;
+}
+
+/* 随附文件行移动端：图标+名称一行，状态+按钮换行右对齐 */
+@media (max-width: 640px) {
+  .cr-file { flex-wrap: wrap; row-gap: 8px; }
+  .cr-file-actions { width: 100%; justify-content: flex-end; }
+}
 .hc-comments-row td {
   padding: 0 !important; background: oklch(0.98 0.005 250 / 0.3);
 }
@@ -5165,13 +5248,40 @@
 
 /* 新建学院/专业 提示 */
 .nc-tip {
-  font-size: 0.86rem; line-height: 1.75; color: var(--ink);
+  font-size: 0.86rem; line-height: 1.7; color: var(--ink);
   background: oklch(from var(--accent) l c h / 0.06);
   border-left: 3px solid var(--accent);
-  padding: var(--space-md); border-radius: var(--radius-sm);
-  margin: var(--space-md) 0;
+  padding: var(--space-md) var(--space-md) var(--space-sm);
+  border-radius: var(--radius-sm);
+  margin: var(--space-md) 0 var(--space-sm);
 }
-.nc-tip-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.nc-tip-lead {
+  font-family: var(--serif); font-size: 0.95rem; font-weight: 700;
+  color: var(--ink); margin-bottom: 10px; line-height: 1.55;
+}
+.nc-tip-list { list-style: none; margin: 0; display: grid; gap: 8px; }
+.nc-tip-list li {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 0.84rem; line-height: 1.65; color: var(--ink-soft);
+}
+.nc-tip-list li::before {
+  content: ""; flex: 0 0 auto; width: 7px; height: 7px;
+  margin-top: 5px; transform: rotate(45deg);
+  background: var(--accent); border-radius: 1px;
+}
+.nc-tip-list b { color: var(--ink); font-weight: 600; }
+.nc-tip-note {
+  font-size: 0.8rem; color: var(--ink-faint); line-height: 1.6;
+  margin: 12px 0 4px; padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.nc-tip-note p { margin: 0 0 6px; }
+.nc-tip-note p:last-child { margin-bottom: 0; }
+.nc-tip-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: var(--space-sm); }
+.nc-tip-wechat {
+  font-size: 0.76rem; color: var(--ink-faint);
+  padding: 0 4px;
+}
 .nc-btn-primary {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 10px 22px; border-radius: var(--radius-sm);
@@ -5254,4 +5364,182 @@
   .lp-inner { padding: var(--space-md); }
   .lp-node { font-size: 0.83rem; }
   .tree-children { padding-left: 8px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   个人中心档案目录（v=147）：我的收藏 / 我的下载 / 我的上传
+   审美锚点：档案账册 —— 类型 slip 方块 + 衬线标题 + 边框账册容器
+   签名元素：文件类型方块（按扩展名着色、折角），色相调和于品牌 OKLCH
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 分段胶囊 tab（去 emoji，账册式灰线分隔） ── */
+.mu-tabs {
+  display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 12px;
+}
+.mu-tab {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.mu-tab:hover:not(.active) {
+  border-color: oklch(from var(--primary) l c h / 0.45);
+  color: var(--primary);
+}
+.mu-tab.active {
+  background: var(--primary-surface);
+  color: var(--primary);
+  border-color: oklch(from var(--primary) l c h / 0.35);
+  font-weight: 600;
+}
+
+/* ── 账册容器 ── */
+.pc-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+/* ── 档案行 ── */
+.pc-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+  transition: background 0.15s ease;
+}
+.pc-item:last-child { border-bottom: none; }
+.pc-item:hover {
+  background: var(--primary-surface);
+  /* 左缘强调线（沿用公开页既有模式，hover 无布局跳动） */
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.pc-item-body { flex: 1; min-width: 0; }
+.pc-item-title {
+  font-family: var(--serif);
+  font-size: 0.97rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.45;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.pc-item-meta {
+  font-size: 0.72rem; color: var(--ink-faint); margin-top: 3px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.pc-item-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.pc-item-side {
+  flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  font-size: 0.74rem; color: var(--ink-faint);
+}
+.pc-side-icon { display: inline-flex; color: var(--accent); opacity: 0.85; }
+
+/* ── 类型 slip 方块（签名元素） ── */
+.pc-glyph {
+  flex-shrink: 0;
+  position: relative;
+  width: 42px; height: 42px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;
+  border: 1.5px solid currentColor;
+  border-radius: 6px;
+  overflow: hidden;
+  user-select: none;
+}
+/* 折角：右上翻起的页角 */
+.pc-glyph::before {
+  content: '';
+  position: absolute; top: 0; right: 0;
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 0 8px 8px 0;
+  border-color: transparent currentColor transparent transparent;
+  opacity: 0.32;
+}
+.pc-glyph-pdf   { color: oklch(0.52 0.16 25);  background: oklch(0.95 0.03 25); }
+.pc-glyph-ppt   { color: oklch(0.56 0.15 55);  background: oklch(0.95 0.035 55); }
+.pc-glyph-doc   { color: oklch(0.50 0.11 250); background: oklch(0.95 0.02 250); }
+.pc-glyph-xls   { color: oklch(0.50 0.11 165); background: oklch(0.95 0.025 165); }
+.pc-glyph-zip   { color: oklch(0.48 0.10 150); background: oklch(0.95 0.02 150); }
+.pc-glyph-img   { color: oklch(0.48 0.12 300); background: oklch(0.95 0.025 300); }
+.pc-glyph-audio { color: oklch(0.50 0.10 20);  background: oklch(0.95 0.03 20); }
+.pc-glyph-video { color: oklch(0.48 0.12 265); background: oklch(0.95 0.025 265); }
+.pc-glyph-other { color: oklch(0.45 0.01 55);  background: oklch(0.96 0.005 55); }
+/* 课程收藏：星星 tile */
+.pc-glyph-star {
+  color: oklch(0.60 0.14 75);
+  background: oklch(0.95 0.045 75);
+  font-size: 1.1rem;
+  border-color: oklch(0.72 0.10 75);
+}
+/* 已删除档案：灰阶虚线 */
+.pc-glyph-dead {
+  color: var(--ink-faint);
+  background: oklch(0.95 0.005 55);
+  border-style: dashed;
+  opacity: 0.8;
+}
+
+/* ── 空状态：开盖木箱（纯 CSS） ── */
+.pc-empty {
+  padding: 56px 20px 48px;
+  text-align: center;
+  color: var(--ink-faint);
+}
+.pc-empty-crate {
+  position: relative;
+  width: 60px; height: 44px;
+  margin: 0 auto 18px;
+}
+.pc-empty-crate::before { /* 箱体（俯视开口） */
+  content: '';
+  position: absolute; left: 0; bottom: 0;
+  width: 60px; height: 30px;
+  border: 2px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: oklch(from var(--border-light) l c h / 0.45);
+}
+.pc-empty-crate::after { /* 盖子斜靠 */
+  content: '';
+  position: absolute; right: 4px; top: 2px;
+  width: 44px; height: 18px;
+  border: 2px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  transform: rotate(10deg);
+  transform-origin: right bottom;
+  background: var(--surface);
+}
+.pc-empty-title { font-size: 0.92rem; font-weight: 600; color: var(--ink-soft); }
+.pc-empty-hint { font-size: 0.78rem; margin-top: 6px; line-height: 1.7; }
+.pc-empty-cta {
+  display: inline-block; margin-top: 18px;
+  padding: 7px 22px;
+  border: 1px solid oklch(from var(--primary) l c h / 0.35);
+  border-radius: var(--radius-full);
+  background: var(--primary-surface);
+  color: var(--primary);
+  font-size: 0.82rem; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.pc-empty-cta:hover {
+  background: oklch(0.90 0.03 250);
+  box-shadow: 0 1px 6px oklch(from var(--primary) l c h / 0.18);
+}
+
+/* 窄屏收紧 */
+@media (max-width: 640px) {
+  .pc-item { padding: 12px; gap: 10px; }
+  .pc-glyph { width: 38px; height: 38px; font-size: 0.6rem; }
+  .pc-item-title { font-size: 0.92rem; }
+  .mu-tab { font-size: 0.78rem; }
 }

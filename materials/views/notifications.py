@@ -15,6 +15,9 @@ def api_notifications(request):
        DELETE /auth/notifications/ — 清空所有通知"""
     if request.method == "GET":
         notifs = Notification.objects.filter(recipient=request.user).order_by("-created_at")
+        # 徽标轮询只取未读，减少负载（?unread_only=1）
+        if request.GET.get("unread_only") == "1":
+            notifs = notifs.filter(is_read=False)
         unread = notifs.filter(is_read=False).count()
         return _ok({
             "unread_count": unread,

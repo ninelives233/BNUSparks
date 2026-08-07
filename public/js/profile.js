@@ -126,6 +126,53 @@
 
   var _myUploadTab = 'approved';
 
+  // ── v=147 档案目录：类型 glyph / 行模板 / 空状态 / 图标 ──
+  var _IC_DOWN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M4 21h16"/></svg>';
+  var _IC_STAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26 6.86.6-5.18 4.56 1.55 6.72L12 16.6l-6.13 3.54 1.55-6.72L2.24 8.86l6.86-.6z"/></svg>';
+
+  function _fileGlyph(fileName) {
+    var fn = String(fileName || '');
+    var dot = fn.lastIndexOf('.');
+    var ext = dot > -1 ? fn.slice(dot + 1).toLowerCase() : '';
+    var map = {
+      pdf: 'pdf', ppt: 'ppt', pptx: 'ppt', doc: 'doc', docx: 'doc',
+      xls: 'xls', xlsx: 'xls', csv: 'xls', zip: 'zip', rar: 'zip',
+      '7z': 'zip', tar: 'zip', gz: 'zip', png: 'img', jpg: 'img',
+      jpeg: 'img', gif: 'img', webp: 'img', svg: 'img', bmp: 'img',
+      heic: 'img', tiff: 'img', mp3: 'audio', wav: 'audio', flac: 'audio',
+      m4a: 'audio', aac: 'audio', mp4: 'video', mov: 'video',
+      avi: 'video', mkv: 'video', wmv: 'video', webm: 'video'
+    };
+    var cls = map[ext] || 'other';
+    var label = ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
+    label = label.replace(/[^A-Z0-9]/g, '') || 'FILE';
+    return '<span class="pc-glyph pc-glyph-' + cls + '">' + label + '</span>';
+  }
+
+  function _pcItem(tile, titleHtml, metaHtml, actionsHtml, sideHtml, onClick) {
+    var row = '<div class="pc-item"' + (onClick ? ' style="cursor:pointer" onclick="' + onClick + '"' : '') + '>';
+    var actions = actionsHtml ? '<div class="pc-item-actions">' + actionsHtml + '</div>' : '';
+    var side = sideHtml ? '<div class="pc-item-side">' + sideHtml + '</div>' : '';
+    return row +
+      tile +
+      '<div class="pc-item-body">' +
+        '<div class="pc-item-title">' + titleHtml + '</div>' +
+        '<div class="pc-item-meta">' + metaHtml + '</div>' +
+        actions +
+      '</div>' +
+      side +
+    '</div>';
+  }
+
+  function _pcEmpty(title, hint, ctaHtml) {
+    return '<div class="pc-empty">' +
+      '<div class="pc-empty-crate"></div>' +
+      '<div class="pc-empty-title">' + title + '</div>' +
+      (hint ? '<div class="pc-empty-hint">' + hint + '</div>' : '') +
+      (ctaHtml ? ctaHtml : '') +
+    '</div>';
+  }
+
   function renderMyUploadsPage() {
     var list = document.getElementById('myUploadsPageList');
     if (!list) return;
@@ -137,7 +184,8 @@
 
     api('/api/user/uploads/').then(function(uploads) {
       if (!uploads || !uploads.length) {
-        list.innerHTML = '<div class="admin-empty">暂无上传记录</div>';
+        list.innerHTML = _pcEmpty('还没有上传过资料', '去课程目录上传你的第一份课程资料，管理员审核通过后即可发布。',
+          '<button class="pc-empty-cta" onclick="showHome()">去上传资料</button>');
         return;
       }
       var filtered = uploads.filter(function(m) {
@@ -147,9 +195,10 @@
         if (_myUploadTab === 'deleted') return false; // 需从删除记录单独加载
         return true;
       });
+      var tabNames = { approved: '已发布', pending: '审核中', rejected: '已驳回', deleted: '已删除' };
       if (!filtered.length) {
-        list.innerHTML = '<div class="admin-empty">暂无' + (_myUploadTab==='approved'?'已通过':_myUploadTab==='pending'?'待审核':_myUploadTab==='rejected'?'已驳回':'已删除') + '的记录</div>';
-        if (_myUploadTab === 'deleted') renderMyDeletedTab(list);
+        if (_myUploadTab === 'deleted') { renderMyDeletedTab(list); return; }
+        list.innerHTML = _pcEmpty('暂无' + tabNames[_myUploadTab] + '的记录', '切换上方分类，或去课程目录上传新资料。');
         return;
       }
       var html = '';
@@ -157,28 +206,28 @@
         var badgeLabel = '', badgeClass = '';
         if (m.review_status === 'pending') { badgeLabel = '审核中'; badgeClass = 'review-badge-pending'; }
         else if (m.review_status === 'rejected') { badgeLabel = '已驳回'; badgeClass = 'review-badge-rejected'; }
-        else { badgeLabel = '已通过'; badgeClass = 'review-badge-approved'; }
+        else { badgeLabel = '已发布'; badgeClass = 'review-badge-approved'; }
         var badgeHtml = '<span class="review-badge ' + badgeClass + '">' + badgeLabel + '</span>';
         var actions = '';
         if (m.review_status === 'rejected') {
-          actions = '<button class="reupload-btn" onclick="showReUploadDialog(' + m.id + ',\'' + escJs(m.course_code) + '\',\'' + escJs(m.course_name) + '\',\'' + escJs(m.title) + '\',\'' + escJs(m.review_notes||'') + '\',\'' + escJs(m.teacher||'') + '\')">↻ 重新上传</button>' +
-            '<button class="delete-rejected-btn" onclick="deleteRejected(' + m.id + ', this)">🗑 删除记录</button>';
+          actions = '<button class="reupload-btn" onclick="event.stopPropagation();showReUploadDialog(' + m.id + ',\'' + escJs(m.course_code) + '\',\'' + escJs(m.course_name) + '\',\'' + escJs(m.title) + '\',\'' + escJs(m.review_notes||'') + '\',\'' + escJs(m.teacher||'') + '\')">↻ 重新上传</button>' +
+            '<button class="delete-rejected-btn" onclick="event.stopPropagation();deleteRejected(' + m.id + ', this)">🗑 删除记录</button>';
         }
         var ctype = m.course_type === 'general' ? '通识课' : '专业课';
-        html += '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'' + escJs(ctype) + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
-          '<div class="hc-item-left">' +
-            '<div class="hc-item-name">' + esc(m.title) + ' ' + badgeHtml + '</div>' +
-            '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + formatSize(m.file_size) + ' · ' + m.download_count + ' 次下载' +
-              (m.review_status === 'rejected' && m.review_notes ? ' · 驳回原因: ' + esc(m.review_notes) : '') +
-            '</div>' +
-            (actions ? '<div class="hc-item-actions">' + actions + '</div>' : '') +
-          '</div>' +
-          '<span class="hc-item-count">' + m.created_at + '</span>' +
-        '</div>';
+        var meta = esc(m.course_name) + ' · ' + formatSize(m.file_size) + ' · ' + m.download_count + ' 次下载' +
+          (m.review_status === 'rejected' && m.review_notes ? ' · <span style="color:oklch(0.5 0.12 25)">驳回原因：' + esc(m.review_notes) + '</span>' : '');
+        html += _pcItem(
+          _fileGlyph(m.file_name),
+          esc(m.title) + badgeHtml,
+          meta,
+          actions,
+          esc(m.created_at),
+          'showExplorer(\'' + escJs(ctype) + '\');navToLast(\'' + escJs(m.course_code) + '\')'
+        );
       });
       list.innerHTML = html;
     }).catch(function(err) {
-      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+      list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。');
     });
   }
 
@@ -209,20 +258,22 @@
     list.innerHTML = '<div class="admin-loading">加载中…</div>';
     api('/api/user/downloads/').then(function(data) {
       if (!data || !data.length) {
-        list.innerHTML = '<div class="admin-empty">暂无下载记录</div>';
+        list.innerHTML = _pcEmpty('还没有下载记录', '去课程目录找到需要的资料，下载过的文件会记录在这里。',
+          '<button class="pc-empty-cta" onclick="showExplorer(\'通识课\')">去课程目录</button>');
         return;
       }
       list.innerHTML = data.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
-          '<div class="hc-item-left">' +
-            '<div class="hc-item-name">' + esc(r.material_title) + '</div>' +
-            '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + esc(r.created_at) + '</div>' +
-          '</div>' +
-          '<span class="hc-item-count">📥</span>' +
-        '</div>';
+        return _pcItem(
+          _fileGlyph(r.file_name),
+          esc(r.material_title),
+          esc(r.course_name) + ' · ' + esc(r.course_code) + ' · ' + esc(r.created_at),
+          '',
+          '<span class="pc-side-icon">' + _IC_DOWN + '</span>',
+          'navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')'
+        );
       }).join('');
     }).catch(function(err) {
-      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+      list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。');
     });
   }
 
@@ -271,20 +322,23 @@
     api('/api/user/course-favorites/').then(function(data) {
       var items = data.items || [];
       if (!items.length) {
-        list.innerHTML = '<div class="admin-empty">暂无收藏课程，去课程目录点击星星收藏吧</div>';
+        list.innerHTML = _pcEmpty('还没有收藏课程', '在课程目录里点击课程行上的星星，就能收藏到这里。',
+          '<button class="pc-empty-cta" onclick="showExplorer(\'通识课\')">去收藏课程</button>');
         return;
       }
       list.innerHTML = items.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'通识课\');navToLast(\'' + escJs(r.course_code) + '\')">' +
-          '<div class="hc-item-left">' +
-            '<div class="hc-item-name">' + esc(r.course_name) + '</div>' +
-            '<div class="hc-item-meta">' + esc(r.course_code) + (r.college_name ? ' · ' + esc(r.college_name) : '') + ' · ' + esc(r.favorited_at) + '</div>' +
-          '</div>' +
-          '<span class="hc-item-count">⭐</span>' +
-        '</div>';
+        var meta = esc(r.course_code) + (r.college_name ? ' · ' + esc(r.college_name) : '') + ' · ' + esc(r.favorited_at);
+        return _pcItem(
+          '<span class="pc-glyph pc-glyph-star">★</span>',
+          esc(r.course_name),
+          meta,
+          '',
+          '<span class="pc-side-icon">' + _IC_STAR + '</span>',
+          'showExplorer(\'' + (r.course_type === 'major' ? '专业课' : '通识课') + '\');navToLast(\'' + escJs(r.course_code) + '\')'
+        );
       }).join('');
     }).catch(function() {
-      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+      list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。');
     });
   }
 
@@ -293,20 +347,22 @@
     api('/api/user/favorites/').then(function(data) {
       var items = data.items || [];
       if (!items.length) {
-        list.innerHTML = '<div class="admin-empty">暂无收藏的文件</div>';
+        list.innerHTML = _pcEmpty('还没有收藏的文件', '打开文件详情页，点击 ⭐ 就能收藏这份资料。',
+          '<button class="pc-empty-cta" onclick="showExplorer(\'通识课\')">去课程目录</button>');
         return;
       }
       list.innerHTML = items.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
-          '<div class="hc-item-left">' +
-            '<div class="hc-item-name">' + esc(r.title) + '</div>' +
-            '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + esc(r.favorited_at) + '</div>' +
-          '</div>' +
-          '<span class="hc-item-count">⭐</span>' +
-        '</div>';
+        return _pcItem(
+          _fileGlyph(r.file_name),
+          esc(r.title),
+          esc(r.course_name) + ' · ' + esc(r.favorited_at),
+          '',
+          '<span class="pc-side-icon">' + _IC_STAR + '</span>',
+          'navToMaterial(' + r.id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')'
+        );
       }).join('');
     }).catch(function() {
-      list.innerHTML = '<div class="admin-empty">加载失败</div>';
+      list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。');
     });
   }
 
@@ -315,30 +371,36 @@
     // 从删除记录 API 加载当前用户相关的删除记录
     api('/api/moderation/deletions/?page=1&per_page=100').then(function(data) {
       if (!data.items || !data.items.length) {
-        listEl.innerHTML = '<div class="admin-empty">暂无已删除的记录</div>';
+        listEl.innerHTML = _pcEmpty('暂无已删除的记录');
         return;
       }
       // 只显示当前用户自己的删除记录
       var mine = data.items.filter(function(r) { return r.deleted_by_id === (currentUser ? currentUser.id : -1); });
       if (!mine.length) {
-        listEl.innerHTML = '<div class="admin-empty">暂无已删除的记录</div>';
+        listEl.innerHTML = _pcEmpty('暂无已删除的记录');
         return;
       }
       var html = '';
       mine.forEach(function(r) {
         var canRestore = r.can_restore && !r.is_restored;
-        html += '<div class="hc-item">' +
-          '<div class="hc-item-left">' +
-            '<div class="hc-item-name">' + esc(r.title) + (r.is_restored ? ' <span style="color:var(--success)">✅ 已恢复</span>' : ' <span class="review-badge review-badge-rejected">已删除</span>') + '</div>' +
-            '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + formatSize(r.file_size) + ' · 删除于 ' + esc(r.deleted_at) + '</div>' +
-            (canRestore ? '<div class="hc-item-actions"><button class="admin-btn admin-btn-approve" onclick="restoreMyDeletion(' + r.id + ', this)">↩ 撤销删除</button></div>' : '') +
-          '</div>' +
-          '<span class="hc-item-count">' + (!canRestore && !r.is_restored ? '⏰ 已过期' : '') + '</span>' +
-        '</div>';
+        var titleHtml = esc(r.title) + (r.is_restored
+          ? ' <span class="review-badge review-badge-approved">已恢复</span>'
+          : ' <span class="review-badge review-badge-rejected">已删除</span>');
+        var actions = canRestore
+          ? '<button class="admin-btn admin-btn-approve" onclick="restoreMyDeletion(' + r.id + ', this)">↩ 撤销删除</button>'
+          : '';
+        var side = (!canRestore && !r.is_restored) ? '已过期' : '';
+        html += _pcItem(
+          '<span class="pc-glyph pc-glyph-dead">✕</span>',
+          titleHtml,
+          esc(r.course_name) + ' · ' + formatSize(r.file_size) + ' · 删除于 ' + esc(r.deleted_at),
+          actions,
+          side
+        );
       });
       listEl.innerHTML = html;
     }).catch(function() {
-      listEl.innerHTML = '<div class="admin-empty">加载失败</div>';
+      listEl.innerHTML = _pcEmpty('加载失败');
     });
   }
 

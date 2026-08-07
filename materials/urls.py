@@ -20,6 +20,7 @@ urlpatterns = [
     path("courses/tree/", views.api_course_tree, name="api_course_tree"),
     path("courses/request/", views.api_course_request_create, name="api_course_request_create"),
     path("courses/request/<int:request_id>/files/", views.api_course_request_upload_file, name="api_course_request_upload_file"),
+    path("courses/request/<int:request_id>/", views.api_course_request_delete, name="api_course_request_delete"),
     path("courses/<str:course_code>/files/", views.api_course_files, name="api_course_files"),
     path("courses/<str:course_code>/favorite/", views.api_course_favorite_toggle, name="api_course_favorite_toggle"),
 

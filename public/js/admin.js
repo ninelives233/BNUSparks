@@ -97,6 +97,38 @@
   var _highlightDisputeMaterialId = null;
   var _pendingItems = {}; // {id: 原始待审核项} — 详情弹窗直接取原始数据（file_size 为字节）
   var _pendingType = 'file'; // 审核类型分段控制器：'file' 文件上传 | 'course' 课程创建
+  var _pendingPage = { file: 1, course: 1 }; // 客户端分页（每类独立页码）
+
+  // 待审核卡片「上传者 pill」：26px 头像 + 名字，点击跳用户主页
+  function _userPill(name, avatar, uid) {
+    var av = avatar
+      ? '<img src="' + esc(avatar) + '" class="cr-pill-avatar" alt="">'
+      : '<span class="cr-pill-avatar cr-pill-avatar-ph">' + esc((name || '?').charAt(0).toUpperCase()) + '</span>';
+    var click = uid ? ' onclick="showUserPublic(' + uid + ')" title="查看用户主页"' : '';
+    return '<span class="cr-user-pill"' + click + '>' + av + '<span class="cr-pill-name">' + esc(name || '匿名') + '</span></span>';
+  }
+
+  // 待审核分页控件（复用 .file-pagination 样式）
+  function _pendingPagination(totalPages, current, type) {
+    if (totalPages <= 1) return '';
+    var h = '<div class="file-pagination" style="justify-content:center">';
+    h += '<button class="fp-btn' + (current <= 1 ? ' fp-disabled' : '') + '"' + (current <= 1 ? ' disabled' : '') + ' onclick="pendingGoPage(\'' + type + '\',' + (current - 1) + ')">‹</button>';
+    for (var p = 1; p <= totalPages; p++) {
+      if (p === 1 || p === totalPages || Math.abs(p - current) <= 1) {
+        h += '<button class="fp-btn' + (p === current ? ' fp-active' : '') + '" onclick="pendingGoPage(\'' + type + '\',' + p + ')">' + p + '</button>';
+      } else if (Math.abs(p - current) === 2) {
+        h += '<span class="fp-btn fp-ellipsis">…</span>';
+      }
+    }
+    h += '<button class="fp-btn' + (current >= totalPages ? ' fp-disabled' : '') + '"' + (current >= totalPages ? ' disabled' : '') + ' onclick="pendingGoPage(\'' + type + '\',' + (current + 1) + ')">›</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function pendingGoPage(type, page) {
+    _pendingPage[type] = page || 1;
+    renderAdminPending(document.getElementById('adminContent'));
+  }
 
   function switchPendingType(type) {
     _pendingType = type;
@@ -178,15 +210,21 @@
         return;
       }
 
+      // 客户端分页
+      var _PER_PAGE = 10;
+      var _fileTotalPages = Math.max(1, Math.ceil((list || []).length / _PER_PAGE));
+      _pendingPage.file = Math.max(1, Math.min(_pendingPage.file, _fileTotalPages));
+      var pageList = (list || []).slice((_pendingPage.file - 1) * _PER_PAGE, _pendingPage.file * _PER_PAGE);
+
       html += '<div class="admin-pending-list">';
 
-      var hasPeerApproved = list.some(function(m) { return m.is_peer_approved; });
-      var hasMyPending = list.some(function(m) { return !m.is_peer_approved; });
+      var hasPeerApproved = pageList.some(function(m) { return m.is_peer_approved; });
+      var hasMyPending = pageList.some(function(m) { return !m.is_peer_approved; });
 
       // ─── 所有待审核（含下级版主分流内容，上级可越级操作） ───
       if (hasMyPending) {
         if (hasPeerApproved) html += '<div class="pc-section-label">⏳ 待审核</div>';
-        list.forEach(function(m) {
+        pageList.forEach(function(m) {
           if (m.is_peer_approved) return;
           var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
           var subTag = m.is_subordinate_handled ? '<span class="sub-tag">下级版主</span>' : '';
@@ -194,8 +232,8 @@
             subTag +
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
+              _userPill(m.uploader_name, m.uploader_avatar, m.uploader_id) +
               '<span>📚 ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
-              '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
               '<span>📅 ' + m.created_at + '</span>' +
               '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
             '</div>';
@@ -218,13 +256,13 @@
       if (hasPeerApproved && !_pendingHidePeerApproved) {
         if (hasMyPending) html += '<div class="pc-section-divider"></div>';
         html += '<div class="pc-section-label">✅ 同僚已通过（24h 内可提出异议）</div>';
-        list.forEach(function(m) {
+        pageList.forEach(function(m) {
           if (!m.is_peer_approved) return;
           html += '<div class="admin-pending-card pc-peer-approved" id="pc-' + m.id + '">' +
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
+              _userPill(m.uploader_name, m.uploader_avatar, m.uploader_id) +
               '<span>📚 ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
-              '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
               '<span>📅 ' + m.created_at + '</span>' +
               '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
             '</div>' +
@@ -239,6 +277,7 @@
       }
 
       html += '</div>';
+      html += _pendingPagination(_fileTotalPages, _pendingPage.file, 'file');
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
@@ -253,30 +292,45 @@
     if (approvable.length) {
       html += '<div style="margin:0 0 10px"><button class="admin-btn admin-btn-approve" onclick="batchApproveCourseRequests(this)">⚡ 一键通过全部申请</button></div>';
     }
+    // 课程创建卡片较大，每页 8 条客户端分页
+    var _courseTotal = Math.max(1, Math.ceil((requests || []).length / 8));
+    _pendingPage.course = Math.max(1, Math.min(_pendingPage.course, _courseTotal));
+    var _pageReqs = (requests || []).slice((_pendingPage.course - 1) * 8, _pendingPage.course * 8);
     html += '<div class="admin-pending-list">';
-    requests.forEach(function(r) { html += _courseRequestCardHtml(r); });
+    _pageReqs.forEach(function(r) { html += _courseRequestCardHtml(r); });
     html += '</div>';
+    html += _pendingPagination(_courseTotal, _pendingPage.course, 'course');
     return html;
   }
 
   function _courseRequestCardHtml(req) {
     var isGeneral = req.course_type === 'general';
     var mats = req.materials || [];
-    var files = mats.map(function(m, idx) {
+    var files = mats.map(function(m) {
       var stCls = m.review_status === 'approved' ? 'cr-st-approved'
         : m.review_status === 'rejected' ? 'cr-st-rejected' : 'cr-st-pending';
       var stLabel = m.review_status === 'approved' ? '已通过'
         : m.review_status === 'rejected' ? '已驳回' : '待审';
       var size = m.file_size ? formatFileSize(m.file_size) : '';
-      var branch = idx === mats.length - 1 ? '└─' : '├─';
+      // 每行固定：状态 + 详情 + 下载；申请已批准（等待随附文件）且该文件待审时，
+      // 追加 通过/驳回（随附文件只在卡片上下文审核，不单独出现在文件上传列表）。
+      var rowBtns = '<button class="cr-file-btn cr-file-btn-detail" onclick="event.stopPropagation();showPendingFileDetail(' + m.id + ')" title="查看文件详情">详情</button>' +
+        '<button class="cr-file-btn cr-file-btn-dl" onclick="event.stopPropagation();doDirectDownload(' + m.id + ')" title="下载文件">下载</button>';
+      if (req.is_waiting_files && m.review_status === 'pending') {
+        rowBtns += '<button class="cr-file-btn cr-file-btn-approve" onclick="quickApprove(' + m.id + ')">✓ 通过</button>' +
+          '<button class="cr-file-btn cr-file-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>';
+      }
       return '<div class="cr-file">' +
-        '<span class="cr-file-branch">' + branch + '</span>' +
-        '<span class="cr-file-name">📄 ' + esc(m.title) + (size ? ' <span class="cr-file-size">' + size + '</span>' : '') + '</span>' +
-        '<span class="cr-file-status ' + stCls + '">' + stLabel + '</span>' +
+        '<span class="cr-file-icon">' + (typeof _fileGlyph === 'function' ? _fileGlyph(m.file_name) : '<span class="pc-glyph pc-glyph-other">FILE</span>') + '</span>' +
+        '<span class="cr-file-name">' + esc(m.title) + (size ? ' <span class="cr-file-size">' + size + '</span>' : '') + '</span>' +
+        '<span class="cr-file-actions">' +
+          '<span class="cr-file-status ' + stCls + '">' + stLabel + '</span>' +
+          rowBtns +
+        '</span>' +
       '</div>';
     }).join('');
 
-    var meta = '<span>👤 ' + esc(req.uploader_name) + '</span>' +
+    var meta = _userPill(req.uploader_name, req.uploader_avatar, req.uploader_id) +
       '<span>📅 ' + esc(req.created_at) + '</span>';
     if (req.college_name) meta += '<span>🏫 ' + esc(req.college_name) + '</span>';
     if (req.assigned_moderator_name) meta += '<span>↗ ' + esc(req.assigned_moderator_name) + '</span>';
@@ -824,7 +878,7 @@
       var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
       html += '<div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr>' +
-          '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>注册时间</th>' +
+          '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>下载数</th><th>注册时间</th>' +
         '</tr></thead><tbody>';
       users.forEach(function(u) {
         var canChange = u.id !== (currentUser ? currentUser.id : -1) && u.role !== 'super_admin';
@@ -885,6 +939,7 @@
           '<td style="font-size:0.78rem;color:var(--text-muted)">' + sections + '</td>' +
           autoApproveCell +
           '<td>' + (u.material_count || 0) + '</td>' +
+          '<td>' + (u.download_count || 0) + '</td>' +
           '<td>' + u.date_joined + '</td>' +
         '</tr>';
       });

@@ -14,12 +14,51 @@
 
   function _ncEl(id) { return document.getElementById(id); }
 
+  // 复位所有提交按钮（v=147：修复「提交中…」卡死——成功/失败后重进视图按钮一直是禁用态）
+  function _resetNewCourseSubmitButtons() {
+    document.querySelectorAll('.nc-submit').forEach(function(b) {
+      b.disabled = false;
+      b.textContent = '提交新建课程申请';
+    });
+  }
+
+  // 清空整个新建课程表单（提交成功后调用，保证下次申请是全新状态）
+  function _resetNewCourseForm() {
+    ['ncGeneralName', 'ncGeneralCode', 'ncGText', 'ncGTitle', 'ncGTeacher', 'ncGDesc',
+     'ncMName', 'ncMCode', 'ncMText', 'ncMTitle', 'ncMTeacher', 'ncMDesc'].forEach(function(id) {
+      var el = _ncEl(id);
+      if (el) el.value = '';
+    });
+    ['ncGFile', 'ncMFile'].forEach(function(id) {
+      var el = _ncEl(id);
+      if (el) el.value = '';
+    });
+    _ncState.college = null;
+    _ncState.majorNode = null;
+    _ncState.targetCatId = null;
+    _ncState.targetPath = '';
+    var levelBtn = _ncEl('ncMLevelBtn');
+    if (levelBtn) {
+      levelBtn.disabled = true;
+      levelBtn.textContent = '选择层级…';
+      levelBtn.classList.remove('is-set');
+    }
+    var tp = _ncEl('ncMTargetPath');
+    if (tp) tp.textContent = '';
+    ['ncGError', 'ncMError'].forEach(function(id) {
+      var el = _ncEl(id);
+      if (el) { el.style.display = 'none'; el.textContent = ''; }
+    });
+    _resetNewCourseSubmitButtons();
+  }
+
   function showNewCourse() {
     pushViewState('newCourse', {});
     switchView('newCourse');
     updateSidebar(null);
     _renderNewCourseBreadcrumb();
     switchNewCourseType('general');
+    _resetNewCourseSubmitButtons();   // 防御：重进视图时复位可能卡死的按钮
     window.scrollTo({ top: 0 });
     _updateFooterVisibility('newCourse');
   }
@@ -30,6 +69,7 @@
     updateSidebar(null);
     _renderNewCourseBreadcrumb();
     switchNewCourseType('general');
+    _resetNewCourseSubmitButtons();
     _updateFooterVisibility('newCourse');
   }
 
@@ -295,10 +335,9 @@
 
   function submitToDeveloper() {
     var mail = 'mailto:bnusparks@163.com?subject=' + encodeURIComponent('课程树收录申请');
+    // v=147：弱化提示——不再 alert（部分浏览器会弹阻断弹窗），微信已在按钮旁静态展示，仅静默复制
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText('Rsun1949').then(function() {
-        alert('已复制开发者微信 Rsun1949，即将打开邮件');
-      }).catch(function() {});
+      navigator.clipboard.writeText('Rsun1949').catch(function() {});
     }
     window.location.href = mail;
   }
@@ -343,12 +382,21 @@
 
     var btn = event && event.target;
     if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+    var reqId = null;
     try {
       var req = await api('/api/courses/request/', { method: 'POST', body: body });
+      reqId = req && req.id;
       await _uploadAttached(isGeneral, req.id);
+      // 成功后复位按钮 + 清空表单（v=147：修复重进视图一直「提交中…」）
+      _resetNewCourseSubmitButtons();
+      _resetNewCourseForm();
       alert('提交成功！新建课程申请已送审，通过后将创建课程文件夹。');
       showHome();
     } catch (err) {
+      // 申请已创建但随附文件上传中途失败：清理半成品申请，避免重试时同批文件重复挂到新申请
+      if (reqId != null) {
+        try { await api('/api/courses/request/' + reqId + '/', { method: 'DELETE' }); } catch (e) {}
+      }
       _ncFail(errEl, (err && (err.message || err.error)) || '提交失败，请稍后再试');
       if (btn) { btn.disabled = false; btn.textContent = '提交新建课程申请'; }
     }

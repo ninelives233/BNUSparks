@@ -134,9 +134,11 @@
     try {
       var sid = document.getElementById('forgotSid').value.trim();
       if (!sid) throw new Error('请输入学号');
-      // 发送纯学号，后端依次尝试两种师大邮箱后缀
+      // 用户自选邮箱后缀，拼成完整邮箱提交（后端按完整邮箱查找）
+      var suffixEl = document.getElementById('forgotSuffix');
+      var suffix = (suffixEl && suffixEl.value) || '@mail.bnu.edu.cn';
       const data = await api('/api/auth/forgot-password/', { method: 'POST',
-        body: { email: sid } });
+        body: { email: sid + suffix } });
       document.getElementById('forgotPwdMsg').textContent = data.message;
       el.style.display = 'none';
       form.style.display = 'none';
@@ -316,21 +318,20 @@
     try {
       const data = await api('/api/auth/notifications/?unread_only=1');
       const badge = document.getElementById('notifBadge');
-      if (data.unread_count > 0) {
-        // 减去本地已读缓存中仍在 server 未读列表里的
-        var readSet = _getReadNotifSet();
-        var actual = data.unread_count;
-        if (data.list) {
-          data.list.forEach(function(n) {
-            if (readSet.has(n.id)) actual--;
-          });
-        }
-        if (actual > 0) {
-          badge.textContent = actual > 99 ? '99+' : actual;
-          badge.style.display = '';
-        } else {
-          badge.style.display = 'none';
-        }
+      if (!badge) return;
+      // 与通知中心同一口径：服务端未读 && 本地未标已读
+      var readSet = (typeof _getReadNotifSet === 'function') ? _getReadNotifSet() : new Set();
+      var realUnread = 0;
+      if (data.list) {
+        data.list.forEach(function(n) {
+          if (!n.is_read && !readSet.has(n.id)) realUnread++;
+        });
+      }
+      if (realUnread > 0) {
+        badge.textContent = realUnread > 99 ? '99+' : realUnread;
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
       }
     } catch(e) { /* ignore */ }
   }

@@ -60,6 +60,7 @@ from .operations import (
 # 新建课程申请
 from .course_requests import (
     api_course_request_create, api_course_request_upload_file,
+    api_course_request_delete,
     api_moderation_course_requests,
     api_moderation_course_request_approve, api_moderation_course_request_reject,
     api_moderation_course_requests_batch_approve,

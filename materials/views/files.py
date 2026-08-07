@@ -452,6 +452,38 @@ def api_file_download(request, file_id):
                                 display_filename=display, inline=False, preview_cache=False)
 
 
+def _scope_matched_moderators(material, actor, include_super_admin=False):
+    """删除资料时应通知的版主/小版主（按资料所属学院匹配管辖范围，与
+    管理后台「删除记录」的可见范围一致）。include_super_admin 时总管理员始终包含。
+    不含 actor，去重返回 User 列表。"""
+    college_id = material.course.college_id if material.course else None
+    roles = [UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR]
+    if include_super_admin:
+        roles.append(UserProfile.Role.SUPER_ADMIN)
+    qs = User.objects.filter(
+        profile__role__in=roles
+    ).exclude(id=actor.id).distinct()
+    recipients = []
+    seen = set()
+    for u in qs:
+        p = _get_or_create_profile(u)
+        in_scope = False
+        if p.role == UserProfile.Role.SUPER_ADMIN:
+            in_scope = True  # 总管理员全局可见，始终通知
+        elif p.role == UserProfile.Role.MODERATOR:
+            if college_id and p.managed_majors.filter(id=college_id).exists():
+                in_scope = True
+            if p.can_moderate_general and material.course and material.course.course_type == 'general':
+                in_scope = True
+        else:  # SUB_MODERATOR
+            if material.course and p.moderated_sections.filter(course=material.course).exists():
+                in_scope = True
+        if in_scope and u.id not in seen:
+            seen.add(u.id)
+            recipients.append(u)
+    return recipients
+
+
 @csrf_exempt
 @require_login
 def api_file_delete(request, file_id):
@@ -496,36 +528,19 @@ def api_file_delete(request, file_id):
         delete_reason=delete_reason,
     )
 
-    # 非自删时通知辖区的版主/小版主
+    # 非自删时通知辖区的版主/小版主（按资料所属学院匹配管辖范围）
     if not is_self_delete and material.course:
-        college_id = material.course.college_id
-        local_users = User.objects.filter(
-            profile__role__in=[UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR]
-        ).exclude(id=request.user.id).distinct()
-        notified = set()
-        for u in local_users:
-            p = _get_or_create_profile(u)
-            in_scope = False
-            if p.role == UserProfile.Role.MODERATOR and college_id:
-                if p.managed_majors.filter(id=college_id).exists():
-                    in_scope = True
-                if p.can_moderate_general and material.course.course_type == 'general':
-                    in_scope = True
-            if p.role == UserProfile.Role.SUB_MODERATOR:
-                if material.course and p.moderated_sections.filter(course=material.course).exists():
-                    in_scope = True
-            if in_scope and u.id not in notified:
-                notified.add(u.id)
-                _create_notification(
-                    recipient=u,
-                    type=Notification.Type.FILE_DELETED,
-                    title="辖区内的资料被删除",
-                    message=f"管理员{request.user.first_name or request.user.username}删除了你辖区内的资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
-                    material=material,
-                    course_code=material.course.code if material.course else "",
-                    course_name=material.course.name if material.course else "",
-                    triggered_by=request.user,
-                )
+        for u in _scope_matched_moderators(material, request.user):
+            _create_notification(
+                recipient=u,
+                type=Notification.Type.FILE_DELETED,
+                title="辖区内的资料被删除",
+                message=f"管理员{request.user.first_name or request.user.username}删除了你辖区内的资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
+                material=material,
+                course_code=material.course.code if material.course else "",
+                course_name=material.course.name if material.course else "",
+                triggered_by=request.user,
+            )
 
     if not is_self_delete and delete_reason and material.uploader and material.uploader_id != request.user.id:
         _create_notification(
@@ -548,10 +563,7 @@ def api_file_delete(request, file_id):
             course_code=material.course.code if material.course else "",
             course_name=material.course.name if material.course else "",
         )
-        admins = User.objects.filter(
-            profile__role__in=[UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR]
-        ).exclude(id=request.user.id).distinct()
-        for admin in admins:
+        for admin in _scope_matched_moderators(material, request.user, include_super_admin=True):
             _create_notification(
                 recipient=admin,
                 type=Notification.Type.FILE_DELETED,

@@ -36,6 +36,9 @@ def api_moderation_pending(request):
         Q(review_status="pending") |
         (Q(review_status="approved", reviewed_at__gte=recently) & ~Q(reviewed_by=request.user))
     )
+    # v=147：新建课程申请的随附文件（creation_request 非空）不进「文件上传」待审核，
+    # 只在课程创建卡片内按申请审核，避免被单独批准成无文件夹的野鬼文件。
+    qs = qs.exclude(creation_request_id__isnull=False)
 
     hide_peer_approved = request.GET.get("hide_peer_approved") == "1"
     if hide_peer_approved:
@@ -62,25 +65,36 @@ def api_moderation_pending(request):
             ~(Q(review_status="pending") & Q(course_id__in=subordinate_course_ids))
         )
 
+    def _avatar_of(u):
+        try:
+            return u.profile.avatar.url if u and u.profile and u.profile.avatar else ""
+        except Exception:
+            return ""
+
     def _serialize(m):
         is_peer_approved = m.review_status == "approved" and m.reviewed_by_id != request.user.id
         is_sub = (m.review_status == "pending" and m.course_id in subordinate_course_ids)
-        # 新建课程申请随附文件 course 可为 NULL，回退到申请信息
-        _cname = m.course.name if m.course_id else (
-            m.creation_request.course_name if m.creation_request_id else "新建课程申请"
+        _course = m.course  # select_related 已加载；悬空外键时 Django 置 None
+        _creq = m.creation_request if m.creation_request_id else None
+        # 新建课程申请随附文件 course 可为 NULL/悬空，回退到申请信息
+        _cname = _course.name if _course else (
+            _creq.course_name if _creq else "新建课程申请"
         )
-        _ccode = m.course.code if m.course_id else (
-            m.creation_request.course_code if m.creation_request_id else ""
+        _ccode = _course.code if _course else (
+            _creq.course_code if _creq else ""
         )
+        _mtype = m.material_type
         return {
             "id": m.id,
-            "title": m.title,
+            "title": m.title or "",
             "course_name": _cname,
             "course_code": _ccode,
             "uploader_name": m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
+            "uploader_id": m.uploader_id,
+            "uploader_avatar": _avatar_of(m.uploader),
             "file_size": m.file_size,
-            "file_type": m.material_type.name if hasattr(m, "material_type") and m.material_type else (m.file_type or "其他"),
-            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
+            "file_type": _mtype.name if _mtype else (m.file_type or "其他"),
+            "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "",
             "is_own": m.uploader_id == request.user.id,
             "is_peer_approved": is_peer_approved,
             "is_subordinate_handled": is_sub,
@@ -89,7 +103,15 @@ def api_moderation_pending(request):
             "review_notes": m.review_notes if m.review_status == "rejected" else "",
             "review_status": m.review_status,
         }
-    return _ok([_serialize(m) for m in qs])
+
+    try:
+        return _ok([_serialize(m) for m in qs])
+    except Exception:
+        # 安全网：任一条目序列化异常不返回 500 HTML（前端会报 Unexpected token '<'），
+        # 而是记录日志并返回可读 JSON 错误。
+        import logging
+        logging.getLogger(__name__).exception("moderation/pending 序列化失败")
+        return _err("待审核列表加载失败，请刷新后重试", 500)
 
 
 @csrf_exempt
@@ -132,6 +154,12 @@ def api_moderation_approve(request, file_id):
 
     material = get_object_or_404(Material, id=file_id)
     _check_moderator_access(request.user, material)
+
+    # v=147：新建课程申请的随附文件在申请批准前 course 为 NULL，
+    # 禁止单独批准（否则变成「已通过却无处可下载」的野鬼文件），
+    # 必须先批准课程创建申请、文件夹创建后随附文件才可过审。
+    if material.creation_request_id and material.course_id is None:
+        return _err("请先批准该课程创建申请，随附文件将随文件夹一并创建", 400)
 
     if material.review_status != "pending":
         return _err("该资料已审核，不可重复操作")

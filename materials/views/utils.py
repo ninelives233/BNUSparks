@@ -39,6 +39,10 @@ from ..models import (
 )
 
 
+# 普通用户每日下载限额（版主/总管理员豁免）
+DAILY_DOWNLOAD_LIMIT = 15
+
+
 # ── 文件名/目录名清洗（防路径穿越，S1） ──
 
 def _sanitize_filename_part(name, max_len=40):
@@ -383,15 +387,15 @@ def _check_download_quota(user):
         )
         profile.refresh_from_db()
 
-    if profile.daily_download_count >= 60:
-        return False, 0, "今日下载次数已达上限（60 次）"
+    if profile.daily_download_count >= DAILY_DOWNLOAD_LIMIT:
+        return False, 0, f"今日下载次数已达上限（{DAILY_DOWNLOAD_LIMIT} 次）"
 
     UserProfile.objects.filter(user=user).update(
         daily_download_count=F('daily_download_count') + 1,
         last_download_date=today,
     )
     profile.refresh_from_db()
-    remaining = 60 - profile.daily_download_count
+    remaining = DAILY_DOWNLOAD_LIMIT - profile.daily_download_count
     return True, remaining, ""
 
 
