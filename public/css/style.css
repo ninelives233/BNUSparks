@@ -2594,8 +2594,14 @@
   margin-top: 8px; padding: 3px 10px; font-size: 0.75rem;
   background: var(--primary-surface); color: var(--primary); border: 1px solid var(--border-light);
   border-radius: var(--radius); cursor: pointer; transition: background 0.15s;
+  display: inline-flex; align-items: center; gap: 5px;
 }
 .notif-mark-btn:hover { background: var(--primary); color: white; }
+.notif-btn-ico { display: inline-flex; }
+.notif-btn-ico svg { width: 13px; height: 13px; }
+.notif-view-all {
+  display: inline-flex; align-items: center; gap: 5px;
+}
 .notif-empty {
   text-align: center;
   padding: var(--space-xl);
@@ -2631,7 +2637,11 @@
   position: relative;
 }
 .dm-item:hover { background: var(--primary-surface); color: var(--primary); }
-.dm-item span:first-child { font-size: 1.1rem; }
+.dm-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dm-item .dm-ico svg { width: 18px; height: 18px; }
 .dm-badge {
   margin-left: auto;
   min-width: 18px; height: 18px;
@@ -3566,7 +3576,11 @@
   padding: 10px 16px;
   cursor: default;
 }
-.dm-toggle-label { font-size: 0.85rem; }
+.dm-toggle-label {
+  font-size: 0.85rem;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.dm-toggle-label .dm-ico svg { width: 16px; height: 16px; }
 
 /* 管理模式 — 新建按钮 */
 .mgmt-new-btn {
