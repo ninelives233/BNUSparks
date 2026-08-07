@@ -194,7 +194,7 @@
             subTag +
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
-              '<span>📚 ' + escapeHtml(m.course_name) + ' (' + m.course_code + ')</span>' +
+              '<span>📚 ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
               '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
               '<span>📅 ' + m.created_at + '</span>' +
               '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
@@ -223,7 +223,7 @@
           html += '<div class="admin-pending-card pc-peer-approved" id="pc-' + m.id + '">' +
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
-              '<span>📚 ' + escapeHtml(m.course_name) + ' (' + m.course_code + ')</span>' +
+              '<span>📚 ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
               '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
               '<span>📅 ' + m.created_at + '</span>' +
               '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
@@ -232,7 +232,7 @@
             '<div class="pc-actions" style="margin-top:8px">' +
               '<button class="admin-btn admin-btn-secondary" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">📄 详情</button>' +
               '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件查看">⬇ 下载查看</button>' +
-              '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escapeHtml(m.title) + '\')">💬 提出异议</button>' +
+              '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">💬 提出异议</button>' +
             '</div>' +
           '</div>';
         });
@@ -547,7 +547,7 @@
         var reviewerName = m.is_admin_uploaded ? escapeHtml(m.uploader_name) + ' (自传)' : escapeHtml(m.reviewed_by_name);
         var objHtml = '';
         if (m.can_object && m.review_status === 'approved') {
-          objHtml = '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escapeHtml(m.title) + '\')">💬 异议</button>';
+          objHtml = '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">💬 异议</button>';
         } else {
           objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">💬</button>';
         }
@@ -828,7 +828,7 @@
         '</tr></thead><tbody>';
       users.forEach(function(u) {
         var canChange = u.id !== (currentUser ? currentUser.id : -1) && u.role !== 'super_admin';
-        var roleOptions = '<select class="admin-role-select" data-user-id="' + u.id + '" data-original="' + u.role + '"' + (canChange ? ' onchange="onRoleChange(' + u.id + ', this.value, \'' + escapeHtml(u.nickname) + '\')"' : ' disabled') + '>' +
+        var roleOptions = '<select class="admin-role-select" data-user-id="' + u.id + '" data-original="' + u.role + '"' + (canChange ? ' onchange="onRoleChange(' + u.id + ', this.value, \'' + escJs(u.nickname) + '\')"' : ' disabled') + '>' +
           '<option value="user"' + (u.role === 'user' ? ' selected' : '') + '>普通用户</option>' +
           '<option value="sub_moderator"' + (u.role === 'sub_moderator' ? ' selected' : '') + '>小版主</option>' +
           '<option value="moderator"' + (u.role === 'moderator' ? ' selected' : '') + '>版主</option>' +
@@ -845,7 +845,7 @@
           }
           var display = names.length ? names.join('、') : '—';
           if (canChange) {
-            sections = '<a href="javascript:void(0)" class="section-link" onclick="onRoleChange(' + u.id + ',\'moderator\',\'' + escapeHtml(u.nickname) + '\')">' + display + '</a>';
+            sections = '<a href="javascript:void(0)" class="section-link" onclick="onRoleChange(' + u.id + ',\'moderator\',\'' + escJs(u.nickname) + '\')">' + display + '</a>';
           } else {
             sections = display;
           }
@@ -855,7 +855,7 @@
           // 仅显示最高层级的节点（父节点不在管辖范围内则不显示子节点）
           var display = [...new Set(info.filter(function(s) { return allIds.indexOf(s.parent_id) === -1; }).map(function(s) { return s.name; }))].join('、') || '—';
           if (canChange) {
-            sections = '<a href="javascript:void(0)" class="section-link" onclick="onRoleChange(' + u.id + ',\'sub_moderator\',\'' + escapeHtml(u.nickname) + '\')">' + display + '</a>';
+            sections = '<a href="javascript:void(0)" class="section-link" onclick="onRoleChange(' + u.id + ',\'sub_moderator\',\'' + escJs(u.nickname) + '\')">' + display + '</a>';
           } else {
             sections = display;
           }
@@ -894,13 +894,13 @@
       if (totalPages > 1) {
         html += '<div class="admin-pagination">';
         if (_userPage > 1) {
-          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escapeHtml(search) + '\', ' + (_userPage - 1) + ')">← 上一页</button>';
+          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escJs(search) + '\', ' + (_userPage - 1) + ')">← 上一页</button>';
         } else {
           html += '<button disabled>← 上一页</button>';
         }
         html += '<span class="page-info">第 ' + _userPage + ' / ' + totalPages + ' 页（共 ' + resp.total + ' 条）</span>';
         if (_userPage < totalPages) {
-          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escapeHtml(search) + '\', ' + (_userPage + 1) + ')">下一页 →</button>';
+          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escJs(search) + '\', ' + (_userPage + 1) + ')">下一页 →</button>';
         } else {
           html += '<button disabled>下一页 →</button>';
         }

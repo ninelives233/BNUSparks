@@ -161,11 +161,11 @@
         var badgeHtml = '<span class="review-badge ' + badgeClass + '">' + badgeLabel + '</span>';
         var actions = '';
         if (m.review_status === 'rejected') {
-          actions = '<button class="reupload-btn" onclick="showReUploadDialog(' + m.id + ',\'' + esc(m.course_code) + '\',\'' + esc(m.course_name) + '\',\'' + esc(m.title) + '\',\'' + esc(m.review_notes||'') + '\',\'' + esc(m.teacher||'') + '\')">↻ 重新上传</button>' +
+          actions = '<button class="reupload-btn" onclick="showReUploadDialog(' + m.id + ',\'' + escJs(m.course_code) + '\',\'' + escJs(m.course_name) + '\',\'' + escJs(m.title) + '\',\'' + escJs(m.review_notes||'') + '\',\'' + escJs(m.teacher||'') + '\')">↻ 重新上传</button>' +
             '<button class="delete-rejected-btn" onclick="deleteRejected(' + m.id + ', this)">🗑 删除记录</button>';
         }
         var ctype = m.course_type === 'general' ? '通识课' : '专业课';
-        html += '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'' + ctype + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+        html += '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'' + escJs(ctype) + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
           '<div class="hc-item-left">' +
             '<div class="hc-item-name">' + esc(m.title) + ' ' + badgeHtml + '</div>' +
             '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + formatSize(m.file_size) + ' · ' + m.download_count + ' 次下载' +
@@ -213,7 +213,7 @@
         return;
       }
       list.innerHTML = data.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.material_id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
           '<div class="hc-item-left">' +
             '<div class="hc-item-name">' + esc(r.material_title) + '</div>' +
             '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + esc(r.created_at) + '</div>' +
@@ -275,7 +275,7 @@
         return;
       }
       list.innerHTML = items.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'通识课\');navToLast(\'' + esc(r.course_code) + '\')">' +
+        return '<div class="hc-item" style="cursor:pointer" onclick="showExplorer(\'通识课\');navToLast(\'' + escJs(r.course_code) + '\')">' +
           '<div class="hc-item-left">' +
             '<div class="hc-item-name">' + esc(r.course_name) + '</div>' +
             '<div class="hc-item-meta">' + esc(r.course_code) + (r.college_name ? ' · ' + esc(r.college_name) : '') + ' · ' + esc(r.favorited_at) + '</div>' +
@@ -297,7 +297,7 @@
         return;
       }
       list.innerHTML = items.map(function(r) {
-        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+        return '<div class="hc-item" style="cursor:pointer" onclick="navToMaterial(' + r.id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
           '<div class="hc-item-left">' +
             '<div class="hc-item-name">' + esc(r.title) + '</div>' +
             '<div class="hc-item-meta">' + esc(r.course_name) + ' · ' + esc(r.favorited_at) + '</div>' +

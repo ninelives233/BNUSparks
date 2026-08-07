@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
+/* 字体策略（P3.4）：移除 Google Fonts 渲染阻塞 @import。
+   中文字体全量自托管在 4Mbps 下反而更糟；改用平台 CJK 系统字体栈
+   （macOS: PingFang/Songti · Windows: 微软雅黑/宋体 · Linux: Noto CJK），
+   零外部请求、国内稳定、视觉与 Noto 系高度接近。 */
 
   /* ═════════════════════════════════════════════════════════════
      心理学驱动设计 (Psychology-Driven Design)
@@ -47,8 +50,8 @@
     --border: oklch(0.86 0.012 65);
     --border-light: oklch(0.91 0.008 65);
 
-    --serif: "Noto Serif SC", Georgia, "Times New Roman", serif;
-    --sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+    --serif: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
 
     --radius-sm: 6px;
     --radius-md: 12px;

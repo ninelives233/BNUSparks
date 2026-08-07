@@ -11,6 +11,7 @@ import hashlib
 import base64
 import io
 import os
+import re
 import time
 import threading
 from pathlib import Path
@@ -36,6 +37,75 @@ from ..models import (
     Favorite, DownloadRecord, DeletionRecord, FolderOperation, Announcement,
     _bump_user_public_gen,
 )
+
+
+# ── 文件名/目录名清洗（防路径穿越，S1） ──
+
+def _sanitize_filename_part(name, max_len=40):
+    """清洗用户提供的文件名片段：消除路径穿越（/ \\ ..），截断长度，兜底空值。
+
+    所有上传处拼接 safe_name 前必须经过本函数：
+        safe_name = f"{uuid}_{_sanitize_filename_part(title)}{ext}"
+    """
+    if not name:
+        return ""
+    name = str(name).replace("\\", "/").rsplit("/", 1)[-1]
+    if name in ("", ".", ".."):
+        return ""
+    name = re.sub(r"[\x00-\x1f\x7f]", "", name)
+    if len(name) > max_len:
+        name = name[:max_len]
+    return name
+
+
+def _safe_dir_name(name, fallback="default"):
+    """清洗目录名：仅保留安全字符（字母/数字/-/_/*/中文），防目录穿越。
+
+    course_code 用作 data/materials/ 下的目录名时使用；真实课程代码均为
+    字母数字，清洗前后一致，仅对恶意输入（含 / \\ .. 等）生效。
+    """
+    if not name:
+        return fallback
+    name = str(name).replace("\\", "/").rsplit("/", 1)[-1]
+    name = re.sub(r"[^A-Za-z0-9一-鿿\-_*]", "", name)
+    return name.strip(".") or fallback
+
+
+# ── 上传扩展名黑名单（S8）：可执行/活动内容一律拒绝 ──
+# 材料平台用黑名单而非白名单：保留 caj/epub/mob 等生僻合法类型，仅拦截能在
+# 源内执行或被当作程序的类型。与 nginx /media/ 移除、预览 inline 限制组合
+# 成存储型 XSS 防线。
+_BLOCKED_UPLOAD_EXTS = {
+    '.html', '.htm', '.shtml', '.xhtml', '.svg',
+    '.js', '.mjs', '.php', '.php3', '.php4', '.php5', '.php7', '.phar', '.phtml',
+    '.asp', '.aspx', '.ashx', '.jsp', '.jspx', '.exe', '.com', '.bat', '.cmd',
+    '.sh', '.bash', '.zsh', '.py', '.pyc', '.pyo', '.pl', '.rb', '.jar', '.dll',
+    '.scr', '.vbs', '.ps1', '.msi', '.app', '.reg', '.lnk', '.hta', '.cpl',
+    '.wsf', '.gadget', '.deb', '.rpm', '.apk', '.xap', '.swf',
+}
+
+
+def _blocked_upload_ext(ext):
+    """扩展名是否在黑名单（小写匹配，含无点前缀容错）。"""
+    if not ext:
+        return False
+    e = str(ext).strip().lower()
+    if not e.startswith("."):
+        e = "." + e
+    return e in _BLOCKED_UPLOAD_EXTS
+
+
+def _safe_int(value, default=1, lo=None, hi=None):
+    """安全解析 int（防非法输入导致 500），越界收敛到 lo/hi。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    if lo is not None and n < lo:
+        n = lo
+    if hi is not None and n > hi:
+        n = hi
+    return n
 
 
 # ── Category/Course batch preload (request-scoped) ──
@@ -111,8 +181,15 @@ def _get_courses_in_category_preloaded(cat, preload):
 # ═══════════════════════════════════════════════════════════════
 
 def _jwt_encode(payload):
-    """编码 JWT（role 不在 token 中，从数据库实时读取）"""
+    """编码 JWT（role 不在 token 中，从数据库实时读取；携带 token_version 供撤销）"""
     payload = dict(payload)
+    uid = payload.get("user_id")
+    if uid:
+        try:
+            payload["ver"] = UserProfile.objects.filter(user_id=uid).values_list(
+                "token_version", flat=True).first() or 0
+        except Exception:
+            pass
 
     header = base64.urlsafe_b64encode(
         json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
@@ -158,9 +235,21 @@ def _get_user(request):
     if payload is None:
         return None
     try:
-        return User.objects.get(id=payload["user_id"])
+        user = User.objects.get(id=payload["user_id"])
     except User.DoesNotExist:
         return None
+    # 令牌版本校验（P2.5）：改密/重置后 token_version+1，旧 JWT 立即失效。
+    # 无 ver 字段的旧 token（本改动前签发）不校验，平滑过渡。
+    ver = payload.get("ver")
+    if ver is not None:
+        try:
+            current = UserProfile.objects.filter(user_id=user.id).values_list(
+                "token_version", flat=True).first()
+            if current is not None and current != ver:
+                return None
+        except Exception:
+            pass
+    return user
 
 
 # ═══════════════════════════════════════════════════════════════

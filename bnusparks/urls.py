@@ -6,14 +6,19 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseNotModified
 from pathlib import Path
 
 
 def frontend(request):
-    """服务前端 index.html"""
-    html = (Path(__file__).resolve().parent.parent / "public" / "index.html").read_text(encoding="utf-8")
-    return HttpResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    """服务前端 index.html（ETag + revalidate，未变返回 304，省 50KB 刷新重传）"""
+    html_path = Path(__file__).resolve().parent.parent / "public" / "index.html"
+    st = html_path.stat()
+    etag = f'"{int(st.st_mtime)}-{st.st_size}"'
+    if request.headers.get("If-None-Match") == etag:
+        return HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "no-cache"})
+    html = html_path.read_text(encoding="utf-8")
+    return HttpResponse(html, headers={"Cache-Control": "no-cache", "ETag": etag})
 
 
 urlpatterns = [

@@ -68,7 +68,7 @@
         return;
       }
       list.innerHTML = data.map(function(r) {
-        return '<div class="notif-item notif-item-read" style="cursor:pointer" onclick="closeNotifDrawer();navToMaterial(' + r.material_id + ',\'' + esc(r.course_code) + '\',\'' + esc(r.course_name) + '\')">' +
+        return '<div class="notif-item notif-item-read" style="cursor:pointer" onclick="closeNotifDrawer();navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
           '<div class="notif-item-header">' +
             '<div class="notif-item-content">' +
               '<div class="notif-item-title">' + esc(r.material_title) + '</div>' +
@@ -209,14 +209,14 @@
           if (n.type === 'disagree') {
             linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a></div>';
           } else if (n.type === 'rejected') {
-            linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="navToReUpload(\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')" style="font-weight:600">↻ 跳转到文件目录并重新上传 →</a></div>';
+            linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="navToReUpload(\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')" style="font-weight:600">↻ 跳转到文件目录并重新上传 →</a></div>';
           } else if (n.type === 'operation') {
             // 操作通知：如果有 material_id 则跳转到文件
             if (n.material_id) {
-              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看资料详情 →</a></div>';
+              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看资料详情 →</a></div>';
             }
           } else {
-            linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a></div>';
+            linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看相关资料 →</a></div>';
           }
         }
         return '<div class="notif-item ' + unreadClass + '" data-nid="' + n.id + '">' +
@@ -444,7 +444,7 @@
           '</div>' +
           '<div class="notif-full-body" style="display:none">' +
             '<div class="notif-full-msg">' + (n.message ? esc(n.message) : '') + '</div>' +
-            (n.material_id ? '<div class="notif-full-link">' + (n.type === 'disagree' ? '<a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a>' : '<a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + esc(n.course_code || '') + '\',\'' + esc(n.course_name || '') + '\')">查看相关资料 →</a>') + '</div>' : '') +
+            (n.material_id ? '<div class="notif-full-link">' + (n.type === 'disagree' ? '<a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a>' : '<a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看相关资料 →</a>') + '</div>' : '') +
           '</div>' +
         '</div>';
       });

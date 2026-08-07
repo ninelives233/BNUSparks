@@ -43,6 +43,8 @@ def api_announcements(request):
 
     elif request.method == "POST":
         user = _get_user(request)
+        if user is None:
+            return _err("请先登录", 401)
         profile = _get_or_create_profile(user)
         if profile.role not in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN):
             return _err("权限不足", 403)

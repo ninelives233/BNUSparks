@@ -311,7 +311,26 @@
 
   function escapeHtml(str) {
     if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&#96;');
+  }
+
+  // JS 字符串字面量转义：用于内联 onclick 属性里单引号包裹的 JS 字符串参数。
+  // 注意：HTML 实体转义（&#39;）在 onclick 场景会被浏览器解码回 '，仍可注入
+  // （…' + esc(x) + '… → …');alert(1)…），所以此处必须用 JS 反斜杠转义：
+  //   '  → \'  （保持 JS 字符串闭合）
+  //   \  → \\  （防止攻击者用 \ 抵消我们的转义）
+  //   "  → &quot;  （HTML 属性安全，解码为 " 在 JS 单引号串内无害）
+  //   &  → &amp;  （同上）
+  function escJs(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n');
   }
 
   function formatFileSize(bytes) {
@@ -368,7 +387,7 @@
         results.courses.forEach(function(c) {
           var typeLabel = c.course_type === 'general' ? '通识' : '专业';
           var typeClass = c.course_type === 'general' ? 'sg-pill-general' : 'sg-pill-major';
-          html += '<div class="sg-item" onclick="this.closest(\'.search-overlay\').remove();showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + esc(c.code) + '\')">';
+          html += '<div class="sg-item" onclick="this.closest(\'.search-overlay\').remove();showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(c.code) + '\')">';
           html += '<div class="sg-item-body">';
           html += '<span class="sg-item-name">' + esc(c.name) + '</span>';
           html += '<span class="sg-item-meta">';
@@ -397,7 +416,7 @@
           if (m.review_status && m.review_status !== 'approved') {
             badgeHtml = '<span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem;margin-left:6px">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          html += '<div class="sg-item sg-item-link" onclick="this.closest(\'.search-overlay\').remove();showFileDetail({id:' + m.id + ',title:\'' + esc(m.title) + '\',course_code:\'' + esc(m.course_code) + '\',course_name:\'' + esc(m.course_name) + '\'})">';
+          html += '<div class="sg-item sg-item-link" onclick="this.closest(\'.search-overlay\').remove();showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})">';
           html += '<div class="sg-item-body">';
           html += '<span class="sg-item-name">' + esc(m.title) + badgeHtml + '</span>';
           html += '<span class="sg-item-meta">';
@@ -451,7 +470,7 @@
       const topEl = document.getElementById('topDownloadedList');
       if (topEl && s.top_downloaded && s.top_downloaded.length) {
         topEl.innerHTML = s.top_downloaded.map(m =>
-          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + m.download_count + ' 次</span>' +
           '</a>'
@@ -467,7 +486,7 @@
           if (m.review_status && m.review_status !== 'approved') {
             badge = '<span class="review-badge review-badge-' + m.review_status + '" style="margin-left:6px;font-size:0.7rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          return '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+          return '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + badge + '</div><div class="hc-item-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + esc(m.uploader_name) + '</span>' +
           '</a>';

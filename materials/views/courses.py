@@ -5,6 +5,7 @@ courses list, course-tree, course-files, search, stats, colleges
 """
 
 import json
+import hashlib
 
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -12,6 +13,7 @@ from django.db.models import Count, Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.cache import cache
+from django.http import JsonResponse, HttpResponseNotModified
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile,
@@ -21,6 +23,20 @@ from .utils import (
     Notification, DownloadRecord, Favorite,
 )
 from ..models import COURSE_TREE_CACHE_KEY
+
+
+def _etag_json_response(request, data):
+    """内容 ETag + 304：浏览器每次重验证，未变返回 304（省去 406KB 树重复传输）。
+
+    内容哈希保证数据变化后 ETag 必然变化 → 无陈旧缓存风险。
+    """
+    resp = JsonResponse({"ok": True, "data": data})
+    etag = '"' + hashlib.md5(resp.content).hexdigest() + '"'
+    if request.headers.get("If-None-Match") == etag:
+        return HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "no-cache"})
+    resp["ETag"] = etag
+    resp["Cache-Control"] = "no-cache"
+    return resp
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -163,7 +179,7 @@ def api_course_tree(request):
     CACHE_KEY = COURSE_TREE_CACHE_KEY
     cached = cache.get(CACHE_KEY)
     if cached is not None:
-        return _ok(cached)
+        return _etag_json_response(request, cached)
 
     # 1. 一次性加载所有 CourseCategory（带 select_related('course') 避免 FK N+1）
     all_cats = CourseCategory.objects.select_related('course').all()
@@ -195,7 +211,7 @@ def api_course_tree(request):
             tree[root.name] = {"children": _build_tree_node(children, preload=preload)}
 
     cache.set(CACHE_KEY, tree, 600)
-    return _ok(tree)
+    return _etag_json_response(request, tree)
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -501,20 +501,23 @@
 
     sameNameMap = finalize(items);
 
-    // 从数据库补充
-    try {
-      const courses = await api('/api/courses/');
-      courses.forEach(c => {
-        if (!items.some(i => i.courseId === c.code)) {
-          items.push({
-            name: c.name, courseId: c.code,
-            type: c.course_type === 'general' ? '通识课' : '专业课',
-            program: c.college || '',
-          });
-        }
-      });
-      sameNameMap = finalize(items);
-    } catch(e) { /* ignore */ }
+    // 兜底：仅当课程树为空（未加载/无数据）时才请求 /api/courses/，
+    // 正常情况树遍历已覆盖全部课程，省去每次启动的冗余拉取（P3.6）
+    if (items.length === 0) {
+      try {
+        const courses = await api('/api/courses/');
+        courses.forEach(c => {
+          if (!items.some(i => i.courseId === c.code)) {
+            items.push({
+              name: c.name, courseId: c.code,
+              type: c.course_type === 'general' ? '通识课' : '专业课',
+              program: c.college || '',
+            });
+          }
+        });
+        sameNameMap = finalize(items);
+      } catch(e) { /* ignore */ }
+    }
   }
 
   function extBadge(fileName) {
@@ -787,7 +790,7 @@
     return node;
   }
 
-  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;'); }
 
   // ── Navigation ──
   function navTo(depth) { expPath = expPath.slice(0, depth); pushViewState('explorer', { expPath: [...expPath] }); renderExplorer(); window.scrollTo({ top: 0 }); }
@@ -1246,7 +1249,7 @@
     container.innerHTML =
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
-          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + esc(code) + '\',\'' + esc(course.name) + '\')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn dl-login-prompt" onclick="event.stopPropagation();showLoginModal()" style="border-style:dashed">🔒 登录后上传</button>') + '</div>' : '') + '</div>' +
+          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn dl-login-prompt" onclick="event.stopPropagation();showLoginModal()" style="border-style:dashed">🔒 登录后上传</button>') + '</div>' : '') + '</div>' +
           '<div class="file-table-wrap"><div class="batch-dl-bar" id="batchDlBar"><span id="selectedCount">已选 0 个</span>' +
             '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">🗑 删除选中</button>' +
             '<button class="admin-btn admin-btn-sm" onclick="showBatchEditDialog()" id="batchEditBtn" style="display:none">✏️ 编辑选中</button>' +
@@ -1258,7 +1261,7 @@
         '</div>' +
         (Object.keys(sameNameGroups).length ? '<div class="file-area-side-bottom"><div class="fasb-title">📚 同名课程（相同名称的不同课程代码）</div><div class="fasb-list">' +
           Object.values(sameNameGroups).map(g =>
-            '<span class="fasb-item" onclick="showExplorer(\'' + g.type + '\');setTimeout(function(){navToLast(\'' + esc(g.courseId) + '\')},60)">' +
+            '<span class="fasb-item" onclick="showExplorer(\'' + escJs(g.type) + '\');setTimeout(function(){navToLast(\'' + escJs(g.courseId) + '\')},60)">' +
               '<span class="fasb-code">' + esc(g.courseId) + '</span>' +
               (g.programs.length ? '<span class="fasb-programs">（' + esc(g.programs.join(' / ')) + '）</span>' : '') +
             '</span>'
@@ -1346,10 +1349,10 @@
           // 管理模式：文件名和教师旁加铅笔（屏幕宽度 > 768px），仅在可编辑时显示
           var selfOrInScope = mgmt && (f.is_uploader || f.can_delete);
           var mgmtPens = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'title\',\'' + esc(f.title) + '\')">✏️</span>')
+            ? ('<span class="mgmt-pen" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'title\',\'' + escJs(f.title) + '\')">✏️</span>')
             : '';
           var teacherPen = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen mgmt-pen-sm" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'teacher\',\'' + esc(f.teacher || '') + '\')">✏️</span>')
+            ? ('<span class="mgmt-pen mgmt-pen-sm" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'teacher\',\'' + escJs(f.teacher || '') + '\')">✏️</span>')
             : '';
           var mgmtDel = mgmt && selfOrInScope && window.innerWidth > 768
             ? ('<span class="mgmt-pen mgmt-del" onclick="event.stopPropagation();deleteFileConfirm(' + f.id + ',this)" title="删除此文件">🗑️</span>')

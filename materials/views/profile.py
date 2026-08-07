@@ -18,7 +18,7 @@ from django.core.cache import cache
 from django.db.models import Count, Sum
 
 from .utils import (
-    _err, _ok, _get_user, _get_or_create_profile, _strip_exif,
+    _err, _ok, _get_user, _get_or_create_profile, _strip_exif, _safe_int,
     require_login, Notification, UserProfile, Material, DownloadRecord,
     DeletionRecord, ReviewComment, Course, CourseCategory, F,
     Favorite, _bump_user_public_gen,
@@ -294,7 +294,7 @@ def api_user_rankings(request):
 
 def api_user_public(request, uid):
     """GET /api/user/public/{uid}/ — 用户公开页（含上传的文件列表，缓存60s）"""
-    page = int(request.GET.get("page", 1))
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
     # 缓存键含上传者公开页「代际」：资料增删/审核状态/昵称变化时递增，
     # 旧键 60s TTL 自然过期，保证公开页删除自传后不再残留显示
     gen = cache.get(f"user_public_gen_{uid}") or 0

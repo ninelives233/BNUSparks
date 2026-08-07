@@ -297,6 +297,10 @@ def api_change_password(request):
 
     request.user.set_password(new_password)
     request.user.save()
+    # 改密后作废旧 JWT（P2.5）
+    profile = _get_or_create_profile(request.user)
+    profile.token_version = (profile.token_version or 0) + 1
+    profile.save(update_fields=["token_version"])
     return _ok({"message": "密码已修改，请重新登录"})
 
 
@@ -379,4 +383,8 @@ def api_reset_password(request):
 
     user.set_password(new_password)
     user.save()
+    # 重置后作废旧 JWT（P2.5）
+    profile = _get_or_create_profile(user)
+    profile.token_version = (profile.token_version or 0) + 1
+    profile.save(update_fields=["token_version"])
     return _ok({"message": "密码已重置，请使用新密码登录"})
