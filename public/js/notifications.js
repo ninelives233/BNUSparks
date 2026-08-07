@@ -18,6 +18,20 @@
   // ── 用户抽屉（菜单 + 通知子视图） ──
   let _notifLoaded = false;
 
+  // 抽屉扁平图标（弃用 emoji，与课程卡 CARD_ICONS 同语言：24 网格线形）
+  const DM_ICONS = {
+    user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 21c1-3.5 4-5 7-5s6 1.5 7 5"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>',
+    upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="M6 11l6-6 6 6"/><path d="M4 20h16"/></svg>',
+    download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v11"/><path d="M6 11l6 6 6-6"/><path d="M4 20h16"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg>',
+    mgmt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="11" cy="18" r="2" fill="currentColor" stroke="none"/></svg>',
+    civilian: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>',
+    logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
+  };
+
   function toggleNotifDrawer() {
     const drawer = document.getElementById('notifDrawer');
     if (drawer.style.display === 'flex') {
@@ -107,8 +121,8 @@
     }
     var notifBadgeHtml = unreadCount > 0 ? '<span class="dm-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '';
     var showAdmin = currentUser.role !== 'user';
-    var mgmtToggle = '<label class="dm-toggle-row"><span class="dm-toggle-label">📁 管理模式</span><span class="ios-toggle' + (_mgmtMode ? ' ios-toggle-on' : '') + '" onclick="toggleMgmtMode()"><span class="ios-toggle-knob"></span></span></label>';
-    var civilianToggle = '<label class="dm-toggle-row"><span class="dm-toggle-label">🙈 平民模式</span><span class="ios-toggle' + (_civilianMode ? ' ios-toggle-on' : '') + '" onclick="toggleCivilianMode()"><span class="ios-toggle-knob"></span></span></label>';
+    var mgmtToggle = '<label class="dm-toggle-row"><span class="dm-toggle-label"><span class="dm-ico">' + DM_ICONS.mgmt + '</span>管理模式</span><span class="ios-toggle' + (_mgmtMode ? ' ios-toggle-on' : '') + '" onclick="toggleMgmtMode()"><span class="ios-toggle-knob"></span></span></label>';
+    var civilianToggle = '<label class="dm-toggle-row"><span class="dm-toggle-label"><span class="dm-ico">' + DM_ICONS.civilian + '</span>平民模式</span><span class="ios-toggle' + (_civilianMode ? ' ios-toggle-on' : '') + '" onclick="toggleCivilianMode()"><span class="ios-toggle-knob"></span></span></label>';
     body.innerHTML =
       '<div class="dm-user">' +
         avatarHtml +
@@ -118,14 +132,14 @@
         '</div>' +
       '</div>' +
       '<div class="dm-divider"></div>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span>👤</span> 个人中心</a>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span>🔔</span> 通知中心' + notifBadgeHtml + '</a>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyUploadsPage()"><span>📤</span> 我的上传</a>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyDownloadsPage()"><span>📥</span> 我的下载</a>' +
-	      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyFavoritesPage()"><span>⭐</span> 我的收藏</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span class="dm-ico">' + DM_ICONS.user + '</span>个人中心</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span class="dm-ico">' + DM_ICONS.bell + '</span>通知中心' + notifBadgeHtml + '</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyUploadsPage()"><span class="dm-ico">' + DM_ICONS.upload + '</span>我的上传</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyDownloadsPage()"><span class="dm-ico">' + DM_ICONS.download + '</span>我的下载</a>' +
+	      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyFavoritesPage()"><span class="dm-ico">' + DM_ICONS.star + '</span>我的收藏</a>' +
       '<div class="dm-divider"></div>' +
       (showAdmin ? mgmtToggle + civilianToggle + '<div class="dm-divider"></div>' : '') +
-      '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span>🚪</span> 退出登录</a>';
+      '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span class="dm-ico">' + DM_ICONS.logout + '</span>退出登录</a>';
   }
 
   function closeNotifDrawer(e) {
@@ -234,13 +248,13 @@
             linkHtml +
             '<div style="margin-top:8px;display:flex;gap:6px">' +
               (isRead ? '' : '<button class="notif-mark-btn" onclick="markOneNotifRead(' + n.id + ', this.closest(\'.notif-item\'), event)">标为已读</button>') +
-              '<button class="notif-mark-btn" onclick="deleteOneNotif(' + n.id + ', this.closest(\'.notif-item\'), event)" style="color:var(--accent)">🗑 删除</button>' +
+              '<button class="notif-mark-btn" onclick="deleteOneNotif(' + n.id + ', this.closest(\'.notif-item\'), event)" style="color:var(--accent)"><span class="dm-ico notif-btn-ico">' + DM_ICONS.trash + '</span>删除</button>' +
             '</div>' +
           '</div>' +
         '</div>';
       }).join('');
       if (data.list.length > 0) {
-        html += '<div style="padding:8px;text-align:center;display:flex;justify-content:center;gap:12px;font-size:0.78rem"><a href="javascript:void(0)" onclick="closeNotifDrawer();showNotifFull()" class="notif-view-all">📋 查看全部通知</a><a href="javascript:void(0)" onclick="clearAllNotifs()" style="color:var(--accent);text-decoration:none">🗑 清空通知</a></div>';
+        html += '<div style="padding:8px;text-align:center;display:flex;justify-content:center;gap:12px;font-size:0.78rem"><a href="javascript:void(0)" onclick="closeNotifDrawer();showNotifFull()" class="notif-view-all"><span class="dm-ico notif-btn-ico">' + DM_ICONS.list + '</span>查看全部通知</a><a href="javascript:void(0)" onclick="clearAllNotifs()" style="color:var(--accent);text-decoration:none"><span class="dm-ico notif-btn-ico">' + DM_ICONS.trash + '</span>清空通知</a></div>';
       }
       list.innerHTML = html;
     } catch (err) {
@@ -422,7 +436,7 @@
         '<span style="font-size:0.85rem;color:var(--text-muted)">共 ' + (data.list ? data.list.length : 0) + ' 条' + (realUnread > 0 ? '，' + realUnread + ' 条未读' : '') + '</span>' +
         '<div style="display:flex;gap:6px">' +
           (realUnread > 0 ? '<button class="admin-btn admin-btn-sm" onclick="markAllNotifFullRead()">全部标为已读</button>' : '') +
-          '<button class="admin-btn admin-btn-sm" onclick="clearAllNotifsFull()" style="color:var(--accent)">🗑 清空通知</button>' +
+          '<button class="admin-btn admin-btn-sm" onclick="clearAllNotifsFull()" style="color:var(--accent)"><span class="dm-ico notif-btn-ico">' + DM_ICONS.trash + '</span>清空通知</button>' +
         '</div>' +
         '</div>';
       if (!data.list || !data.list.length) {
