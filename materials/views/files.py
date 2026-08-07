@@ -339,7 +339,11 @@ def _serve_file_response(request, abs_path, *, display_filename, inline=False, p
         except ValueError:
             return _err("非法文件路径", 400)  # 越界（含 .. 逃逸）即拒绝
         resp = HttpResponse()
-        resp["X-Accel-Redirect"] = prefix + rel
+        # 百分号编码 rel：含中文/全角字符的文件名若原样写入响应头，gunicorn(WSGI)
+        # 会按 RFC 2047 编码成 `=?utf-8?q?...?=`，nginx 无法解析该路径 → 内部 404
+        # → 浏览器「无法从网站上提取文件」。percent-encode 后头部纯 ASCII，
+        # nginx internal 转发时 URL-decode 回原路径，正确命中磁盘文件。
+        resp["X-Accel-Redirect"] = prefix + quote(rel, safe='/')
         resp["Content-Type"] = ctype
         resp["Content-Disposition"] = _content_disposition_header(display_filename, attachment=not inline)
         resp["X-Content-Type-Options"] = "nosniff"
