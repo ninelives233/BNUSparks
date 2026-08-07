@@ -1037,31 +1037,20 @@
   // ── Renderers ──
   function renderGrid(items) {
     const parent = document.getElementById('explorerContent');
-    const mathItem = items.find(i => i.mathCard);
-    const regularItems = items.filter(i => !i.divider && !i.mathCard);
+    // 第三行特排卡（国际视野与文明对话/数学类/实用文件）单独成行、等距排开；
+    // 其余通识课大类/学院卡片照常铺满上方网格（5 列 = 两行 5+5）。
+    const regularItems = items.filter(i => !i.divider && !i.thirdRow);
+    const thirdRow = items.filter(i => i.thirdRow);
     const mgmt = isMgmtActive();
     let html = '';
 
     html += '<div class="folder-grid">' +
-      regularItems.map(item =>
-        '<div class="folder-card" data-n="' + esc(item.name) + '">' +
-          '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
-          '<div class="fc-name">' + esc(item.name) + '</div>' +
-          '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
-          (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') +
-        '</div>'
-      ).join('') +
+      regularItems.map(item => _cardHtml(item, mgmt)).join('') +
     '</div>';
 
-    // Divider before math section
-    if (mathItem) {
-      html += '<div class="grid-divider-wrap"><hr class="grid-divider"></div>';
-      html += '<div class="folder-grid">' +
-        '<div class="folder-card" data-n="数学类">' +
-          '<div class="fc-icon">' + (CARD_ICONS[mathItem.iconClass] || CARD_ICONS['folder']) + '</div>' +
-          '<div class="fc-name">数学类</div>' +
-          '<div class="fc-count">' + mathItem.children.length + ' 项</div>' +
-        '</div>' +
+    if (thirdRow.length) {
+      html += '<div class="folder-grid-3">' +
+        thirdRow.map(item => _cardHtml(item, mgmt)).join('') +
       '</div>';
     }
 
@@ -1072,6 +1061,17 @@
         navIn(el.dataset.n);
       });
     });
+  }
+
+  function _cardHtml(item, mgmt) {
+    const canMgmt = mgmt && item.id &&
+      (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1));
+    return '<div class="folder-card" data-n="' + esc(item.name) + '">' +
+      '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
+      '<div class="fc-name">' + esc(item.name) + '</div>' +
+      '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
+      (canMgmt ? _mgmtCardMenuHtml(item) : '') +
+    '</div>';
   }
 
   function _mgmtCardMenuHtml(item) {

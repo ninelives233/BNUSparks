@@ -557,6 +557,16 @@
     max-width: 1180px;
     margin: 0 auto;
   }
+  /* 第三行特排：国际视野与文明对话/数学类/实用文件 等距排开 */
+  .folder-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 218px));
+    justify-content: space-evenly;
+    gap: var(--space-md);
+    padding: var(--space-xs) 0 var(--space-xl);
+    max-width: 1180px;
+    margin: 0 auto;
+  }
   .folder-card {
     aspect-ratio: 1;
     background: var(--raised);
@@ -783,6 +793,7 @@
   /* ── Mobile responsive ──────────────────── */
   @media (max-width: 640px) {
     .folder-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--space-sm); }
+    .folder-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-sm); }
     .folder-card { padding: 8px; }
     .folder-card .fc-icon { width: 46px; height: 46px; }
     .folder-card .fc-icon svg { width: 26px; height: 26px; }
@@ -1240,19 +1251,6 @@
   .so-empty { text-align: center; padding: var(--space-lg); }
   .so-empty-icon { font-size: 1.5rem; margin-bottom: var(--space-xs); }
   .so-empty-text { font-size: 0.85rem; color: var(--ink-faint); }
-
-  /* ═══════════════════════════════════════════
-     Grid divider + Math Card (centered)
-     ═══════════════════════════════════════════ */
-
-  .grid-divider-wrap {
-    display: flex; justify-content: center;
-    padding: var(--space-lg) 0 var(--space-md);
-  }
-  .grid-divider {
-    width: 40%; border: none;
-    border-top: 1.5px solid var(--border-light);
-  }
 
   /* ═══════════════════════════════════════════
      Same-name sidebar inside file listing
