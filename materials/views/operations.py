@@ -449,6 +449,17 @@ def api_operations(request):
     })
 
 
+def _folder_has_materials(cat):
+    """该文件夹（含通配代码匹配的课程）下是否已有资料——决定能否撤销创建"""
+    if cat.course_id and Material.objects.filter(course_id=cat.course_id).exists():
+        return True
+    if cat.course_text:
+        prefix = cat.course_text.replace("*", "")
+        if prefix and Material.objects.filter(course__code__startswith=prefix).exists():
+            return True
+    return False
+
+
 @csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_folder_restore(request, operation_id):
@@ -471,13 +482,20 @@ def api_folder_restore(request, operation_id):
     reason = body.get("reason", "")
 
     if op.action == FolderOperation.Action.CREATE:
-        try:
-            cat = CourseCategory.objects.get(id=op.category_id)
-            if cat.course_id or cat.course_text:
-                return _err("无法撤销：该文件夹已被系统使用", 400)
+        cat = CourseCategory.objects.filter(id=op.category_id).first()
+        if cat is not None:
+            # v=147：以「是否有资料」替代「是否绑课程」作撤销判据——
+            # 课程申请批准建的文件夹必绑 Course，旧逻辑导致空文件夹也永远撤不掉。
+            if _folder_has_materials(cat):
+                return _err("该文件夹内已有资料，请先删除资料再撤销", 400)
+            course = cat.course
             cat.delete()
-        except CourseCategory.DoesNotExist:
-            pass
+            # 连带删除未被其他节点引用且无资料的孤儿 Course，彻底清掉搜索残留
+            if course and not CourseCategory.objects.filter(course=course).exists() \
+               and not Material.objects.filter(course=course).exists():
+                course.delete()
+        # cat 已不存在（此前被手动删除）：搜索残留由 api_search 的
+        # coursecategory_set__isnull=False 过滤兜底，这里仅标记已撤销。
     elif op.action == FolderOperation.Action.DELETE:
         CourseCategory.objects.create(name=op.category_name, parent=None, order=0)
 

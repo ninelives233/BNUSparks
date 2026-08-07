@@ -22,16 +22,16 @@ window.addEventListener('popstate', async function(e) {
   const state = e.state;
 
   // ── 如果有浮层/弹窗打开，先关闭它 ──
+  // 预览弹窗（最上层：可能叠在文件详情浮层之上，优先关闭）
+  var pvOverlay = document.querySelector('.preview-overlay');
+  if (pvOverlay) {
+    closePreview();
+    return;
+  }
   // 文件详情弹窗
   var fiOverlay = document.querySelector('.file-info-overlay');
   if (fiOverlay) {
     closeFileInfoModal(null);
-    return;
-  }
-  // 预览弹窗
-  var pvOverlay = document.querySelector('.preview-overlay');
-  if (pvOverlay) {
-    closePreview();
     return;
   }
   // 上传弹窗
@@ -131,6 +131,10 @@ window.addEventListener('popstate', async function(e) {
       renderNewCourseView();
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
+    // 个人中心三视图：返回时重新渲染（数据可能已变化，且 popstate 路径此前未恢复）
+    if (state.view === 'myuploads' && typeof renderMyUploadsPage === 'function') renderMyUploadsPage();
+    if (state.view === 'mydownloads' && typeof renderMyDownloadsPage === 'function') renderMyDownloadsPage();
+    if (state.view === 'myfavorites' && typeof renderMyFavoritesPage === 'function') renderMyFavoritesPage();
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
@@ -252,8 +256,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 默认首页
   showHome();
 
-  // 每 30 秒刷新通知徽章
+  // 每 20 秒刷新通知徽章 + 切回页面/聚焦时立即刷新（v=148 红点同步）
   setInterval(function() {
     if (currentUser) loadNotifCount();
-  }, 30000);
+  }, 20000);
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && currentUser) loadNotifCount();
+  });
+  window.addEventListener('focus', function() {
+    if (currentUser) loadNotifCount();
+  });
 });

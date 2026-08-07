@@ -26,7 +26,8 @@ def api_admin_users(request):
     ).prefetch_related(
         'profile__managed_majors', 'profile__moderated_sections'
     ).annotate(
-        material_count=Count('uploads')
+        material_count=Count('uploads', distinct=True),
+        download_count=Count('download_records', distinct=True),
     ).order_by("-date_joined")
     search = request.GET.get("search", "").strip()
     if search:
@@ -50,30 +51,37 @@ def api_admin_users(request):
     page = max(1, min(page, total_pages))
     offset = (page - 1) * per_page
 
+    def _profile_of(u):
+        try:
+            return u.profile
+        except Exception:
+            return None  # 极少数无 profile 的用户，安全兜底
+
+    def _serialize_user(u):
+        p = _profile_of(u)
+        return {
+            "id": u.id,
+            "nickname": u.first_name or u.username,
+            "email": u.email,
+            "avatar_url": p.avatar.url if p and p.avatar else "",
+            "role": p.role if p else UserProfile.Role.USER,
+            "date_joined": u.date_joined.strftime("%Y-%m-%d"),
+            "material_count": u.material_count,
+            "download_count": u.download_count,
+            "auto_approve": p.auto_approve if p else False,
+            "can_auto_approve": p.can_auto_approve if p else False,
+            "can_moderate_general": p.can_moderate_general if p else False,
+            "managed_majors_info": [
+                {"id": c.id, "name": c.name} for c in p.managed_majors.all()
+            ] if p else [],
+            "moderated_sections_info": [
+                {"id": cat.id, "name": cat.name, "parent_id": cat.parent_id}
+                for cat in p.moderated_sections.all()
+            ] if p else [],
+        }
+
     return _ok({
-        "users": [
-            {
-                "id": u.id,
-                "nickname": u.first_name or u.username,
-                "email": u.email,
-                "avatar_url": u.profile.avatar.url if u.profile.avatar else "",
-                "role": u.profile.role,
-                "date_joined": u.date_joined.strftime("%Y-%m-%d"),
-                "material_count": u.material_count,
-                "auto_approve": u.profile.auto_approve,
-                "can_auto_approve": u.profile.can_auto_approve,
-                "can_moderate_general": u.profile.can_moderate_general,
-                "managed_majors_info": [
-                    {"id": c.id, "name": c.name}
-                    for c in u.profile.managed_majors.all()
-                ],
-                "moderated_sections_info": [
-                    {"id": cat.id, "name": cat.name, "parent_id": cat.parent_id}
-                    for cat in u.profile.moderated_sections.all()
-                ],
-            }
-            for u in qs[offset:offset + per_page]
-        ],
+        "users": [_serialize_user(u) for u in qs[offset:offset + per_page]],
         "total": total,
         "page": page,
         "total_pages": total_pages,

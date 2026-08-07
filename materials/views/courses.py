@@ -48,6 +48,9 @@ def api_courses(request):
     qs = Course.objects.select_related('college').annotate(
         _material_count=Count('materials', filter=Q(materials__review_status='approved'))
     )
+    # v=147：只返回仍挂在课程树（有 CourseCategory 引用）的课程，
+    # 文件夹被删除后残留的孤儿 Course 不再出现在列表里。
+    qs = qs.filter(coursecategory__isnull=False)
     t = request.GET.get("type")
     s = request.GET.get("search", "").strip()
     college_id = request.GET.get("college")
@@ -230,7 +233,9 @@ def api_search(request):
 
     if search_type in ("all", "course"):
         courses_qs = Course.objects.select_related('college').filter(
-            Q(code__icontains=query) | Q(name__icontains=query)
+            Q(code__icontains=query) | Q(name__icontains=query),
+            # v=147：排除已删除文件夹的孤儿 Course，避免搜索结果残留
+            coursecategory__isnull=False,
         ).order_by("code")
         seen = set()
         results["courses"] = []

@@ -150,6 +150,7 @@ def api_my_course_favorites(request):
         seen[code] = {
             "course_code": code,
             "course_name": fav.course.name,
+            "course_type": fav.course.course_type,
             "college_name": fav.course.college.name if fav.course.college_id else "",
             "favorited_at": fav.created_at.strftime("%Y-%m-%d"),
         }

@@ -15,7 +15,7 @@ from django.core.mail import send_mail
 
 from .utils import (
     _err, _ok, _jwt_encode, _get_user, _get_or_create_profile,
-    require_login, UserProfile,
+    require_login, UserProfile, DAILY_DOWNLOAD_LIMIT,
 )
 
 
@@ -247,12 +247,12 @@ def api_me(request):
 
     from datetime import date
     today = date.today()
-    remaining = 60
+    remaining = DAILY_DOWNLOAD_LIMIT
     if profile.role == UserProfile.Role.USER:
         if profile.last_download_date != today:
-            remaining = 60
+            remaining = DAILY_DOWNLOAD_LIMIT
         else:
-            remaining = max(0, 60 - profile.daily_download_count)
+            remaining = max(0, DAILY_DOWNLOAD_LIMIT - profile.daily_download_count)
 
     return _ok({
         "id": user.id,
@@ -263,6 +263,7 @@ def api_me(request):
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
         "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
         "can_moderate_general": profile.can_moderate_general if profile else False,
+        "daily_download_limit": DAILY_DOWNLOAD_LIMIT,
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
         "avatar_url": profile.avatar.url if profile.avatar else "",

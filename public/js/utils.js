@@ -51,7 +51,14 @@
     }
     clearTimeout(timeout);
 
-    const data = await resp.json();
+    let data;
+    try {
+      data = await resp.json();
+    } catch (err) {
+      // 非 JSON 响应（Django 500 HTML / nginx 网关页）：给出可读错误，
+      // 避免前端暴露 "Unexpected token '<' ... is not valid JSON"
+      throw new Error('服务器返回异常（HTTP ' + resp.status + '），请稍后重试');
+    }
     if (!data.ok) throw new Error(data.error || '请求失败');
 
     // 缓存 GET 响应
@@ -119,11 +126,15 @@
     event.preventDefault();
     event.stopPropagation();
 
-    // 限额梯度提醒
-    if (currentUser && currentUser.daily_download_remaining !== undefined && currentUser.daily_download_remaining > 0 && currentUser.daily_download_remaining <= 40) {
-      var used = 60 - currentUser.daily_download_remaining;
-      if (used >= 21 && used % 5 === 0) {
-        if (!confirm('温馨提醒：今日已下载 ' + used + ' 次。请考虑一下平台的维护成本，珍惜每一次下载。\n\n点击「确定」继续下载。')) {
+    // 未登录：非单纯浏览操作 → 弹登录弹窗
+    if (!currentUser) { showLoginModal(); return; }
+
+    // 限额梯度提醒（limit 从后端实时读，默认 15）
+    if (currentUser.daily_download_remaining !== undefined) {
+      var limit = currentUser.daily_download_limit || 15;
+      var used = limit - currentUser.daily_download_remaining;
+      if (used >= Math.min(10, limit)) {
+        if (!confirm('温馨提醒：今日已下载 ' + used + ' 次，接近当日上限。请考虑一下平台的维护成本，珍惜每一次下载。\n\n点击「确定」继续下载。')) {
           return;
         }
       }
@@ -155,7 +166,7 @@
   // ── 直接下载（短时令牌替代 JWT 放入 URL，避免 JWT 泄露到日志） ──
   async function doDirectDownload(fileId, fileName) {
     var token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    if (!token) { alert('请先登录'); return; }
+    if (!token) { showLoginModal(); return; }
     try {
       var resp = await fetch('/api/files/' + fileId + '/download-token/', {
         headers: { 'Authorization': 'Bearer ' + token }
