@@ -525,6 +525,8 @@ def _build_tree_node(qs, *, preload=None):
             node["iconClass"] = cat.icon_class
         if cat.is_math_card:
             node["mathCard"] = True
+        if cat.is_third_row:
+            node["thirdRow"] = True
         # 学院 ID（用于前端权限匹配）
         if cat.course_id and cat.course.college_id:
             node["collegeId"] = cat.course.college_id

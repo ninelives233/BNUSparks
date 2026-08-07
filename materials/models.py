@@ -217,6 +217,7 @@ class CourseCategory(models.Model):
     order = models.IntegerField("排序", default=0)
     is_divider = models.BooleanField("分隔线", default=False)
     is_math_card = models.BooleanField("数学卡片", default=False)
+    is_third_row = models.BooleanField("第三行特排卡片", default=False)
 
     # 叶子节点：要么关联实际课程
     course = models.ForeignKey(
