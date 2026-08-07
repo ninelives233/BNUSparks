@@ -129,8 +129,8 @@
     // 未登录：非单纯浏览操作 → 弹登录弹窗
     if (!currentUser) { showLoginModal(); return; }
 
-    // 限额梯度提醒（limit 从后端实时读，默认 15）
-    if (currentUser.daily_download_remaining !== undefined) {
+    // 限额梯度提醒（limit 从后端实时读；limit<0 表示不限量角色，跳过提醒）
+    if (currentUser.daily_download_remaining !== undefined && currentUser.daily_download_limit >= 0) {
       var limit = currentUser.daily_download_limit || 15;
       var used = limit - currentUser.daily_download_remaining;
       if (used >= Math.min(10, limit)) {

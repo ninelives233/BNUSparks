@@ -31,12 +31,19 @@ from .utils import (
 
 def _profile_payload(request, profile):
     """序列化当前用户完整资料（GET/PATCH 共用，保证字段一致）"""
-    remaining = DAILY_DOWNLOAD_LIMIT
     today = date.today()
+    # 限额只对普通用户生效：其余角色限量为 -1（前端显示「不限」）
     if profile.role == UserProfile.Role.USER:
         if profile.last_download_date == today:
             remaining = max(0, DAILY_DOWNLOAD_LIMIT - profile.daily_download_count)
-    daily_download_used = profile.daily_download_count if profile.last_download_date == today else 0
+        else:
+            remaining = DAILY_DOWNLOAD_LIMIT
+        daily_download_used = profile.daily_download_count if profile.last_download_date == today else 0
+        daily_download_limit = DAILY_DOWNLOAD_LIMIT
+    else:
+        remaining = -1
+        daily_download_used = 0
+        daily_download_limit = -1
     sections_display = []
     if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
         from .utils import _get_managed_sections_display
@@ -55,7 +62,7 @@ def _profile_payload(request, profile):
         "role": profile.role,
         "role_label": role_labels.get(profile.role, "用户"),
         "date_joined": request.user.date_joined.strftime("%Y-%m-%d") if request.user.date_joined else "",
-        "daily_download_limit": DAILY_DOWNLOAD_LIMIT,
+        "daily_download_limit": daily_download_limit,
         "daily_download_remaining": remaining,
         "daily_download_used": daily_download_used,
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),

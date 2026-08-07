@@ -247,12 +247,16 @@ def api_me(request):
 
     from datetime import date
     today = date.today()
-    remaining = DAILY_DOWNLOAD_LIMIT
+    # 限额只对普通用户生效：其余角色限量为 -1（不限）
     if profile.role == UserProfile.Role.USER:
-        if profile.last_download_date != today:
-            remaining = DAILY_DOWNLOAD_LIMIT
-        else:
+        if profile.last_download_date == today:
             remaining = max(0, DAILY_DOWNLOAD_LIMIT - profile.daily_download_count)
+        else:
+            remaining = DAILY_DOWNLOAD_LIMIT
+        daily_download_limit = DAILY_DOWNLOAD_LIMIT
+    else:
+        remaining = -1
+        daily_download_limit = -1
 
     return _ok({
         "id": user.id,
@@ -263,7 +267,7 @@ def api_me(request):
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
         "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
         "can_moderate_general": profile.can_moderate_general if profile else False,
-        "daily_download_limit": DAILY_DOWNLOAD_LIMIT,
+        "daily_download_limit": daily_download_limit,
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
         "avatar_url": profile.avatar.url if profile.avatar else "",
