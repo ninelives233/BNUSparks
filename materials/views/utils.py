@@ -373,8 +373,14 @@ def _create_notification(recipient, type, title, message="", material=None, trig
 # 下载配额
 # ═══════════════════════════════════════════════════════════════
 
-def _check_download_quota(user):
-    """检查并扣除下载配额，返回 (allowed, remaining, message)"""
+def _check_download_quota(user, material=None):
+    """检查并扣除下载配额，返回 (allowed, remaining, message)
+
+    daily_download_count 语义 = 「当天已下载的不同文件数」。
+    传入 material 时：同一天同一文件只计一次数——今天已下载过的文件再次
+    下载直接放行不扣配额（下载失败后重试、重复下载都不重复计数）。
+    文件不存在等失败场景在调用方已前置拦截（不进入本函数）。
+    """
     profile = _get_or_create_profile(user)
     if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN):
         return True, -1, ""
@@ -386,6 +392,13 @@ def _check_download_quota(user):
             last_download_date=today,
         )
         profile.refresh_from_db()
+
+    # 同一天同一文件只计一次数：今天已下载过 → 不重复扣配额，直接放行
+    if material is not None and DownloadRecord.objects.filter(
+        user=user, material_id=material.id, created_at__date=today
+    ).exists():
+        remaining = DAILY_DOWNLOAD_LIMIT - profile.daily_download_count
+        return True, remaining, ""
 
     if profile.daily_download_count >= DAILY_DOWNLOAD_LIMIT:
         return False, 0, f"今日下载次数已达上限（{DAILY_DOWNLOAD_LIMIT} 次）"
@@ -585,9 +598,11 @@ def _build_tree_node(qs, *, preload=None):
 
         result.append(node)
 
-    # 显示次序：中间文件夹（有子节点）优先于叶子节点，各自保持原 order 相对顺序（稳定分区）
+    # 显示次序：中间文件夹与空分类目录按原 order 显示，真正的课程叶子（含 courseId）置后。
+    # 空分类目录（无 children、无 courseId 的命名分类）也是结构节点——如尚未导入课程的
+    # 通识课大类（艺术鉴赏与审美体验/经典研读与文化传承），不应被当叶子排到末尾。
     if result and any("children" in r for r in result):
-        result.sort(key=lambda r: 0 if "children" in r else 1)
+        result.sort(key=lambda r: 1 if ("courseId" in r and "children" not in r) else 0)
     elif result:
         result.sort(key=lambda r: (0 if r.get("fileCount", 0) else 1, r.get("name", "")))
 

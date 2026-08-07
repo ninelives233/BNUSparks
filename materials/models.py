@@ -515,4 +515,7 @@ def _bump_user_public_gen(user_id):
 @receiver(post_delete, sender=Material)
 def _invalidate_material_caches(sender, instance, **kwargs):
     cache.delete(COURSE_TREE_CACHE_KEY)
+    # 首页统计（最近上传/下载榜/计数）也依赖 Material，删除/上传/审批后必须即时失效，
+    # 否则被删除的文件最长残留 120s 仍显示在「最近上传排行榜」里。
+    cache.delete("api_stats_data")
     _bump_user_public_gen(getattr(instance, "uploader_id", None))
