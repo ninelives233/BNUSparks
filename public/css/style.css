@@ -2615,7 +2615,7 @@
 .dm-avatar {
   display: flex; align-items: center; justify-content: center;
   width: 44px; height: 44px; border-radius: 50%;
-  background: linear-gradient(135deg, oklch(0.55 0.12 280), oklch(0.45 0.15 320));
+  background: oklch(0.46 0.04 250); /* v=148.2：与 .user-avatar-circle 一致，莫兰迪低亮纯色（灰蓝）替代渐变 */
   color: #fff; font-size: 1.1rem; font-weight: 700;
   flex-shrink: 0; user-select: none;
 }

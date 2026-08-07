@@ -440,7 +440,7 @@ def api_file_download(request, file_id):
                 pass  # 解析失败 → 降级为完整文件预览（计入配额）
         # 完整文件预览（图片/PPT/文本/切页失败降级）→ 与下载同权：扣配额、计数，
         # 堵住原先 preview=1 绕过每日下载限额的洞
-        allowed, remaining, msg = _check_download_quota(user)
+        allowed, remaining, msg = _check_download_quota(user, material)
         if not allowed:
             return _err(msg, 429)
         _increment_download(user, material, file_id)
@@ -448,7 +448,7 @@ def api_file_download(request, file_id):
                                     display_filename=display, inline=True, preview_cache=False)
 
     # 正式下载：配额 + 计数后交给 nginx 直接送文件
-    allowed, remaining, msg = _check_download_quota(user)
+    allowed, remaining, msg = _check_download_quota(user, material)
     if not allowed:
         return _err(msg, 429)
     _increment_download(user, material, file_id)
