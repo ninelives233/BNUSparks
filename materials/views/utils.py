@@ -382,7 +382,8 @@ def _check_download_quota(user, material=None):
     文件不存在等失败场景在调用方已前置拦截（不进入本函数）。
     """
     profile = _get_or_create_profile(user)
-    if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN):
+    # 限额只对普通用户生效，其余角色（小版主/版主/总管理员）不限量
+    if profile.role != UserProfile.Role.USER:
         return True, -1, ""
 
     today = date.today()
