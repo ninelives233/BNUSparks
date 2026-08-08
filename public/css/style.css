@@ -549,10 +549,12 @@
   .explorer-header .eh-count { font-size: 0.78rem; color: var(--ink-faint); }
 
   /* ── Level 1: Square Card Grid ──────────── */
+  /* flex-wrap + space-evenly：每行独立等距排布，未满行自动轴对称居中。
+     （grid 的 auto-fit 折叠不了被前几行占用的轨道，未满行只能左对齐，故改用 flex；
+      卡片 flex-basis 180px 使满行 6×180+5×20=1180 恰好填满，与旧 grid 渲染像素级一致） */
   .folder-grid {
-    display: grid;
-    /* auto-fit + space-evenly：最后一行未填满时等距排布、轴对称（同 folder-grid-3） */
-    grid-template-columns: repeat(auto-fit, minmax(178px, 218px));
+    display: flex;
+    flex-wrap: wrap;
     justify-content: space-evenly;
     gap: var(--space-md);
     padding: var(--space-sm) 0 var(--space-xl);
@@ -570,6 +572,7 @@
     margin: 0 auto;
   }
   .folder-card {
+    flex: 0 0 180px;
     aspect-ratio: 1;
     background: var(--raised);
     border: 1px solid var(--border-light);
@@ -794,9 +797,9 @@
 
   /* ── Mobile responsive ──────────────────── */
   @media (max-width: 640px) {
-    .folder-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: var(--space-sm); }
+    .folder-grid { gap: var(--space-sm); }
     .folder-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-sm); }
-    .folder-card { padding: 8px; }
+    .folder-card { flex: 0 0 100px; padding: 8px; }
     .folder-card .fc-icon { width: 46px; height: 46px; }
     .folder-card .fc-icon svg { width: 26px; height: 26px; }
     .folder-card .fc-name { font-size: 0.75rem; }
