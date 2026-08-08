@@ -355,6 +355,7 @@
     'flask': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v4l-5 12a2 2 0 002 2h10a2 2 0 002-2l-5-12V3"/></svg>',
     'dna': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4c4 2 4 6 0 8c4 2 4 6 0 8"/><path d="M16 4c-4 2 -4 6 0 8c-4 2 -4 6 0 8"/><line x1="10" y1="6" x2="14" y2="6"/><line x1="10" y1="11" x2="14" y2="11"/><line x1="10" y1="17" x2="14" y2="17"/></svg>',
     'key': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3.5"/><line x1="12" y1="8.5" x2="12" y2="21"/><line x1="12" y1="21" x2="9" y2="21"/><line x1="12" y1="18" x2="9" y2="18"/><line x1="12" y1="15" x2="10" y2="15"/></svg>',
+    'leaf': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20C4 12 9 6 17 4c0 9-6 15-13 16z"/><path d="M4 20c7-4 11-8 13-11"/></svg>',
   };
 
   // ── State ──
