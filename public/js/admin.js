@@ -142,11 +142,14 @@
     if (_pendingIncludeSub) params.push('include_subordinate=1');
     if (_pendingHidePeerApproved) params.push('hide_peer_approved=1');
     if (params.length) url += '?' + params.join('&');
+    // v=153：课程创建申请同样受「显示下级板块」开关控制（下级版主区域默认隐藏）
+    var reqUrl = '/api/moderation/course-requests/';
+    if (_pendingIncludeSub) reqUrl += '?include_subordinate=1';
     // 同时加载待审核数据和当前用户资料（自动托管状态）
     Promise.all([
       api(url),
       api('/api/auth/profile/'),
-      api('/api/moderation/course-requests/')
+      api(reqUrl)
     ]).then(function(results) {
       var list = results[0];
       var profile = results[1];
@@ -227,9 +230,8 @@
         pageList.forEach(function(m) {
           if (m.is_peer_approved) return;
           var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
-          var subTag = m.is_subordinate_handled ? '<span class="sub-tag">下级版主</span>' : '';
+          // v=153：去掉「下级版主」标签（无实际用途，且下级版主可能不止一个）
           html += '<div class="admin-pending-card' + (m.is_subordinate_handled ? ' pc-sub-handled' : '') + '" id="pc-' + m.id + '">' +
-            subTag +
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
               _userPill(m.uploader_name, m.uploader_avatar, m.uploader_id) +

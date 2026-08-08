@@ -429,6 +429,10 @@ class CourseCreationRequest(models.Model):
         max_length=20, choices=Status.choices, default=Status.PENDING,
         verbose_name="审核状态",
     )
+    auto_approved = models.BooleanField(
+        default=False, verbose_name="管理员辖区内自动通过",
+        help_text="申请人在自己辖区内提交时直接创建课程文件夹，无需人工审核",
+    )
     assigned_moderator = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
         verbose_name="指派审核人", related_name="+",

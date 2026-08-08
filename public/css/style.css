@@ -2642,6 +2642,12 @@
   flex-shrink: 0;
 }
 .dm-item .dm-ico svg { width: 18px; height: 18px; }
+/* v=153：抽屉图标语义配色（品牌蓝/琥珀/成功绿/危险红/中性灰，贴合网站调性） */
+.dm-ico-user svg, .dm-ico-download svg { color: var(--primary); }
+.dm-ico-bell svg, .dm-ico-star svg { color: var(--accent); }
+.dm-ico-upload svg { color: var(--success); }
+.dm-ico-logout svg { color: var(--danger, oklch(0.5 0.15 30)); }
+.dm-ico-mgmt svg, .dm-ico-civilian svg { color: var(--ink-faint); }
 .dm-badge {
   margin-left: auto;
   min-width: 18px; height: 18px;

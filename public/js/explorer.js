@@ -2344,13 +2344,13 @@
       var cur = root;
       for (var j = 0; j < parts.length - 1; j++) {
         var d = parts[j];
-        if (!cur[d]) cur[d] = { __children: {}, __count: 0, __size: 0 };
-        cur = cur[d];
+        if (!cur.__children[d]) cur.__children[d] = { __children: {}, __count: 0, __size: 0 };
+        cur = cur.__children[d];
         cur.__count += 1;
         cur.__size += it.size || 0;
       }
       var leaf = parts[parts.length - 1];
-      if (leaf) cur[leaf] = { __size: it.size || 0, __compressed: it.compressed_size || 0 };
+      if (leaf) cur.__children[leaf] = { __size: it.size || 0, __compressed: it.compressed_size || 0 };
     }
 
     var inOverlay = !!document.querySelector('.preview-overlay');

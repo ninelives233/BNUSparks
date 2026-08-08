@@ -20,6 +20,7 @@ from .utils import (
     _get_category_preload, require_login, require_role,
     _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
 )
+from .operations import _can_create_under
 from ..models import (
     Course, CourseCategory, CourseCreationRequest, UserProfile, Material,
     Notification, FolderOperation,
@@ -106,6 +107,23 @@ def _can_review_request(user, req):
     return _category_covered(profile, req.target_category)
 
 
+def _request_covered_by_subordinate(req, sub_cat_ids):
+    """申请目标位置是否落在任一下级版主（小版主）管辖板块内。
+
+    v=153：新建课程申请与文件上传同样受「显示下级板块」开关控制——
+    默认隐藏下级版主负责区域的申请，勾选后才显示（上级可越级处理）。
+    """
+    if not sub_cat_ids:
+        return False
+    cat = req.target_category or req.general_category
+    p = cat
+    while p:
+        if p.id in sub_cat_ids:
+            return True
+        p = p.parent
+    return False
+
+
 def _resolve_course_or_err(course_code, course_name, course_type, college):
     """新建课程申请的课程解析（v=147 修复前缀误配）。
 
@@ -164,6 +182,20 @@ def api_course_request_create(request):
     if course_type == CourseCreationRequest.Type.MAJOR and not target_category_id:
         return _err("请选择具体层级（目标课程文件夹）")
 
+    # v=153：目标位置在管理员辖区内 → 与管理模式「新建」按钮一致，直接创建课程文件夹免审核。
+    # 普通用户 / 辖区外提交仍走审核流程。
+    profile = _get_or_create_profile(request.user)
+    target_cat = None
+    if course_type == CourseCreationRequest.Type.MAJOR and target_category_id:
+        target_cat = CourseCategory.objects.filter(id=target_category_id).first()
+    elif course_type == CourseCreationRequest.Type.GENERAL and general_category_id:
+        target_cat = CourseCategory.objects.filter(id=general_category_id).first()
+    is_auto = (
+        profile.role != UserProfile.Role.USER
+        and target_cat is not None
+        and _can_create_under(request.user, target_cat)
+    )
+
     req = CourseCreationRequest.objects.create(
         user=request.user,
         course_type=course_type,
@@ -172,26 +204,62 @@ def api_course_request_create(request):
         college_id=college_id or None,
         target_category_id=target_category_id or None,
         general_category_id=general_category_id or None,
+        auto_approved=is_auto,
     )
+
+    if is_auto:
+        try:
+            with transaction.atomic():
+                new_cat, err = _approve_request(req, request.user)
+            if err is not None:
+                raise RuntimeError("auto-approve failed")
+        except Exception:
+            # 自动建课失败（目标位置异常/课程代码冲突）→ 回退为普通待审申请
+            is_auto = False
+            req.auto_approved = False
+            req.status = CourseCreationRequest.Status.PENDING
+            req.save(update_fields=["auto_approved", "status"])
+            _send_submit_notification(request.user, course_name, course_code)
+            assigned = _calculate_course_request_assignment(req)
+            if assigned:
+                req.assigned_moderator = assigned
+                req.save(update_fields=["assigned_moderator"])
+            return _ok({
+                "id": req.id,
+                "auto_approved": False,
+                "assigned_moderator": req.assigned_moderator_id,
+            })
+        return _ok({
+            "id": req.id,
+            "auto_approved": True,
+            "category_id": new_cat.id,
+            "parent_path": _category_path(new_cat.parent) if new_cat.parent else "",
+            "course_name": new_cat.name,
+        })
+
+    _send_submit_notification(request.user, course_name, course_code)
     assigned = _calculate_course_request_assignment(req)
     if assigned:
         req.assigned_moderator = assigned
         req.save(update_fields=["assigned_moderator"])
-
-    _create_notification(
-        recipient=request.user,
-        type=Notification.Type.REPORT,
-        title="新建课程申请已提交",
-        message=f"你的新建课程申请「{course_name}」已提交，审核通过后将创建课程文件夹。",
-        course_code=course_code, course_name=course_name,
-    )
     return _ok({
         "id": req.id,
+        "auto_approved": False,
         "assigned_moderator": req.assigned_moderator_id,
         "assigned_moderator_name": (
             req.assigned_moderator.first_name or req.assigned_moderator.username
         ) if req.assigned_moderator else None,
     })
+
+
+def _send_submit_notification(user, course_name, course_code):
+    _create_notification(
+        recipient=user,
+        type=Notification.Type.REPORT,
+        title="新建课程申请已提交",
+        message=f"你的新建课程申请「{course_name}」已提交，审核通过后将创建课程文件夹。",
+        course_code=course_code, course_name=course_name,
+    )
 
 
 @csrf_exempt
@@ -205,7 +273,10 @@ def api_course_request_upload_file(request, request_id):
         return _err("申请不存在", 404)
     if req.user_id != request.user.id and not request.user.is_superuser:
         return _err("无权操作该申请", 403)
-    if req.status != CourseCreationRequest.Status.PENDING:
+    # v=153：管理员辖区内自动建课的申请（已 APPROVED 且 auto_approved）仍允许继续
+    # 上传随附文件——文件直接归位到已创建的课程文件夹，进入正常文件审核队列。
+    is_auto_upload = req.auto_approved and req.status == CourseCreationRequest.Status.APPROVED
+    if req.status != CourseCreationRequest.Status.PENDING and not is_auto_upload:
         return _err("该申请已处理，无法再添加文件")
 
     title = request.POST.get("title", "").strip()
@@ -224,8 +295,25 @@ def api_course_request_upload_file(request, request_id):
         return _err("该文件类型不允许上传（可能包含可执行/活动内容）", 400)
     clean_title = _sanitize_filename_part(title) or _sanitize_filename_part(Path(uploaded_file.name).stem) or "file"
     safe_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
-    save_dir = Path(settings.MEDIA_ROOT) / "requests" / f"req_{req.id}"
-    save_dir.mkdir(parents=True, exist_ok=True)
+
+    if is_auto_upload:
+        # 已自动建课：随附文件直接归位到新课程文件夹（course 已绑定，进入正常审核队列）
+        course, _ = _resolve_course_or_err(
+            req.course_code, req.course_name, req.course_type,
+            req.college if req.course_type == CourseCreationRequest.Type.MAJOR else None,
+        )
+        save_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(course.code)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        material_course = course
+        rel_path = f"{course.code}/{safe_name}"
+        commit_rel = rel_path
+    else:
+        save_dir = Path(settings.MEDIA_ROOT) / "requests" / f"req_{req.id}"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        material_course = None
+        rel_path = f"requests/req_{req.id}/{safe_name}"
+        commit_rel = rel_path
+
     with open(save_dir / safe_name, "wb") as f:
         for chunk in uploaded_file.chunks():
             f.write(chunk)
@@ -233,7 +321,7 @@ def api_course_request_upload_file(request, request_id):
     file_size = (save_dir / safe_name).stat().st_size
 
     material = Material.objects.create(
-        course=None,
+        course=material_course,
         creation_request=req,
         title=title,
         description=description,
@@ -242,7 +330,7 @@ def api_course_request_upload_file(request, request_id):
             int(material_type_id) if material_type_id and material_type_id.isdigit() else None
         ),
         file_name=uploaded_file.name,
-        file_path=f"requests/req_{req.id}/{safe_name}",
+        file_path=rel_path,
         file_size=file_size,
         file_type=Path(uploaded_file.name).suffix.lstrip(".").lower() or "other",
         uploader=req.user,
@@ -254,7 +342,7 @@ def api_course_request_upload_file(request, request_id):
 
     try:
         from git_storage import commit_file
-        commit_file(f"requests/req_{req.id}/{safe_name}")
+        commit_file(commit_rel)
     except Exception:
         pass
 
@@ -309,12 +397,27 @@ def api_moderation_course_requests(request):
     卡片消失规则（服务端强制）：status==pending，
     或 status==approved 但仍有随附文件处于 pending（等文件审完才消失）。
     """
+    include_subordinate = request.GET.get("include_subordinate") == "1"
+    # 下级版主（小版主）管辖板块 id 集合，用于「显示下级板块」分流。
+    # 仅版主/总管理员需要越级查看；小版主不参与（与 _get_subordinate_covered_course_ids 同口径）
+    sub_cat_ids = set()
+    profile = _get_or_create_profile(request.user)
+    if profile.role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN):
+        sub_cat_ids = set(
+            UserProfile.objects.filter(role=UserProfile.Role.SUB_MODERATOR)
+            .exclude(user=request.user)
+            .values_list("moderated_sections__id", flat=True)
+        )
     qs = CourseCreationRequest.objects.select_related(
-        "user", "college", "assigned_moderator"
+        "user", "college", "assigned_moderator",
+        "target_category", "general_category",
     ).prefetch_related("materials")
 
     def _visible(req):
         if not _can_review_request(request.user, req):
+            return False
+        # 默认隐藏下级版主负责区域的申请，勾选「显示下级板块」后才显示
+        if not include_subordinate and _request_covered_by_subordinate(req, sub_cat_ids):
             return False
         if req.status == CourseCreationRequest.Status.PENDING:
             return True
@@ -371,17 +474,20 @@ def api_moderation_course_requests(request):
 
 
 def _approve_request(req, reviewer):
-    """批准申请（事务内）：解析课程 → 建叶子 → 操作记录 → 随附文件归位"""
+    """批准申请（事务内）：解析课程 → 建叶子 → 操作记录 → 随附文件归位。
+
+    返回 (new_cat, None) 成功 / (None, _err响应) 失败，便于调用方拿到新目录跳转。
+    """
     course, err = _resolve_course_or_err(
         req.course_code, req.course_name, req.course_type,
         req.college if req.course_type == CourseCreationRequest.Type.MAJOR else None,
     )
     if err:
-        return _err(err)
+        return None, _err(err)
 
     parent = req.general_category if req.course_type == CourseCreationRequest.Type.GENERAL else req.target_category
     if parent is None:
-        return _err("目标位置缺失，无法创建课程文件夹")
+        return None, _err("目标位置缺失，无法创建课程文件夹")
 
     max_order = CourseCategory.objects.filter(parent=parent).aggregate(m=Max("order"))["m"] or 0
     new_cat = CourseCategory.objects.create(
@@ -432,7 +538,7 @@ def _approve_request(req, reviewer):
         message=f"你的申请「{req.course_name}」已通过，课程文件夹已创建。",
         course_code=req.course_code, course_name=req.course_name,
     )
-    return None
+    return new_cat, None
 
 
 @csrf_exempt
@@ -450,7 +556,7 @@ def api_moderation_course_request_approve(request, request_id):
         return _err("该申请已通过")
 
     with transaction.atomic():
-        err = _approve_request(req, request.user)
+        _cat, err = _approve_request(req, request.user)
     if err is not None:
         return err
     return _ok({"id": req.id, "status": req.status})
@@ -521,7 +627,7 @@ def api_moderation_course_requests_batch_approve(request):
     for req in pending:
         try:
             with transaction.atomic():
-                err = _approve_request(req, request.user)
+                _cat, err = _approve_request(req, request.user)
             if err is None:
                 approved += 1
         except Exception:
