@@ -551,7 +551,9 @@
   /* ── Level 1: Square Card Grid ──────────── */
   .folder-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(178px, 218px));
+    /* auto-fit + space-evenly：最后一行未填满时等距排布、轴对称（同 folder-grid-3） */
+    grid-template-columns: repeat(auto-fit, minmax(178px, 218px));
+    justify-content: space-evenly;
     gap: var(--space-md);
     padding: var(--space-sm) 0 var(--space-xl);
     max-width: 1180px;
@@ -792,7 +794,7 @@
 
   /* ── Mobile responsive ──────────────────── */
   @media (max-width: 640px) {
-    .folder-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--space-sm); }
+    .folder-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: var(--space-sm); }
     .folder-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-sm); }
     .folder-card { padding: 8px; }
     .folder-card .fc-icon { width: 46px; height: 46px; }
