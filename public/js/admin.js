@@ -243,7 +243,7 @@
             html += '<div class="pc-own">你的上传，等待其他审核员处理</div>';
           } else {
             html += '<div class="pc-actions">' +
-              '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">📄 详情</button>' +
+              '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">' + (window.ICONS ? ICONS.file : '') + '<span>详情</span></button>' +
               '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件进行审核">⬇ 下载</button>' +
               '<button class="admin-btn admin-btn-approve" onclick="quickApprove(' + m.id + ')">✓ 通过</button>' +
               '<button class="admin-btn admin-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>' +
@@ -270,7 +270,7 @@
             '</div>' +
             '<div class="pc-peer-approved-badge">✅ 已被 ' + escapeHtml(m.approved_by_name) + ' 于 ' + m.approved_at + ' 审核通过</div>' +
             '<div class="pc-actions" style="margin-top:8px">' +
-              '<button class="admin-btn admin-btn-secondary" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">📄 详情</button>' +
+              '<button class="admin-btn admin-btn-secondary" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">' + (window.ICONS ? ICONS.file : '') + '<span>详情</span></button>' +
               '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件查看">⬇ 下载查看</button>' +
               '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">💬 提出异议</button>' +
             '</div>' +
