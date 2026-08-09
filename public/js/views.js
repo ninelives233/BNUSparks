@@ -1,6 +1,6 @@
   function renderEmpty(course) {
     document.getElementById('explorerContent').innerHTML =
-      '<div class="empty-state"><div class="es-icon"><span class="gi gi-empty"></span></div><div class="es-text">「' + esc(course.name) + '」暂无资料</div><div class="es-sub">可能是课程尚未开始，或资料正在征集中</div></div>';
+      '<div class="empty-state"><div class="es-icon">' + (window.ICONS ? ICONS.inbox : '') + '</div><div class="es-text">「' + esc(course.name) + '」暂无资料</div><div class="es-sub">可能是课程尚未开始，或资料正在征集中</div></div>';
   }
 
   function renderExplorer() {

@@ -5743,3 +5743,12 @@
 
 /* ── 空态：紧凑变体（容器内"加载中/暂无数据/加载失败"消息） ── */
 .empty-state.compact { padding: 32px 16px; }
+
+/* ── Phase 3 · ICONS 尺寸（SVG 不带内联尺寸，尺寸集中在此） ── */
+.ico-nav { display: inline-flex; align-items: center; justify-content: center; }
+.side-nav .ico-nav { width: 18px; height: 18px; }
+.side-nav .ico-nav svg { width: 18px; height: 18px; }
+.sn-icon.ico-nav { width: 20px; height: 20px; }
+.sn-icon.ico-nav svg { width: 20px; height: 20px; }
+.header-login .login-icon svg { width: 20px; height: 20px; display: block; }
+.empty-state .es-icon svg { width: 40px; height: 40px; }
