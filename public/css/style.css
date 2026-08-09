@@ -33,10 +33,10 @@
     --brand-hue: 250;
 
     /* 主色 v=160 降饱和（原 0.09 → 0.06，保持 hue=250/明度；回退=改回原值注释） */
-    --primary: oklch(0.40 0.06 250);            /* 原 oklch(0.40 0.09 250) */
-    --primary-dark: oklch(0.32 0.08 250);       /* 原 oklch(0.32 0.11 250) */
-    --primary-light: oklch(0.88 0.025 250);     /* 原 oklch(0.88 0.04 250) */
-    --primary-surface: oklch(0.94 0.018 250);   /* 原 oklch(0.94 0.025 250) */
+    --primary: oklch(0.40 0.09 250);            /* 原 0.09 饱和蓝（用户否决降饱和，还原活力） */
+    --primary-dark: oklch(0.32 0.11 250);       /* 原 0.32 0.11 250 */
+    --primary-light: oklch(0.88 0.04 250);      /* 原 0.88 0.04 250 */
+    --primary-surface: oklch(0.94 0.025 250);   /* 原 0.94 0.025 250 */
 
     --accent: oklch(0.52 0.13 45);
     --accent-hover: oklch(0.45 0.15 45);
@@ -498,6 +498,10 @@
     border-top: 1px solid var(--border-light); padding: var(--space-2xl) 0 var(--space-xl);
     margin-top: auto; /* v=158：sticky footer，内容不足一屏时把备案号栏钉到底部 */
   }
+  /* v=160：非首页仅显示备案号一行 */
+  .site-footer.compact { padding: var(--space-lg) 0; }
+  .site-footer.compact .footer-grid { display: none; }
+  .site-footer.compact .footer-bottom { border-top: none; }
   .footer-grid {
     display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--space-xl);
     margin-bottom: var(--space-xl);
