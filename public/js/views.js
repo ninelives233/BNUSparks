@@ -680,11 +680,11 @@
      ═══════════════════════════════════════════════════════════ */
 
   function _updateFooterVisibility(viewName) {
-    // v=158：Footer（含备案号栏）全域显示，不再按视图隐藏——
-    // 否则移动端文件列表内容少时页面过短无法滑动到底、备案号局促
+    // v=160：仅首页显示完整 footer（品牌+三列+备案号行）；
+    // 其余页面只保留备案号一行（compact），footer 元素仍占位 → sticky 钉底不受影响
     var footer = document.getElementById('siteFooter');
     if (!footer) return;
-    footer.style.display = '';
+    footer.classList.toggle('compact', viewName !== 'home');
   }
 
   function returnToPreviousView() {
