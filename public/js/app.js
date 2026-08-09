@@ -151,11 +151,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 关闭浏览器原生滚动恢复，滚动位置完全由 JS 显式控制，
   // 避免其与视图切换的平滑滚动竞争导致刷新后页面自动下滑
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-  // v160 Phase3：导航图标注入（window.ICONS → [data-nav-icon] 占位）
-  document.querySelectorAll('[data-nav-icon]').forEach(function(el) {
-    var k = el.getAttribute('data-nav-icon');
-    if (window.ICONS && ICONS[k]) el.innerHTML = ICONS[k];
-  });
   // 并行触发所有独立请求（串行 800ms → 并行 ~200ms）
   const treePromise = loadCourseTree();
   const authPromise = checkAuth().then(() => {
