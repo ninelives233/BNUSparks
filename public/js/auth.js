@@ -17,7 +17,7 @@
     } else {
       container.innerHTML =
         '<a href="#" class="login-btn" onclick="event.preventDefault();showLoginModal()">' +
-          '<span class="login-icon">' + (window.ICONS ? ICONS.user : '') + '</span><span class="login-text">登录</span>' +
+          '<span class="login-icon gi gi-login"></span><span class="login-text">登录</span>' +
         '</a>';
     }
     // 侧边栏管理后台入口显示/隐藏（平民模式隐藏一切）
