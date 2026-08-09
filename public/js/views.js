@@ -166,7 +166,7 @@
   // ── Rankings & Recent All Views ──
   async function renderTopDownloaded(restoreScrollY) {
     const container = document.getElementById('rankingsContent');
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    container.innerHTML = '<div class="empty-state compact">加载中...</div>';
     try {
       const s = await api('/api/stats/?limit=100');
       const allItems = s.top_downloaded || [];
@@ -228,7 +228,7 @@
 
   async function renderRecentAll(restoreScrollY) {
     const container = document.getElementById('recentAllContent');
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    container.innerHTML = '<div class="empty-state compact">加载中...</div>';
     try {
       const s = await api('/api/stats/?limit=100');
       const allItems = s.recent_uploads || [];
@@ -328,12 +328,12 @@
   async function renderLeaderboard(type, page) {
     var container = document.getElementById('leaderboardContent');
     if (!container) return;
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    container.innerHTML = '<div class="empty-state compact">加载中...</div>';
     try {
       var data = await api('/api/user/rankings/?type=' + encodeURIComponent(type) + '&page=' + page);
       var items = data.items || [];
       if (!items.length) {
-        container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">暂无数据</div>';
+        container.innerHTML = '<div class="empty-state compact">暂无数据</div>';
         return;
       }
       var columnHeader = type === 'download' ? '被下载次数' : (type === 'collection' ? '被收藏次数' : '上传文件数');
@@ -364,7 +364,7 @@
 
       container.innerHTML = html;
     } catch(e) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
+      container.innerHTML = '<div class="empty-state compact">加载失败</div>';
     }
   }
 
@@ -412,7 +412,7 @@
 
   function _renderUserPublicHTML(container, userId, page, data) {
     var u = data.user;
-    if (!u) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">用户不存在</div>'; return; }
+    if (!u) { container.innerHTML = '<div class="empty-state compact">用户不存在</div>'; return; }
 
     // 用户名片
     var initial = (u.nickname || '?').charAt(0).toUpperCase();
@@ -473,7 +473,7 @@
         html += '</div>';
       }
     } else {
-      html += '<div style="text-align:center;padding:24px;color:var(--ink-faint);font-size:0.85rem">该用户尚未上传资料</div>';
+      html += '<div class="empty-state compact">该用户尚未上传资料</div>';
     }
 
     container.innerHTML = html;
@@ -488,14 +488,14 @@
       _renderUserPublicHTML(container, userId, page, entry.data);
       return;
     }
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    container.innerHTML = '<div class="empty-state compact">加载中...</div>';
     try {
       var data = await api('/api/user/public/' + userId + '/?page=' + page);
       if (!_userPublicCache[userId]) _userPublicCache[userId] = {};
       _userPublicCache[userId][page] = { ts: Date.now(), data: data };
       _renderUserPublicHTML(container, userId, page, data);
     } catch(e) {
-      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
+      container.innerHTML = '<div class="empty-state compact">加载失败</div>';
     }
   }
 
@@ -513,7 +513,7 @@
   async function loadAnnouncements() {
     var list = document.getElementById('announcementsList');
     if (!list) return;
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>';
+    list.innerHTML = '<div class="empty-state compact">加载中...</div>';
 
     // 发布公告按钮权限
     var createBtn = document.getElementById('createAnnouncementBtn');
@@ -526,7 +526,7 @@
     try {
       var data = await api('/api/announcements/');
       if (!data || !data.items || !data.items.length) {
-        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">暂无公告</div>';
+        list.innerHTML = '<div class="empty-state compact">暂无公告</div>';
         return;
       }
       var html = '';
@@ -548,7 +548,7 @@
       });
       list.innerHTML = html;
     } catch(e) {
-      list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-faint)">加载失败</div>';
+      list.innerHTML = '<div class="empty-state compact">加载失败</div>';
     }
   }
 
