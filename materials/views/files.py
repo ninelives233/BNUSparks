@@ -7,6 +7,7 @@ file-upload, upload-text, download-token, download, delete
 import json
 import os
 import re
+import unicodedata
 import mimetypes
 import hashlib
 from io import BytesIO
@@ -627,7 +628,119 @@ def api_file_detail(request, file_id):
         "is_approved": material.is_approved,
     })
 
-_ZIP_CACHE_MAX = 5000  # 单次响应上限（超过截断提示；正常课程资料远低于此）
+_ZIP_CACHE_MAX = 5000   # 单次响应条目上限（超过截断提示；正常课程资料远低于此）
+_ZIP_SCAN_MAX = 20000   # 中央目录扫描硬上限（防超大压缩包/目录膨胀拖垮解析）
+_ZIP_MAX_DEPTH = 32     # 最大目录层级（超深视为异常结构丢弃）
+_ZIP_NAME_ENCODINGS = ("utf-8", "gb18030", "cp437", "iso-8859-1")
+
+
+def _zip_name_score(text):
+    """对非 UTF-8 候选的解码结果启发式打分，越高越像真实文件名。
+
+    - U+FFFD 替换符（解码失败残留）→ 判死刑
+    - 控制字符 → 强扣分
+    - CJK 汉字 → 加分（中文课程资料主流）
+    - Latin-1 重音/符号区 → 扣分（UTF-8 中文被 cp437/ISO 误读的乱码特征）
+    - 希腊/西里尔等罕见脚本（U+0370–U+1FFF）→ 重扣分（GBK 字节被 UTF-8 误读的产物）
+    """
+    if "�" in text:
+        return -100000
+    cjk = ctrl = latin = rare = symbol = 0
+    for ch in text:
+        cat = unicodedata.category(ch)
+        cp = ord(ch)
+        if cat == "Cc":
+            ctrl += 1
+        elif "一" <= ch <= "鿿":
+            cjk += 1
+        elif 0x00A1 <= cp <= 0x024F:
+            latin += 1
+        elif 0x0370 <= cp <= 0x1FFF:
+            rare += 1
+        elif cat == "So":
+            symbol += 1
+    return cjk * 3 - ctrl * 100 - latin * 2 - rare * 30 - symbol
+
+
+def _zip_utf8_trustworthy(text):
+    """UTF-8 严格解码结果是否可信：无替换符/控制符/罕见脚本。
+
+    GBK 归档的名字被当 UTF-8 严格解码时通常直接抛 UnicodeDecodeError，
+    少数恰好合法的会解出西里尔/希腊等罕见脚本 —— 用此门把关，可信才采信。
+    """
+    if "�" in text:
+        return False
+    for ch in text:
+        cp = ord(ch)
+        if unicodedata.category(ch) == "Cc":
+            return False
+        if 0x0370 <= cp <= 0x1FFF:
+            return False
+    return True
+
+
+def _decode_zip_name(info):
+    """多编码候选解码 ZIP 文件名，修复 macOS/Windows 归档文件名乱码。
+
+    zipfile 在 UTF-8 flag 未设置时按 cp437 解码（macOS 归档工具常不设 flag，
+    但文件名实为 UTF-8），把中文解成 'τ¼öΦ«░' 这类乱码。cp437 解码是无损的
+    （字节↔字符一一对应），可反解出原始字节，再依次尝试候选编码：
+    UTF-8 → GB18030 → CP437 → ISO-8859-1，启发式评分选最优。
+    """
+    name = info.orig_filename
+    if isinstance(name, bytes):
+        raw = name  # 老版本 Python：直接是中央目录原始字节
+    else:
+        try:
+            raw = name.encode("cp437")  # 从 cp437 无损反解 → 原始字节
+        except UnicodeEncodeError:
+            raw = name.encode("utf-8")  # 本就走 UTF-8（flag 已设），无需重建
+    # 1) UTF-8 严格解码且可信 → 直接采信（UTF-8 成功是极强信号）
+    try:
+        utf8_text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        utf8_text = None
+    if utf8_text is not None and _zip_utf8_trustworthy(utf8_text):
+        return utf8_text
+    # 2) 其余候选按启发式评分取最优
+    best, best_score = "", -10**9
+    for enc in ("gb18030", "cp437", "iso-8859-1"):
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+        score = _zip_name_score(text)
+        if score > best_score:
+            best, best_score = text, score
+    if best:
+        return best
+    return utf8_text if utf8_text is not None else raw.decode("cp437", errors="replace")
+
+
+def _is_zip_slip(name):
+    """检测路径穿越（..）与绝对路径，防范 Zip Slip 路径遍历。"""
+    if not name or name.startswith("/") or name.startswith("\\"):
+        return True
+    depth = 0
+    for part in name.replace("\\", "/").split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            depth -= 1
+            if depth < 0:
+                return True
+        else:
+            depth += 1
+    return False
+
+
+def _is_zip_metadata(name):
+    """过滤 macOS/归档元数据：__MACOSX 目录、.DS_Store、AppleDouble ._ 侧车。"""
+    base = name.replace("\\", "/").rsplit("/", 1)[-1]
+    return (
+        name.startswith("__MACOSX/") or name == "__MACOSX"
+        or base == ".DS_Store" or base.startswith("._")
+    )
 
 
 def _pdf_preview_cache_path(file_id, file_path, max_pages):
@@ -654,7 +767,8 @@ def _zip_structure_cache_path(file_id, file_path):
     """
     try:
         st = file_path.stat()
-        key = f"{file_id}:{st.st_size}:{int(st.st_mtime)}"
+        # zip2 版本前缀：v159 起结构含"解码后文件名"，与旧（乱码）缓存不兼容，升版强制失效
+        key = f"zip2:{file_id}:{st.st_size}:{int(st.st_mtime)}"
     except OSError:
         return None
     digest = hashlib.md5(key.encode('utf-8')).hexdigest()[:16]
@@ -700,11 +814,25 @@ def api_zip_structure(request, file_id):
     try:
         with zipfile.ZipFile(str(file_path), 'r') as zf:
             items = []
+            scanned = 0
+            truncated = False
             for info in zf.infolist():
+                scanned += 1
+                if scanned > _ZIP_SCAN_MAX:
+                    truncated = True  # 防超大压缩包：超过扫描上限即停止
+                    break
                 if info.is_dir():
                     continue  # 目录由前端从路径推导，无需下发
+                name = _decode_zip_name(info)
+                if _is_zip_slip(name):
+                    continue  # 路径穿越/绝对路径条目：安全过滤，不下发
+                if _is_zip_metadata(name):
+                    continue  # __MACOSX/.DS_Store/._ 元数据：体验过滤
+                if name.count('/') >= _ZIP_MAX_DEPTH:
+                    truncated = True  # 超深目录视为异常结构，丢弃并提示截断
+                    continue
                 items.append({
-                    'name': info.filename,
+                    'name': name,
                     'size': info.file_size,
                     'compressed_size': info.compress_size,
                 })
@@ -714,7 +842,7 @@ def api_zip_structure(request, file_id):
             'file_name': material.file_name,
             'total': total,
             'items': items[: _ZIP_CACHE_MAX],
-            'truncated': total > _ZIP_CACHE_MAX,
+            'truncated': truncated or total > _ZIP_CACHE_MAX,
         }
         # 原子写缓存，供后续预览复用
         if cache_path:

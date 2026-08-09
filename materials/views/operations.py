@@ -6,6 +6,7 @@ operations, folder-restore, batch-delete/edit, restore-deletion
 """
 
 import json
+import re
 import shutil
 from datetime import timedelta
 from pathlib import Path
@@ -14,7 +15,6 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.db.models import Q, Max
-from django.db import transaction
 from django.conf import settings
 from django.utils import timezone
 
@@ -290,6 +290,9 @@ def api_folder_create(request):
             return _err("课程节点必须填写课程代码")
         if not course_name:
             return _err("课程节点必须填写课程名称")
+        # v=158：课程代码仅允许字母和数字（既作 Course.code 又作目录名）
+        if not re.match(r"^[A-Za-z0-9]+$", course_code):
+            return _err("课程代码仅允许字母和数字", 400)
         matched = Course.objects.filter(code=course_code)
         if matched.count() == 1:
             course = matched.first()
@@ -767,12 +770,12 @@ def api_folder_set_course(request, folder_id):
     if not course_code:
         return _err("课程代码不能为空")
 
-    # 课程代码既作目录名又作 Course.code：拒绝一切路径穿越字符（/ \ .. 及空白），
-    # 防止重命名后 file_path 前缀带 .. 逃逸出 MEDIA_ROOT
-    safe_code = _safe_dir_name(course_code)
-    if safe_code != course_code or "/" in course_code or "\\" in course_code or ".." in course_code:
-        return _err("课程代码包含非法字符（仅允许字母、数字、-、_、*）", 400)
-    course_code = safe_code
+    # v=158：课程代码仅允许字母和数字。校验原始输入（非清洗后），
+    # 避免 "BAD-CODE!" 被 _safe_dir_name 静默清洗成 "BADCODE" 而不报错；
+    # 纯字母数字天然无路径穿越风险（/ \ .. 空白均被正则拦截），可安全作目录名。
+    if not re.match(r"^[A-Za-z0-9]+$", course_code):
+        return _err("课程代码仅允许字母和数字", 400)
+    course_code = _safe_dir_name(course_code)
 
     # 阶段 1：只查询→返回情况（前端未选 action 时）
     if not action_id:
@@ -878,18 +881,13 @@ def api_folder_set_course(request, folder_id):
             except OSError:
                 pass  # 非空时静默失败
 
-        # 更新 file_path
-        if old_dir != new_dir:
-            Material.objects.filter(course=old_course).update(
-                file_path=transaction.atomic().on_commit(
-                    lambda: None  # 下面积累
-                )
-            )
-            # 用 F 表达式安全更新 file_path 前缀
-            for m in Material.objects.filter(course=old_course):
-                if m.file_path.startswith(old_code + "/"):
-                    m.file_path = course_code + m.file_path[len(old_code):]
-                    m.save(update_fields=["file_path"])
+        # 更新 file_path 前缀：{旧code}/ → {新code}/
+        # v=158：去掉残留的 `Material.objects.update(file_path=transaction.atomic().on_commit(...))`
+        # 垃圾代码——on_commit 返回 None 会把全部 file_path 写成 NULL 且随后循环崩溃
+        for m in Material.objects.filter(course=old_course):
+            if m.file_path and m.file_path.startswith(old_code + "/"):
+                m.file_path = course_code + m.file_path[len(old_code):]
+                m.save(update_fields=["file_path"])
 
         # 改 Course.code
         old_course.code = course_code
@@ -949,10 +947,11 @@ def api_folder_set_course(request, folder_id):
             except OSError:
                 pass
 
-        # 3. 更新 file_path 前缀
+        # 3. 更新 file_path 前缀：{旧code}/ → {target.code}/
+        # v=158：原来 `target.code + 后缀` 丢了斜杠（"TGT001test.pdf"），补回 "/"
         old_prefix = old_course.code + "/"
         for m in Material.objects.filter(course=target, file_path__startswith=old_prefix):
-            m.file_path = target.code + m.file_path[len(old_prefix):]
+            m.file_path = target.code + "/" + m.file_path[len(old_prefix):]
             m.save(update_fields=["file_path"])
 
         # 4. 更新其他 CourseCategory 节点引用

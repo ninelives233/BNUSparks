@@ -251,7 +251,7 @@
   .side-nav .sn-icon { font-size: 1.05rem; width: 20px; text-align: center; flex-shrink: 0; }
   .side-nav .sn-spacer { margin-top: auto; }
 
-  .main-content { flex: 1; min-width: 0; }
+  .main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
   /* ── Mobile Drawer (for sidebar collapse) ─────────── */
   .mobile-drawer {
@@ -420,7 +420,7 @@
      ════════════════════════════════════════════════════════════ */
   .site-footer {
     border-top: 1px solid var(--border-light); padding: var(--space-2xl) 0 var(--space-xl);
-    margin-top: var(--space-lg);
+    margin-top: auto; /* v=158：sticky footer，内容不足一屏时把备案号栏钉到底部 */
   }
   .footer-grid {
     display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--space-xl);

@@ -680,9 +680,11 @@
      ═══════════════════════════════════════════════════════════ */
 
   function _updateFooterVisibility(viewName) {
+    // v=158：Footer（含备案号栏）全域显示，不再按视图隐藏——
+    // 否则移动端文件列表内容少时页面过短无法滑动到底、备案号局促
     var footer = document.getElementById('siteFooter');
     if (!footer) return;
-    footer.style.display = viewName === 'home' ? '' : 'none';
+    footer.style.display = '';
   }
 
   function returnToPreviousView() {

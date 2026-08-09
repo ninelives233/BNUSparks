@@ -596,20 +596,21 @@
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:440px">' +
         '<h3>📎 修改课程代码</h3>' +
-        '<div style="margin:10px 0"><label>课程代码</label>' +
-          '<input type="text" id="mgmtCourseCode" placeholder="如 PSY301" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
-        '<div style="margin-bottom:10px"><label>课程名称</label>' +
-          '<input type="text" id="mgmtCourseName" placeholder="课程名称" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
+        '<p style="font-size:0.82rem;color:var(--ink-mid);margin:2px 0 10px">输入新的课程代码。若已存在同代码的课程文件夹，将自动合并其中的文件；否则仅在原文件夹上修改课程代码。</p>' +
+        '<div style="margin:10px 0"><label>新课程代码</label>' +
+          '<input type="text" id="mgmtCourseCode" maxlength="20" placeholder="如 PSY30201" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box">' +
+          '<div style="font-size:0.75rem;color:var(--ink-faint);margin-top:4px">仅允许字母和数字</div></div>' +
+        '<input type="hidden" id="mgmtCatId" value="' + catId + '">' +
         '<div id="mgmtSituationArea"></div>' +
         '<div class="ar-actions">' +
-          '<button class="admin-btn admin-btn-primary" onclick="document.getElementById(\'confirmBtn\').click()">查询</button>' +
+          '<button class="admin-btn admin-btn-primary" id="mgmtSetCourseBtn">确认</button>' +
           '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
     overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
     lockScroll();
-    setTimeout(function() { document.getElementById('mgmtCourseCode').focus(); }, 100);
+    setTimeout(function() { var el = document.getElementById('mgmtCourseCode'); if (el) el.focus(); }, 100);
   }
 
   // 事件委托：监听 #explorerContent 上的三点菜单和弹窗操作
@@ -641,91 +642,90 @@
       return;
     }
 
-    // 修改课程代码 — 查询阶段的确认执行按钮
-    var confirmBtn = e.target.closest('#confirmBtn');
-    if (confirmBtn) {
-      // 处理 set-course 的第二阶段
-      var code = document.getElementById('mgmtCourseCode').value.trim();
-      var name = document.getElementById('mgmtCourseName').value.trim();
+    // 修改课程代码 — 主按钮（查询 → 自动重命名/合并；多课程时选择后执行）
+    var setCourseBtn = e.target.closest('#mgmtSetCourseBtn');
+    if (setCourseBtn) {
+      var codeEl = document.getElementById('mgmtCourseCode');
+      var code = codeEl ? codeEl.value.trim() : '';
       if (!code) { alert('请输入课程代码'); return; }
-
-      var selectedAction = document.querySelector('input[name="mgmtAction"]:checked');
-      var selectedTarget = document.querySelector('input[name="mgmtTargetCourse"]:checked');
+      if (!/^[A-Za-z0-9]+$/.test(code)) { alert('课程代码仅允许字母和数字'); return; }
       var catIdInput = document.getElementById('mgmtCatId');
       var targetCatId = catIdInput ? parseInt(catIdInput.value) : 0;
-
-      if (selectedAction) {
-        // 阶段2：执行
-        var body = { course_code: code, course_name: name, action_id: selectedAction.value };
-        if (selectedTarget) body.target_course_id = parseInt(selectedTarget.value);
-        var overlay = document.querySelector('.admin-reject-overlay');
-        // 找确认按钮的值
-        api('/api/folders/' + targetCatId + '/set-course/', { method: 'POST', body: body })
-          .then(function() {
-            if (overlay) _removeOverlay(overlay);
-            refreshCourseTree();
-          }).catch(function(err) { _showScopeError('操作失败', err); });
+      if (!targetCatId) { alert('缺少目标节点'); return; }
+      if (setCourseBtn.dataset.mode === 'pick') {
+        // 多课程已展示选择列表 → 确认执行链接
+        var sel = document.querySelector('input[name="mgmtTargetCourse"]:checked');
+        if (!sel) { alert('请选择要指向的课程'); return; }
+        var codeNow = codeEl.value.trim();
+        _mgmtSetCourseExec(targetCatId, codeNow, 'link', parseInt(sel.value));
       } else {
-        // 阶段1：查询
-        api('/api/folders/' + targetCatId + '/set-course/', { method: 'POST', body: { course_code: code, course_name: name } })
-          .then(function(r) { _renderSetCourseSituation(r, code, name, targetCatId); })
-          .catch(function(err) { _showScopeError('查询失败', err); });
+        _mgmtSetCoursePhase1(targetCatId, code, setCourseBtn);
       }
       return;
     }
   });
 
-  function _renderSetCourseSituation(r, code, name, catId) {
+  // 阶段1：查询课程代码存在情况 → 自动执行（重命名/合并/链接），多课程时展示选择列表
+  function _mgmtSetCoursePhase1(catId, code, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    api('/api/folders/' + catId + '/set-course/', { method: 'POST', body: { course_code: code } })
+      .then(function(r) {
+        if (r.situation === 'new_code') {
+          // 无同代码文件夹 → 原文件夹上仅改课程代码（重命名 + 文件路径迁移）
+          _mgmtSetCourseExec(catId, code, 'rename_self', null);
+        } else if (r.situation === 'exists_single') {
+          // 存在同代码课程 → 自动合并（有文件迁移）；无可合并时链接到已有课程
+          var hasMerge = (r.options || []).some(function(o) { return o.id === 'merge'; });
+          var targetId = r.existing_course && r.existing_course.id;
+          _mgmtSetCourseExec(catId, code, hasMerge ? 'merge' : 'link', targetId);
+        } else if (r.situation === 'exists_multiple') {
+          // 同代码对应多个课程 → 展示列表让管理员选择指向哪个
+          _renderSetCoursePicker(r);
+        } else {
+          if (btn) { btn.disabled = false; btn.textContent = '确认'; }
+          alert(r.note || '查询失败');
+        }
+      })
+      .catch(function(err) {
+        _showScopeError('查询失败', err);
+        if (btn) { btn.disabled = false; btn.textContent = '确认'; }
+      });
+  }
+
+  function _renderSetCoursePicker(r) {
     var area = document.getElementById('mgmtSituationArea');
     if (!area) return;
-    var html = '';
-
-    if (r.situation === 'new_code') {
-      html += '<div class="mgmt-situation">' + esc(r.note) + '</div>';
-      if (r.options && r.options.length) {
-        html += '<div class="mgmt-option" style="background:var(--primary-surface)">' +
-          '<input type="radio" name="mgmtAction" id="act_rename" value="rename_self" checked>' +
-          '<label for="act_rename"><strong>' + esc(r.options[0].label) + '</strong></label>' +
-          '<div class="mgmt-opt-desc">' + esc(r.options[0].desc) + '</div>' +
-        '</div>';
-      }
-    } else if (r.situation === 'exists_single') {
-      html += '<div class="mgmt-situation">' + esc(r.note) + '</div>';
-      if (r.options) {
-        r.options.forEach(function(opt, i) {
-          html += '<div class="mgmt-option">' +
-            '<input type="radio" name="mgmtAction" id="act_' + i + '" value="' + opt.id + '"' + (i === 0 ? ' checked' : '') + '>' +
-            '<label for="act_' + i + '"><strong>' + esc(opt.label) + '</strong></label>' +
-            '<div class="mgmt-opt-desc">' + esc(opt.desc) + '</div>' +
-          '</div>';
-        });
-      }
-    } else if (r.situation === 'exists_multiple') {
-      html += '<div class="mgmt-situation">' + esc(r.note) + '</div>';
-      html += '<div class="mgmt-course-list">';
-      if (r.matching_courses) {
-        r.matching_courses.forEach(function(c, idx) {
-          html += '<div class="mgmt-course-item" onclick="this.querySelector(\'input\').checked=true">' +
-            '<input type="radio" name="mgmtTargetCourse" value="' + c.id + '"' + (idx === 0 ? ' checked' : '') + '>' +
-            ' <strong>' + esc(c.name) + '</strong>' +
-            ' <span style="color:var(--ink-faint)">' + esc(c.code) + ' · ' + esc(c.college || '无学院') + ' · ' + c.file_count + '个文件</span>' +
-          '</div>';
-        });
-      }
-      html += '</div>';
-      html += '<div style="margin-top:8px">' +
-        '<button class="admin-btn admin-btn-sm" onclick="document.querySelector(\'input[name=&quot;mgmtAction&quot;]\').checked=false;document.getElementById(\'confirmBtn\').click()" style="display:none" id="fakeLinkBtn">链接到所选课程</button>' +
-        '<span style="font-size:0.85rem;color:var(--ink-mid)">选择一个课程后，点击下方确认执行</span>' +
+    var html = '<div class="mgmt-situation">' + esc(r.note) + '</div>';
+    html += '<div class="mgmt-course-list">';
+    (r.matching_courses || []).forEach(function(c, idx) {
+      html += '<div class="mgmt-course-item" onclick="this.querySelector(\'input\').checked=true">' +
+        '<input type="radio" name="mgmtTargetCourse" value="' + c.id + '"' + (idx === 0 ? ' checked' : '') + '>' +
+        ' <strong>' + esc(c.name) + '</strong>' +
+        ' <span style="color:var(--ink-faint)">' + esc(c.code) + ' · ' + esc(c.college || '无学院') + ' · ' + c.file_count + '个文件</span>' +
       '</div>';
-    }
-
-    // 追加确认按钮
-    html += '<div class="ar-actions" style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">' +
-      '<button class="admin-btn admin-btn-primary" id="confirmBtn" onclick="(function(){var code=document.getElementById(\'mgmtCourseCode\').value.trim();var name=document.getElementById(\'mgmtCourseName\').value.trim();if(!code){alert(\'请输入课程代码\');return}var sa=document.querySelector(\'input[name=\\"mgmtAction\\"]:checked\');var st=document.querySelector(\'input[name=\\"mgmtTargetCourse\\"]:checked\');if(sa){var body={course_code:code,course_name:name,action_id:sa.value};if(st)body.target_course_id=parseInt(st.value);api(\'/api/folders/' + catId + '/set-course/\',{method:\'POST\',body:body}).then(function(){var ov=document.querySelector(\'.admin-reject-overlay\');if(ov)_removeOverlay(ov);refreshCourseTree()}).catch(function(err){alert(\'操作失败：\'+(err.message||err.error))})}else{alert(\'请选择一个操作\')}})()">确认执行</button>' +
-      '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
-    '</div>';
-
+    });
+    html += '</div>';
+    html += '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-mid)">该代码对应多个课程，请选择要指向的课程后点击「确认执行」</div>';
     area.innerHTML = html;
+    var btn = document.getElementById('mgmtSetCourseBtn');
+    if (btn) { btn.disabled = false; btn.textContent = '确认执行'; btn.dataset.mode = 'pick'; }
+  }
+
+  // 阶段2：执行修改/合并/链接
+  function _mgmtSetCourseExec(catId, code, actionId, targetId) {
+    var body = { course_code: code, action_id: actionId };
+    if (targetId) body.target_course_id = targetId;
+    var overlay = document.querySelector('.admin-reject-overlay');
+    api('/api/folders/' + catId + '/set-course/', { method: 'POST', body: body })
+      .then(function() {
+        if (overlay) _removeOverlay(overlay);
+        refreshCourseTree();
+      })
+      .catch(function(err) {
+        _showScopeError('操作失败', err);
+        var btn = document.getElementById('mgmtSetCourseBtn');
+        if (btn) { btn.disabled = false; btn.textContent = '确认'; delete btn.dataset.mode; }
+      });
   }
 
   function _showDeleteDialog(catId, node) {
@@ -892,12 +892,12 @@
         setTimeout(function() { var el = document.getElementById('newFolderName'); if (el) el.focus(); }, 100);
       } else if (type === 'course') {
         container.innerHTML =
-          '<div style="margin-bottom:8px;margin-top:12px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程代码</label>' +
-            '<input type="text" id="newFolderCode" placeholder="三个字母加五位数字，如 PSY30201" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
-          '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程名称</label>' +
+          '<div style="margin:12px 0 8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程名称</label>' +
             '<input type="text" id="newFolderCourseName" placeholder="如 普通心理学" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
-          '<div style="font-size:0.75rem;color:var(--ink-faint);margin-bottom:4px">课程名称将作为文件夹显示名称</div>';
-        setTimeout(function() { var el = document.getElementById('newFolderCode'); if (el) el.focus(); }, 100);
+          '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">课程代码</label>' +
+            '<input type="text" id="newFolderCode" placeholder="三个字母加五位数字，如 PSY30201" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box"></div>' +
+          '<div style="font-size:0.75rem;color:var(--ink-faint);margin-bottom:4px">课程名称将作为文件夹显示名称 · 课程代码仅允许字母和数字</div>';
+        setTimeout(function() { var el = document.getElementById('newFolderCourseName'); if (el) el.focus(); }, 100);
       } else if (type === 'custom') {
         container.innerHTML =
           '<div style="margin:12px 0"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹名称</label>' +
@@ -924,6 +924,7 @@
       var cname = document.getElementById('newFolderCourseName').value.trim();
       if (!code) { alert('请填写课程代码'); return; }
       if (!cname) { alert('请填写课程名称'); return; }
+      if (!/^[A-Za-z0-9]+$/.test(code)) { alert('课程代码仅允许字母和数字'); return; }  // v=158 加固
       body.name = cname;       // 课程名称作为文件夹显示名
       body.course_code = code;
       body.course_name = cname;
