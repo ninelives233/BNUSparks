@@ -540,7 +540,7 @@
     var items = isCourse ? ['rename', 'set_course', 'delete']
                          : ['rename', 'delete'];
     return items.map(function(a) {
-      var label = { rename: '✏️ 重命名', set_course: '📎 修改课程代码', delete: (window.ICONS ? ICONS.trash : '') + ' 删除' }[a] || a;
+      var label = { rename: '✏️ 重命名', set_course: '📎 修改课程代码', delete: '🗑 删除' }[a] || a;
       var cls = a === 'delete' ? 'fc-menu-item danger' : 'fc-menu-item';
       return '<div class="' + cls + '" data-action="' + a + '">' + label + '</div>';
     }).join('');
@@ -738,7 +738,7 @@
       : '';
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:360px">' +
-        '<h3>' + (window.ICONS ? ICONS.trash : '') + '<span>确认删除</span></h3>' +
+        '<h3>🗑 确认删除</h3>' +
         '<p>将删除文件夹 <strong>' + esc(name) + '</strong></p>' +
         peelNote +
         '<p style="font-size:0.8rem;color:var(--ink-faint)">仅删除目录节点，关联课程和文件不受影响</p>' +
@@ -866,7 +866,7 @@
     overlay.className = 'admin-reject-overlay';
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:420px">' +
-        '<h3>' + (window.ICONS ? ICONS.folder : '') + '<span>新建文件夹</span></h3>' +
+        '<h3>📁 新建文件夹</h3>' +
         '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹类型</label>' +
           '<select id="newFolderType" onchange="updateNewFolderFields()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem">' +
             '<option value="intermediate">中间节点（可建子文件夹，不绑定课程）</option>' +
@@ -1343,9 +1343,9 @@
           }
           var dlLink = currentUser
             ? (f.can_download !== false
-                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">' + (window.ICONS ? ICONS.download : '') + ' 下载</a><a href="javascript:void(0)" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</a>'
+                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a><a href="javascript:void(0)" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</a>'
                 : '<span class="dl-link dl-disabled" title="审核通过后可下载">⏳ 待审核</span>')
-            : '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">' + (window.ICONS ? ICONS.download : '') + ' 下载</a>';
+            : '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a>';
           var isChecked = !!_selectedIds[f.id];
           var mgmt = isMgmtActive();
           // 管理模式：文件名和教师旁加铅笔（屏幕宽度 > 768px），仅在可编辑时显示
@@ -1357,7 +1357,7 @@
             ? ('<span class="mgmt-pen mgmt-pen-sm" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'teacher\',\'' + escJs(f.teacher || '') + '\')">✏️</span>')
             : '';
           var mgmtDel = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen mgmt-del" onclick="event.stopPropagation();deleteFileConfirm(' + f.id + ',this)" title="删除此文件">' + (window.ICONS ? ICONS.trash : '') + '</span>')
+            ? ('<span class="mgmt-pen mgmt-del" onclick="event.stopPropagation();deleteFileConfirm(' + f.id + ',this)" title="删除此文件">🗑️</span>')
             : '';
           return '<tr data-file-id="' + f.id + '"><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span class="fn-text" title="' + esc(f.title) + '">' + esc(f.title) + '</span>' + badgeHtml + mgmtPens + mgmtDel + '</span></td>' +
             '<td class="ft-type-cell">' + esc(f.user_material_type || f.file_type) + (mgmt && selfOrInScope ? '<span class="mgmt-type-dropdown-wrap"><select class="mgmt-type-select" onchange="mgmtChangeType(' + f.id + ',this)">' + MATERIAL_TYPES.map(function(t) { var sel = (f.user_material_type || '') === t.name ? ' selected' : ''; return '<option value="' + t.id + '"' + sel + '>' + t.name + '</option>'; }).join('') + '</select></span>' : '') + '</td>' +
@@ -1586,9 +1586,9 @@
           '<div class="fi-row fi-row-desc"><span class="fi-label">简介</span><span class="fi-value">' + descHtml + '</span></div>' +
           '<div class="fi-actions">' +
             (currentUser
-              ? '<button class="fi-preview-btn" onclick="event.stopPropagation();showPreview(' + file.id + ')">预览文件</button><button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">' + (window.ICONS ? ICONS.download : '') + ' 下载文件</button>'
-              : '<button class="fi-download-btn" onclick="event.stopPropagation();handleDownloadClick(' + file.id + ',this,event)">' + (window.ICONS ? ICONS.download : '') + ' 下载文件</button>') +
-            (file.can_delete && !_civilianMode ? '<button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">' + (window.ICONS ? ICONS.trash : '') + '<span>删除此资料</span></button>' : '') +
+              ? '<button class="fi-preview-btn" onclick="event.stopPropagation();showPreview(' + file.id + ')">预览文件</button><button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>'
+              : '<button class="fi-download-btn" onclick="event.stopPropagation();handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>') +
+            (file.can_delete && !_civilianMode ? '<button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">🗑️ 删除此资料</button>' : '') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -2246,7 +2246,7 @@
             '<div class="pv-unsupported-icon">📊</div>' +
             '<div class="pv-unsupported-text">此格式暂不支持在线预览</div>' +
             '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
-            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">' + (window.ICONS ? ICONS.download : '') + ' 下载文件</button>' +
+            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
           '</div>';
         } else if (extType === 'zip') {
           bodyHtml = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
@@ -2262,7 +2262,7 @@
             '<div class="pv-unsupported-icon">📄</div>' +
             '<div class="pv-unsupported-text">此格式暂不支持在线预览</div>' +
             '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
-            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">' + (window.ICONS ? ICONS.download : '') + ' 下载文件</button>' +
+            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
           '</div>';
         }
 
@@ -2273,7 +2273,7 @@
           '<div class="preview-header">' +
             '<span class="pv-badge">' + extBadgeHtml + '</span>' +
             '<span class="pv-title" title="' + esc(fn) + '">' + esc(fileTitle || fn || '文件预览') + '</span>' +
-            '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">' + (window.ICONS ? ICONS.download : '') + ' 下载</button>' +
+            '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">⬇ 下载</button>' +
           '</div>' +
           '<div class="preview-body" id="previewBody">' + bodyHtml + '</div>';
         overlay.addEventListener('click', function(e) {
@@ -2409,7 +2409,7 @@
     html += renderNode(root.__children, 0);
     html += '</div>' +
       '<div class="pv-zip-footer"><button class="pv-dl-btn" onclick="' +
-        (inOverlay ? 'closePreview();' : '') + 'doDirectDownload(' + fileId + ')">' + (window.ICONS ? ICONS.download : '') + ' 下载文件</button></div>';
+        (inOverlay ? 'closePreview();' : '') + 'doDirectDownload(' + fileId + ')">⬇ 下载文件</button></div>';
 
     container.innerHTML = html;
   }
