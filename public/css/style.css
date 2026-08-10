@@ -632,9 +632,9 @@
   /* flex-wrap + space-evenly：每行独立等距排布，未满行自动轴对称居中。
      （grid 的 auto-fit 折叠不了被前几行占用的轨道，未满行只能左对齐，故改用 flex）
      卡片宽度 clamp 连续渐变：宽屏 5 列 218px（5×218+4×20=1170≤1180，与旧 grid 满行同宽），
-     随容器缩小平滑收缩（218→140px），低于 140px 下限时由 flex-wrap 自动降档
-     5→4→3→2→1 列（每档卡片恒 140px，无大小突变）；375px 视口 2 列 140px、
-     360px 视口 2 列 140px、320px 以下 1 列 140px。
+     随容器缩小平滑收缩（218→150px），低于 150px 下限时由 flex-wrap 自动降档
+     5→4→3→2→1 列（每档卡片恒 150px，无大小突变）；375px 视口 2 列 150px（间距≈20px）、
+     360px 视口 2 列 150px、352px 以下 1 列 150px。
      切勿改回固定 px 或用 ≤180px 的窄下限：前者恢复 640px 断点的 218→100 突变，
      后者会让满行变 6 列。 */
   .folder-grid {
@@ -647,7 +647,7 @@
     margin: 0 auto;
   }
   .folder-card {
-    flex: 0 0 clamp(140px, calc((100% - 4 * var(--space-md)) / 5), 218px);
+    flex: 0 0 clamp(150px, calc((100% - 4 * var(--space-md)) / 5), 218px);
     aspect-ratio: 1;
     background: var(--raised);
     border: 1px solid var(--border-light);
