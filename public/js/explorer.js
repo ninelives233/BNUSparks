@@ -1039,22 +1039,15 @@
   // ── Renderers ──
   function renderGrid(items) {
     const parent = document.getElementById('explorerContent');
-    // 第三行特排卡（国际视野与文明对话/数学类/实用文件）单独成行、等距排开；
-    // 其余通识课大类/学院卡片照常铺满上方网格（5 列 = 两行 5+5）。
-    const regularItems = items.filter(i => !i.divider && !i.thirdRow);
-    const thirdRow = items.filter(i => i.thirdRow);
+    // 所有大类/学院卡片统一进同一个 folder-grid，由 CSS flex-wrap + clamp 自适应列数
+    // （不再有「第三行特排」：国际视野与文明对话/数学类/实用文件 与其余通识大类一起排布）。
+    const regularItems = items.filter(i => !i.divider);
     const mgmt = isMgmtActive();
     let html = '';
 
     html += '<div class="folder-grid">' +
       regularItems.map(item => _cardHtml(item, mgmt)).join('') +
     '</div>';
-
-    if (thirdRow.length) {
-      html += '<div class="folder-grid-3">' +
-        thirdRow.map(item => _cardHtml(item, mgmt)).join('') +
-      '</div>';
-    }
 
     parent.innerHTML = html;
     parent.querySelectorAll('.folder-card').forEach(el => {
