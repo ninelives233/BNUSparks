@@ -1,3 +1,21 @@
+// ── 未登录权限收紧（v=164）────────────────────────────
+// 未登录用户仅能观看网站外壳：tab 栏 / 登录按钮与认证弹窗 / 移动抽屉开关 / Footer 备案外链 /
+// Logo / 首页卡片（教程·公告·关于）与「更多 →」直达可点；其余任何点击都唤起登录弹窗。
+// 登录用户（currentUser 非空）完全不受影响。capture 阶段拦截，优先于各视图的冒泡 handler。
+document.addEventListener('click', function(e) {
+  if (currentUser) return;
+  var lm = document.getElementById('loginModal');
+  if (lm && lm.style.display === 'flex') return; // 登录弹窗已开：不重复拦截其交互
+  var t = e.target;
+  if (t.closest('.side-nav a, #mobileDrawer, #menuOpen, #menuClose, .login-btn, '
+      + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
+      + '.header-logo-area, .home-nav-card, .hc-more')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  showLoginModal();
+}, true);
+
 // ── Mobile Drawer ──
 var drawer = document.getElementById('mobileDrawer');
 document.getElementById('menuOpen').addEventListener('click', () => drawer.classList.add('open'));
@@ -205,54 +223,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 等待关键数据就绪后再恢复视图
   await Promise.all([treePromise, authPromise, statsPromise]).catch(function(){});
 
-  // 恢复刷新前的视图
-  try {
-    var saved = JSON.parse(sessionStorage.getItem('bnusparks_view'));
-    if (saved && saved._bnusparks) {
-      _suppressingPushState = true;
-      history.replaceState(saved, '');
-      switch (saved.view) {
-        case 'home': showHome(saved.scrollY); break;
-        case 'explorer':
-          expPath = saved.expPath || ['专业课'];
-          renderExplorer();
-          switchView('explorer', true);
-          updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
-          if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
-          break;
-        // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
-        // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
-        case 'rankings': showTopDownloaded(); break;
-        case 'leaderboard': showLeaderboard(); break;
-        case 'recentAll': showRecentAll(); break;
-        case 'profile': showProfile(); break;
-        case 'notif': showNotifFull(); break;
-        case 'admin': showAdminPanel(); break;
-        case 'about': showAbout(saved.aboutSection || 'introduction'); break;
-        case 'tutorial': showTutorial(); break;
-        case 'announcements': showAnnouncements(); break;
-        case 'broad': showBroad(); break;
-        case 'myuploads': showMyUploadsPage(); break;
-        case 'mydownloads': showMyDownloadsPage(); break;
-        case 'myfavorites': showMyFavoritesPage(); break;
-        case 'fileDetail':
-          // 尝试从文件缓存恢复，否则从 API 获取
-          if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
-            showFileDetail(window._fileLookup[saved.fileId]);
-          } else if (saved.fileId) {
-            showFileDetail({ id: saved.fileId, title: '' });
-          } else {
-            showHome();
-          }
-          break;
-        case 'userPublic': showUserPublic(saved.userId); break;
-        case 'newCourse': renderNewCourseView(); break;
-        default: showHome();
-      }
-      _suppressingPushState = false;
-      return;
+  // 恢复刷新前的视图：URL 路由优先（可分享深链直达），sessionStorage 兜底（旧逻辑）
+  var saved = null;
+  var route = parseRoute(location.pathname);
+  if (route) {
+    saved = { _bnusparks: true, view: route.view };
+    if (route.expPath && route.expPath.length) saved.expPath = route.expPath;
+    if (route.userId) saved.userId = route.userId;
+    if (route.fileId) saved.fileId = route.fileId;
+  } else {
+    try { saved = JSON.parse(sessionStorage.getItem('bnusparks_view')); } catch(e) {}
+  }
+  if (saved && saved._bnusparks) {
+    _suppressingPushState = true;
+    // 兜底恢复时顺带把地址栏写成对应路径，让 URL 与视图一致
+    history.replaceState(saved, '', routeToPath(saved.view, saved) || '');
+    switch (saved.view) {
+      case 'home': showHome(saved.scrollY); break;
+      case 'explorer':
+        expPath = saved.expPath || ['专业课'];
+        renderExplorer();
+        switchView('explorer', true);
+        updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
+        if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
+        break;
+      // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
+      // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
+      case 'rankings': showTopDownloaded(); break;
+      case 'leaderboard': showLeaderboard(); break;
+      case 'recentAll': showRecentAll(); break;
+      case 'profile': showProfile(); break;
+      case 'notif': showNotifFull(); break;
+      case 'admin': showAdminPanel(); break;
+      case 'about': showAbout(saved.aboutSection || 'introduction'); break;
+      case 'tutorial': showTutorial(); break;
+      case 'announcements': showAnnouncements(); break;
+      case 'broad': showBroad(); break;
+      case 'myuploads': showMyUploadsPage(); break;
+      case 'mydownloads': showMyDownloadsPage(); break;
+      case 'myfavorites': showMyFavoritesPage(); break;
+      case 'fileDetail':
+        // 尝试从文件缓存恢复，否则从 API 获取
+        if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
+          showFileDetail(window._fileLookup[saved.fileId]);
+        } else if (saved.fileId) {
+          showFileDetail({ id: saved.fileId, title: '' });
+        } else {
+          showHome();
+        }
+        break;
+      case 'userPublic': showUserPublic(saved.userId); break;
+      case 'newCourse': renderNewCourseView(); break;
+      default: showHome();
     }
-  } catch(e) {}
+    _suppressingPushState = false;
+    return;
+  }
+  // 未知路径深链：既无路由也无保存视图 → 地址栏对齐根路径再显示首页
+  if (location.pathname !== '/' && !/^\/(verify-email|reset-password)\//.test(location.pathname)) {
+    history.replaceState(null, '', '/');
+  }
   // 默认首页
   showHome();
 

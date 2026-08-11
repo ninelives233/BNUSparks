@@ -14,8 +14,19 @@ from django.db.models import Q, Count
 
 from .utils import (
     _err, _ok, _get_or_create_profile, _safe_int,
-    require_login, require_role, UserProfile, CourseCategory,
+    require_login, require_role, UserProfile, CourseCategory, College,
 )
+
+
+def _coerce_int_list(values):
+    """把请求体里的 id 列表安全转为 int 列表（丢弃非数值项，防 500）"""
+    out = []
+    for v in values or []:
+        try:
+            out.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 @require_role(UserProfile.Role.SUPER_ADMIN)
@@ -118,13 +129,20 @@ def api_admin_set_role(request, uid):
     profile.save()
 
     # 设置新权限（前端在弹窗中提交的管辖范围数据）
+    # 先过滤出真实存在的 id 再 set，避免无效 id 触发 M2M ValueError 500
     if new_role == UserProfile.Role.MODERATOR:
         managed_majors = body.get("managed_majors", [])
         if managed_majors:
-            profile.managed_majors.set(managed_majors)
+            valid = list(College.objects.filter(
+                id__in=_coerce_int_list(managed_majors)
+            ).values_list("id", flat=True))
+            profile.managed_majors.set(valid)
         moderated_sections = body.get("moderated_sections", [])
         if moderated_sections:
-            profile.moderated_sections.set(moderated_sections)
+            valid = list(CourseCategory.objects.filter(
+                id__in=_coerce_int_list(moderated_sections)
+            ).values_list("id", flat=True))
+            profile.moderated_sections.set(valid)
         if body.get("can_moderate_general", False):
             profile.can_moderate_general = True
         profile.save()
@@ -132,7 +150,10 @@ def api_admin_set_role(request, uid):
     elif new_role == UserProfile.Role.SUB_MODERATOR:
         moderated_sections = body.get("moderated_sections", [])
         if moderated_sections:
-            profile.moderated_sections.set(moderated_sections)
+            valid = list(CourseCategory.objects.filter(
+                id__in=_coerce_int_list(moderated_sections)
+            ).values_list("id", flat=True))
+            profile.moderated_sections.set(valid)
         profile.save()
 
     return _ok({"message": f"已设置 {target_user.first_name or target_user.username} 为 {new_role}"})
@@ -190,9 +211,21 @@ def api_admin_sections(request):
 @csrf_exempt
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_auto_approve_toggle(request, uid):
-    """POST /api/admin/users/<uid>/auto-approve/ — 切换自动托管（仅总管理员）"""
+    """POST /api/admin/users/<uid>/auto-approve/ — 授予/回收「自行开启自动托管」权（仅总管理员）
+
+    权限模型：超管授权 + 版主自开。
+    body.can_auto_approve:
+      true  → can_auto_approve=True（授权，被授权者可在待审页经 /api/moderation/auto-approve/
+              自行开关 auto_approve）
+      false → can_auto_approve=False 且强制 auto_approve=False（回收即停用）
+    响应返回 {can_auto_approve, auto_approve} 两个字段。
+    """
     if request.method != "POST":
         return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        body = {}
 
     target = get_object_or_404(User, id=uid)
     target_profile = _get_or_create_profile(target)
@@ -201,6 +234,12 @@ def api_admin_auto_approve_toggle(request, uid):
     if target_profile.role not in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
         return _err("仅版主/小版主可开启自动托管", 400)
 
-    target_profile.auto_approve = not target_profile.auto_approve
-    target_profile.save(update_fields=["auto_approve"])
-    return _ok({"auto_approve": target_profile.auto_approve})
+    new_gate = bool(body.get("can_auto_approve", False))
+    target_profile.can_auto_approve = new_gate
+    if not new_gate:
+        target_profile.auto_approve = False
+    target_profile.save(update_fields=["can_auto_approve", "auto_approve"])
+    return _ok({
+        "can_auto_approve": target_profile.can_auto_approve,
+        "auto_approve": target_profile.auto_approve,
+    })

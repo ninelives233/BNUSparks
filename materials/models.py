@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.core.validators import FileExtensionValidator
 from django.contrib.auth.models import User
 
@@ -28,6 +29,8 @@ class UserProfile(models.Model):
         help_text="总管理员设置：该用户是否可以开启自动托管")
     daily_download_count = models.IntegerField("今日已下载", default=0)
     last_download_date = models.DateField("最后下载日期", null=True, blank=True)
+    daily_report_count = models.IntegerField("今日已举报", default=0)
+    last_report_date = models.DateField("最后举报日期", null=True, blank=True)
     avatar = models.ImageField("头像", upload_to="avatars/", blank=True, null=True)
     token_version = models.IntegerField("JWT 令牌版本", default=0,
         help_text="改密/重置后 +1，使旧 JWT 立即失效（P2.5）")
@@ -247,6 +250,11 @@ class Notification(models.Model):
         FILE_DELETED = "file_deleted", "用户删除资料"
         OPERATION = "operation", "操作通知"
         ANNOUNCEMENT = "announcement", "系统公告"
+        NEW_PENDING = "new_pending", "新待审核"
+        REPORT_ALERT = "report_alert", "新举报待处理"
+        REPORT_RESULT = "report_result", "举报处理结果"
+        REPORT_ESCALATED = "report_escalated", "举报已升级"
+        REPORT_MALICIOUS = "report_malicious", "恶意举报提醒"
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications",
@@ -291,6 +299,8 @@ class DeletionRecord(models.Model):
     deleted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="删除人")
     deleted_at = models.DateTimeField("删除时间", auto_now_add=True)
     delete_reason = models.TextField("删除理由", blank=True, default="")
+    trash_path = models.CharField("暂存路径", max_length=500, blank=True, default="",
+                                  help_text="软删除时物理文件移入 data/trash/ 的相对路径（MEDIA_ROOT 相对）；空表示当时文件已不存在。48h 内可据此恢复。")
     is_restored = models.BooleanField("已恢复", default=False)
     restored_at = models.DateTimeField("恢复时间", null=True, blank=True)
     restored_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
@@ -475,6 +485,93 @@ class CourseFavorite(models.Model):
 
     def __str__(self):
         return f"{self.user.username} → {self.course.name}"
+
+
+class Report(models.Model):
+    """资料 / 连带用户举报
+
+    material-kind：举报资料；user-kind：连带举报上传者（与资料举报同次提交产生）。
+    FK 全部 SET_NULL + 冗余字段：材料/用户删除后举报记录仍可追溯展示。
+    candidates M2M 创建时按审核路由计算，举报受理按此过滤；升级时重设为全部总管理员。
+    """
+
+    class Kind(models.TextChoices):
+        MATERIAL = "material", "资料举报"
+        USER = "user", "连带举报用户"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "待处理"
+        HANDLED = "handled", "已处理"
+        ESCALATED = "escalated", "已升级"  # 仅连带举报（属实=是，转发总管理）
+
+    class Action(models.TextChoices):
+        DELETE = "delete", "删除"
+        KEEP = "keep", "保留"
+
+    kind = models.CharField("举报类型", max_length=10, choices=Kind.choices, default=Kind.MATERIAL)
+    # 被举报对象（二选一：material-kind 有 material，user-kind 有 target_user）
+    material = models.ForeignKey(
+        Material, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reports", verbose_name="被举报资料",
+    )
+    material_pk = models.IntegerField("被举报资料ID", null=True, blank=True,
+        help_text="冗余：材料删除后 FK 置空，此字段保留原始 ID 供聚合/删除联动判断")
+    target_user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reported", verbose_name="被连带举报用户",
+    )
+    # 举报内容
+    reporter = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reports_submitted", verbose_name="举报人",
+    )
+    reporter_name = models.CharField("举报人昵称", max_length=50, blank=True)
+    reasons = models.JSONField("举报原因", default=list, blank=True)  # code 列表
+    detail = models.TextField("详细说明", blank=True, default="")
+    # 冗余字段（FK 失效后记录仍可读）
+    material_title = models.CharField("资料标题", max_length=200, blank=True)
+    course_code = models.CharField("课程代码", max_length=50, blank=True)
+    course_name = models.CharField("课程名称", max_length=200, blank=True)
+    target_user_name = models.CharField("被举报用户昵称", max_length=50, blank=True)
+    # 受理候选人（创建时按审核路由计算；升级时重设为全部总管理员）
+    candidates = models.ManyToManyField(
+        User, related_name="report_candidates", blank=True, verbose_name="受理候选人",
+        help_text="举报受理/作用域过滤依据；升级（连带属实）后重设为全部总管理员",
+    )
+    created_at = models.DateTimeField("举报时间", auto_now_add=True)
+    # 处理结果
+    status = models.CharField("状态", max_length=10, choices=Status.choices, default=Status.PENDING)
+    is_true = models.BooleanField("属实", null=True, blank=True)
+    actual_situation = models.TextField("实际情况/保留原因", blank=True, default="")
+    action = models.CharField("处理方式", max_length=10, choices=Action.choices, null=True, blank=True)
+    allow_retry = models.BooleanField("允许重新上传", null=True, blank=True)
+    is_malicious = models.BooleanField("恶意举报", null=True, blank=True)
+    handled_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="handled_reports", verbose_name="处理人",
+    )
+    handled_at = models.DateTimeField("处理时间", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "举报"
+        verbose_name_plural = "举报"
+        ordering = ["-created_at"]
+        constraints = [
+            # 同一用户同一资料只报一次；连带举报按被举报用户防重复
+            models.UniqueConstraint(
+                fields=["reporter", "material"], condition=Q(kind="material"),
+                name="uniq_material_report",
+            ),
+            models.UniqueConstraint(
+                fields=["reporter", "target_user"], condition=Q(kind="user"),
+                name="uniq_user_report",
+            ),
+        ]
+
+    def __str__(self):
+        if self.kind == self.Kind.MATERIAL:
+            return f"[举报资料] {self.material_title} by {self.reporter_name}"
+        return f"[举报用户] {self.target_user_name} by {self.reporter_name}"
 
 
 # ═══════════════════════════════════════════════════════════════

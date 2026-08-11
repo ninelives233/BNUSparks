@@ -337,6 +337,9 @@ def api_user_public(request, uid):
             "course_code": m.course.code if m.course_id else "",
             "course_name": m.course.name if m.course_id else "",
             "file_type": m.file_type,
+            # v=164.1：补 file_name——file_type 是脏值（中文类别名/大写/空），
+            # 前端文件图标需从真实文件名推导扩展名
+            "file_name": m.file_name,
             "download_count": m.download_count,
             "created_at": m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
         })

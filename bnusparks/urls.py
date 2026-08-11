@@ -10,8 +10,9 @@ from django.http import HttpResponse, HttpResponseNotModified
 from pathlib import Path
 
 
-def frontend(request):
-    """服务前端 index.html（ETag + revalidate，未变返回 304，省 50KB 刷新重传）"""
+def frontend(request, *args, **kwargs):
+    """服务前端 index.html（ETag + revalidate，未变返回 304，省 50KB 刷新重传）。
+    *args/**kwargs 兼容 catch-all 路由 <path:rest> 传入的 rest 关键字参数。"""
     html_path = Path(__file__).resolve().parent.parent / "public" / "index.html"
     st = html_path.stat()
     etag = f'"{int(st.st_mtime)}-{st.st_size}"'
@@ -27,4 +28,8 @@ urlpatterns = [
     path("", frontend, name="frontend"),
     path("reset-password/", frontend, name="reset-password"),
     path("verify-email/", frontend, name="verify-email"),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + [
+    # SPA 干净 URL 兜底（v=171）：/about /explorer/... /file/... 等深链刷新返回 index.html。
+    # 必须放在 static() 之后，否则 dev 下 /media/ 会被吞掉；/api/ /admin/ /static/ 均在其前匹配。
+    path("<path:rest>", frontend, name="frontend-fallback"),
+]

@@ -121,6 +121,46 @@
     }
   }
 
+  // ── SPA 干净 URL 路由（v=171）：每个视图对应一个可分享/可刷新/可返回的路径 ──
+  // 静态视图名 → 路径；explorer/userPublic/fileDetail 是动态路径，在 routeToPath 里单独处理；
+  // drawer 是叠在当前视图上的浮层，不占 URL。
+  var VIEW_ROUTES = { home: '/', about: '/about', tutorial: '/tutorial',
+    announcements: '/announcements', broad: '/broad', rankings: '/rankings',
+    recentAll: '/recent', leaderboard: '/leaderboard', profile: '/profile',
+    myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
+    admin: '/manage', notif: '/notifications', newCourse: '/new-course' };
+
+  // state = { view, expPath, userId, fileId, ... } → 路径字符串；返回 null 表示保持当前 URL
+  function routeToPath(view, state) {
+    if (view === 'explorer') {
+      var p = (state && state.expPath) || [];
+      return p.length ? '/explorer/' + p.map(encodeURIComponent).join('/') : '/explorer';
+    }
+    if (view === 'userPublic') return state && state.userId ? '/user/' + state.userId : null;
+    if (view === 'fileDetail') return state && state.fileId ? '/file/' + state.fileId : null;
+    if (view === 'drawer') return null;
+    return VIEW_ROUTES[view] || null;
+  }
+
+  // pathname → { view, expPath?/userId?/fileId? }；不认识的路径返回 null
+  function parseRoute(path) {
+    if (!path) path = location.pathname;
+    if (path === '/') return { view: 'home' };
+    var segs = path.split('/').filter(Boolean).map(decodeURIComponent);
+    var head = segs[0];
+    if (head === 'explorer') return { view: 'explorer', expPath: segs.slice(1) };
+    if (head === 'user') {
+      var uid = parseInt(segs[1], 10);
+      return uid ? { view: 'userPublic', userId: uid } : null;
+    }
+    if (head === 'file') {
+      var fid = parseInt(segs[1], 10);
+      return fid ? { view: 'fileDetail', fileId: fid } : null;
+    }
+    var v = Object.keys(VIEW_ROUTES).find(function(k) { return VIEW_ROUTES[k] === '/' + head; });
+    return v ? { view: v } : null;
+  }
+
   // ── 下载处理（含限额梯度提醒） ──
   function handleDownloadClick(fileId, el, event) {
     event.preventDefault();
@@ -359,7 +399,11 @@
     const input = document.querySelector('.search-box input');
     const btn = document.querySelector('.search-box button');
     if (!input) return;
-    function go() { const q = input.value.trim(); if (q) searchQuery(q); }
+    function go() {
+      // v=164：未登录回车提交在此拦截（点击搜索框/按钮已由 app.js capture 拦截器兜底）
+      if (!currentUser) { showLoginModal(); return; }
+      const q = input.value.trim(); if (q) searchQuery(q);
+    }
     input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
     if (btn) btn.addEventListener('click', go);
   }
