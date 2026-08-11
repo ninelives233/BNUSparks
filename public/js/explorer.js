@@ -68,6 +68,7 @@
      ═══════════════════════════════════════════════════════════ */
 
   let uploadCourseCode = '';
+  let uploadCategoryId = null; // v170：上传上下文节点（决定审核路由 L1/L2）
   let _uploadMode = 'file'; // 'file' | 'text'
 
   function autoFillUploadTitle() {
@@ -122,6 +123,34 @@
     starFilled: '<svg width="16" height="16" viewBox="0 0 24 24" fill="#F5A623" stroke="#F5A623" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg>',
     trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     lock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    report: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+  };
+
+  // 举报原因（与后端 REPORT_REASON_LABELS 一致）
+  var _REPORT_GROUPS = [
+    { title: '安全与合规', items: ['political', 'privacy', 'malware'] },
+    { title: '学术诚信', items: ['cheating', 'impersonation', 'suspicious'] },
+    { title: '内容质量', items: ['duplicate', 'incomplete', 'error', 'irrelevant', 'outdated', 'scan-quality'] },
+    { title: '版权与广告', items: ['copyright', 'ads', 'watermark'] },
+    { title: '其他', items: ['other'] },
+  ];
+  var _REPORT_ITEM_META = {
+    political: { label: '内容违规', desc: '含有政治敏感或违规信息' },
+    privacy: { label: '隐私泄露', desc: '包含个人敏感信息（姓名、学号、成绩等）' },
+    malware: { label: '恶意文件', desc: '文件无法打开、疑似病毒或含有钓鱼链接' },
+    cheating: { label: '作弊风险', desc: '涉及未结束考试内容或疑似泄题' },
+    impersonation: { label: '冒充身份', desc: '非本人/非教学团队冒充老师、助教或学长发布' },
+    suspicious: { label: '来源可疑', desc: '资料来源不明确，无法验证真实性' },
+    duplicate: { label: '重复低质', desc: '与已有资料重复或质量低下' },
+    incomplete: { label: '资料不完整', desc: '文件缺页、内容残缺或章节缺失' },
+    error: { label: '内容错误', desc: '存在明显学术性错误（公式、概念、答案等）', field: { id: 'rdFieldError', inputId: 'rdInputError', label: '请指出具体错误位置（页码/题号/公式编号等）', ph: '例如：第3页第2题，答案应为...' } },
+    irrelevant: { label: '与课程无关', desc: '资料与标注的课程、老师或学期不符', field: { id: 'rdFieldIrrelevant', inputId: 'rdInputIrrelevant', label: '该资料实际属于哪个课程？', ph: '例如：高等数学A（2024春）' } },
+    outdated: { label: '版本过时', desc: '教材已更新多版，内容严重滞后可能误导同学' },
+    'scan-quality': { label: '扫描/排版极差', desc: '字迹模糊、缺页乱序、OCR错误严重到影响阅读' },
+    copyright: { label: '版权侵权', desc: '涉及未经授权的版权内容' },
+    ads: { label: '含有广告', desc: '包含引流、推广或商业二维码' },
+    watermark: { label: '商业水印', desc: '存在第三方平台标识或机构推广信息' },
+    other: { label: '其他原因', desc: '不属于以上任何类别，请在下方详细说明' },
   };
 
   function populateMaterialTypeDropdown() {
@@ -157,9 +186,10 @@
     el.style.display = 'block';
   }
 
-  function showUploadModal(code, name) {
+  function showUploadModal(code, name, catId) {
     if (!currentUser) { showLoginModal(); return; }
     uploadCourseCode = code;
+    uploadCategoryId = catId || null; // v170：从哪个专业节点上传
     _uploadMode = 'file';
     document.getElementById('uploadCourse').value = name + ' (' + code + ')';
     populateMaterialTypeDropdown();
@@ -230,6 +260,7 @@
           headers: token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             course_code: uploadCourseCode,
+            category_id: uploadCategoryId, // v170 路由上下文
             title: title,
             content: content,
             description: description,
@@ -282,6 +313,7 @@
       try {
         const formData = new FormData();
         formData.append('course_code', uploadCourseCode);
+        if (uploadCategoryId) formData.append('category_id', uploadCategoryId); // v170 路由上下文
         formData.append('title', fileTitle);
         formData.append('file', file);
         formData.append('description', description);
@@ -374,10 +406,13 @@
   function pushViewState(view, extra, replace) {
     if (_suppressingPushState) return;
     const state = { _bnusparks: true, view, scrollY: window.scrollY, ...extra };
+    // 同步写入 URL（v=171 SPA 路由）：每个视图一个可分享/可刷新/可返回的干净路径；
+    // drawer 等浮层返回 null → 保持当前 URL
+    const url = routeToPath(view, state);
     if (replace) {
-      history.replaceState(state, '');
+      url ? history.replaceState(state, '', url) : history.replaceState(state, '');
     } else {
-      history.pushState(state, '');
+      url ? history.pushState(state, '', url) : history.pushState(state, '');
     }
     // 同时写入 sessionStorage，刷新后可恢复
     try { sessionStorage.setItem('bnusparks_view', JSON.stringify(state)); } catch(e) {}
@@ -935,8 +970,10 @@
     }
 
     var overlay = document.querySelector('.admin-reject-overlay');
-    api('/api/folders/create/', { method: 'POST', body: body }).then(function() {
+    api('/api/folders/create/', { method: 'POST', body: body }).then(function(res) {
       _removeOverlay(overlay);
+      // v=165：课程代码已存在且目标位置已有入口 → 后端复用叶子并带 message
+      if (res && res.message) alert(res.message);
       refreshCourseTree();
     }).catch(function(err) {
       _showScopeError('创建失败', err);
@@ -1244,7 +1281,7 @@
     container.innerHTML =
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
-          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\')">+ 上传资料</button>') + '</div>' : '') + '</div>' +
+          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>' +
           '<div class="file-table-wrap"><div class="batch-dl-bar" id="batchDlBar"><span id="selectedCount">已选 0 个</span>' +
             '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">🗑 删除选中</button>' +
             '<button class="admin-btn admin-btn-sm" onclick="showBatchEditDialog()" id="batchEditBtn" style="display:none">✏️ 编辑选中</button>' +
@@ -1981,10 +2018,14 @@
       var favBtn = currentUser
         ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
         : '';
+      // 举报按钮：低调 ghost，收藏按钮右侧；大小与收藏一致（同 .fd-btn 基类）
+      var repBtn = currentUser
+        ? '<button class="fd-btn fd-btn-secondary fd-btn-report" id="fdRepBtn" onclick="openReportModal(' + (file.id || 0) + ', ' + (file.uploader_id || 0) + ')" title="举报资料问题">' + FD_ICONS.report + ' 举报</button>'
+        : '';
       var delBtn = (file.can_delete && !_civilianMode)
         ? '<button class="fd-btn fd-btn-danger" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + ' 删除</button>'
         : '';
-      actionsEl.innerHTML = '<div class="fd-actions-inner">' + dlBtn + favBtn + delBtn + '</div>';
+      actionsEl.innerHTML = '<div class="fd-actions-inner">' + dlBtn + favBtn + repBtn + delBtn + '</div>';
       // 加载初始收藏状态
       if (currentUser) {
         if (file.is_favorited !== undefined) {
@@ -2002,6 +2043,15 @@
             }
           }).catch(function(){});
         }
+        // 加载初始举报状态：已举报 → 按钮禁用「已举报」
+        api('/api/files/' + (file.id || 0) + '/report-status/').then(function(rs) {
+          var rb = document.getElementById('fdRepBtn');
+          if (rb && rs.reported) {
+            rb.classList.add('reported');
+            rb.disabled = true;
+            rb.innerHTML = FD_ICONS.report + ' 已举报';
+          }
+        }).catch(function(){});
       }
     }
     var badgeEl = document.getElementById('fdPreviewBadge');
@@ -2057,7 +2107,7 @@
     try {
       var previewUrl = await _previewUrl(fileId);
       if (extType === 'pdf') {
-        body.innerHTML = '<iframe src="' + previewUrl + '" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>';
+        body.innerHTML = '<iframe src="' + previewUrl + '" style="width:100%;height:85vh;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>';
       } else if (extType === 'image') {
         body.innerHTML = '<img src="' + previewUrl + '" alt="预览" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
       } else if (extType === 'text') {
@@ -2095,6 +2145,150 @@
     } catch(e) {
       alert('操作失败：' + e.message);
     }
+  }
+
+  // ═══════════════════ 举报（v172） ═══════════════════
+  function openReportModal(fileId, uploaderId) {
+    // 先查状态：已举报/超限 → 仅提示，不进入举报界面
+    api('/api/files/' + fileId + '/report-status/').then(function(rs) {
+      if (rs.reported) { alert('你已举报过该资料'); return; }
+      if (rs.can_report === false) { alert('今日举报次数过多'); return; }
+      _renderReportModal(fileId, uploaderId);
+    }).catch(function() {
+      _renderReportModal(fileId, uploaderId);
+    });
+  }
+
+  function _renderReportModal(fileId, uploaderId) {
+    var old = document.querySelector('.report-overlay');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.className = 'report-overlay';
+    var groupsHtml = _REPORT_GROUPS.map(function(g) {
+      var itemsHtml = g.items.map(function(v) {
+        var meta = _REPORT_ITEM_META[v];
+        if (!meta) return '';
+        var fieldHtml = meta.field
+          ? '<div class="rd-field" id="' + meta.field.id + '" style="display:none"><label>' + meta.field.label + '</label>' +
+            '<input type="text" id="' + meta.field.inputId + '" placeholder="' + meta.field.ph + '"></div>'
+          : '';
+        return '<div class="report-option" data-value="' + v + '" onclick="toggleReportOption(this)">' +
+          '<span class="ro-cb"></span>' +
+          '<span class="ro-text"><span class="ro-label">' + meta.label + '</span>' +
+          (meta.desc ? '<span class="ro-desc">' + meta.desc + '</span>' : '') + '</span>' +
+          fieldHtml + '</div>';
+      }).join('');
+      return '<div class="report-group"><div class="rg-head">' + g.title + '</div><div class="rg-options">' + itemsHtml + '</div></div>';
+    }).join('');
+
+    var uploaderExists = !!uploaderId;
+    var joinHtml = uploaderExists
+      ? '<label class="rd-check"><input type="checkbox" id="rdReportUser"> ' +
+        '<span><strong>连带举报该用户</strong><br><span class="rd-check-desc">如果此人上传了大量有问题的资料，将一并提请管理员核查该账号</span></span></label>'
+      : '';
+
+    overlay.innerHTML =
+      '<div class="report-dialog" role="dialog" aria-modal="true">' +
+        '<div class="rd-head">' +
+          '<div class="rd-title">资料举报</div>' +
+          '<div class="rd-sub">请选择至少一个举报原因（可多选），审核员将在 1–3 个工作日内处理</div>' +
+          '<button class="rd-close" onclick="closeReportModal(event)" aria-label="关闭">✕</button>' +
+        '</div>' +
+        '<div class="rd-body">' +
+          groupsHtml +
+          '<div class="report-group rd-detail-group">' +
+            '<div class="rg-head">详细说明（可选）</div>' +
+            '<textarea id="rdDetail" placeholder="可以提供更详细的举报原因说明，以帮助审核员更好地判断资料的违规情况"></textarea>' +
+            '<div class="rd-hint" id="rdDetailHint">如果选择了「其他原因」，则必须填写详细说明。</div>' +
+          '</div>' +
+          joinHtml +
+        '</div>' +
+        '<div class="rd-error" id="rdError" style="display:none"></div>' +
+        '<div class="rd-actions">' +
+          '<button class="admin-btn admin-btn-primary" id="rdSubmitBtn" onclick="submitReport(' + fileId + ')" disabled>提交举报</button>' +
+          '<button class="admin-btn admin-btn-secondary" onclick="closeReportModal(event)">取消</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.onclick = function(e) { if (e.target === overlay) closeReportModal(null); };
+    lockScroll();
+    _pushModalHistory();
+  }
+
+  function closeReportModal(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var overlay = document.querySelector('.report-overlay');
+    if (overlay) { overlay.remove(); unlockScroll(); _popModalHistory(); }
+  }
+
+  function toggleReportOption(el) {
+    el.classList.toggle('selected');
+    var v = el.getAttribute('data-value');
+    var meta = _REPORT_ITEM_META[v];
+    if (meta && meta.field) {
+      var f = document.getElementById(meta.field.id);
+      if (f) f.style.display = el.classList.contains('selected') ? '' : 'none';
+    }
+    _updateReportState();
+  }
+
+  function _getSelectedReport() {
+    return Array.from(document.querySelectorAll('.report-option.selected'))
+      .map(function(el) { return el.getAttribute('data-value'); });
+  }
+
+  function _updateReportState() {
+    var sel = _getSelectedReport();
+    var btn = document.getElementById('rdSubmitBtn');
+    if (btn) btn.disabled = sel.length === 0;
+    var hint = document.getElementById('rdDetailHint');
+    if (hint) {
+      var hasOther = sel.indexOf('other') >= 0;
+      hint.classList.toggle('rd-hint-error', hasOther);
+      hint.textContent = hasOther ? '已选择「其他原因」，必须填写详细说明。' : '如果选择了「其他原因」，则必须填写详细说明。';
+    }
+  }
+
+  function _showReportError(msg) {
+    var e = document.getElementById('rdError');
+    if (e) { e.textContent = msg; e.style.display = ''; }
+  }
+
+  function submitReport(fileId) {
+    var sel = _getSelectedReport();
+    if (!sel.length) { _showReportError('请至少选择一个举报原因'); return; }
+    var detail = (document.getElementById('rdDetail') || {}).value ? document.getElementById('rdDetail').value.trim() : '';
+    if (sel.indexOf('other') >= 0 && !detail) {
+      _showReportError('选择「其他原因」时，必须填写详细说明');
+      var d = document.getElementById('rdDetail');
+      if (d) d.focus();
+      return;
+    }
+    // 动态字段并入详细说明
+    var fErr = document.getElementById('rdInputError');
+    if (sel.indexOf('error') >= 0 && fErr && fErr.value.trim()) {
+      detail = (detail ? detail + '\n' : '') + '具体错误位置：' + fErr.value.trim();
+    }
+    var fIr = document.getElementById('rdInputIrrelevant');
+    if (sel.indexOf('irrelevant') >= 0 && fIr && fIr.value.trim()) {
+      detail = (detail ? detail + '\n' : '') + '实际课程：' + fIr.value.trim();
+    }
+    var reportUser = false;
+    var ru = document.getElementById('rdReportUser');
+    if (ru) reportUser = ru.checked;
+    var btn = document.getElementById('rdSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+    api('/api/files/' + fileId + '/report/', { method: 'POST', body: { reasons: sel, detail: detail, report_user: reportUser } })
+      .then(function() {
+        closeReportModal(null);
+        var rb = document.getElementById('fdRepBtn');
+        if (rb) { rb.classList.add('reported'); rb.disabled = true; rb.innerHTML = FD_ICONS.report + ' 已举报'; }
+        alert('举报已提交，审核员将在 1-3 个工作日内处理');
+      })
+      .catch(function(err) {
+        _showReportError(err.message || '提交失败，请稍后重试');
+        if (btn) { btn.disabled = false; btn.textContent = '提交举报'; }
+      });
   }
 
   function fdEditField(penEl) {

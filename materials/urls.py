@@ -19,6 +19,7 @@ urlpatterns = [
     path("courses/", views.api_courses, name="api_courses"),
     path("courses/tree/", views.api_course_tree, name="api_course_tree"),
     path("courses/request/", views.api_course_request_create, name="api_course_request_create"),
+    path("courses/request/check/", views.api_course_request_check, name="api_course_request_check"),
     path("courses/request/<int:request_id>/files/", views.api_course_request_upload_file, name="api_course_request_upload_file"),
     path("courses/request/<int:request_id>/", views.api_course_request_delete, name="api_course_request_delete"),
     path("courses/<str:course_code>/files/", views.api_course_files, name="api_course_files"),
@@ -33,6 +34,8 @@ urlpatterns = [
     path("files/<int:file_id>/update/", views.api_file_update, name="api_file_update"),
     path("files/batch-delete/", views.api_file_batch_delete, name="api_file_batch_delete"),
     path("files/batch-edit/", views.api_file_batch_edit, name="api_file_batch_edit"),
+    path("files/<int:file_id>/report/", views.api_file_report, name="api_file_report"),
+    path("files/<int:file_id>/report-status/", views.api_file_report_status, name="api_file_report_status"),
 
     # 收藏
     path("files/<int:file_id>/", views.api_file_detail, name="api_file_detail"),
@@ -81,11 +84,17 @@ urlpatterns = [
     path("moderation/<int:file_id>/approve/", views.api_moderation_approve, name="api_moderation_approve"),
     path("moderation/<int:file_id>/reject/", views.api_moderation_reject, name="api_moderation_reject"),
     path("moderation/<int:file_id>/reassign/", views.api_moderation_reassign, name="api_moderation_reassign"),
+    path("moderation/<int:file_id>/assignable/", views.api_moderation_assignable, name="api_moderation_assignable"),
     path("moderation/<int:file_id>/comments/", views.api_review_comments, name="api_review_comments"),
     path("moderation/history/", views.api_moderation_history, name="api_moderation_history"),
+    path("moderation/auto-approve/", views.api_auto_approve_toggle_self, name="api_auto_approve_toggle_self"),
     path("moderation/deletions/", views.api_deletion_records, name="api_deletion_records"),
     path("moderation/deletions/<int:deletion_id>/restore/", views.api_restore_deletion, name="api_restore_deletion"),
     path("moderation/stats/", views.api_moderation_stats, name="api_moderation_stats"),
+    path("moderation/reports/pending/", views.api_report_pending, name="api_report_pending"),
+    path("moderation/reports/history/", views.api_report_history, name="api_report_history"),
+    path("moderation/reports/<int:report_id>/handle/", views.api_report_handle, name="api_report_handle"),
+    path("moderation/reports/<int:report_id>/finish/", views.api_report_finish, name="api_report_finish"),
 
     # 用户管理（Iter 3 — 仅 super_admin）
     path("admin/users/", views.api_admin_users, name="api_admin_users"),

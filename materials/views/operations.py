@@ -22,8 +22,9 @@ from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
     _check_moderator_access, _get_courses_in_category,
     _get_category_preload, _safe_dir_name, _get_visible_deletion_records,
-    _safe_int,
+    _safe_int, _stage_file_to_trash, _purge_expired_trash,
     require_login, require_role,
+    _find_existing_course, _find_leaf_under_parent,
     UserProfile, Material, Course, CourseCategory, College,
     Notification, FolderOperation, DeletionRecord,
 )
@@ -283,6 +284,7 @@ def api_folder_create(request):
         parent = None
 
     course = None
+    reused = False
     if folder_type == "course":
         course_code = (body.get("course_code") or "").strip()
         course_name = (body.get("course_name") or "").strip()
@@ -293,11 +295,11 @@ def api_folder_create(request):
         # v=158：课程代码仅允许字母和数字（既作 Course.code 又作目录名）
         if not re.match(r"^[A-Za-z0-9]+$", course_code):
             return _err("课程代码仅允许字母和数字", 400)
-        matched = Course.objects.filter(code=course_code)
-        if matched.count() == 1:
-            course = matched.first()
-        elif matched.count() > 1:
-            return _err(f"课程代码 {course_code} 对应多个课程，请检查数据", 400)
+        # v=165：同码课程确定性收敛复用（壳语义）——多行同码不再硬报错
+        existing = _find_existing_course(course_code)
+        if existing:
+            course = existing
+            reused = True
         else:
             course = Course.objects.create(
                 code=course_code, name=course_name,
@@ -310,8 +312,23 @@ def api_folder_create(request):
             course_type="major",
         )
 
+    # v=165：目标位置已有同课程叶子 → 不重复创建节点（提示并复用）
+    if folder_type == "course" and parent is not None:
+        existing_leaf = _find_leaf_under_parent(parent, course)
+        if existing_leaf:
+            return _ok({
+                "id": existing_leaf.id,
+                "name": existing_leaf.name or course.name,
+                "parent_id": parent.id,
+                "course_code": course.code,
+                "folder_type": folder_type,
+                "reused": True,
+                "message": "该课程已在此位置存在，未重复创建",
+            })
+
+    # 复用既有课程时用权威名 course.name（与申请流壳语义一致）；新建时 course.name 即提交名
     cat = CourseCategory.objects.create(
-        name=name, parent=parent, order=0, course=course,
+        name=course.name or name, parent=parent, order=0, course=course,
     )
 
     # 写日志
@@ -325,11 +342,13 @@ def api_folder_create(request):
         user=request.user, action=FolderOperation.Action.CREATE,
         category_id=cat.id, category_name=cat.name,
         parent_path=parent_path, folder_type=folder_type,
+        reason="新建课程文件夹" + (f"（已链接到既有课程 {course.code}）" if reused else ""),
     )
     return _ok({
         "id": cat.id, "name": cat.name, "parent_id": cat.parent_id,
         "course_code": course.code if course else None,
         "folder_type": folder_type,
+        "reused": reused,
     })
 
 
@@ -522,9 +541,10 @@ def api_folder_restore(request, operation_id):
 @csrf_exempt
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_restore_deletion(request, deletion_id):
-    """POST /api/moderation/deletions/<id>/restore/ — 恢复已删除文件"""
+    """POST /api/moderation/deletions/<id>/restore/ — 恢复已删除文件（从暂存区取回物理文件）"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
+    _purge_expired_trash()  # 顺带清理超期暂存文件
     dr = get_object_or_404(DeletionRecord, id=deletion_id)
     if dr.is_restored:
         return _err("该文件已恢复", 400)
@@ -545,13 +565,38 @@ def api_restore_deletion(request, deletion_id):
     course = Course.objects.filter(code=dr.course_code).first()
     if not course:
         return _err("原课程已不存在，无法恢复", 400)
+
+    # v=167 从暂存区取回物理文件：移回课程目录并填真实 file_path，杜绝旧版 file_path=""
+    # 的幽灵记录（下载直接 500/404）。暂存文件不存在（历史记录或已超期硬删）→ 拒绝恢复。
+    rel_path = ""
+    if dr.trash_path:
+        staged = Path(settings.MEDIA_ROOT) / dr.trash_path
+        if staged.is_file():
+            new_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(course.code)
+            new_dir.mkdir(parents=True, exist_ok=True)
+            dest = new_dir / staged.name
+            try:
+                shutil.move(str(staged), str(dest))
+                rel_path = f"{course.code}/{staged.name}"
+            except OSError:
+                return _err("文件恢复失败（暂存文件不可用）", 400)
+    if not rel_path:
+        return _err("原文件已被物理清除，无法恢复", 400)
+
     material = Material.objects.create(
         course=course, title=dr.title, file_name=dr.file_name,
-        file_size=dr.file_size, file_path="",
+        file_size=dr.file_size, file_path=rel_path,
         uploader_name=dr.uploader_name,
         review_status="approved", is_approved=True,
         reviewed_by=dr.deleted_by,
     )
+
+    try:
+        from git_storage import commit_file
+        commit_file(rel_path)
+    except Exception:
+        pass
+
     dr.is_restored = True
     dr.restored_at = timezone.now()
     dr.restored_by = request.user
@@ -581,9 +626,10 @@ def api_restore_deletion(request, deletion_id):
 @csrf_exempt
 @require_login
 def api_file_batch_delete(request):
-    """POST /api/files/batch-delete/ — 批量删除文件"""
+    """POST /api/files/batch-delete/ — 批量删除文件（软删除：物理文件移入暂存，48h 内可恢复）"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
+    _purge_expired_trash()  # 顺带清理超期暂存文件
     try:
         body = json.loads(request.body)
     except Exception:
@@ -613,7 +659,7 @@ def api_file_batch_delete(request):
             else:
                 errors.append(f"文件#{fid}：无权删除")
                 continue
-            DeletionRecord.objects.create(
+            dr = DeletionRecord.objects.create(
                 material_id=m.id, title=m.title,
                 file_name=m.file_name, file_size=m.file_size,
                 course_code=m.course.code if m.course else "",
@@ -622,6 +668,11 @@ def api_file_batch_delete(request):
                 uploader_name=m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
                 deleted_by=request.user, delete_reason=reason,
             )
+            # 软删除：物理文件移入暂存区（顺带修复此前批删不留文件、磁盘残留孤儿的问题）
+            trash_rel = _stage_file_to_trash(m)
+            if trash_rel:
+                dr.trash_path = trash_rel
+                dr.save(update_fields=["trash_path"])
             m.delete()
             deleted += 1
         except Material.DoesNotExist:

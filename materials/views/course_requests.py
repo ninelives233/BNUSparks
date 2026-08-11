@@ -19,6 +19,7 @@ from .utils import (
     _err, _ok, _get_or_create_profile, _strip_exif, _create_notification,
     _get_category_preload, require_login, require_role,
     _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
+    _find_existing_course, _find_leaf_under_parent,
 )
 from .operations import _can_create_under
 from ..models import (
@@ -39,6 +40,51 @@ def _category_path(cat):
         parts.append(p.name or f"#{p.id}")
         p = p.parent
     return " / ".join(reversed(parts))
+
+
+# ── v=165 新建课程前查重：课程代码已存在时判定「本专业树已有入口」vs「仅在他处」 ──
+
+def _matching_course_ids(code):
+    """该课程代码对应的全部 Course id 集合（同码多行收敛）。"""
+    return set(Course.objects.filter(code=code).values_list("id", flat=True))
+
+
+def _code_matches_wildcard(leaf_course_text, code):
+    """通配叶子 course_text（如 GEN02***）是否覆盖该 code。
+
+    与 _get_courses_in_category 同口径：去 * 与 - 后前缀匹配。
+    """
+    cleaned = (leaf_course_text or "").replace("*", "").replace("-", "")
+    return bool(cleaned) and bool(code) and code.startswith(cleaned)
+
+
+def _leaf_under_parent(leaf, parent):
+    """叶子是否落在 parent 子树下（沿 parent 链上溯）。"""
+    p = leaf.parent
+    while p:
+        if p.id == parent.id:
+            return True
+        p = p.parent
+    return False
+
+
+def _course_locations(code, parent=None):
+    """该 code 在课程树中的所有叶子面包屑路径 + 是否已有入口落在 parent 下。
+
+    返回 (locations: [str], in_target: bool)。叶子来源：course FK 命中 + 通配前缀命中。
+    """
+    course_ids = _matching_course_ids(code)
+    leaves = list(CourseCategory.objects.filter(course_id__in=course_ids))
+    leaves += [c for c in CourseCategory.objects.filter(course_id__isnull=True)
+               if _code_matches_wildcard(c.course_text, code)]
+    locations, in_target = [], False
+    for leaf in leaves:
+        path = _category_path(leaf)
+        if path and path not in locations:
+            locations.append(path)
+        if parent is not None and _leaf_under_parent(leaf, parent):
+            in_target = True
+    return locations, in_target
 
 
 def _category_covered(profile, cat):
@@ -125,28 +171,48 @@ def _request_covered_by_subordinate(req, sub_cat_ids):
 
 
 def _resolve_course_or_err(course_code, course_name, course_type, college):
-    """新建课程申请的课程解析（v=147 修复前缀误配）。
+    """新建课程申请的课程解析（v=147 修复前缀误配 + v=165 同码收敛）。
 
-    只做「精确代码」匹配：唯一 → 复用；多条同码 → 取有资料者/最早者；
-    不存在 → 新建 Course。**禁用 startswith 前缀匹配**——否则 ECO11451/ECO1145
-    会命中已有的 ECO11451222，导致多个不同代码的申请共享同一 Course 文件夹。
+    只做「精确代码」匹配：已存在（唯一或多行）→ 由 _find_existing_course
+    确定性收敛复用；不存在 → 新建 Course。返回 (course, err, created)，
+    created=True 表示本次新建，False=复用既有课程（即「壳」语义）。
+    **禁用 startswith 前缀匹配**——否则 ECO11451/ECO1145 会命中已有的
+    ECO11451222，导致多个不同代码的申请共享同一 Course 文件夹。
     """
-    from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
-    try:
-        return Course.objects.get(code=course_code), None
-    except MultipleObjectsReturned:
-        courses = Course.objects.filter(code=course_code).order_by("id")
-        with_files = courses.filter(materials__is_approved=True).distinct()
-        if with_files.count() == 1:
-            return with_files.first(), None
-        if with_files.count() > 1:
-            return None, "课程代码不明确，请联系管理员"
-        return courses.first(), None
-    except ObjectDoesNotExist:
-        return Course.objects.create(
-            code=course_code, name=course_name,
-            course_type=course_type, college=college,
-        ), None
+    existing = _find_existing_course(
+        course_code, college.pk if college is not None else None
+    )
+    if existing:
+        return existing, None, False
+    return Course.objects.create(
+        code=course_code, name=course_name,
+        course_type=course_type, college=college,
+    ), None, True
+
+
+@csrf_exempt
+@require_login
+def api_course_request_check(request):
+    """GET /api/courses/request/check/ — 新建课程前查重（前端实时提示，v=165）
+
+    ?course_code=&target_category_id=|general_category_id=   （target 二选一）
+    返回 {exists, in_target, locations}：
+      exists     该代码已存在（Course 有记录或课程树有覆盖叶子）
+      in_target  该代码已有入口落在所选目标层级下 → 应引导直接上传
+      locations  该代码在课程树中的全部叶子路径（面包屑）
+    """
+    code = (request.GET.get("course_code") or "").strip().replace("*", "").replace("-", "")
+    target_id = request.GET.get("target_category_id") or request.GET.get("general_category_id")
+    if not code:
+        return _ok({"exists": False, "in_target": False, "locations": []})
+    parent = CourseCategory.objects.filter(id=target_id).first() if target_id else None
+    locations, in_target = _course_locations(code, parent)
+    exists = Course.objects.filter(code=code).exists() or bool(locations)
+    return _ok({
+        "exists": exists,
+        "in_target": in_target,
+        "locations": locations,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -196,6 +262,22 @@ def api_course_request_create(request):
         and _can_create_under(request.user, target_cat)
     )
 
+    # v=165：课程代码已存在时的提交端处理——
+    #   目标位置已有该课程入口 → 引导直接上传，不创建申请（含 auto-approve 路径）；
+    #   仅存在于别处 → 允许提交，批准后链接为「壳」节点（复用既有课程目录）。
+    will_link = False
+    existing_locations = []
+    if Course.objects.filter(code=course_code).exists():
+        locations, in_target = _course_locations(course_code, target_cat)
+        if in_target:
+            return _err(
+                f"该课程已在本专业课程树「{locations[0] if locations else '该位置'}」中，"
+                "请直接到对应目录上传资料",
+                400,
+            )
+        will_link = True
+        existing_locations = locations
+
     req = CourseCreationRequest.objects.create(
         user=request.user,
         course_type=course_type,
@@ -228,6 +310,8 @@ def api_course_request_create(request):
                 "id": req.id,
                 "auto_approved": False,
                 "assigned_moderator": req.assigned_moderator_id,
+                "will_link": will_link,
+                "existing_locations": existing_locations,
             })
         return _ok({
             "id": req.id,
@@ -235,6 +319,8 @@ def api_course_request_create(request):
             "category_id": new_cat.id,
             "parent_path": _category_path(new_cat.parent) if new_cat.parent else "",
             "course_name": new_cat.name,
+            "will_link": will_link,
+            "existing_locations": existing_locations,
         })
 
     _send_submit_notification(request.user, course_name, course_code)
@@ -249,6 +335,8 @@ def api_course_request_create(request):
         "assigned_moderator_name": (
             req.assigned_moderator.first_name or req.assigned_moderator.username
         ) if req.assigned_moderator else None,
+        "will_link": will_link,
+        "existing_locations": existing_locations,
     })
 
 
@@ -298,7 +386,7 @@ def api_course_request_upload_file(request, request_id):
 
     if is_auto_upload:
         # 已自动建课：随附文件直接归位到新课程文件夹（course 已绑定，进入正常审核队列）
-        course, _ = _resolve_course_or_err(
+        course, _, _ = _resolve_course_or_err(
             req.course_code, req.course_name, req.course_type,
             req.college if req.course_type == CourseCreationRequest.Type.MAJOR else None,
         )
@@ -446,6 +534,10 @@ def api_moderation_course_requests(request):
             m.review_status == "pending" for m in req.materials.all()
         )
         target = req.target_category or req.general_category
+        # v=165：pending 申请若代码已存在 → 徽标「将链接到既有课程」，批准后为壳节点
+        linked_course = (
+            _find_existing_course(req.course_code) if req.status == CourseCreationRequest.Status.PENDING else None
+        )
         return {
             "id": req.id,
             "course_type": req.course_type,
@@ -467,6 +559,8 @@ def api_moderation_course_requests(request):
                 req.assigned_moderator.first_name or req.assigned_moderator.username
             ) if req.assigned_moderator_id else None,
             "is_own": req.user_id == request.user.id,
+            "will_link": linked_course is not None,
+            "existing_course_name": linked_course.name if linked_course else "",
             "materials": mats,
         }
 
@@ -474,11 +568,12 @@ def api_moderation_course_requests(request):
 
 
 def _approve_request(req, reviewer):
-    """批准申请（事务内）：解析课程 → 建叶子 → 操作记录 → 随附文件归位。
+    """批准申请（事务内）：解析课程（壳语义）→ 建/复用叶子 → 操作记录 → 随附文件归位。
 
     返回 (new_cat, None) 成功 / (None, _err响应) 失败，便于调用方拿到新目录跳转。
+    v=165：课程已存在时复用为「壳」；目标位置已有同课程叶子时不再重复创建节点。
     """
-    course, err = _resolve_course_or_err(
+    course, err, created = _resolve_course_or_err(
         req.course_code, req.course_name, req.course_type,
         req.college if req.course_type == CourseCreationRequest.Type.MAJOR else None,
     )
@@ -489,17 +584,32 @@ def _approve_request(req, reviewer):
     if parent is None:
         return None, _err("目标位置缺失，无法创建课程文件夹")
 
-    max_order = CourseCategory.objects.filter(parent=parent).aggregate(m=Max("order"))["m"] or 0
-    new_cat = CourseCategory.objects.create(
-        name=req.course_name, parent=parent,
-        order=max_order + 1, course=course,
-    )
-    FolderOperation.objects.create(
-        user=reviewer, action=FolderOperation.Action.CREATE,
-        category_id=new_cat.id, category_name=req.course_name,
-        parent_path=_category_path(parent), folder_type="course",
-        reason="新建课程申请",
-    )
+    linked = not created
+    existing_leaf = _find_leaf_under_parent(parent, course)
+    if existing_leaf:
+        # 目标位置已有同课程入口 → 复用叶子，不重复创建节点（文件仍归位到既有课程目录）
+        new_cat = existing_leaf
+        FolderOperation.objects.create(
+            user=reviewer, action=FolderOperation.Action.CREATE,
+            category_id=new_cat.id, category_name=new_cat.name or f"#{new_cat.id}",
+            parent_path=_category_path(parent), folder_type="course",
+            reason="新建课程申请（目标位置已有同课程入口，未新建节点）",
+        )
+    else:
+        max_order = CourseCategory.objects.filter(parent=parent).aggregate(m=Max("order"))["m"] or 0
+        reason = "新建课程申请"
+        if linked:
+            reason += f"（已链接到既有课程 {course.code}）"
+        new_cat = CourseCategory.objects.create(
+            name=course.name or req.course_name, parent=parent,
+            order=max_order + 1, course=course,
+        )
+        FolderOperation.objects.create(
+            user=reviewer, action=FolderOperation.Action.CREATE,
+            category_id=new_cat.id, category_name=new_cat.name or req.course_name,
+            parent_path=_category_path(parent), folder_type="course",
+            reason=reason,
+        )
 
     # 随附材料全部归位到 {course.code}/，赋 course → 进入正常文件审核队列。
     # 归位 ALL 而非仅 pending：若版主在批准申请前先单独批准了随附文件，
@@ -531,13 +641,25 @@ def _approve_request(req, reviewer):
     req.reviewed_at = timezone.now()
     req.save(update_fields=["status", "reviewed_by", "reviewed_at"])
 
-    _create_notification(
-        recipient=req.user,
-        type=Notification.Type.OPERATION,
-        title="新建课程申请已通过",
-        message=f"你的申请「{req.course_name}」已通过，课程文件夹已创建。",
-        course_code=req.course_code, course_name=req.course_name,
-    )
+    if linked:
+        _create_notification(
+            recipient=req.user,
+            type=Notification.Type.OPERATION,
+            title="新建课程申请已通过（已链接既有课程）",
+            message=(
+                f"你的申请「{req.course_name}」已通过。该课程已存在（{req.course_code}），"
+                "已链接到既有课程目录，未新建独立文件夹；你随附的资料已归入该课程。"
+            ),
+            course_code=req.course_code, course_name=req.course_name,
+        )
+    else:
+        _create_notification(
+            recipient=req.user,
+            type=Notification.Type.OPERATION,
+            title="新建课程申请已通过",
+            message=f"你的申请「{req.course_name}」已通过，课程文件夹已创建。",
+            course_code=req.course_code, course_name=req.course_name,
+        )
     return new_cat, None
 
 

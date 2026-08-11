@@ -307,6 +307,11 @@
   var _lbType = 'upload';
   var _lbPage = 1;
 
+  // v=164：用户公开页联系/注册信息 SVG 图标（去 emoji）
+  var _IC_MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
+  var _IC_MSG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  var _IC_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+
   function showLeaderboard() {
     pushViewState('leaderboard', {});
     switchView('leaderboard');
@@ -336,21 +341,25 @@
         container.innerHTML = '<div class="empty-state compact">暂无数据</div>';
         return;
       }
-      var columnHeader = type === 'download' ? '被下载次数' : (type === 'collection' ? '被收藏次数' : '上传文件数');
-      var html = '<div class="leaderboard-table-wrap"><table class="leaderboard-table"><thead><tr><th>排名</th><th>用户</th><th>' + columnHeader + '</th></tr></thead><tbody>';
+      // v=164：卡片列表 + 前三名印章徽章（金/银/铜），弃表格
+      var metricName = type === 'download' ? '被下载次数' : (type === 'collection' ? '被收藏次数' : '上传文件数');
+      var html = '<div class="lb-list">';
       items.forEach(function(u) {
-        var rankClass = 'lb-rank';
-        if (u.rank === 1) rankClass += ' top-1';
-        else if (u.rank === 2) rankClass += ' top-2';
-        else if (u.rank === 3) rankClass += ' top-3';
+        var rowClass = 'lb-row';
+        if (u.rank === 1) rowClass += ' top-1';
+        else if (u.rank === 2) rowClass += ' top-2';
+        else if (u.rank === 3) rowClass += ' top-3';
+        var sealClass = 'lb-rank-seal' + (u.rank <= 3 ? ' top-' + u.rank : '');
         var avatarHtml = u.avatar_url
           ? '<img src="' + esc(u.avatar_url) + '" class="lb-avatar" onclick="showUserPublic(' + u.user_id + ')">'
           : '<span class="lb-avatar-placeholder" onclick="showUserPublic(' + u.user_id + ')">' + esc((u.nickname || '?').charAt(0).toUpperCase()) + '</span>';
-        html += '<tr><td><span class="' + rankClass + '">#' + u.rank + '</span></td>' +
-          '<td><div class="lb-user-cell">' + avatarHtml + '<span class="lb-user-name" onclick="showUserPublic(' + u.user_id + ')">' + esc(u.nickname) + '</span></div></td>' +
-          '<td><span class="lb-count">' + u.count + '</span></td></tr>';
+        html += '<div class="' + rowClass + '">' +
+          '<span class="' + sealClass + '">' + u.rank + '</span>' +
+          '<div class="lb-user-cell">' + avatarHtml + '<span class="lb-user-name" onclick="showUserPublic(' + u.user_id + ')">' + esc(u.nickname) + '</span></div>' +
+          '<div class="lb-stat"><span class="lb-count">' + u.count + '</span><span class="lb-metric">' + metricName + '</span></div>' +
+        '</div>';
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
 
       // 翻页
       var totalPages = data.total_pages || 1;
@@ -422,15 +431,15 @@
     var contactHtml = '';
     if (u.contact_email || u.contact_way) {
       contactHtml = '<div class="upi-contact">';
-      if (u.contact_email) contactHtml += '📧 ' + esc(u.contact_email) + ' ';
-      if (u.contact_way) contactHtml += '💬 ' + esc(u.contact_way);
+      if (u.contact_email) contactHtml += '<span class="upi-ico">' + _IC_MAIL + '</span> ' + esc(u.contact_email) + ' ';
+      if (u.contact_way) contactHtml += '<span class="upi-ico">' + _IC_MSG + '</span> ' + esc(u.contact_way);
       contactHtml += '</div>';
     }
     // 注册时间（member_since 形如 "2026-08"）
     var memberHtml = '';
     if (u.member_since && /^\d{4}-\d{2}$/.test(u.member_since)) {
       var ms = u.member_since.split('-');
-      memberHtml = '<div class="upi-member">🕰️ 注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</div>';
+      memberHtml = '<div class="upi-member"><span class="upi-ico">' + _IC_CLOCK + '</span> 注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</div>';
     }
     var html = '<div class="user-public-card">' + avatarHtml +
       '<div class="user-public-info">' +
@@ -447,17 +456,22 @@
       '<div class="user-stat-card"><div class="usc-value">' + (u.collection_count || 0) + '</div><div class="usc-label">被收藏次数</div></div>' +
     '</div>';
 
-    // 文件列表
+    // 文件列表（v=164 与收藏/下载/上传统一用 _pcItem/_fileGlyph 组件）
     if (data.materials && data.materials.length) {
-      html += '<h3 style="font-size:0.95rem;font-weight:600;margin-bottom:var(--space-sm);color:var(--ink)">上传的文件</h3>';
-      html += '<div class="user-public-materials">';
+      html += '<h3 class="user-files-head">上传的文件</h3>';
+      html += '<div class="pc-list">';
       data.materials.forEach(function(m) {
         // 点击直接打开文件详情（修复此前 showHome();navToLast 落到首页）
-        var stamp = (m.file_type || '').replace(/^\./, '').toUpperCase();
-        html += '<div class="hc-item user-public-file-item" style="cursor:pointer" onclick="event.preventDefault();showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})">' +
-          '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div>' +
-          '<div class="hc-item-meta">' + esc(m.course_name) + ' · ' + m.created_at + ' · ' + m.download_count + ' 次下载</div></div>' +
-          '<span class="user-file-type-stamp">' + (stamp ? esc(stamp) : '文件') + '</span></div>';
+        var side = '<span class="pc-side-icon">' + _IC_DOWN + '</span>' + m.download_count + ' 次下载';
+        html += _pcItem(
+          // v=164.1：优先用真实文件名推导扩展名（file_type 为脏值兜底）
+          _fileGlyph(m.file_name, m.file_type),
+          esc(m.title),
+          esc(m.course_name) + ' · ' + m.created_at,
+          '',
+          side,
+          'event.preventDefault();showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})'
+        );
       });
       html += '</div>';
 
@@ -473,7 +487,7 @@
         html += '</div>';
       }
     } else {
-      html += '<div class="empty-state compact">该用户尚未上传资料</div>';
+      html += _pcEmpty('该用户尚未上传资料', '等 TA 上传第一份课程资料，这里就会热闹起来。');
     }
 
     container.innerHTML = html;
@@ -684,7 +698,11 @@
     // 其余页面只保留备案号一行（compact），footer 元素仍占位 → sticky 钉底不受影响
     var footer = document.getElementById('siteFooter');
     if (!footer) return;
-    footer.classList.toggle('compact', viewName !== 'home');
+    var isHome = viewName === 'home';
+    footer.classList.toggle('compact', !isHome);
+    // v=163：非首页 footer 再往下沉——内容不足一屏时沉到首屏之下，
+    // 正常浏览不向下翻动就看不到，下滑即出现（给短页面滚动反馈）
+    document.body.classList.toggle('footer-pushed', !isHome);
   }
 
   function returnToPreviousView() {

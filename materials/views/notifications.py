@@ -19,8 +19,21 @@ def api_notifications(request):
         if request.GET.get("unread_only") == "1":
             notifs = notifs.filter(is_read=False)
         unread = notifs.filter(is_read=False).count()
+        # v=164.1：分页（每页 20）。抽屉仍取第 1 页，但用 total/unread_count 保证总数正确
+        try:
+            page = int(request.GET.get("page", "1"))
+        except (TypeError, ValueError):
+            page = 1
+        per_page = 20
+        total = notifs.count()
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
         return _ok({
             "unread_count": unread,
+            "total": total,
+            "page": page,
+            "total_pages": total_pages,
             "list": [{
                 "id": n.id,
                 "type": n.type,
@@ -31,7 +44,7 @@ def api_notifications(request):
                 "course_code": n.course_code,
                 "course_name": n.course_name,
                 "created_at": n.created_at.strftime("%Y-%m-%d %H:%M"),
-            } for n in notifs],
+            } for n in notifs[start:start + per_page]],
         })
 
     elif request.method == "POST":

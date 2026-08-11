@@ -130,10 +130,20 @@
   var _IC_DOWN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M6 11l6 6 6-6"/><path d="M4 21h16"/></svg>';
   var _IC_STAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.9 6.26 6.86.6-5.18 4.56 1.55 6.72L12 16.6l-6.13 3.54 1.55-6.72L2.24 8.86l6.86-.6z"/></svg>';
 
-  function _fileGlyph(fileName) {
+  function _fileGlyph(fileName, typeHint) {
     var fn = String(fileName || '');
     var dot = fn.lastIndexOf('.');
     var ext = dot > -1 ? fn.slice(dot + 1).toLowerCase() : '';
+    // v=164.1：文件名无扩展名时，从 typeHint 推导。公开页 file_type 是脏值
+    // （中文类别名 课件/文档/图片/其他、大写 PDF、空串），中文类别名映射到对应图标
+    var typeClass = '', typeLabel = '';
+    if (!ext && typeHint) {
+      var hint = String(typeHint).replace(/^\./, '').toLowerCase();
+      var cnMap = { '课件': ['ppt', '课件'], '文档': ['doc', '文档'], '图片': ['img', '图片'], '其他': ['other', '文件'] };
+      var mapped = cnMap[hint];
+      if (mapped) { typeClass = mapped[0]; typeLabel = mapped[1]; }
+      else ext = hint;
+    }
     var map = {
       pdf: 'pdf', ppt: 'ppt', pptx: 'ppt', doc: 'doc', docx: 'doc',
       xls: 'xls', xlsx: 'xls', csv: 'xls', zip: 'zip', rar: 'zip',
@@ -143,9 +153,9 @@
       m4a: 'audio', aac: 'audio', mp4: 'video', mov: 'video',
       avi: 'video', mkv: 'video', wmv: 'video', webm: 'video'
     };
-    var cls = map[ext] || 'other';
-    var label = ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
-    label = label.replace(/[^A-Z0-9]/g, '') || 'FILE';
+    var cls = typeClass || map[ext] || 'other';
+    var label = typeLabel || (ext ? ext.slice(0, 4).toUpperCase() : 'FILE');
+    label = label.replace(/[^A-Z0-9一-鿿]/g, '') || 'FILE';
     return '<span class="pc-glyph pc-glyph-' + cls + '">' + label + '</span>';
   }
 

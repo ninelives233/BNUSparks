@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/style.css?v=162">
+<link rel="stylesheet" href="/static/css/style.css?v=172">
 </head>
 <body>
 
@@ -274,9 +274,9 @@
         <p class="about-subtitle">看看谁在为社区做贡献</p>
       </div>
       <div class="leaderboard-tabs" id="lbTabs">
-        <button class="lb-tab active" data-type="upload" onclick="switchLeaderboardTab('upload')">📤 上传量排行榜</button>
-        <button class="lb-tab" data-type="download" onclick="switchLeaderboardTab('download')">📥 下载量排行榜</button>
-        <button class="lb-tab" data-type="collection" onclick="switchLeaderboardTab('collection')">⭐ 收藏量排行榜</button>
+        <button class="lb-tab active" data-type="upload" onclick="switchLeaderboardTab('upload')"><span class="lb-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V5"/><path d="M6 11l6-6 6 6"/><path d="M4 20h16"/></svg></span>上传量排行榜</button>
+        <button class="lb-tab" data-type="download" onclick="switchLeaderboardTab('download')"><span class="lb-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v11"/><path d="M6 11l6 6 6-6"/><path d="M4 20h16"/></svg></span>下载量排行榜</button>
+        <button class="lb-tab" data-type="collection" onclick="switchLeaderboardTab('collection')"><span class="lb-tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg></span>收藏量排行榜</button>
       </div>
       <div class="leaderboard-content" id="leaderboardContent">
         <div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>
@@ -323,7 +323,8 @@
 
     <!-- ─── Page: Menu ─── -->
     <div id="drawerMenu">
-      <div class="notif-drawer-header" style="justify-content:flex-end">
+      <div class="notif-drawer-header notif-drawer-header--menu">
+        <span class="dm-eyebrow">我的账户</span>
         <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
       </div>
       <div class="drawer-menu-body" id="drawerMenuBody"></div>
@@ -338,6 +339,7 @@
       </div>
       <div class="notif-drawer-actions">
         <button class="notif-mark-all-btn" onclick="markAllNotifRead()">全部标为已读</button>
+        <button class="notif-clear-btn" onclick="clearAllNotifs()"><span class="dm-ico notif-btn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></span>清空通知</button>
       </div>
       <div class="notif-drawer-body" id="notifList">
         <p class="notif-empty">暂无通知</p>
@@ -472,7 +474,15 @@
 <!-- ═══ 通知中心（完整页） ═══ -->
 <div class="view-section" id="notifView">
   <div class="container" style="padding-top: var(--space-lg)">
-    <div class="section-accent" style="margin-bottom: var(--space-md)">通知中心</div>
+    <div class="breadcrumb" style="margin-bottom: var(--space-sm)">
+      <a onclick="showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">通知中心</span>
+    </div>
+    <div class="notif-full-head">
+      <div class="section-accent" style="margin:0">通知中心</div>
+      <span class="notif-full-count" id="notifFullCount"></span>
+    </div>
     <div id="notifFullContent"></div>
   </div>
 </div>
@@ -483,10 +493,12 @@
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="overview">📊 概览</button>
       <button class="admin-tab" data-tab="pending">⏳ 待审核</button>
+      <button class="admin-tab" data-tab="reports">🚩 举报受理</button>
       <button class="admin-tab" data-tab="history">📋 审核历史</button>
       <button class="admin-tab" data-tab="deletions">🗑️ 删除记录</button>
       <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none">👥 用户管理</button>
       <button class="admin-tab" data-tab="operations" style="display:none">📋 操作记录</button>
+      <button class="admin-tab" data-tab="report-history" style="display:none">📄 举报记录</button>
     </div>
     <div id="adminContent"></div>
   </div>
@@ -610,8 +622,9 @@
         </div>
         <div class="mf-group">
           <label>课程代码</label>
-          <input type="text" id="ncGeneralCode" class="mf-input" placeholder="如：GEN02201">
+          <input type="text" id="ncGeneralCode" class="mf-input" placeholder="如：GEN02201" oninput="scheduleCourseCheck('G')">
           <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
+          <div id="ncGCodeHint" class="nc-code-hint" style="display:none"></div>
         </div>
 
         <div class="nc-step">
@@ -705,8 +718,9 @@
           </div>
           <div class="mf-group">
             <label>课程代码</label>
-            <input type="text" id="ncMCode" class="mf-input" placeholder="如：PHY11451">
+            <input type="text" id="ncMCode" class="mf-input" placeholder="如：PHY11451" oninput="scheduleCourseCheck('M')">
             <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
+            <div id="ncMCodeHint" class="nc-code-hint" style="display:none"></div>
           </div>
 
           <div class="nc-step">
@@ -808,6 +822,7 @@
     <div class="footer-bottom">
       <p>© 2026 BNU Sparks · 木铎星火 · 资料共享</p>
       <p class="icp-info">
+        <span class="icp-copy">© 2026 BNU Sparks · </span>
         <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">鲁ICP备2026040195号</a>
         <a href="https://beian.mps.gov.cn/#/query/webSearch?code=37172502372130" rel="noreferrer" target="_blank" class="gongan-link">
           <img src="/static/gongan.png" alt="公安备案图标" class="gongan-icon">鲁公网安备37172502372130号
@@ -1021,15 +1036,15 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=162" defer></script>
-<script src="/static/js/auth.js?v=162" defer></script>
-<script src="/static/js/profile.js?v=162" defer></script>
-<script src="/static/js/notifications.js?v=162" defer></script>
-<script src="/static/js/admin.js?v=162" defer></script>
-<script src="/static/js/views.js?v=162" defer></script>
-<script src="/static/js/explorer.js?v=162" defer></script>
-<script src="/static/js/newcourse.js?v=162" defer></script>
-<script src="/static/js/app.js?v=162" defer></script>
+<script src="/static/js/utils.js?v=172" defer></script>
+<script src="/static/js/auth.js?v=172" defer></script>
+<script src="/static/js/profile.js?v=172" defer></script>
+<script src="/static/js/notifications.js?v=172" defer></script>
+<script src="/static/js/admin.js?v=172" defer></script>
+<script src="/static/js/views.js?v=172" defer></script>
+<script src="/static/js/explorer.js?v=172" defer></script>
+<script src="/static/js/newcourse.js?v=172" defer></script>
+<script src="/static/js/app.js?v=172" defer></script>
 
 </body>
 </html>

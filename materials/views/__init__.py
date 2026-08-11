@@ -33,6 +33,13 @@ from .files import (
     api_file_detail, api_zip_structure,
 )
 
+# 举报
+from .reports import (
+    api_file_report, api_file_report_status,
+    api_report_pending, api_report_handle,
+    api_report_finish, api_report_history,
+)
+
 # 收藏
 from .favorites import (
     api_favorite_toggle, api_favorite_status, api_my_favorites,
@@ -43,9 +50,9 @@ from .favorites import (
 from .moderation import (
     api_moderation_pending, api_moderation_batch_approve,
     api_moderation_approve, api_moderation_reject,
-    api_moderation_reassign, api_review_comments,
-    api_moderation_history, api_moderation_stats,
-    api_deletion_records,
+    api_moderation_reassign, api_moderation_assignable,
+    api_review_comments, api_moderation_history, api_moderation_stats,
+    api_deletion_records, api_auto_approve_toggle_self,
 )
 
 # 文件管理 / 文件夹 / 操作
@@ -59,7 +66,8 @@ from .operations import (
 
 # 新建课程申请
 from .course_requests import (
-    api_course_request_create, api_course_request_upload_file,
+    api_course_request_create, api_course_request_check,
+    api_course_request_upload_file,
     api_course_request_delete,
     api_moderation_course_requests,
     api_moderation_course_request_approve, api_moderation_course_request_reject,
@@ -77,8 +85,10 @@ from .announcements import api_announcements, api_announcement_delete
 
 # ── 内部辅助函数（供测试套件引用）──
 from .utils import (
-    _calculate_review_assignment,
+    _review_candidates,
     _check_auto_approve,
     _check_download_quota,
+    _check_report_quota,
+    _report_candidates,
     _get_courses_in_category,
 )

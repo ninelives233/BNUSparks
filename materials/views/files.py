@@ -32,11 +32,12 @@ from .utils import (
     _err, _ok, _get_user, _get_or_create_profile,
     _generate_download_token, _verify_download_token,
     _strip_exif, _check_auto_approve, _check_download_quota,
-    _check_moderator_access, _calculate_review_assignment,
+    _check_moderator_access, _review_candidates, _node_contains_course,
     _create_notification, _user_can_edit_material,
     _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
-    require_login,
-    UserProfile, Course, Material, Notification,
+    _stage_file_to_trash, _purge_expired_trash,
+    require_login, _user_covers_course, ENFORCE_UPLOAD_SCOPE,
+    UserProfile, Course, Material, Notification, MaterialType,
     DownloadRecord, DeletionRecord, CourseCategory,
 )
 from django.db.models import Count
@@ -67,14 +68,9 @@ def api_file_upload(request):
     try:
         course = Course.objects.get(code=course_code)
     except Course.DoesNotExist:
-        cleaned = course_code.replace("*", "").replace("-", "")
-        matched = Course.objects.filter(code__startswith=cleaned)
-        if matched.count() == 1:
-            course = matched.first()
-        elif matched.count() > 1:
-            return _err("课程代码不明确，请联系管理员")
-        else:
-            return _err("课程不存在")
+        # v=167 移除前缀匹配：曾用于「填前缀自动命中唯一课程」，但会静默挂错课程且
+        # 磁盘目录用提交值（≠course.code）导致 rename/merge 漏迁。现一律精确匹配。
+        return _err("课程不存在")
     except Course.MultipleObjectsReturned:
         courses = Course.objects.filter(code=course_code).order_by("id")
         with_files = courses.filter(materials__is_approved=True).distinct()
@@ -85,8 +81,17 @@ def api_file_upload(request):
         else:
             course = courses.first()
 
+    # v170：上传上下文——用户从哪个专业节点进的上传，决定审核路由 L1/L2。
+    # 节点不包含该课程（含伪造/跨学院）一律视为无上下文，路由回落到版主。
+    context_category = None
+    category_id = request.POST.get("category_id", "").strip()
+    if category_id.isdigit():
+        node = CourseCategory.objects.filter(id=int(category_id)).first()
+        if node is not None and _node_contains_course(node, course):
+            context_category = node
+
     from uuid import uuid4
-    course_dir = _safe_dir_name(course_code)
+    course_dir = _safe_dir_name(course.code)
     ext = Path(uploaded_file.name).suffix
     if _blocked_upload_ext(ext):
         return _err("该文件类型不允许上传（可能包含可执行/活动内容）", 400)
@@ -114,12 +119,26 @@ def api_file_upload(request):
         if auto_approved_by:
             is_auto_approved = True
 
+    # 后备开关（默认关闭，ENFORCE_UPLOAD_SCOPE=False）：越辖区上传 → 走 pending 正常审核。
+    # 仅对管理员角色生效；超管不受限；普通用户的自动托管通道不受影响。
+    if is_auto_approved and ENFORCE_UPLOAD_SCOPE and profile.role != UserProfile.Role.SUPER_ADMIN \
+            and not _user_covers_course(request.user, course):
+        is_auto_approved = False
+        auto_approved_by = None
+
     review_status = "approved" if is_auto_approved else "pending"
+
+    # 校验资料类型存在（防无效 id 触发 FK IntegrityError 500）
+    mtid = None
+    if material_type_id and material_type_id.isdigit():
+        mtid = int(material_type_id)
+        if not MaterialType.objects.filter(id=mtid).exists():
+            return _err("资料类型不存在", 400)
 
     material = Material.objects.create(
         course=course, title=title, description=description,
         teacher=teacher,
-        material_type_id=int(material_type_id) if material_type_id and material_type_id.isdigit() else None,
+        material_type_id=mtid,
         file_name=uploaded_file.name,
         file_path=f"{course_dir}/{safe_name}",
         file_size=file_size,
@@ -133,15 +152,23 @@ def api_file_upload(request):
 
     try:
         from git_storage import commit_file
-        commit_file(f"{course_code}/{safe_name}")
+        commit_file(f"{course.code}/{safe_name}")
     except Exception:
         pass
 
     if review_status == "pending":
-        assigned = _calculate_review_assignment(material)
-        if assigned:
-            material.assigned_moderator = assigned
-            material.save(update_fields=["assigned_moderator"])
+        # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），
+        # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
+        for u in _review_candidates(material, context_category):
+            if u.id == request.user.id:
+                continue
+            _create_notification(
+                recipient=u,
+                type=Notification.Type.NEW_PENDING,
+                title="有新的待审核资料",
+                message=f"「{title}」正在等待审核——多人同时可见，先审先得。",
+                material=material,
+            )
 
         _create_notification(
             recipient=request.user,
@@ -194,14 +221,9 @@ def api_file_upload_text(request):
     try:
         course = Course.objects.get(code=course_code)
     except Course.DoesNotExist:
-        cleaned = course_code.replace("*", "").replace("-", "")
-        matched = Course.objects.filter(code__startswith=cleaned)
-        if matched.count() == 1:
-            course = matched.first()
-        elif matched.count() > 1:
-            return _err("课程代码不明确，请联系管理员")
-        else:
-            return _err("课程不存在")
+        # v=167 移除前缀匹配：曾用于「填前缀自动命中唯一课程」，但会静默挂错课程且
+        # 磁盘目录用提交值（≠course.code）导致 rename/merge 漏迁。现一律精确匹配。
+        return _err("课程不存在")
     except Course.MultipleObjectsReturned:
         courses = Course.objects.filter(code=course_code).order_by("id")
         with_files = courses.filter(materials__is_approved=True).distinct()
@@ -212,8 +234,17 @@ def api_file_upload_text(request):
         else:
             course = courses.first()
 
+    # v170：上传上下文——用户从哪个专业节点进的上传，决定审核路由 L1/L2。
+    # 节点不包含该课程（含伪造/跨学院）一律视为无上下文，路由回落到版主。
+    context_category = None
+    category_id = (data.get("category_id") or "").strip()
+    if category_id.isdigit():
+        node = CourseCategory.objects.filter(id=int(category_id)).first()
+        if node is not None and _node_contains_course(node, course):
+            context_category = node
+
     from uuid import uuid4
-    course_dir = _safe_dir_name(course_code)
+    course_dir = _safe_dir_name(course.code)
     clean_title = _sanitize_filename_part(title) or "text"
     safe_name = f"text_{uuid4().hex[:12]}_{clean_title}.txt"
     save_dir = Path(settings.MEDIA_ROOT) / course_dir
@@ -234,12 +265,26 @@ def api_file_upload_text(request):
         if auto_approved_by:
             is_auto_approved = True
 
+    # 后备开关（默认关闭，ENFORCE_UPLOAD_SCOPE=False）：越辖区上传 → 走 pending 正常审核。
+    # 仅对管理员角色生效；超管不受限；普通用户的自动托管通道不受影响。
+    if is_auto_approved and ENFORCE_UPLOAD_SCOPE and profile.role != UserProfile.Role.SUPER_ADMIN \
+            and not _user_covers_course(request.user, course):
+        is_auto_approved = False
+        auto_approved_by = None
+
     review_status = "approved" if is_auto_approved else "pending"
+
+    # 校验资料类型存在（防无效 id 触发 FK IntegrityError 500）
+    mtid = None
+    if material_type_id and material_type_id.isdigit():
+        mtid = int(material_type_id)
+        if not MaterialType.objects.filter(id=mtid).exists():
+            return _err("资料类型不存在", 400)
 
     material = Material.objects.create(
         course=course, title=title, description=description,
         teacher=teacher,
-        material_type_id=int(material_type_id) if material_type_id and material_type_id.isdigit() else None,
+        material_type_id=mtid,
         file_name=safe_name,
         file_path=f"{course_dir}/{safe_name}",
         file_size=file_size,
@@ -253,15 +298,23 @@ def api_file_upload_text(request):
 
     try:
         from git_storage import commit_file
-        commit_file(f"{course_code}/{safe_name}")
+        commit_file(f"{course.code}/{safe_name}")
     except Exception:
         pass
 
     if review_status == "pending":
-        assigned = _calculate_review_assignment(material)
-        if assigned:
-            material.assigned_moderator = assigned
-            material.save(update_fields=["assigned_moderator"])
+        # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），
+        # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
+        for u in _review_candidates(material, context_category):
+            if u.id == request.user.id:
+                continue
+            _create_notification(
+                recipient=u,
+                type=Notification.Type.NEW_PENDING,
+                title="有新的待审核资料",
+                message=f"「{title}」正在等待审核——多人同时可见，先审先得。",
+                material=material,
+            )
 
         _create_notification(
             recipient=request.user,
@@ -285,10 +338,30 @@ def api_file_upload_text(request):
 
 @require_login
 def api_download_token(request, file_id):
-    """GET /api/files/<id>/download-token/ — 生成短时下载令牌"""
+    """GET /api/files/<id>/download-token/ — 生成短时下载令牌
+
+    v=167 安全加固：
+      1. 签发前做下载授权校验——未批准资料仅上传者/辖区管理员可取令牌，
+         普通第三方拿不到未批准文件的下载令牌；
+      2. 令牌绑定签发时的会话键（session_key）——转发到其他浏览器即失效。
+    """
     if request.method != "GET":
         return _err("仅支持 GET", 405)
-    token = _generate_download_token(file_id, request.user.id)
+    material = get_object_or_404(Material, id=file_id)
+    if material.review_status != "approved":
+        try:
+            # 与下载端点同权：已驳回 → 上传者本人也无权；待审核 → 上传者可取（1 分钟窗口）
+            if material.review_status == "rejected":
+                _check_moderator_access(request.user, material, allow_uploader=False)
+            else:
+                _check_moderator_access(request.user, material)
+        except Exception:
+            return _err("该资料未通过审核，暂不可下载", 403)
+    # 确保存在会话：写入 session 让浏览器拿到 sessionid cookie，下载端才能比对会话键
+    request.session.set_expiry(120)
+    request.session["dt"] = 1
+    request.session.save()
+    token = _generate_download_token(file_id, request.user.id, request.session.session_key)
     return _ok({"token": token})
 
 
@@ -387,7 +460,8 @@ def api_file_download(request, file_id):
     if user is None:
         dtoken = request.GET.get("dtoken")
         if dtoken:
-            uid = _verify_download_token(dtoken, file_id)
+            # v=167：令牌绑定签发会话，会话键不匹配（转发/无 cookie）即验证失败
+            uid = _verify_download_token(dtoken, file_id, request.session.session_key)
             if uid:
                 user = User.objects.filter(id=uid).first()
     if user is None:
@@ -492,9 +566,11 @@ def _scope_matched_moderators(material, actor, include_super_admin=False):
 @csrf_exempt
 @require_login
 def api_file_delete(request, file_id):
-    """DELETE /api/files/<id>/delete/ — 删除文件"""
+    """DELETE /api/files/<id>/delete/ — 删除文件（软删除：物理文件移入暂存，48h 内可恢复）"""
     if request.method != "DELETE":
         return _err("仅支持 DELETE", 405)
+
+    _purge_expired_trash()  # 顺带清理超期暂存文件
 
     material = get_object_or_404(Material, id=file_id)
     profile = _get_or_create_profile(request.user)
@@ -520,7 +596,7 @@ def api_file_delete(request, file_id):
         body = {}
     delete_reason = body.get("reason", "")
 
-    DeletionRecord.objects.create(
+    dr = DeletionRecord.objects.create(
         material_id=material.id,
         title=material.title,
         file_name=material.file_name,
@@ -532,6 +608,11 @@ def api_file_delete(request, file_id):
         deleted_by=request.user,
         delete_reason=delete_reason,
     )
+    # 软删除：物理文件移入暂存区（48h 内可恢复），记录暂存路径
+    trash_rel = _stage_file_to_trash(material)
+    if trash_rel:
+        dr.trash_path = trash_rel
+        dr.save(update_fields=["trash_path"])
 
     # 非自删时通知辖区的版主/小版主（按资料所属学院匹配管辖范围）
     if not is_self_delete and material.course:
@@ -579,10 +660,6 @@ def api_file_delete(request, file_id):
                 triggered_by=request.user,
             )
 
-    file_path = Path(settings.MEDIA_ROOT) / material.file_path
-    if file_path.exists():
-        file_path.unlink()
-
     material.delete()
     return _ok({"message": "文件已删除"})
 
@@ -599,6 +676,18 @@ def api_file_detail(request, file_id):
         id=file_id,
     )
     user = request.user
+    # v=XXX：未批准资料（pending/rejected）仅上传者本人 / 辖区管理员可见，
+    # 其他登录用户一律 404，防元数据被枚举（标题/教师/描述等）。
+    if material.review_status != "approved":
+        can_view = user.is_authenticated and material.uploader_id == user.id
+        if not can_view and user.is_authenticated:
+            try:
+                _check_moderator_access(user, material)
+                can_view = True
+            except Exception:
+                can_view = False
+        if not can_view:
+            return _err("文件不存在", 404)
     from .utils import Favorite
     is_favorited = Favorite.objects.filter(user=user, material=material).exists() if user.is_authenticated else False
     rs = material.review_status

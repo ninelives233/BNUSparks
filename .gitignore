@@ -97,3 +97,4 @@ deploy/
 # 项目元信息（不用于运行网站）
 
 data/.zip_cache/
+data/.pdf_cache/

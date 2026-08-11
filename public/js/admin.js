@@ -28,6 +28,9 @@
     // 显示操作记录 tab（所有管理员可见）
     var opTab = document.querySelector('.admin-tab[data-tab="operations"]');
     if (opTab) opTab.style.display = '';
+    // 举报记录 tab（所有管理员可见，可见性原则与操作记录一致）
+    var repHistTab = document.querySelector('.admin-tab[data-tab="report-history"]');
+    if (repHistTab) repHistTab.style.display = '';
     // 绑定 tab 切换（保存 tab 状态到 sessionStorage）
     document.querySelectorAll('.admin-tab').forEach(function(tab) {
       tab.onclick = function() {
@@ -55,6 +58,8 @@
     else if (tab === 'deletions') renderAdminDeletions(content, 1);
     else if (tab === 'users') renderAdminUsers(content, '', 1);
     else if (tab === 'operations') renderAdminOperations(content);
+    else if (tab === 'reports') renderAdminReports(content);
+    else if (tab === 'report-history') renderAdminReportHistory(content, 1);
   }
 
 
@@ -80,7 +85,7 @@
       // 自动托管开关（仅版主/小版主有 can_auto_approve 时显示）
       if (profile.can_auto_approve) {
         var isOn = profile.auto_approve;
-        html += '<div class="admin-auto-toggle" style="margin-top:16px;padding:10px 14px;background:var(--card-bg);border-radius:8px;display:flex;align-items:center;justify-content:space-between">' +
+        html += '<div class="admin-auto-toggle">' +
           '<span><strong>🤖 自动托管审核</strong><br><span style="font-size:0.75rem;color:var(--text-muted)">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
           '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + (isOn ? '✅ 已开启' : '⏸ 已关闭') + '</button>' +
         '</div>';
@@ -137,6 +142,12 @@
 
   function renderAdminPending(content) {
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    // v=XXX：小版主不参与「显示下级板块/同僚已通过」开关，强制复位为默认值，
+    // 避免版主勾选后登出、小版主登入仍残留 hide_peer_approved=1 且无控件取消。
+    if (!(currentUser && (currentUser.role === 'moderator' || currentUser.role === 'super_admin'))) {
+      _pendingIncludeSub = false;
+      _pendingHidePeerApproved = true;
+    }
     var url = '/api/moderation/pending/';
     var params = [];
     if (_pendingIncludeSub) params.push('include_subordinate=1');
@@ -162,7 +173,7 @@
       // 自动托管开关（仅版主/小版主有 can_auto_approve 时显示）
       if (profile.can_auto_approve) {
         var isOn = profile.auto_approve;
-        html += '<div class="admin-auto-toggle" style="margin-bottom:12px;padding:10px 14px;background:var(--card-bg);border-radius:8px;display:flex;align-items:center;justify-content:space-between">' +
+        html += '<div class="admin-auto-toggle">' +
           '<span><strong>🤖 自动托管审核</strong><br><span style="font-size:0.75rem;color:var(--text-muted)">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
           '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + (isOn ? '✅ 已开启' : '⏸ 已关闭') + '</button>' +
         '</div>';
@@ -247,7 +258,7 @@
               '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件进行审核">⬇ 下载</button>' +
               '<button class="admin-btn admin-btn-approve" onclick="quickApprove(' + m.id + ')">✓ 通过</button>' +
               '<button class="admin-btn admin-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>' +
-              (isSuperAdmin ? '<button class="admin-btn admin-btn-secondary" onclick="showReassignDialog(' + m.id + ')" title="手动指派审核人">↗ 指派</button>' : '') +
+              (isMod ? '<button class="admin-btn admin-btn-secondary" onclick="showReassignDialog(' + m.id + ')" title="手动指派审核人">↗ 指派</button>' : '') +
             '</div>';
           }
           html += '</div>';
@@ -349,8 +360,9 @@
     if (req.is_own) {
       actions = '<div class="pc-own">你的申请，等待其他审核员处理</div>';
     } else if (req.status === 'pending') {
+      // v=165：will_link → 批准后为壳节点（链接到既有课程），按钮文案同步
       actions = '<div class="pc-actions">' +
-        '<button class="admin-btn admin-btn-approve" onclick="approveCourseRequest(' + req.id + ', this)">✓ 批准并创建文件夹</button>' +
+        '<button class="admin-btn admin-btn-approve" onclick="approveCourseRequest(' + req.id + ', this)">' + (req.will_link ? '✓ 批准（链接到既有课程）' : '✓ 批准并创建文件夹') + '</button>' +
         '<button class="admin-btn admin-btn-reject" onclick="showCourseRequestReject(' + req.id + ')">✗ 驳回</button>' +
       '</div>';
     } else if (req.is_waiting_files) {
@@ -358,6 +370,9 @@
     }
 
     var waitingTag = req.is_waiting_files ? '<span class="cr-waiting-tag">⏳ 等待随附文件</span>' : '';
+    var linkTag = req.will_link
+      ? '<span class="cr-link-tag" title="批准后不会新建独立文件夹，树节点将指向既有课程目录">🔗 将链接到既有课程「' + esc(req.existing_course_name || '') + '」</span>'
+      : '';
 
     return '<div class="admin-pending-card cr-card' + (req.is_waiting_files ? ' cr-waiting-card' : '') + '">' +
       '<div class="cr-head">' +
@@ -365,6 +380,7 @@
         '<span class="cr-title">' + esc(req.course_name) + '</span>' +
         '<span class="cr-code">' + esc(req.course_code) + '</span>' +
         waitingTag +
+        linkTag +
       '</div>' +
       '<div class="cr-meta">' + meta + '</div>' +
       body +
@@ -462,16 +478,16 @@
   }
 
   function toggleAutoApprove(btn) {
-    api('/api/auth/profile/').then(function(profile) {
-      var newVal = !profile.auto_approve;
-      var uid = currentUser ? currentUser.id : 0;
-      // 使用后端 toggle API
-      return api('/api/admin/users/' + uid + '/auto-approve/', {
-        method: 'POST',
-        body: { auto_approve: newVal }
-      });
-    }).then(function(result) {
-      renderAdminPending(document.getElementById('adminContent'));
+    // v=XXX：版主/小版主自服务开关（需超管先授权 can_auto_approve），
+    // 不再调用 super_admin 专属的 admin/users 接口。
+    api('/api/moderation/auto-approve/', {
+      method: 'POST'
+    }).then(function() {
+      // 重渲染当前 tab（概览/待审页均有此开关）
+      var content = document.getElementById('adminContent');
+      var active = document.querySelector('.admin-tab.active');
+      var tab = active ? active.getAttribute('data-tab') : 'pending';
+      switchAdminTab(tab);
     }).catch(function(err) {
       alert('操作失败：' + err.message);
     });
@@ -672,7 +688,7 @@
     try {
       var data = await api('/api/moderation/deletions/?page=' + page + '&per_page=' + _delPerPage);
       if (!data.items || !data.items.length) {
-        content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:60px 0">暂无文件删除记录</p>';
+        content.innerHTML = '<div class="admin-empty">🗑️ 暂无文件删除记录</div>';
         return;
       }
       var _esc = escapeHtml || function(s) {
@@ -793,7 +809,7 @@
     try {
       var data = await api('/api/operations/?page=' + _opPage + '&per_page=' + _opPerPage);
       if (!data.items || !data.items.length) {
-        content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:60px 0">暂无操作记录</p>';
+        content.innerHTML = '<div class="admin-empty">📋 暂无操作记录</div>';
         return;
       }
       var html = '<div class="admin-table-wrapper"><table class="admin-table">';
@@ -837,6 +853,288 @@
     } catch (err) {
       content.innerHTML = '<p style="text-align:center;color:var(--ink-faint);padding:40px">加载失败：' + esc(err.message || '未知错误') + '</p>';
     }
+  }
+
+  // ═══════════════════ 举报受理 / 举报记录（v172） ═══════════════════
+  var _reportGroups = {};  // group_key → group（供处理浮窗取用）
+
+  function renderAdminReports(content) {
+    content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/moderation/reports/pending/').then(function(data) {
+      var mg = data.material_groups || [];
+      var ug = data.user_groups || [];
+      if (!mg.length && !ug.length) {
+        content.innerHTML = '<div class="admin-empty">暂无待处理的举报</div>';
+        return;
+      }
+      _reportGroups = {};
+      mg.forEach(function(g) { _reportGroups[g.group_key] = g; });
+      ug.forEach(function(g) { _reportGroups[g.group_key] = g; });
+      var html = '';
+      if (mg.length) {
+        html += '<div class="pc-section-label">🚩 待处理资料举报</div><div class="admin-pending-list">';
+        mg.forEach(function(g) { html += _reportCardHtml(g); });
+        html += '</div>';
+      }
+      if (ug.length) {
+        if (mg.length) html += '<div class="pc-section-divider"></div>';
+        html += '<div class="pc-section-label">🚩 待处理连带举报</div><div class="admin-pending-list">';
+        ug.forEach(function(g) { html += _reportCardHtml(g); });
+        html += '</div>';
+      }
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  function _reportReasonTags(labels) {
+    if (!labels || !labels.length) return '';
+    return '<div class="report-reason-tags">' + labels.map(function(r) {
+      return '<span class="report-reason-tag">' + esc(r) + '</span>';
+    }).join('') + '</div>';
+  }
+
+  function _reportCardHtml(g) {
+    if (g.kind === 'material') {
+      var detailBtn = g.material_exists
+        ? '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="showPendingFileDetail(' + g.material_id + ')" title="查看文件详情核实"><span>详情</span></button>'
+        : '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="alert(\'该资料已被删除\')" title="该资料已被删除"><span>详情</span></button>';
+      return '<div class="admin-pending-card report-card">' +
+        '<div class="pc-title">' + esc(g.material_title) + ' <span class="report-count-pill">' + g.reporter_count + ' 人举报</span></div>' +
+        '<div class="pc-meta">' +
+          '<span>📚 ' + esc(g.course_name) + ' (' + esc(g.course_code) + ')</span>' +
+          '<span>📅 ' + g.latest_reported_at + '</span>' +
+          (g.material_exists ? '' : '<span class="report-gone">⚠ 资料已删除</span>') +
+        '</div>' +
+        _reportReasonTags(g.reason_labels) +
+        '<div class="pc-meta report-reporters">举报人：' + g.reporter_names.map(esc).join('、') + '</div>' +
+        (g.latest_detail ? '<div class="report-detail">' + esc(g.latest_detail) + '</div>' : '') +
+        '<div class="pc-actions">' + detailBtn +
+          '<button class="admin-btn admin-btn-primary" onclick="openReportHandleDialog(\'' + g.group_key + '\')">处理</button></div>' +
+      '</div>';
+    }
+    // user kind（连带举报）
+    var stTag = g.status === 'escalated'
+      ? '<span class="report-status-tag report-status-escalated">已升级</span>'
+      : '<span class="report-status-tag report-status-pending">待处理</span>';
+    var handleBtn = g.can_finish
+      ? '<button class="admin-btn admin-btn-approve" onclick="submitReportFinish(' + g.report_id + ')">已处理</button>'
+      : '<button class="admin-btn admin-btn-primary" onclick="openReportHandleDialog(\'' + g.group_key + '\')">处理</button>';
+    return '<div class="admin-pending-card report-card">' +
+      '<div class="pc-title">用户：' + esc(g.target_user_name) + ' <span class="report-count-pill">' + g.reporter_count + ' 人举报</span> ' + stTag + '</div>' +
+      '<div class="pc-meta"><span>📅 ' + g.latest_reported_at + '</span></div>' +
+      _reportReasonTags(g.reason_labels) +
+      '<div class="pc-meta report-reporters">举报人：' + g.reporter_names.map(esc).join('、') + '</div>' +
+      (g.latest_detail ? '<div class="report-detail">' + esc(g.latest_detail) + '</div>' : '') +
+      '<div class="pc-actions">' +
+        '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="showUserPublic(' + g.target_user_id + ')" title="查看该用户主页核实"><span>详情</span></button>' +
+        handleBtn +
+      '</div>' +
+    '</div>';
+  }
+
+  function openReportHandleDialog(groupKey) {
+    var g = _reportGroups[groupKey];
+    if (!g) return;
+    var old = document.querySelector('.admin-reject-overlay');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.className = 'admin-reject-overlay report-handle-overlay';
+    var isMaterial = g.kind === 'material';
+    var inner = '';
+    if (isMaterial) {
+      inner =
+        '<div class="rh-question"><div class="rh-q-label">1. 举报情况是否属实？</div>' +
+          '<label class="rh-radio"><input type="radio" name="rhTrue" value="true" onchange="updateReportHandleState()"> <span>是</span></label>' +
+          '<label class="rh-radio"><input type="radio" name="rhTrue" value="false" onchange="updateReportHandleState()"> <span>否（需填实际情况，若资料确有问题但描述不准确也选否）</span></label>' +
+        '</div>' +
+        '<div class="rh-field" id="rhActualField" style="display:none">' +
+          '<textarea id="rhActual" placeholder="请填写实际情况（必填）" rows="2"></textarea>' +
+        '</div>' +
+        '<div class="rh-question"><div class="rh-q-label">2. 如何处理？</div>' +
+          '<label class="rh-radio"><input type="radio" name="rhAction" value="delete" onchange="updateReportHandleState()"> <span>删除' + (g.material_exists ? '' : '（该文件已被删除，此条无实际效果）') + '</span></label>' +
+          '<label class="rh-radio"><input type="radio" name="rhAction" value="keep" onchange="updateReportHandleState()"> <span>保留</span></label>' +
+        '</div>' +
+        '<div class="rh-question" id="rhRetryQ"><div class="rh-q-label">3. 是否允许重新上传？（选择保留则此条不可用）</div>' +
+          '<label class="rh-radio"><input type="radio" name="rhRetry" value="true"> <span>是（小错可原谅）</span></label>' +
+          '<label class="rh-radio"><input type="radio" name="rhRetry" value="false"> <span>否（大错需谨慎）</span></label>' +
+        '</div>' +
+        '<div class="rh-question" id="rhMalQ"><div class="rh-q-label">4. 是否为恶意举报？（选择删除则此条不可用）</div>' +
+          '<label class="rh-radio"><input type="radio" name="rhMal" value="true"> <span>是（此条通知转发至总管理，提醒注意）</span></label>' +
+          '<label class="rh-radio"><input type="radio" name="rhMal" value="false"> <span>否（仅为误报，不需大惊小怪）</span></label>' +
+        '</div>' +
+        '<div class="ar-error" id="rhError" style="display:none"></div>';
+    } else {
+      inner =
+        '<div class="rh-question"><div class="rh-q-label">1. 是否属实？</div>' +
+          '<label class="rh-radio"><input type="radio" name="rhTrue" value="true" onchange="updateReportHandleState()"> <span>是（确认属实后将升级转发至总管理员）</span></label>' +
+          '<label class="rh-radio"><input type="radio" name="rhTrue" value="false" onchange="updateReportHandleState()"> <span>否（反馈至举报者）</span></label>' +
+        '</div>' +
+        '<div class="rh-question" id="rhMalQ"><div class="rh-q-label">2. 是否为恶意举报？（选择否则此条不可用）</div>' +
+          '<label class="rh-radio"><input type="radio" name="rhMal" value="true"> <span>是（此条通知转发至总管理，提醒注意）</span></label>' +
+          '<label class="rh-radio"><input type="radio" name="rhMal" value="false"> <span>否（仅为误报，不需大惊小怪）</span></label>' +
+        '</div>' +
+        '<div class="ar-error" id="rhError" style="display:none"></div>';
+    }
+    overlay.innerHTML =
+      '<div class="admin-reject-dialog report-handle-dialog">' +
+        '<h3>处理举报 · ' + esc(isMaterial ? (g.material_title || '') : (g.target_user_name || '')) + '</h3>' +
+        '<div id="rhBody">' + inner + '</div>' +
+        '<div class="ar-actions" style="margin-top:14px">' +
+          '<button class="admin-btn admin-btn-primary" id="rhSubmitBtn" onclick="submitReportHandle(\'' + g.group_key + '\')">确定</button>' +
+          '<button class="admin-btn admin-btn-secondary" onclick="_removeOverlay(this.closest(\'.admin-reject-overlay\'))">取消</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
+    lockScroll();
+    updateReportHandleState();
+  }
+
+  function updateReportHandleState() {
+    var overlay = document.querySelector('.report-handle-overlay');
+    if (!overlay) return;
+    var isMaterial = !!overlay.querySelector('input[name="rhAction"]');
+    var isTrue = _rhVal(overlay, 'rhTrue');
+    var actualField = overlay.querySelector('#rhActualField');
+    if (actualField) actualField.style.display = isTrue === 'false' ? '' : 'none';
+    if (isMaterial) {
+      var action = _rhVal(overlay, 'rhAction');
+      var retryQ = overlay.querySelector('#rhRetryQ');
+      var malQ = overlay.querySelector('#rhMalQ');
+      if (retryQ) {
+        retryQ.classList.toggle('rh-disabled', action === 'keep');
+        retryQ.querySelectorAll('input').forEach(function(i) { i.disabled = action === 'keep'; });
+      }
+      if (malQ) {
+        malQ.classList.toggle('rh-disabled', action === 'delete');
+        malQ.querySelectorAll('input').forEach(function(i) { i.disabled = action === 'delete'; });
+      }
+      if (action === 'keep') _clearRadios(overlay, 'rhRetry');
+      if (action === 'delete') _clearRadios(overlay, 'rhMal');
+    } else {
+      var malQ2 = overlay.querySelector('#rhMalQ');
+      if (malQ2) {
+        malQ2.classList.toggle('rh-disabled', isTrue === 'false');
+        malQ2.querySelectorAll('input').forEach(function(i) { i.disabled = isTrue === 'false'; });
+      }
+      if (isTrue === 'false') _clearRadios(overlay, 'rhMal');
+    }
+  }
+
+  function _rhVal(overlay, name) {
+    var el = overlay.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : null;
+  }
+
+  function _clearRadios(overlay, name) {
+    overlay.querySelectorAll('input[name="' + name + '"]').forEach(function(i) { i.checked = false; });
+  }
+
+  function _showRhError(overlay, msg) {
+    var e = overlay.querySelector('#rhError');
+    if (e) { e.textContent = msg; e.style.display = ''; }
+  }
+
+  function submitReportHandle(groupKey) {
+    var g = _reportGroups[groupKey];
+    var overlay = document.querySelector('.report-handle-overlay');
+    if (!g || !overlay) return;
+    var isMaterial = g.kind === 'material';
+    var isTrue = _rhVal(overlay, 'rhTrue');
+    if (!isTrue) { _showRhError(overlay, '请选择是否属实'); return; }
+    var body = { is_true: isTrue === 'true' };
+    if (isMaterial) {
+      var action = _rhVal(overlay, 'rhAction');
+      if (!action) { _showRhError(overlay, '请选择处理方式'); return; }
+      body.action = action;
+      if (body.is_true === false) {
+        var actualEl = overlay.querySelector('#rhActual');
+        var actual = actualEl ? actualEl.value.trim() : '';
+        if (!actual) { _showRhError(overlay, '选择不属实时，必须填写实际情况'); return; }
+        body.actual_situation = actual;
+      }
+      if (action === 'delete') {
+        var retry = _rhVal(overlay, 'rhRetry');
+        if (retry === null) { _showRhError(overlay, '请选择是否允许重新上传'); return; }
+        body.allow_retry = retry === 'true';
+      } else {
+        var mal = _rhVal(overlay, 'rhMal');
+        if (mal === null) { _showRhError(overlay, '请选择是否为恶意举报'); return; }
+        body.is_malicious = mal === 'true';
+      }
+    } else {
+      if (body.is_true) {
+        var mal2 = _rhVal(overlay, 'rhMal');
+        if (mal2 === null) { _showRhError(overlay, '请选择是否为恶意举报'); return; }
+        body.is_malicious = mal2 === 'true';
+      }
+    }
+    var btn = overlay.querySelector('#rhSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    api('/api/moderation/reports/' + g.report_id + '/handle/', { method: 'POST', body: body })
+      .then(function(data) {
+        _removeOverlay(overlay);
+        if (data.file_already_deleted) alert('该文件已被删除，删除操作无实际效果。');
+        renderAdminReports(document.getElementById('adminContent'));
+      })
+      .catch(function(err) {
+        _showRhError(overlay, err.message || '处理失败');
+        if (btn) { btn.disabled = false; btn.textContent = '确定'; }
+      });
+  }
+
+  function submitReportFinish(reportId) {
+    if (!confirm('确认此连带举报已处理完毕？')) return;
+    api('/api/moderation/reports/' + reportId + '/finish/', { method: 'POST', body: {} })
+      .then(function() {
+        renderAdminReports(document.getElementById('adminContent'));
+      })
+      .catch(function(err) {
+        alert('操作失败：' + err.message);
+      });
+  }
+
+  function renderAdminReportHistory(content, page) {
+    content.innerHTML = '<div class="admin-loading">加载中…</div>';
+    api('/api/moderation/reports/history/?page=' + page + '&per_page=20').then(function(data) {
+      if (!data.items || !data.items.length) {
+        content.innerHTML = '<div class="admin-empty">暂无举报记录</div>';
+        return;
+      }
+      var html = '<div class="admin-table-wrap"><table class="admin-table">' +
+        '<thead><tr><th>类型</th><th>被举报</th><th>课程</th><th>举报人</th><th>原因</th><th>状态</th><th>处理人</th><th>举报时间</th><th>处理时间</th></tr></thead><tbody>';
+      data.items.forEach(function(r) {
+        var target = r.kind === 'material' ? (r.material_title || '资料已删除') : ('用户：' + (r.target_user_name || '匿名'));
+        var stCls = r.status === 'handled' ? 'report-status-handled'
+          : r.status === 'escalated' ? 'report-status-escalated' : 'report-status-pending';
+        html += '<tr>' +
+          '<td>' + esc(r.kind_label) + '</td>' +
+          '<td>' + esc(target) + '</td>' +
+          '<td style="font-size:0.78rem;color:var(--text-muted)">' + esc(r.course_name) + '</td>' +
+          '<td>' + esc(r.reporter_name) + '</td>' +
+          '<td>' + (r.reason_labels || []).map(function(x) { return '<span class="report-reason-tag report-reason-tag-sm">' + esc(x) + '</span>'; }).join('') + '</td>' +
+          '<td><span class="report-status-tag ' + stCls + '">' + esc(r.status_label) + '</span></td>' +
+          '<td>' + esc(r.handled_by_name || '—') + '</td>' +
+          '<td>' + esc(r.created_at) + '</td>' +
+          '<td>' + esc(r.handled_at || '—') + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+      if (data.total_pages > 1) {
+        html += '<div class="admin-pagination">';
+        if (page > 1) html += '<button onclick="renderAdminReportHistory(document.getElementById(\'adminContent\'), ' + (page - 1) + ')">← 上一页</button>';
+        else html += '<button disabled>← 上一页</button>';
+        html += '<span class="page-info">第 ' + page + ' / ' + data.total_pages + ' 页（共 ' + data.total + ' 条）</span>';
+        if (page < data.total_pages) html += '<button onclick="renderAdminReportHistory(document.getElementById(\'adminContent\'), ' + (page + 1) + ')">下一页 →</button>';
+        else html += '<button disabled>下一页 →</button>';
+        html += '</div>';
+      }
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
+    });
   }
 
   function restoreFolderOp(opId, btn) {
@@ -1377,9 +1675,9 @@
   function showReassignDialog(fileId) {
     var existing = document.querySelector('.reassign-overlay');
     if (existing) existing.remove();
-    api('/api/admin/users/').then(function(users) {
-      // 过滤出版主和小版主
-      var mods = users.filter(function(u) { return u.role === 'moderator' || u.role === 'sub_moderator'; });
+    // 后端按角色返回可指派对象：超管=全部版主+小版主；版主=覆盖该课程的小版主
+    api('/api/moderation/' + fileId + '/assignable/').then(function(res) {
+      var mods = res.users || [];
       if (!mods.length) {
         alert('当前没有可指派的审核员（版主/小版主）');
         return;
@@ -1425,24 +1723,24 @@
     });
   }
 
-  // ── 自动托管管理（super_admin 切换 can_auto_approve） ──
+  // ── 自动托管管理（super_admin 授予/回收「可自开」权 can_auto_approve） ──
   function toggleAdminAutoApprove(uid, btn) {
-    // 从按钮 data-caa 属性直接读取当前状态
+    // 从按钮 data-caa 属性直接读取当前 gate 状态
     var currentOn = btn && btn.getAttribute('data-caa') === '1';
     var newVal = !currentOn;
     api('/api/admin/users/' + uid + '/auto-approve/', {
       method: 'POST',
-      body: { can_auto_approve: newVal, auto_approve: newVal }
+      body: { can_auto_approve: newVal }
     }).then(function(result) {
       // 直接修改所在 <td> 的 DOM，无需重渲染
       if (!btn) return;
       var td = btn.closest('td');
       if (td) {
-        // 更新 🟢🔴 标识
+        // 更新 🟢🔴 标识（回收授权时后端会强制关 auto_approve）
         var span = td.querySelector('span');
         if (span) span.textContent = result.auto_approve ? '🟢 开' : '🔴 关';
       }
-      // 更新按钮本身
+      // 更新按钮本身（gate 状态）
       btn.textContent = result.can_auto_approve ? '允许' : '禁止';
       btn.setAttribute('data-caa', result.can_auto_approve ? '1' : '0');
     }).catch(function(err) {

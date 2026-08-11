@@ -320,13 +320,16 @@
       const badge = document.getElementById('notifBadge');
       if (!badge) return;
       // 与通知中心同一口径：服务端未读 && 本地未标已读
+      // v=164.1：分页后列表只含第 1 页，未读数必须以 unread_count 为权威，
+      // 再扣掉本地已标已读但服务端仍未读的（瞬时同步窗口）
       var readSet = (typeof _getReadNotifSet === 'function') ? _getReadNotifSet() : new Set();
-      var realUnread = 0;
+      var realUnread = data.unread_count || 0;
       if (data.list) {
         data.list.forEach(function(n) {
-          if (!n.is_read && !readSet.has(n.id)) realUnread++;
+          if (!n.is_read && readSet.has(n.id)) realUnread--;
         });
       }
+      if (realUnread < 0) realUnread = 0;
       if (realUnread > 0) {
         badge.textContent = realUnread > 99 ? '99+' : realUnread;
         badge.style.display = '';

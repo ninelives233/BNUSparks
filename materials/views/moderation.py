@@ -13,13 +13,14 @@ from django.db.models import F, Q
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.http import Http404
 
 from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
     _get_moderated_material_qs, _get_subordinate_covered_course_ids,
-    _get_courses_in_category, _check_moderator_access,
-    _get_visible_deletion_records, require_role, _safe_int,
-    _get_category_preload,
+    _get_courses_in_category, _check_moderator_access, _user_covers_course,
+    _get_visible_deletion_records, require_login, require_role, _safe_int,
+    _get_category_preload, _purge_expired_trash,
     UserProfile, Material, CourseCategory, Notification,
     ReviewComment, DeletionRecord, Course, _bump_user_public_gen,
 )
@@ -46,12 +47,16 @@ def api_moderation_pending(request):
 
     qs = qs.order_by("-created_at")
 
-    # 清理失效指派
+    # 清理失效指派：仅清理指派给「非版主/小版主」的失效指派（普通用户/停用账号等
+    # 无法审核的角色），版主与小版主指派一律保留（自动路由 + 总管理员手动指派均生效，
+    # 修复此前误清版主指派导致 assigned_moderator 字段失效的问题）。
     stale_qs = qs.filter(
         review_status="pending",
         assigned_moderator__isnull=False,
     ).exclude(
-        assigned_moderator__profile__role=UserProfile.Role.SUB_MODERATOR
+        assigned_moderator__profile__role__in=[
+            UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR,
+        ]
     )
     stale_ids = list(stale_qs.values_list("id", flat=True)[:200])
     if stale_ids:
@@ -133,10 +138,23 @@ def api_moderation_batch_approve(request):
         is_approved=True, review_status="approved",
         reviewed_by=request.user, reviewed_at=now,
     )
-    # qs.update() 不触发 post_save 信号，手动失效树缓存 + 递增上传者公开页代际
+    # qs.update() 不触发 post_save 信号，手动失效树缓存 + 首页统计 + 递增上传者公开页代际
     cache.delete(COURSE_TREE_CACHE_KEY)
+    cache.delete("api_stats_data")
+    # 按上传者聚合通知（与单条 approve 一致，避免「一键过审后上传者零感知」）
     for uid in uploader_ids:
         _bump_user_public_gen(uid)
+        try:
+            up = User.objects.get(id=uid)
+        except User.DoesNotExist:
+            continue
+        n = qs.filter(uploader_id=uid).count()
+        _create_notification(
+            recipient=up, type=Notification.Type.APPROVED,
+            title="你的资料已通过审核",
+            message=f"你上传的 {n} 份资料已通过审核，现在可以下载了。",
+            triggered_by=request.user,
+        )
     return _ok({"approved_count": count})
 
 
@@ -153,7 +171,12 @@ def api_moderation_approve(request, file_id):
         body = {}
 
     material = get_object_or_404(Material, id=file_id)
-    _check_moderator_access(request.user, material)
+    try:
+        _check_moderator_access(request.user, material)
+    except Http404:
+        # 返回 JSON 404：既保住「越权即视为不存在」的语义（含 null-course 随附文件对
+        # 非指派版主的隐藏），又避免 Django 渲染 HTML 404 破坏前端 api() 的 JSON 解析。
+        return _err("无权操作该资料", 404)
 
     # v=147：新建课程申请的随附文件在申请批准前 course 为 NULL，
     # 禁止单独批准（否则变成「已通过却无处可下载」的野鬼文件），
@@ -161,16 +184,25 @@ def api_moderation_approve(request, file_id):
     if material.creation_request_id and material.course_id is None:
         return _err("请先批准该课程创建申请，随附文件将随文件夹一并创建", 400)
 
-    if material.review_status != "pending":
-        return _err("该资料已审核，不可重复操作")
+    # 上传者本人不可审核自己的上传（与 batch-approve 的 exclude(uploader) 一致）
+    if material.uploader_id == request.user.id:
+        return _err("不能审核自己上传的资料", 400)
 
     notes = (body.get("notes") or "").strip()
-    material.review_status = "approved"
-    material.is_approved = True
-    material.review_notes = notes
-    material.reviewed_by = request.user
-    material.reviewed_at = timezone.now()
-    material.save()
+    # 原子条件更新：并发双审只有一个成功（SQLite 不支持 select_for_update，
+    # 用 filter(status=pending).update() 保证「读-判-写」不丢失）；同时清空指派字段。
+    updated = Material.objects.filter(id=file_id, review_status="pending").update(
+        is_approved=True, review_status="approved",
+        review_notes=notes,
+        reviewed_by=request.user, reviewed_at=timezone.now(),
+        assigned_moderator=None,
+    )
+    if updated == 0:
+        return _err("该资料已审核，不可重复操作")
+    # update() 不触发 post_save 信号，手动失效缓存 + 递增上传者公开页代际
+    cache.delete(COURSE_TREE_CACHE_KEY)
+    cache.delete("api_stats_data")
+    _bump_user_public_gen(material.uploader_id)
 
     if material.uploader:
         _create_notification(
@@ -202,17 +234,29 @@ def api_moderation_reject(request, file_id):
         return _err("驳回原因不能为空")
 
     material = get_object_or_404(Material, id=file_id)
-    _check_moderator_access(request.user, material)
+    try:
+        _check_moderator_access(request.user, material)
+    except Http404:
+        # 同 approve：JSON 404 隐藏越权资料的「存在」，且避免 HTML 404 破坏 JSON 解析
+        return _err("无权操作该资料", 404)
 
-    if material.review_status != "pending":
+    # 上传者本人不可驳回自己的上传（与 approve 一致）
+    if material.uploader_id == request.user.id:
+        return _err("不能审核自己上传的资料", 400)
+
+    # 原子条件更新：并发双审只有一个成功（同 approve 的并发处理模式）；同时清空指派字段。
+    updated = Material.objects.filter(id=file_id, review_status="pending").update(
+        is_approved=False, review_status="rejected",
+        review_notes=notes,
+        reviewed_by=request.user, reviewed_at=timezone.now(),
+        assigned_moderator=None,
+    )
+    if updated == 0:
         return _err("该资料已审核，不可重复操作")
-
-    material.review_status = "rejected"
-    material.is_approved = False
-    material.review_notes = notes
-    material.reviewed_by = request.user
-    material.reviewed_at = timezone.now()
-    material.save()
+    # update() 不触发 post_save 信号，手动失效缓存 + 递增上传者公开页代际
+    cache.delete(COURSE_TREE_CACHE_KEY)
+    cache.delete("api_stats_data")
+    _bump_user_public_gen(material.uploader_id)
 
     if material.uploader:
         _create_notification(
@@ -228,13 +272,23 @@ def api_moderation_reject(request, file_id):
 
 
 @csrf_exempt
-@require_role(UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_moderation_reassign(request, file_id):
-    """POST /api/moderation/<id>/reassign/ — 手动指派审核人"""
+    """POST /api/moderation/<id>/reassign/ — 手动指派审核人
+
+    - super_admin：可指派给任意版主/小版主
+    - moderator：只能向下指派给小版主（目标必须覆盖该课程，限辖区）
+    """
     if request.method != "POST":
         return _err("仅支持 POST", 405)
 
     material = get_object_or_404(Material, id=file_id, review_status="pending")
+    profile = _get_or_create_profile(request.user)
+    if profile.role == UserProfile.Role.MODERATOR:
+        try:
+            _check_moderator_access(request.user, material)
+        except Exception:
+            return _err("无权操作该资料", 403)
 
     try:
         body = json.loads(request.body)
@@ -243,12 +297,79 @@ def api_moderation_reassign(request, file_id):
 
     new_mod_id = body.get("assigned_moderator")
     if new_mod_id is not None:
-        material.assigned_moderator = get_object_or_404(User, id=new_mod_id)
+        target = get_object_or_404(User, id=new_mod_id)
+        target_profile = _get_or_create_profile(target)
+        # 指派对象必须是能审核的管理员角色，否则「能看不能审」且 pending 会定期被清理
+        if target_profile.role not in (
+            UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR,
+        ):
+            return _err("指派对象必须是版主或小版主", 400)
+        # 版主只能向下指派给小版主，且目标必须覆盖该课程（防止乱派给无关管理员）
+        if profile.role == UserProfile.Role.MODERATOR:
+            if target_profile.role != UserProfile.Role.SUB_MODERATOR:
+                return _err("版主只能向下指派给小版主", 400)
+            if material.course_id is None:
+                return _err("该资料无课程归属，版主不可下派", 400)
+            if not _user_covers_course(target, material.course):
+                return _err("该小版主不覆盖这门课程，无法指派", 400)
+        if material.assigned_moderator_id != target.id:
+            material.assigned_moderator = target
+            material.save(update_fields=["assigned_moderator"])
+            # 通知新指派人（旧指派人不再持有，无残留状态需清理）
+            _create_notification(
+                recipient=target,
+                type=Notification.Type.OPERATION,
+                title="有资料指派给你审核",
+                message=f"资料「{material.title}」已指派给你审核，请前往待审核列表处理。",
+                material=material,
+                triggered_by=request.user,
+            )
     else:
         material.assigned_moderator = None
-    material.save(update_fields=["assigned_moderator"])
+        material.save(update_fields=["assigned_moderator"])
 
     return _ok({"message": "已重新指派"})
+
+
+@csrf_exempt
+@require_role(UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
+def api_moderation_assignable(request, file_id):
+    """GET /api/moderation/<id>/assignable/ — 待审资料可指派的审核员列表
+
+    - super_admin → 全部版主 + 小版主（沿用原下拉范围）
+    - moderator → 仅覆盖该课程的小版主（限辖区向下指派）
+    """
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    material = get_object_or_404(Material, id=file_id, review_status="pending")
+    profile = _get_or_create_profile(request.user)
+    if profile.role == UserProfile.Role.MODERATOR:
+        try:
+            _check_moderator_access(request.user, material)
+        except Exception:
+            return _err("无权查看该资料的指派对象", 403)
+        if material.course_id is None:
+            return _ok({"users": []})
+        targets = UserProfile.objects.filter(
+            role=UserProfile.Role.SUB_MODERATOR,
+        ).select_related("user").prefetch_related("moderated_sections")
+        return _ok({
+            "users": [
+                {"id": tp.user.id, "nickname": tp.user.first_name or tp.user.username, "role": tp.role}
+                for tp in targets
+                if _user_covers_course(tp.user, material.course)
+            ]
+        })
+    # super_admin：全部版主 + 小版主
+    targets = UserProfile.objects.filter(
+        role__in=[UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR],
+    ).select_related("user")
+    return _ok({
+        "users": [
+            {"id": tp.user.id, "nickname": tp.user.first_name or tp.user.username, "role": tp.role}
+            for tp in targets
+        ]
+    })
 
 
 @csrf_exempt
@@ -396,6 +517,7 @@ def api_moderation_stats(request):
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_deletion_records(request):
     """GET /api/moderation/deletions/ — 删除记录列表"""
+    _purge_expired_trash()  # 顺带清理超期暂存文件
     page = _safe_int(request.GET.get("page"), 1, lo=1)
     per_page = min(_safe_int(request.GET.get("per_page"), 20, lo=1), 100)
     page = max(1, page)
@@ -428,3 +550,23 @@ def api_deletion_records(request):
             } for r in items
         ],
     })
+
+
+@csrf_exempt
+@require_login
+def api_auto_approve_toggle_self(request):
+    """POST /api/moderation/auto-approve/ — 版主/小版主自行开关自动托管（需超管授权）
+
+    超管通过 /api/admin/users/<uid>/auto-approve/ 授予 can_auto_approve 后，
+    被授权者可在待审页自行开启/关闭 auto_approve；未授权返回 403。
+    """
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    profile = _get_or_create_profile(request.user)
+    if profile.role not in (UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR):
+        return _err("仅版主/小版主可操作自动托管", 400)
+    if not profile.can_auto_approve:
+        return _err("未被授权开启自动托管，请联系总管理员", 403)
+    profile.auto_approve = not profile.auto_approve
+    profile.save(update_fields=["auto_approve"])
+    return _ok({"auto_approve": profile.auto_approve})

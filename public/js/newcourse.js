@@ -353,6 +353,46 @@
     });
   }
 
+  // ── v=165 新建课程前查重（实时提示）──
+  var _ncCheckTimers = { G: null, M: null };
+
+  function scheduleCourseCheck(prefix) {
+    if (_ncCheckTimers[prefix]) clearTimeout(_ncCheckTimers[prefix]);
+    _ncCheckTimers[prefix] = setTimeout(function() { runCourseCheck(prefix); }, 400);
+  }
+
+  async function runCourseCheck(prefix) {
+    var isGeneral = prefix === 'G';
+    var code = (_ncEl(isGeneral ? 'ncGeneralCode' : 'ncMCode').value || '').trim();
+    var hint = _ncEl(isGeneral ? 'ncGCodeHint' : 'ncMCodeHint');
+    if (!hint) return;
+    if (!code) { hint.style.display = 'none'; hint.textContent = ''; return; }
+    var targetId = isGeneral
+      ? (_ncEl('ncGeneralCategory') ? _ncEl('ncGeneralCategory').value : '')
+      : (_ncState.targetCatId || '');
+    try {
+      var q = '/api/courses/request/check/?course_code=' + encodeURIComponent(code);
+      if (targetId) q += '&target_category_id=' + encodeURIComponent(targetId);
+      var d = await api(q);
+      if (d && d.exists) {
+        hint.style.display = '';
+        if (d.in_target) {
+          hint.className = 'nc-code-hint nc-code-hint-error';
+          hint.textContent = '⚠ 该课程已在本专业课程树「' + (d.locations[0] || '该位置') + '」中，请直接到对应目录上传资料';
+        } else {
+          hint.className = 'nc-code-hint nc-code-hint-warn';
+          hint.textContent = 'ℹ 该课程已存在于别处（' + (d.locations.length || 1) + ' 处）。提交后批准将链接到既有课程目录，不新建独立文件夹';
+        }
+      } else {
+        hint.style.display = 'none';
+        hint.textContent = '';
+      }
+    } catch (e) {
+      hint.style.display = 'none';
+      hint.textContent = '';
+    }
+  }
+
   // ── 提交 ──
   async function submitCourseRequest(type) {
     var isGeneral = type === 'general';
@@ -392,7 +432,13 @@
       _resetNewCourseForm();
       if (req && req.auto_approved) {
         // v=153：管理员在辖区内提交 → 直接建课免审核
-        alert('课程文件夹已创建！随附文件已进入课程目录，审核通过后即可被下载。');
+        // v=165：课程已存在时自动链接为壳
+        alert(req.will_link
+          ? '课程已存在，已链接到既有课程目录！随附文件已进入该课程，审核通过后即可被下载。'
+          : '课程文件夹已创建！随附文件已进入课程目录，审核通过后即可被下载。');
+      } else if (req && req.will_link) {
+        // v=165：代码已存在且不在本专业树 → 批准后为壳节点
+        alert('提交成功！该课程已存在，批准后将链接到既有课程目录，不新建独立文件夹。');
       } else {
         alert('提交成功！新建课程申请已送审，通过后将创建课程文件夹。');
       }
