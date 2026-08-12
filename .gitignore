@@ -82,8 +82,12 @@ test_data/
 materials/templates/
 materials/static/
 
-# One-time import tools（不用于生产）
+# One-time import tools（不用于生产）—— 但 v174 问答区定时命令用于生产，需跟踪
 materials/management/
+!materials/management/
+materials/management/commands/cleanup_invalid_courses.py
+materials/management/commands/import_pyfa.py
+materials/management/commands/purge_trash.py
 
 # 空测试模板（不用于生产）
 materials/tests.py

@@ -83,6 +83,20 @@ from .admin import (
 # 公告
 from .announcements import api_announcements, api_announcement_delete
 
+# 问答区（新生指南，Phase 1）
+from .qa import (
+    api_qa_tags, api_qa_questions, api_qa_question_detail,
+    api_qa_question_view, api_qa_question_favorite,
+    api_qa_answer_favorite, api_qa_answer_like, api_qa_user_favorites,
+    api_qa_guest_verify, api_qa_ask_click,
+    api_qa_admin_question_create, api_qa_admin_question_update,
+    api_qa_admin_question_delete, api_qa_admin_question_history,
+    api_qa_admin_question_rollback, api_qa_admin_answer_create,
+    api_qa_admin_answer_update, api_qa_admin_answer_delete,
+    api_qa_admin_answer_history, api_qa_admin_answer_rollback,
+    api_qa_admin_records, api_qa_admin_pending, api_qa_admin_upload_image,
+)
+
 # ── 内部辅助函数（供测试套件引用）──
 from .utils import (
     _review_candidates,

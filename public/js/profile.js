@@ -322,9 +322,34 @@
     });
     if (_myFavTab === 'course') {
       _renderMyCourseFavorites(list);
+    } else if (_myFavTab === 'post') {
+      _renderMyPostFavorites(list);
     } else {
       _renderMyFileFavorites(list);
     }
+  }
+
+  function _renderMyPostFavorites(list) {
+    list.innerHTML = '<div class="admin-loading">加载中...</div>';
+    api('/api/qa/user/favorites/').then(function(data) {
+      var items = data.items || [];
+      if (!items.length) {
+        list.innerHTML = _pcEmpty('还没有收藏帖子', '在问答区的问题或回答上点击星星，就能收藏到这里。',
+          '<button class="pc-empty-cta" onclick="showQa()">去问答区逛逛</button>');
+        return;
+      }
+      list.innerHTML = items.map(function(r) {
+        var statusHtml = r.status === 'deleted'
+          ? '<span class="pc-dead-label" style="margin-left:6px;font-size:0.7rem;color:var(--ink-faint)">（已删除）</span>' : '';
+        var meta = [r.tag_l1, r.tag_l2].filter(Boolean).join(' · ') + ' · ' + esc(r.favorited_at);
+        return _pcItem(
+          '<span class="pc-glyph pc-glyph-star">★</span>',
+          esc(r.title) + statusHtml, meta, '',
+          '<span class="pc-side-icon">' + _IC_STAR + '</span>',
+          'qaOpenDetail(' + r.id + ')'
+        );
+      }).join('');
+    }).catch(function() { list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。'); });
   }
 
   function _renderMyCourseFavorites(list) {

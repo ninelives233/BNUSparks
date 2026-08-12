@@ -267,6 +267,7 @@ def api_me(request):
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
         "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
         "can_moderate_general": profile.can_moderate_general if profile else False,
+        "can_moderate_qa": profile.can_moderate_qa if profile else False,
         "daily_download_limit": daily_download_limit,
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,

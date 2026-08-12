@@ -9,7 +9,7 @@ document.addEventListener('click', function(e) {
   var t = e.target;
   if (t.closest('.side-nav a, #mobileDrawer, #menuOpen, #menuClose, .login-btn, '
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
-      + '.header-logo-area, .home-nav-card, .hc-more')) return;
+      + '.header-logo-area, .home-nav-card, .hc-more, #qaView')) return;
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -153,6 +153,8 @@ window.addEventListener('popstate', async function(e) {
     if (state.view === 'myuploads' && typeof renderMyUploadsPage === 'function') renderMyUploadsPage();
     if (state.view === 'mydownloads' && typeof renderMyDownloadsPage === 'function') renderMyDownloadsPage();
     if (state.view === 'myfavorites' && typeof renderMyFavoritesPage === 'function') renderMyFavoritesPage();
+    // 问答区：返回时重新渲染
+    if (state.view === 'qa' && typeof renderQaView === 'function') renderQaView();
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
@@ -250,6 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
       // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
       case 'rankings': showTopDownloaded(); break;
+      case 'qa': showQa(); break;
       case 'leaderboard': showLeaderboard(); break;
       case 'recentAll': showRecentAll(); break;
       case 'profile': showProfile(); break;

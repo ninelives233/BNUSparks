@@ -260,6 +260,7 @@
     localStorage.removeItem('token');
     localStorage.removeItem('_loginTime');
     localStorage.removeItem('_loginRemember');
+    sessionStorage.removeItem('bnusparks_qa_guest'); // 问答区 2026 门控标记
     currentUser = null;
     location.reload();
   }
