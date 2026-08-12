@@ -321,6 +321,13 @@
     renderLeaderboard('upload', 1);
   }
 
+  function showQa() {
+    pushViewState('qa', {});
+    switchView('qa');
+    updateSidebar('qa');
+    if (typeof renderQaView === 'function') renderQaView();
+  }
+
   function switchLeaderboardTab(type) {
     _lbType = type;
     _lbPage = 1;
@@ -745,6 +752,7 @@
       if (view === 'home') showHome();
       else if (view === 'general') showExplorer('通识课');
       else if (view === 'major') showExplorer('专业课');
+      else if (view === 'qa') showQa();
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
       else if (view === 'leaderboard') showLeaderboard();
@@ -760,6 +768,7 @@
       if (view === 'home') showHome();
       else if (view === 'general') showExplorer('通识课');
       else if (view === 'major') showExplorer('专业课');
+      else if (view === 'qa') showQa();
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
       else if (view === 'leaderboard') showLeaderboard();

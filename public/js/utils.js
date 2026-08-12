@@ -128,7 +128,7 @@
     announcements: '/announcements', broad: '/broad', rankings: '/rankings',
     recentAll: '/recent', leaderboard: '/leaderboard', profile: '/profile',
     myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
-    admin: '/manage', notif: '/notifications', newCourse: '/new-course' };
+    admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa' };
 
   // state = { view, expPath, userId, fileId, ... } → 路径字符串；返回 null 表示保持当前 URL
   function routeToPath(view, state) {
@@ -400,6 +400,12 @@
     const btn = document.querySelector('.search-box button');
     if (!input) return;
     function go() {
+      // 问答区视图内：搜索框自动切为帖子搜索（未登录经 2026 门控也可搜）
+      if (typeof isQaViewActive === 'function' && isQaViewActive()) {
+        const qaQ = input.value.trim();
+        if (qaQ && typeof qaSearch === 'function') qaSearch(qaQ);
+        return;
+      }
       // v=164：未登录回车提交在此拦截（点击搜索框/按钮已由 app.js capture 拦截器兜底）
       if (!currentUser) { showLoginModal(); return; }
       const q = input.value.trim(); if (q) searchQuery(q);

@@ -82,6 +82,7 @@ def api_admin_users(request):
             "auto_approve": p.auto_approve if p else False,
             "can_auto_approve": p.can_auto_approve if p else False,
             "can_moderate_general": p.can_moderate_general if p else False,
+            "can_moderate_qa": p.can_moderate_qa if p else False,
             "managed_majors_info": [
                 {"id": c.id, "name": c.name} for c in p.managed_majors.all()
             ] if p else [],
@@ -123,6 +124,7 @@ def api_admin_set_role(request, uid):
     profile.moderated_sections.clear()
     profile.managed_majors.clear()
     profile.can_moderate_general = False
+    profile.can_moderate_qa = False
     profile.auto_approve = False
 
     profile.role = new_role
@@ -145,6 +147,8 @@ def api_admin_set_role(request, uid):
             profile.moderated_sections.set(valid)
         if body.get("can_moderate_general", False):
             profile.can_moderate_general = True
+        if body.get("can_moderate_qa", False):
+            profile.can_moderate_qa = True
         profile.save()
 
     elif new_role == UserProfile.Role.SUB_MODERATOR:
@@ -154,6 +158,8 @@ def api_admin_set_role(request, uid):
                 id__in=_coerce_int_list(moderated_sections)
             ).values_list("id", flat=True))
             profile.moderated_sections.set(valid)
+        if body.get("can_moderate_qa", False):
+            profile.can_moderate_qa = True
         profile.save()
 
     return _ok({"message": f"已设置 {target_user.first_name or target_user.username} 为 {new_role}"})

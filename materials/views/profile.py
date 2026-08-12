@@ -73,6 +73,7 @@ def _profile_payload(request, profile):
         "auto_approve": profile.auto_approve,
         "can_auto_approve": profile.can_auto_approve,
         "can_moderate_general": profile.can_moderate_general,
+        "can_moderate_qa": profile.can_moderate_qa,
         "contact_email": profile.contact_email or "",
         "contact_way": profile.contact_way or "",
         "bio": profile.bio or "",

@@ -193,7 +193,8 @@ def api_report_pending(request):
         candidates__id=user.id,
         status__in=[Report.Status.PENDING, Report.Status.ESCALATED],
     ).select_related("material", "material__course", "material__uploader",
-                     "target_user", "reporter"))
+                     "target_user", "reporter")
+        .prefetch_related("candidates__profile"))
 
     # ── 材料举报聚合（pending）──
     mat_rows = [r for r in qs if r.kind == Report.Kind.MATERIAL]
@@ -218,6 +219,12 @@ def api_report_pending(request):
             if nm not in reporter_names:
                 reporter_names.append(nm)
         mat = latest.material
+        # 直送总管理：候选全是超管（无 L1/L2/L3 可路由时回退 L4 超管 / 课程悬空全超管）
+        cands = list(latest.candidates.all())
+        is_direct_super = bool(cands) and all(
+            getattr(getattr(c, "profile", None), "role", None) == UserProfile.Role.SUPER_ADMIN
+            for c in cands
+        )
         material_groups.append({
             "group_key": f"m:{latest.material_pk}",
             "kind": "material",
@@ -229,6 +236,7 @@ def api_report_pending(request):
             "uploader_name": (mat.uploader_name or _display_name(mat.uploader)) if mat else "匿名",
             "uploader_id": mat.uploader_id if mat else None,
             "material_exists": latest.material_pk in alive_ids if latest.material_pk else False,
+            "is_direct_super": is_direct_super,
             "reporter_count": len(rows),
             "reasons": reasons,
             "reason_labels": [_reason_label(rc) for rc in reasons],
@@ -507,7 +515,8 @@ def api_report_history(request):
     items = qs[(page - 1) * per_page: page * per_page]
 
     def _serialize(r):
-        status_label = dict(Report.Status.choices).get(r.status, r.status)
+        # v173：升级到总管理的举报，在记录里标「已提交」
+        status_label = "已提交" if r.status == Report.Status.ESCALATED else dict(Report.Status.choices).get(r.status, r.status)
         return {
             "report_id": r.id,
             "kind": r.kind,

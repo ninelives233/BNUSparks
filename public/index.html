@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/style.css?v=172">
+<link rel="stylesheet" href="/static/css/style.css?v=174">
 </head>
 <body>
 
@@ -34,6 +34,7 @@
   <a href="#" data-view="home" class="active"><span class="gi gi-nav-home" style="width:18px;height:18px"></span> 首页</a>
   <a href="#" data-view="general"><span class="gi gi-nav-general"></span> 通识课</a>
   <a href="#" data-view="major"><span class="gi gi-nav-major"></span> 专业课</a>
+  <a href="#" data-view="qa"><span class="gi gi-nav-qa"></span> 问答区</a>
   <a href="#" data-view="leaderboard"><span class="gi gi-nav-leaderboard" style="width:16px;height:16px"><span></span></span> 排行榜</a>
   <a href="#" data-view="admin" id="mobAdminLink" style="display:none"><span>⚙️</span> 管理后台</a>
   <a href="#" data-view="about"><span>ℹ️</span> 关于</a>
@@ -45,6 +46,7 @@
   <a href="#" class="active" data-view="home"><span class="sn-icon gi gi-nav-home" style="width:22px;height:22px"></span>首页</a>
   <a href="#" data-view="general"><span class="sn-icon gi gi-nav-general"></span>通识课</a>
   <a href="#" data-view="major"><span class="sn-icon gi gi-nav-major"></span>专业课</a>
+  <a href="#" data-view="qa"><span class="sn-icon gi gi-nav-qa"></span>问答区</a>
   <a href="#" data-view="leaderboard"><span class="sn-icon gi gi-nav-leaderboard"><span></span></span>排行榜</a>
   <a href="#" data-view="admin" id="sideAdminLink" style="display:none"><span class="sn-icon gi" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center">⚙️</span>管理后台</a>
   <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon gi" style="width:3px;height:16px;background:currentColor;border-radius:2px;opacity:0.5"></span>关于</a>
@@ -256,6 +258,25 @@
         <p class="about-subtitle">最受欢迎的资料</p>
       </div>
       <div class="rankings-content" id="rankingsContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 问答区（新生指南）View ═══ -->
+<div class="view-section" id="qaView">
+  <div class="about-page">
+    <div class="container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">问答区</span>
+      </div>
+      <div class="about-header qa-header">
+        <h2 class="about-title">问答区</h2>
+        <p class="about-subtitle">新生指南 · 常见问题与解答</p>
+        <button class="qa-ask-btn" id="qaAskBtn" onclick="qaAskClick()">我要提问</button>
+      </div>
+      <div id="qaContent"><div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div></div>
     </div>
   </div>
 </div>
@@ -493,12 +514,12 @@
     <div class="admin-tabs">
       <button class="admin-tab active" data-tab="overview">📊 概览</button>
       <button class="admin-tab" data-tab="pending">⏳ 待审核</button>
-      <button class="admin-tab" data-tab="reports">🚩 举报受理</button>
       <button class="admin-tab" data-tab="history">📋 审核历史</button>
       <button class="admin-tab" data-tab="deletions">🗑️ 删除记录</button>
       <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none">👥 用户管理</button>
       <button class="admin-tab" data-tab="operations" style="display:none">📋 操作记录</button>
       <button class="admin-tab" data-tab="report-history" style="display:none">📄 举报记录</button>
+      <button class="admin-tab" data-tab="qa-records" id="adminQaTab" style="display:none">💬 论坛记录</button>
     </div>
     <div id="adminContent"></div>
   </div>
@@ -544,6 +565,7 @@
     <div class="mu-tabs">
       <button class="mu-tab active" data-favtab="course" onclick="switchMyFavTab('course')">课程</button>
       <button class="mu-tab" data-favtab="file" onclick="switchMyFavTab('file')">文件</button>
+      <button class="mu-tab" data-favtab="post" onclick="switchMyFavTab('post')">帖子</button>
     </div>
     <div id="myFavoritesPageList" class="pc-list"></div>
   </div>
@@ -910,7 +932,7 @@
       <button class="mf-btn ms-btn" onclick="closeAuthModal()">知道了</button>
     </div>
     <div class="external-access">
-      <a href="mailto:bnusparks@163.com?subject=校外人员访问申请" class="external-access-btn">校外人员访问申请 →</a>
+      <a href="mailto:bnusparks@163.com?subject=校外人员访问申请" class="external-access-btn" onclick="return confirm('考虑到潜在的知识产权风险，此入口的可用性会受到较大局限，我们可能将不再受理以“获取资料”为目的的访问申请。');">校外人员访问申请 →</a>
     </div>
   </div>
 </div>
@@ -1036,15 +1058,18 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=172" defer></script>
-<script src="/static/js/auth.js?v=172" defer></script>
-<script src="/static/js/profile.js?v=172" defer></script>
-<script src="/static/js/notifications.js?v=172" defer></script>
-<script src="/static/js/admin.js?v=172" defer></script>
-<script src="/static/js/views.js?v=172" defer></script>
-<script src="/static/js/explorer.js?v=172" defer></script>
-<script src="/static/js/newcourse.js?v=172" defer></script>
-<script src="/static/js/app.js?v=172" defer></script>
+<script src="/static/js/utils.js?v=174" defer></script>
+<script src="/static/js/auth.js?v=174" defer></script>
+<script src="/static/js/profile.js?v=174" defer></script>
+<script src="/static/js/notifications.js?v=174" defer></script>
+<script src="/static/js/admin.js?v=174" defer></script>
+<script src="/static/js/views.js?v=174" defer></script>
+<script src="/static/js/explorer.js?v=174" defer></script>
+<script src="/static/js/newcourse.js?v=174" defer></script>
+<script src="/static/js/qa.js?v=174" defer></script>
+<script src="/static/js/qa-editor.js?v=174" defer></script>
+<script src="/static/js/qa-admin.js?v=174" defer></script>
+<script src="/static/js/app.js?v=174" defer></script>
 
 </body>
 </html>

@@ -96,6 +96,33 @@ urlpatterns = [
     path("moderation/reports/<int:report_id>/handle/", views.api_report_handle, name="api_report_handle"),
     path("moderation/reports/<int:report_id>/finish/", views.api_report_finish, name="api_report_finish"),
 
+    # 问答区（新生指南，Phase 1）
+    path("qa/tags/", views.api_qa_tags, name="api_qa_tags"),
+    path("qa/questions/", views.api_qa_questions, name="api_qa_questions"),
+    path("qa/questions/<int:qid>/", views.api_qa_question_detail, name="api_qa_question_detail"),
+    path("qa/questions/<int:qid>/view/", views.api_qa_question_view, name="api_qa_question_view"),
+    path("qa/questions/<int:qid>/favorite/", views.api_qa_question_favorite, name="api_qa_question_favorite"),
+    path("qa/answers/<int:aid>/favorite/", views.api_qa_answer_favorite, name="api_qa_answer_favorite"),
+    path("qa/answers/<int:aid>/like/", views.api_qa_answer_like, name="api_qa_answer_like"),
+    path("qa/user/favorites/", views.api_qa_user_favorites, name="api_qa_user_favorites"),
+    path("qa/guest/verify/", views.api_qa_guest_verify, name="api_qa_guest_verify"),
+    path("qa/ask-click/", views.api_qa_ask_click, name="api_qa_ask_click"),
+
+    # 问答区管理（问答区版主 / 超管，Phase 1）
+    path("admin/qa/questions/", views.api_qa_admin_question_create, name="api_qa_admin_question_create"),
+    path("admin/qa/questions/<int:qid>/", views.api_qa_admin_question_update, name="api_qa_admin_question_update"),
+    path("admin/qa/questions/<int:qid>/delete/", views.api_qa_admin_question_delete, name="api_qa_admin_question_delete"),
+    path("admin/qa/questions/<int:qid>/history/", views.api_qa_admin_question_history, name="api_qa_admin_question_history"),
+    path("admin/qa/questions/<int:qid>/rollback/", views.api_qa_admin_question_rollback, name="api_qa_admin_question_rollback"),
+    path("admin/qa/questions/<int:qid>/answers/", views.api_qa_admin_answer_create, name="api_qa_admin_answer_create"),
+    path("admin/qa/answers/<int:aid>/", views.api_qa_admin_answer_update, name="api_qa_admin_answer_update"),
+    path("admin/qa/answers/<int:aid>/delete/", views.api_qa_admin_answer_delete, name="api_qa_admin_answer_delete"),
+    path("admin/qa/answers/<int:aid>/history/", views.api_qa_admin_answer_history, name="api_qa_admin_answer_history"),
+    path("admin/qa/answers/<int:aid>/rollback/", views.api_qa_admin_answer_rollback, name="api_qa_admin_answer_rollback"),
+    path("admin/qa/records/", views.api_qa_admin_records, name="api_qa_admin_records"),
+    path("admin/qa/pending/", views.api_qa_admin_pending, name="api_qa_admin_pending"),
+    path("admin/qa/upload-image/", views.api_qa_admin_upload_image, name="api_qa_admin_upload_image"),
+
     # 用户管理（Iter 3 — 仅 super_admin）
     path("admin/users/", views.api_admin_users, name="api_admin_users"),
     path("admin/users/<int:uid>/role/", views.api_admin_set_role, name="api_admin_set_role"),

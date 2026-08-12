@@ -23,6 +23,7 @@ class UserProfile(models.Model):
         help_text="小版主仅管理这些专业（学院）对应的课程资料审核",
     )
     can_moderate_general = models.BooleanField("可审核通识课", default=False)
+    can_moderate_qa = models.BooleanField("可审核问答区", default=False)
     auto_approve = models.BooleanField("自动托管审核", default=False,
         help_text="开启后自动通过管辖板块内所有新上传的资料")
     can_auto_approve = models.BooleanField("允许自动托管", default=False,
@@ -621,3 +622,201 @@ def _invalidate_material_caches(sender, instance, **kwargs):
     # 否则被删除的文件最长残留 120s 仍显示在「最近上传排行榜」里。
     cache.delete("api_stats_data")
     _bump_user_public_gen(getattr(instance, "uploader_id", None))
+
+
+# ═══════════════════════════════════════════════════════════════
+# 问答区（新生指南）模块 — Phase 1
+# 管理员/问答区版主发布图文问题与回答；已认证学生及通过 2026 门控的
+# 未注册新生浏览、搜索、收藏、点赞。
+# Phase 2 预留（仅建字段/枚举，不实现）：用户提问/回答、最佳回答采纳、
+# 通知、热度排序。
+# ═══════════════════════════════════════════════════════════════
+
+from datetime import date as _date
+
+
+class QaTag(models.Model):
+    """问答区预设分类标签（两级：L1=学院/通用，L2=8 个固定分类）"""
+    name = models.CharField("标签名", max_length=50)
+    icon = models.CharField("图标", max_length=50, blank=True, default="")
+    color = models.CharField("颜色", max_length=20, blank=True, default="")
+    sort_order = models.IntegerField("排序", default=0)
+    level = models.IntegerField("级别", default=2, choices=[(1, "一级"), (2, "二级")])
+    description = models.CharField("说明", max_length=200, blank=True, default="",
+        help_text="二级标签点击后显示的括号内解释")
+
+    class Meta:
+        verbose_name = "问答区标签"
+        verbose_name_plural = "问答区标签"
+        ordering = ["level", "sort_order", "id"]
+
+    def __str__(self):
+        return self.name
+
+
+class QaQuestion(models.Model):
+    """问答区问题（Phase 1 全部由管理员/问答区版主发布）"""
+    class Status(models.TextChoices):
+        PUBLISHED = "published", "已发布"
+        DELETED = "deleted", "已删除"
+        # Phase 2 预留
+        PENDING = "pending", "待审核"
+        REJECTED = "rejected", "已驳回"
+
+    title = models.CharField("标题", max_length=100)
+    content = models.TextField("正文（富文本 HTML）", max_length=1000)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="qa_questions")
+    tag_l1 = models.ForeignKey(QaTag, on_delete=models.PROTECT, related_name="+", verbose_name="一级标签")
+    tag_l2 = models.ForeignKey(QaTag, on_delete=models.PROTECT, related_name="+", verbose_name="二级标签")
+    is_pinned = models.BooleanField("置顶", default=False)
+    pinned_at = models.DateTimeField("置顶时间", null=True, blank=True)
+    status = models.CharField("状态", max_length=20, choices=Status.choices, default=Status.PUBLISHED)
+    view_count = models.IntegerField("浏览量", default=0)
+    favorite_count = models.IntegerField("收藏数", default=0)
+    heat_score = models.IntegerField("热度分（Phase 2 预留）", default=0)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+    deleted_at = models.DateTimeField("删除时间", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "问答区问题"
+        verbose_name_plural = "问答区问题"
+        ordering = ["-is_pinned", "-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
+class QaAnswer(models.Model):
+    """问答区回答（Phase 1 由管理员发布）"""
+    class Status(models.TextChoices):
+        PUBLISHED = "published", "已发布"
+        DELETED = "deleted", "已删除"
+        # Phase 2 预留
+        PENDING = "pending", "待审核"
+        REJECTED = "rejected", "已驳回"
+
+    question = models.ForeignKey(QaQuestion, on_delete=models.CASCADE, related_name="answers")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="qa_answers")
+    content = models.TextField("回答正文（富文本 HTML）", max_length=20000)
+    is_pinned = models.BooleanField("置顶", default=False)
+    pinned_at = models.DateTimeField("置顶时间", null=True, blank=True)
+    like_count = models.IntegerField("点赞数", default=0)
+    is_accepted = models.BooleanField("最佳回答（Phase 2 预留）", default=False)
+    status = models.CharField("状态", max_length=20, choices=Status.choices, default=Status.PUBLISHED)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+    deleted_at = models.DateTimeField("删除时间", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "问答区回答"
+        verbose_name_plural = "问答区回答"
+        ordering = ["-is_pinned", "-created_at"]
+
+    def __str__(self):
+        return f"回答 {self.id}"
+
+
+class QaAnswerLike(models.Model):
+    """回答点赞（Phase 1 用户互动，点赞过的按钮高亮）"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="qa_answer_likes")
+    answer = models.ForeignKey(QaAnswer, on_delete=models.CASCADE, related_name="likes")
+    created_at = models.DateTimeField("点赞时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "回答点赞"
+        verbose_name_plural = "回答点赞"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "answer"], name="uniq_qa_answer_like"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} → 回答{self.answer_id}"
+
+
+class QaFavorite(models.Model):
+    """问答区收藏（问题级 + 回答级；收藏回答自动同时收藏其问题，我的收藏合并显示）
+
+    条件唯一约束（SQLite 有效）：
+    - answer 非空 → 回答级收藏，唯一 (user, answer)
+    - answer 为空 → 问题级收藏，唯一 (user, question)
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="qa_favorites")
+    question = models.ForeignKey(QaQuestion, on_delete=models.CASCADE, related_name="qa_favorited_by")
+    answer = models.ForeignKey(QaAnswer, on_delete=models.CASCADE, related_name="qa_favorited_by",
+                               null=True, blank=True)
+    created_at = models.DateTimeField("收藏时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "问答区收藏"
+        verbose_name_plural = "问答区收藏"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "answer"], condition=Q(answer__isnull=False),
+                                    name="uniq_qa_fav_answer"),
+            models.UniqueConstraint(fields=["user", "question"], condition=Q(answer__isnull=True),
+                                    name="uniq_qa_fav_question"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} → 问题{self.question_id}"
+
+
+class QaEditHistory(models.Model):
+    """问答区编辑留痕（快照式：记录编辑前后标题/正文，支撑回滚）"""
+    TARGET_CHOICES = [("question", "问题"), ("answer", "回答")]
+
+    target_type = models.CharField("目标类型", max_length=10, choices=TARGET_CHOICES)
+    target_id = models.PositiveIntegerField("目标ID")
+    editor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="qa_edit_histories")
+    old_title = models.CharField("编辑前标题", max_length=100, blank=True, default="")
+    new_title = models.CharField("编辑后标题", max_length=100, blank=True, default="")
+    old_content = models.TextField("编辑前正文", blank=True, default="")
+    new_content = models.TextField("编辑后正文", blank=True, default="")
+    created_at = models.DateTimeField("编辑时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "问答区编辑历史"
+        verbose_name_plural = "问答区编辑历史"
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["target_type", "target_id"], name="qa_edit_hist_target")]
+
+    def __str__(self):
+        return f"{self.get_target_type_display()}{self.target_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class QaViewLog(models.Model):
+    """问答区浏览量去重（同一用户每日只算一次浏览）
+
+    条件唯一约束：匿名（user IS NULL）按 (question, date)；登录按 (user, question, date)。
+    SQLite 上单一 unique_together 对匿名 NULL 不去重，故拆两条。
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="qa_views",
+                             null=True, blank=True)
+    question = models.ForeignKey(QaQuestion, on_delete=models.CASCADE, related_name="view_logs")
+    date = models.DateField("浏览日期")
+
+    class Meta:
+        verbose_name = "问答区浏览日志"
+        verbose_name_plural = "问答区浏览日志"
+        constraints = [
+            models.UniqueConstraint(fields=["question", "date"], condition=Q(user__isnull=True),
+                                    name="uniq_qa_view_guest"),
+            models.UniqueConstraint(fields=["user", "question", "date"], condition=Q(user__isnull=False),
+                                    name="uniq_qa_view_user"),
+        ]
+
+    def __str__(self):
+        return f"问题{self.question_id} @ {self.date}"
+
+
+class QaAskClickDaily(models.Model):
+    """「我要提问」按钮无权限点击埋点（当日聚合，日报命令读取）"""
+    date = models.DateField("日期", unique=True)
+    count = models.IntegerField("当日点击", default=0)
+
+    class Meta:
+        verbose_name = "问答区提问点击埋点"
+        verbose_name_plural = "问答区提问点击埋点"
+
+    def __str__(self):
+        return f"{self.date}: {self.count}"
