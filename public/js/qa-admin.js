@@ -1,17 +1,43 @@
 // ═══════════════════════════════════════════════════════════════
 // 问答区管理端（问答区版主 / 超管）
-// 论坛记录 tab、论坛管理 pending、发布/编辑问题与回答、历史回滚、删除/恢复
-// 依赖：qa-editor.js（buildQaEditor / getQaEditorHtml）、utils.js、admin.js 的 overlay 模式
+// 论坛记录 tab（状态筛选）、论坛管理 pending（通过/驳回）、发布/编辑入口、
+// 历史回滚、删除/恢复
+// 依赖：utils.js、admin.js 的 overlay 模式；
+// v175：发布/编辑统一改走独立 qaCompose 视图（qa-compose.js），
+//       此处 openQa* 仅作薄包装保留调用点兼容
 // ═══════════════════════════════════════════════════════════════
 
-// ── 论坛记录（管理后台 tab）──
+// ── 论坛记录（管理后台 tab，v175 加状态筛选）──
+var _qaRecordsStatus = '';
+
+function qaRecordsFilter(status) {
+  _qaRecordsStatus = status;
+  renderAdminQaRecords(document.getElementById('adminContent'), 1);
+}
+
 function renderAdminQaRecords(content, page) {
   content.innerHTML = '<div class="admin-loading">加载中…</div>';
-  api('/api/admin/qa/records/?page=' + page + '&pageSize=10').then(function(data) {
+  var segs = [
+    { v: '', label: '全部' },
+    { v: 'published', label: '已发布' },
+    { v: 'pending', label: '待审核' },
+    { v: 'rejected', label: '已驳回' },
+    { v: 'deleted', label: '已删除' }
+  ];
+  var segHtml = '<div class="pc-type-bar"><span class="pc-type-label">💬 论坛记录</span>' +
+    '<div class="pc-seg" role="tablist">';
+  segs.forEach(function(s) {
+    segHtml += '<button class="pc-seg-btn' + (_qaRecordsStatus === s.v ? ' active' : '') + '" data-status="' + s.v +
+      '" onclick="qaRecordsFilter(\'' + s.v + '\')">' + s.label + '</button>';
+  });
+  segHtml += '</div></div>';
+
+  var qs = [];
+  if (_qaRecordsStatus) qs.push('status=' + encodeURIComponent(_qaRecordsStatus));
+  var url = '/api/admin/qa/records/?page=' + page + '&pageSize=10' + (qs.length ? '&' + qs.join('&') : '');
+  api(url).then(function(data) {
     var items = data.items || [];
-    var html = '<div class="pc-toolbar" style="margin-bottom:12px">' +
-      '<span class="pc-type-label">💬 论坛记录 — 问答区文字内容过审情况</span>' +
-    '</div>';
+    var html = segHtml;
     if (!items.length) {
       html += '<div class="admin-empty">暂无问答区内容，去发布第一篇吧。</div>';
     } else {
@@ -67,16 +93,50 @@ function _qaRecordCardHtml(it) {
   '</div>';
 }
 
-// ── 论坛管理待审（Phase 2 预留卡片渲染）──
+// ── 论坛管理待审（v175：真实 pending 列表 + 通过/驳回）──
 function _qaForumPendingCardHtml(item) {
   var statusLabel = _QA_STATUS_LABEL[item.status] || item.status;
+  var kindIcon = item.kind === 'answer' ? '💬' : '❓';
+  var reasonBtn = '驳回原因（可选）';
   return '<div class="qa-record-card">' +
     '<div class="qa-record-main">' +
-      '<div class="qa-record-title">❓ ' + esc(item.title || '') +
+      '<div class="qa-record-title">' + kindIcon + ' ' + esc(item.title || '') +
         '<span class="review-badge review-badge-pending" style="margin-left:6px">' + statusLabel + '</span></div>' +
-      '<div class="qa-record-meta">' + esc(item.author || '') + ' · ' + esc(item.created_at || '') + '</div>' +
+      '<div class="qa-record-meta">' + (item.kind === 'answer' ? '回答' : '问题') + ' · ' + esc(item.author || '') + ' · ' + esc(item.created_at || '') + '</div>' +
+      (item.content_preview ? '<div class="qa-record-meta">' + esc(item.content_preview) + '</div>' : '') +
+    '</div>' +
+    '<div class="qa-record-actions">' +
+      '<button class="admin-btn admin-btn-approve admin-btn-sm" onclick="qaAdminApprove(\'' + item.kind + '\',' + item.id + ')">通过</button>' +
+      '<button class="admin-btn admin-btn-reject admin-btn-sm" onclick="qaAdminReject(\'' + item.kind + '\',' + item.id + ')">驳回</button>' +
     '</div>' +
   '</div>';
+}
+
+// 通过 / 驳回待审内容（后端原子条件更新防双审；驳回带原因则通知作者）
+function qaAdminApprove(kind, id) {
+  api(kind === 'question'
+      ? '/api/admin/qa/questions/' + id + '/approve/'
+      : '/api/admin/qa/answers/' + id + '/approve/', { method: 'POST' })
+    .then(function() {
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert((err && (err.message || err.error)) || '操作失败');
+      renderAdminPending(document.getElementById('adminContent'));
+    });
+}
+
+function qaAdminReject(kind, id) {
+  var reason = prompt('请输入驳回原因（可选，填写后将通知作者）：', '');
+  if (reason === null) return; // 用户取消
+  api(kind === 'question'
+      ? '/api/admin/qa/questions/' + id + '/reject/'
+      : '/api/admin/qa/answers/' + id + '/reject/', { method: 'POST', body: { reason: reason } })
+    .then(function() {
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert((err && (err.message || err.error)) || '操作失败');
+      renderAdminPending(document.getElementById('adminContent'));
+    });
 }
 
 // ── 管理动作 ──
@@ -166,168 +226,15 @@ function qaRollback(kind, id, historyId, btn) {
   });
 }
 
-// ── 发布 / 编辑 问题 ──
+// ── 发布 / 编辑 问题 · 回答（v175：薄包装 → 独立 qaCompose 视图）──
 function openQaPublishModal() {
-  openQaQuestionEditor(null);
+  showQaCompose({ type: 'question', action: 'create' });
 }
 
 function openQaQuestionEditor(qid) {
-  var isEdit = !!qid;
-  var title = '', content = '', tagL1 = '', tagL2 = '', pinned = false;
-  var load = isEdit ? api('/api/admin/qa/questions/' + qid + '/') : Promise.resolve(null);
-  load.then(function(q) {
-    if (q) { title = q.title; content = q.content; tagL1 = q.tag_l1_id; tagL2 = q.tag_l2_id; pinned = q.is_pinned; }
-    _buildQaQuestionModal(qid, title, content, tagL1, tagL2, pinned, isEdit);
-  }).catch(function() { alert('加载问题失败'); });
+  showQaCompose({ type: 'question', action: qid ? 'edit' : 'create', qid: qid || undefined });
 }
 
-function _buildQaQuestionModal(qid, title, content, tagL1, tagL2, pinned, isEdit) {
-  api('/api/qa/tags/').then(function(tags) {
-    var old = document.querySelector('.qa-editor-overlay');
-    if (old) old.remove();
-    var overlay = document.createElement('div');
-    overlay.className = 'modal-overlay qa-editor-overlay';
-    overlay.innerHTML =
-      '<div class="modal-card modal-card-wide">' +
-        '<button class="modal-close" onclick="closeQaEditorOverlay(this)">✕</button>' +
-        '<h3 class="modal-title">' + (isEdit ? '编辑问题' : '发布问题') + '</h3>' +
-        '<div class="mf-group"><label>标题</label>' +
-          '<input type="text" id="qeTitle" class="mf-input" maxlength="100" placeholder="一句话概括问题" value="' + esc(title) + '"></div>' +
-        '<div class="qe-tags-row">' +
-          '<div class="mf-group"><label>一级标签</label><select id="qeTagL1" class="mf-input" onchange="qeTagL1Changed()"></select></div>' +
-          '<div class="mf-group"><label>二级标签</label><select id="qeTagL2" class="mf-input" onchange="qeTagL2Changed()"></select></div>' +
-        '</div>' +
-        '<div id="qeTagDesc" class="qa-tag-desc"></div>' +
-        '<div class="mf-group"><label>描述（富文本，≤1000 字）</label><div id="qeEditorContainer"></div></div>' +
-        '<label class="qe-pin-row"><input type="checkbox" id="qePin" ' + (pinned ? 'checked' : '') + '> 置顶此问题（全局最多 5 篇）</label>' +
-        '<div id="qeError" class="mf-error" style="display:none"></div>' +
-        '<div class="qe-editor-actions"><button class="qa-gate-btn" onclick="submitQaQuestionEditor(this)">' + (isEdit ? '保存' : '发布') + '</button></div>' +
-      '</div>';
-    document.body.appendChild(overlay);
-    lockScroll();
-
-    // 标签下拉
-    var sel1 = document.getElementById('qeTagL1');
-    var sel2 = document.getElementById('qeTagL2');
-    sel1.innerHTML = '<option value="">选择一级标签</option>' + (tags.l1 || []).map(function(t) {
-      return '<option value="' + t.id + '"' + (String(tagL1) === String(t.id) ? ' selected' : '') + '>' + esc(t.name) + '</option>';
-    }).join('');
-    sel2.innerHTML = '<option value="">选择二级标签</option>' + (tags.l2 || []).map(function(t) {
-      return '<option value="' + t.id + '"' + (String(tagL2) === String(t.id) ? ' selected' : '') + '>' + esc(t.name) + '</option>';
-    }).join('');
-    // 编辑器
-    var editable = buildQaEditor(document.getElementById('qeEditorContainer'), content || '');
-    overlay.setAttribute('data-editable', 'qeEditorContainer');
-    window._qaEditable = editable;
-    qeTagL2Changed();
-  }).catch(function() { alert('加载标签失败'); });
-}
-
-function qeTagL1Changed() {
-  // 一级标签切换不重置二级（8 个固定二级对所有一级通用）
-}
-
-function qeTagL2Changed() {
-  var desc = document.getElementById('qeTagDesc');
-  var sel2 = document.getElementById('qeTagL2');
-  if (!desc || !sel2) return;
-  var opt = sel2.options[sel2.selectedIndex];
-  var d = opt ? opt.getAttribute('data-desc') : '';
-  desc.textContent = d ? (opt.text + '（' + d + '）') : '';
-}
-
-function submitQaQuestionEditor(btn) {
-  var isEdit = !!btn.dataset.edit;
-  var title = document.getElementById('qeTitle').value.trim();
-  var tagL1 = document.getElementById('qeTagL1').value;
-  var tagL2 = document.getElementById('qeTagL2').value;
-  var pin = document.getElementById('qePin').checked;
-  var editable = window._qaEditable;
-  var content = editable ? getQaEditorHtml(editable) : '';
-  var errEl = document.getElementById('qeError');
-  if (!title) { errEl.style.display = 'block'; errEl.textContent = '请填写标题'; return; }
-  if (!tagL1 || !tagL2) { errEl.style.display = 'block'; errEl.textContent = '请选择一级和二级标签'; return; }
-  if (!content) { errEl.style.display = 'block'; errEl.textContent = '请填写描述正文'; return; }
-  btn.disabled = true;
-  var body = { title: title, content: content, tag_l1: parseInt(tagL1), tag_l2: parseInt(tagL2), is_pinned: pin };
-  var qid = btn.dataset.qid;
-  var req = qid
-    ? api('/api/admin/qa/questions/' + qid + '/', { method: 'PUT', body: body })
-    : api('/api/admin/qa/questions/', { method: 'POST', body: body });
-  req.then(function() {
-    var overlay = btn.closest('.qa-editor-overlay');
-    if (overlay) overlay.remove();
-    unlockScroll();
-    window._qaEditable = null;
-    renderAdminQaRecords(document.getElementById('adminContent'), 1);
-  }).catch(function(err) {
-    errEl.style.display = 'block';
-    errEl.textContent = (err && (err.message || err.error)) || '保存失败';
-    btn.disabled = false;
-  });
-}
-
-function closeQaEditorOverlay(closeBtn) {
-  var overlay = closeBtn.closest('.qa-editor-overlay');
-  if (overlay) overlay.remove();
-  unlockScroll();
-  window._qaEditable = null;
-}
-
-// ── 发布 / 编辑 回答 ──
 function openQaAnswerEditor(qid, aid) {
-  var isEdit = !!aid;
-  var load = isEdit ? api('/api/admin/qa/answers/' + aid + '/') : Promise.resolve(null);
-  load.then(function(a) {
-    var content = a ? a.content : '';
-    var pinned = a ? a.is_pinned : false;
-    var old = document.querySelector('.qa-editor-overlay');
-    if (old) old.remove();
-    var overlay = document.createElement('div');
-    overlay.className = 'modal-overlay qa-editor-overlay';
-    overlay.innerHTML =
-      '<div class="modal-card modal-card-wide">' +
-        '<button class="modal-close" onclick="closeQaEditorOverlay(this)">✕</button>' +
-        '<h3 class="modal-title">' + (isEdit ? '编辑回答' : '发布回答') + '</h3>' +
-        '<div class="mf-group"><label>回答正文（富文本，≤2 万字）</label><div id="qeAnswerEditorContainer"></div></div>' +
-        '<label class="qe-pin-row"><input type="checkbox" id="qeAnsPin" ' + (pinned ? 'checked' : '') + '> 在回答中置顶展示</label>' +
-        '<div id="qeAnsError" class="mf-error" style="display:none"></div>' +
-        '<div class="qe-editor-actions"><button class="qa-gate-btn" onclick="submitQaAnswerEditor(this)">' + (isEdit ? '保存' : '发布') + '</button></div>' +
-      '</div>';
-    document.body.appendChild(overlay);
-    lockScroll();
-    window._qaEditable = buildQaEditor(document.getElementById('qeAnswerEditorContainer'), content || '');
-    if (isEdit) {
-      var btn = overlay.querySelector('.qe-editor-actions .qa-gate-btn');
-      btn.dataset.aid = aid;
-      btn.dataset.qid = qid;
-    } else {
-      var btn2 = overlay.querySelector('.qe-editor-actions .qa-gate-btn');
-      btn2.dataset.qid = qid;
-    }
-  }).catch(function() { alert('加载回答失败'); });
-}
-
-function submitQaAnswerEditor(btn) {
-  var qid = btn.dataset.qid;
-  var aid = btn.dataset.aid;
-  var pin = document.getElementById('qeAnsPin').checked;
-  var content = window._qaEditable ? getQaEditorHtml(window._qaEditable) : '';
-  var errEl = document.getElementById('qeAnsError');
-  if (!content) { errEl.style.display = 'block'; errEl.textContent = '请填写回答正文'; return; }
-  btn.disabled = true;
-  var req = aid
-    ? api('/api/admin/qa/answers/' + aid + '/', { method: 'PUT', body: { content: content, is_pinned: pin } })
-    : api('/api/admin/qa/questions/' + qid + '/answers/', { method: 'POST', body: { content: content, is_pinned: pin } });
-  req.then(function() {
-    var overlay = btn.closest('.qa-editor-overlay');
-    if (overlay) overlay.remove();
-    unlockScroll();
-    window._qaEditable = null;
-    renderAdminQaRecords(document.getElementById('adminContent'), 1);
-  }).catch(function(err) {
-    errEl.style.display = 'block';
-    errEl.textContent = (err && (err.message || err.error)) || '保存失败';
-    btn.disabled = false;
-  });
+  showQaCompose({ type: 'answer', action: aid ? 'edit' : 'create', qid: qid || undefined, aid: aid || undefined });
 }

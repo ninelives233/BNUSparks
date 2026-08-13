@@ -4,7 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/style.css?v=174">
+<link rel="stylesheet" href="/static/css/tokens.css?v=179">
+<link rel="stylesheet" href="/static/css/base.css?v=179">
+<link rel="stylesheet" href="/static/css/admin.css?v=179">
+<link rel="stylesheet" href="/static/css/user.css?v=179">
+<link rel="stylesheet" href="/static/css/files.css?v=179">
+<link rel="stylesheet" href="/static/css/course.css?v=179">
+<link rel="stylesheet" href="/static/css/announcement.css?v=179">
+<link rel="stylesheet" href="/static/css/qa.css?v=179">
+<link rel="stylesheet" href="/static/css/components.css?v=179">
 </head>
 <body>
 
@@ -272,11 +280,32 @@
         <span class="bc-current">问答区</span>
       </div>
       <div class="about-header qa-header">
-        <h2 class="about-title">问答区</h2>
-        <p class="about-subtitle">新生指南 · 常见问题与解答</p>
-        <button class="qa-ask-btn" id="qaAskBtn" onclick="qaAskClick()">我要提问</button>
+        <div class="qa-head-left">
+          <h2 class="about-title">问答区</h2>
+          <p class="about-subtitle">常见问题与解答</p>
+        </div>
+        <div class="qa-head-actions">
+          <button class="qa-filter-btn" id="qaFilterBtn" onclick="toggleQaFilter()">筛选</button>
+          <button class="qa-ask-btn" id="qaAskBtn" onclick="qaAskClick()">我要提问</button>
+        </div>
       </div>
       <div id="qaContent"><div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 问答区 · 独立发布/编辑视图（v175） ═══ -->
+<div class="view-section" id="qaComposeView">
+  <div class="about-page">
+    <div class="container qa-compose-container">
+      <div class="breadcrumb">
+        <a onclick="showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <a onclick="showQa()">问答区</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current" id="qaComposeTitle">发布问题</span>
+      </div>
+      <div id="qaComposeContent"><div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div></div>
     </div>
   </div>
 </div>
@@ -1058,18 +1087,27 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=174" defer></script>
-<script src="/static/js/auth.js?v=174" defer></script>
-<script src="/static/js/profile.js?v=174" defer></script>
-<script src="/static/js/notifications.js?v=174" defer></script>
-<script src="/static/js/admin.js?v=174" defer></script>
-<script src="/static/js/views.js?v=174" defer></script>
-<script src="/static/js/explorer.js?v=174" defer></script>
-<script src="/static/js/newcourse.js?v=174" defer></script>
-<script src="/static/js/qa.js?v=174" defer></script>
-<script src="/static/js/qa-editor.js?v=174" defer></script>
-<script src="/static/js/qa-admin.js?v=174" defer></script>
-<script src="/static/js/app.js?v=174" defer></script>
+<script src="/static/js/utils.js?v=179" defer></script>
+<script src="/static/js/auth.js?v=179" defer></script>
+<script src="/static/js/profile.js?v=179" defer></script>
+<script src="/static/js/notifications.js?v=179" defer></script>
+<script src="/static/js/admin-core.js?v=179" defer></script>
+<script src="/static/js/admin-pending.js?v=179" defer></script>
+<script src="/static/js/admin-records.js?v=179" defer></script>
+<script src="/static/js/admin-users.js?v=179" defer></script>
+<script src="/static/js/views.js?v=179" defer></script>
+<script src="/static/js/explorer-core.js?v=179" defer></script>
+<script src="/static/js/explorer-upload.js?v=179" defer></script>
+<script src="/static/js/explorer-mgmt.js?v=179" defer></script>
+<script src="/static/js/explorer-render.js?v=179" defer></script>
+<script src="/static/js/explorer-file.js?v=179" defer></script>
+<script src="/static/js/explorer-preview.js?v=179" defer></script>
+<script src="/static/js/newcourse.js?v=179" defer></script>
+<script src="/static/js/qa.js?v=179" defer></script>
+<script src="/static/js/qa-editor.js?v=179" defer></script>
+<script src="/static/js/qa-admin.js?v=179" defer></script>
+<script src="/static/js/qa-compose.js?v=179" defer></script>
+<script src="/static/js/app.js?v=179" defer></script>
 
 </body>
 </html>

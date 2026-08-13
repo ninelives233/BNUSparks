@@ -128,7 +128,8 @@
     announcements: '/announcements', broad: '/broad', rankings: '/rankings',
     recentAll: '/recent', leaderboard: '/leaderboard', profile: '/profile',
     myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
-    admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa' };
+    admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa',
+    qaCompose: '/qa/compose' };
 
   // state = { view, expPath, userId, fileId, ... } → 路径字符串；返回 null 表示保持当前 URL
   function routeToPath(view, state) {
@@ -139,6 +140,19 @@
     if (view === 'userPublic') return state && state.userId ? '/user/' + state.userId : null;
     if (view === 'fileDetail') return state && state.fileId ? '/file/' + state.fileId : null;
     if (view === 'drawer') return null;
+    // qaCompose 动态子路径：/qa/compose[/<type>[/<action>[/<id>]]]，可分享/可刷新（v175）
+    if (view === 'qaCompose') {
+      var qp = '/qa/compose';
+      if (state && state.type) {
+        qp += '/' + state.type;
+        if (state.action) {
+          qp += '/' + state.action;
+          var qpid = state.type === 'answer' ? (state.aid || 0) : (state.qid || 0);
+          if (qpid) qp += '/' + qpid;
+        }
+      }
+      return qp;
+    }
     return VIEW_ROUTES[view] || null;
   }
 
@@ -156,6 +170,17 @@
     if (head === 'file') {
       var fid = parseInt(segs[1], 10);
       return fid ? { view: 'fileDetail', fileId: fid } : null;
+    }
+    // /qa/compose 必须在通用 VIEW_ROUTES 查找前处理，否则被 /qa 吃掉（v175）
+    if (head === 'qa' && segs[1] === 'compose') {
+      var cm = { view: 'qaCompose' };
+      if (segs[2]) cm.type = segs[2];
+      if (segs[3]) cm.action = segs[3];
+      if (segs[3] && segs[4]) {
+        var cmid = parseInt(segs[4], 10);
+        if (cmid) cm[segs[3] === 'answer' ? 'aid' : 'qid'] = cmid;
+      }
+      return cm;
     }
     var v = Object.keys(VIEW_ROUTES).find(function(k) { return VIEW_ROUTES[k] === '/' + head; });
     return v ? { view: v } : null;

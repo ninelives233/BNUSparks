@@ -108,7 +108,7 @@ def api_course_files(request, course_code):
 
     materials = Material.objects.filter(q_filter).select_related(
         "material_type", "course", "uploader", "uploader__profile"
-    ).order_by("-created_at")
+    ).order_by("-is_pinned", "-created_at")
 
     # 注释收藏数
     from django.db.models import Count
@@ -168,6 +168,7 @@ def api_course_files(request, course_code):
             ),
             "can_download": m.is_approved or (user is not None and m.uploader_id == user.id),
             "can_delete": user is not None and _user_can_edit_material(user, m),
+            "is_pinned": m.is_pinned,
         }
 
     return _ok([_serialize_file(m) for m in materials])

@@ -17,6 +17,7 @@ var _qaSort = 'default';
 var _qaTotalPages = 1;
 var _qaTags = null;       // 两级标签缓存
 var _qaPhInitialized = false;
+var _qaFilterOpen = false;   // 筛选面板默认收起（v177：筛选按钮展开/收起）
 
 // ── 图标（与全站 24×24 stroke 风格一致）──
 var _QA_IC_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" aria-hidden="true"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/></svg>';
@@ -64,9 +65,9 @@ function showQaGate() {
   overlay.innerHTML =
     '<div class="modal-card qa-gate-card">' +
       '<button class="modal-close" onclick="closeQaGate()">✕</button>' +
-      '<h3 class="modal-title">新生导航 · 学号验证</h3>' +
-      '<p class="qa-gate-desc">问答区面向 BNU 新生开放。请填写学号完成验证（前四位需为 2026）。</p>' +
-      '<input type="text" id="qaGateSid" class="qa-gate-input" maxlength="20" placeholder="请输入学号（如 2026012345）" autocomplete="off">' +
+      '<h3 class="modal-title">学号验证</h3>' +
+      '<p class="qa-gate-desc">若邮箱未激活，请填写学号完成验证。</p>' +
+      '<input type="text" id="qaGateSid" class="qa-gate-input" maxlength="20" placeholder="请输入学号" autocomplete="off">' +
       '<div id="qaGateError" class="qa-gate-error" style="display:none"></div>' +
       '<div class="qa-gate-actions">' +
         '<button class="qa-gate-btn" onclick="submitQaGate()">验证并进入</button>' +
@@ -123,6 +124,7 @@ async function renderQaList() {
     var data = await api('/api/qa/questions/' + params);
     _qaTotalPages = data.total_pages || 1;
     container.innerHTML = _qaListHtml(data);
+    _updateQaFilterButton();
   } catch (err) {
     container.innerHTML = '<div class="empty-state compact" style="padding:40px">加载失败，请重试。</div>';
   }
@@ -132,16 +134,34 @@ function _qaListHtml(data) {
   var html = '';
   // 筛选工具栏
   html += _qaFilterBarHtml();
+  // 置顶精选区：仅无筛选且第一页时独立展示（上限 5 由后端保障）
+  var showPinned = !_qaTagL1 && !_qaTagL2 && _qaPage === 1;
+  var pinnedItems = [];
+  var listItems = data.items;
+  if (showPinned) {
+    pinnedItems = data.items.filter(function(q) { return q.is_pinned; });
+    listItems = data.items.filter(function(q) { return !q.is_pinned; });
+  }
+  if (pinnedItems.length) {
+    html += '<div class="qa-pinned-section">' +
+      '<div class="qa-pinned-head">' +
+        '<span class="qa-pinned-title">' + _QA_IC_PIN + ' 精选</span>' +
+        '<span class="qa-pinned-sub">置顶推荐 · 管理员精选</span>' +
+      '</div>' +
+      '<div class="qa-pinned-list">';
+    pinnedItems.forEach(function(q) { html += _qaPinCardHtml(q); });
+    html += '</div></div>';
+  }
   // 列表
-  if (!data.items.length) {
+  if (!listItems.length) {
     html += '<div class="qa-empty">' +
       '<div class="qa-empty-icon">🔍</div>' +
-      '<div class="qa-empty-title">暂无相关问答</div>' +
+      '<div class="qa-empty-title">' + (pinnedItems.length ? '暂无其他问答' : '暂无相关问答') + '</div>' +
       '<div class="qa-empty-desc">换个筛选条件或关键词试试</div>' +
     '</div>';
   } else {
     html += '<div class="qa-list">';
-    data.items.forEach(function(q) {
+    listItems.forEach(function(q) {
       html += _qaCardHtml(q);
     });
     html += '</div>';
@@ -154,22 +174,23 @@ function _qaListHtml(data) {
 function _qaFilterBarHtml() {
   var l1 = (_qaTags && _qaTags.l1) || [];
   var l2 = (_qaTags && _qaTags.l2) || [];
-  var html = '<div class="qa-toolbar">';
+  // 外层 qa-toolbar 是 grid 容器（动画高度），内层 qa-toolbar-inner 承载卡片样式（v178）
+  var html = '<div class="qa-toolbar' + (_qaFilterOpen ? '' : ' qa-toolbar-collapsed') + '"><div class="qa-toolbar-inner">';
 
-  // 一级标签
-  var l1Html = '<button class="qa-pill' + (!_qaTagL1 ? ' on' : '') + '" onclick="qaFilterL1(\'\')">全部</button>';
+  // 一级标签（accent 系徽章，暖色层级更高）
+  var l1Html = '<button class="qa-pill qa-pill-l1' + (!_qaTagL1 ? ' on' : '') + '" onclick="qaFilterL1(\'\')">全部</button>';
   l1.forEach(function(t) {
-    l1Html += '<button class="qa-pill' + (_qaTagL1 == t.id ? ' on' : '') + '" onclick="qaFilterL1(' + t.id + ')">' + esc(t.name) + '</button>';
+    l1Html += '<button class="qa-pill qa-pill-l1' + (_qaTagL1 == t.id ? ' on' : '') + '" onclick="qaFilterL1(' + t.id + ')">' + esc(t.name) + '</button>';
   });
   html += '<div class="qa-filter-row">' +
     '<span class="qa-filter-label">一级</span>' +
     '<div class="qa-pills qa-pills-l1">' + l1Html + '</div>' +
   '</div>';
 
-  // 二级标签
-  var l2Html = '<button class="qa-pill' + (!_qaTagL2 ? ' on' : '') + '" onclick="qaFilterL2(\'\')">全部</button>';
+  // 二级标签（primary 系徽章）
+  var l2Html = '<button class="qa-pill qa-pill-l2' + (!_qaTagL2 ? ' on' : '') + '" onclick="qaFilterL2(\'\')">全部</button>';
   l2.forEach(function(t) {
-    l2Html += '<button class="qa-pill' + (_qaTagL2 == t.id ? ' on' : '') + '" onclick="qaFilterL2(' + t.id + ')">' + esc(t.name) + '</button>';
+    l2Html += '<button class="qa-pill qa-pill-l2' + (_qaTagL2 == t.id ? ' on' : '') + '" onclick="qaFilterL2(' + t.id + ')">' + esc(t.name) + '</button>';
   });
   html += '<div class="qa-filter-row">' +
     '<span class="qa-filter-label">二级</span>' +
@@ -188,28 +209,56 @@ function _qaFilterBarHtml() {
     '<button class="qa-pill qa-sort' + (_qaSort === 'latest' ? ' on' : '') + '" onclick="qaSort(\'latest\')">最新</button>' +
   '</div>';
 
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
+// 两级标签徽章（L1 accent 系 / L2 primary 系，v175 后 v177 互换）
+function _qaBadgesHtml(q) {
+  var h = '';
+  if (q.tag_l1) h += '<span class="qa-badge qa-badge-l1">' + esc(q.tag_l1) + '</span>';
+  if (q.tag_l2) h += '<span class="qa-badge qa-badge-l2">' + esc(q.tag_l2) + '</span>';
+  return h;
+}
+
+// 紧凑统计（去竖线，v175）
+function _qaStatHtml(q) {
+  return '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + q.view_count + '</b></span>' +
+    '<span class="qa-stat">' + window.ICONS.star + '<b>' + q.favorite_count + '</b></span>' +
+    '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + q.answer_count + '</b></span>';
+}
+
 function _qaCardHtml(q) {
-  var metaBits = [];
-  if (q.tag_l1) metaBits.push(esc(q.tag_l1));
-  if (q.tag_l2) metaBits.push(esc(q.tag_l2));
-  metaBits.push(_QA_IC_EYE + ' ' + q.view_count);
-  metaBits.push(window.ICONS.star + ' ' + q.favorite_count);
-  metaBits.push(_QA_IC_ANSWER + ' ' + q.answer_count);
+  var badges = _qaBadgesHtml(q);
   var pinHtml = q.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '';
-  return '<div class="qa-card" onclick="qaOpenDetail(' + q.id + ')">' +
+  return '<div class="qa-card' + (q.is_pinned ? ' qa-card--pinned' : '') + '" onclick="qaOpenDetail(' + q.id + ')">' +
     '<div class="qa-card-head">' +
-      pinHtml +
+      (badges ? '<span class="qa-card-tags">' + badges + '</span>' : '') +
+      (pinHtml ? pinHtml : '') +
       '<span class="qa-card-date">' + esc(q.created_at) + '</span>' +
     '</div>' +
     '<div class="qa-card-title">' + esc(q.title) + '</div>' +
     (q.content_preview ? '<div class="qa-card-preview">' + esc(q.content_preview) + '</div>' : '') +
     '<div class="qa-card-foot">' +
       '<span class="qa-card-author">' + esc(q.author) + '</span>' +
-      '<span class="qa-card-meta">' + metaBits.join('<span class="qa-meta-sep"></span>') + '</span>' +
+      '<span class="qa-card-meta">' + _qaStatHtml(q) + '</span>' +
+    '</div>' +
+  '</div>';
+}
+
+// 置顶精选卡（v175：accent 左边条 + 浅底，与普通卡形成权重差）
+function _qaPinCardHtml(q) {
+  return '<div class="qa-pin-card" onclick="qaOpenDetail(' + q.id + ')">' +
+    '<div class="qa-pin-main">' +
+      '<div class="qa-pin-title">' + esc(q.title) + '</div>' +
+      (q.content_preview ? '<div class="qa-pin-preview">' + esc(q.content_preview) + '</div>' : '') +
+    '</div>' +
+    '<div class="qa-pin-side">' +
+      '<div class="qa-pin-badges">' + _qaBadgesHtml(q) + '</div>' +
+      '<div class="qa-pin-meta">' +
+        '<span class="qa-card-author">' + esc(q.author) + '</span>' +
+        '<span class="qa-card-meta">' + _qaStatHtml(q) + '</span>' +
+      '</div>' +
     '</div>' +
   '</div>';
 }
@@ -254,6 +303,22 @@ function qaGoPage(p) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ── 筛选面板展开/收起（v177）──
+function toggleQaFilter() {
+  _qaFilterOpen = !_qaFilterOpen;
+  var panel = document.querySelector('#qaContent .qa-toolbar');
+  if (panel) panel.classList.toggle('qa-toolbar-collapsed', !_qaFilterOpen);
+  _updateQaFilterButton();
+}
+
+function _updateQaFilterButton() {
+  var b = document.getElementById('qaFilterBtn');
+  if (!b) return;
+  var hasFilter = !!_qaTagL1 || !!_qaTagL2 || _qaSort !== 'default';
+  b.classList.toggle('open', _qaFilterOpen);
+  b.classList.toggle('active', hasFilter);
+}
+
 // ── 详情 ──
 function qaOpenDetail(id) {
   if (typeof pushViewState === 'function') pushViewState('qa', { qaId: id });
@@ -294,21 +359,29 @@ function _qaDetailHtml(d) {
   // 问题卡
   var favState = d.is_favorited ? 'on' : '';
   var favIcon = window.ICONS[d.is_favorited ? 'starFilled' : 'star'];
-  var metaBits = [];
-  if (d.tag_l1) metaBits.push(esc(d.tag_l1));
-  if (d.tag_l2) metaBits.push(esc(d.tag_l2));
-  metaBits.push(_QA_IC_EYE + ' ' + d.view_count);
-  metaBits.push(_QA_IC_ANSWER + ' ' + d.answers.length);
+  var badges = _qaBadgesHtml({ tag_l1: d.tag_l1, tag_l2: d.tag_l2 });
+  var stats = '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + d.view_count + '</b></span>' +
+    '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + d.answers.length + '</b></span>';
   html += '<div class="qa-q-card">' +
     (d.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '') +
     '<h3 class="qa-q-title">' + esc(d.title) + '</h3>' +
-    '<div class="qa-q-meta">' + metaBits.join('<span class="qa-meta-sep"></span>') + '</div>' +
+    (badges ? '<div class="qa-q-tags">' + badges + '</div>' : '') +
     '<div class="qa-rich">' + d.content + '</div>' +
+    '<div class="qa-q-meta">' + stats + '</div>' +
     '<div class="qa-q-foot">' +
       '<span class="qa-card-author">' + esc(d.author) + ' · ' + esc(d.created_at) + '</span>' +
       '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleQuestionFav(' + d.id + ', this)">' + favIcon + '<span>' + (d.is_favorited ? '已收藏' : '收藏') + '</span><b class="qa-count">' + d.favorite_count + '</b></button>' +
     '</div>' +
   '</div>';
+
+  // 发布回答入口（仅问答区版主/超管，v175）
+  var canManage = !!(currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa));
+  if (canManage) {
+    html += '<div class="qa-answer-publish">' +
+      '<span class="qa-answer-publish-hint">你是问答区版主</span>' +
+      '<button class="qa-gate-btn qa-answer-publish-btn" onclick="showQaCompose({ type: \'answer\', action: \'create\', qid: ' + d.id + ' })">发布回答</button>' +
+    '</div>';
+  }
 
   // 回答列表
   if (d.answers.length) {
@@ -449,9 +522,9 @@ async function qaSearch(q) {
 function qaAskClick() {
   var canAsk = currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa);
   if (canAsk) {
-    // 问答区版主 / 超管 → 打开发布器（qa-admin.js 提供）
-    if (typeof openQaPublishModal === 'function') {
-      openQaPublishModal();
+    // 问答区版主 / 超管 → 独立发布视图（v175 qa-compose.js）
+    if (typeof showQaCompose === 'function') {
+      showQaCompose({ type: 'question', action: 'create' });
     } else {
       alert('发布功能加载中，请稍后再试');
     }

@@ -1,0 +1,157 @@
+/* 字体策略（P3.4）：移除 Google Fonts 渲染阻塞 @import。
+   中文字体全量自托管在 4Mbps 下反而更糟；改用平台 CJK 系统字体栈
+   （macOS: PingFang/Songti · Windows: 微软雅黑/宋体 · Linux: Noto CJK），
+   零外部请求、国内稳定、视觉与 Noto 系高度接近。 */
+
+  /* ═════════════════════════════════════════════════════════════
+     心理学驱动设计 (Psychology-Driven Design)
+     ─────────────────────────────────────────────
+     品牌:
+       · BNU Sparks · 木铎星火
+       · "星星之火，可以燎原" — 每人一份资料就是一粒火星
+     色彩:
+       · 主色 250° 暖调藏蓝 → 跨文化最受信赖色相，暖化去冷感
+       · 强调色 45° 琥珀   → 与主色 205° 互补，冷暖自然悦目
+       · 背景 60° 奶油     → 暖底色减少视疲劳 30%+，提升可信度
+       · 绿 150°           → 成长/学习的正向暗示
+     排版:
+       · Noto Serif SC 标题 → 学术权威感
+       · Noto Sans SC 正文 → 清晰易读
+     空间:
+       · 宽松间距降低认知负荷（Hick's Law）
+       · whitespace 提升感知价值
+     圆角:
+       · 人脑处理圆角比直角快 ~60ms（婴儿图式效应）
+       · 圆角 → 安全/友善/可信赖
+     动效:
+       · 微交互动效提供系统状态可见性（Visibility of System Status）
+       · 过渡时间 150-250ms 符合最佳交互响应窗口
+     ═════════════════════════════════════════════════════════════ */
+
+  :root {
+    /* ── 品牌色相（v=160 新增，供派生 oklch 引用）── */
+    --brand-hue: 250;
+
+    /* 主色 v=160 降饱和（原 0.09 → 0.06，保持 hue=250/明度；回退=改回原值注释） */
+    --primary: oklch(0.40 0.09 250);            /* 原 0.09 饱和蓝（用户否决降饱和，还原活力） */
+    --primary-dark: oklch(0.32 0.11 250);       /* 原 0.32 0.11 250 */
+    --primary-light: oklch(0.88 0.04 250);      /* 原 0.88 0.04 250 */
+    --primary-surface: oklch(0.94 0.025 250);   /* 原 0.94 0.025 250 */
+
+    --accent: oklch(0.52 0.13 45);
+    --accent-hover: oklch(0.45 0.15 45);
+    --accent-light: oklch(0.90 0.06 50);
+
+    --success: oklch(0.48 0.12 150);
+    --success-light: oklch(0.88 0.06 150);
+
+    /* 危险色家族（v=160 token 化，hue≈30 血橙红） */
+    --danger: oklch(0.5 0.15 30);
+    --danger-dark: oklch(0.42 0.16 25);
+    --danger-light: oklch(0.93 0.04 30);        /* ≈ #fef2f0 */
+    --danger-border: oklch(0.85 0.06 28);       /* ≈ #e0b8b4 */
+
+    /* 星标/琥珀金家族（收藏星，原 #F5A623/#B8860B/#8B7500） */
+    --star: oklch(0.72 0.14 70);
+    --star-dark: oklch(0.58 0.12 60);
+    --star-light: oklch(0.94 0.05 75);          /* ≈ #FFFBEA */
+    --star-border: oklch(0.84 0.07 70);         /* ≈ #D4A843 */
+
+    --bg: oklch(0.97 0.005 60);
+    --surface: oklch(0.995 0.003 60);
+    --raised: oklch(1 0 0);
+    --ink: oklch(0.18 0.01 55);
+    --ink-soft: oklch(0.35 0.01 55);
+    --ink-faint: oklch(0.55 0.008 55);
+    --border: oklch(0.86 0.012 65);
+    --border-light: oklch(0.91 0.008 65);
+
+    /* 待审核暖纸色（v=148）：上传者 pill / 随附文件行 */
+    --pill-bg: oklch(0.985 0.004 80);
+    --pill-border: oklch(0.945 0.008 80);
+    --pill-hover: oklch(0.965 0.006 80);
+    --file-row-bg: oklch(0.99 0.003 80);
+
+    --serif: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+
+    /* 圆角：--radius-xs 新增；--radius 兼容别名（历史 8 处误引用，已改 --radius-md） */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+    --radius-full: 999px;
+    --radius: var(--radius-md);
+
+    /* 阴影（v=160 新增，暖色相 hue≈55 与奶油底同族，杜绝纯黑） */
+    --shadow-xs: 0 1px 2px oklch(0.45 0.01 55 / 0.08);
+    --shadow-sm: 0 1px 3px oklch(0.45 0.01 55 / 0.10), 0 2px 8px oklch(0.45 0.01 55 / 0.06);
+    --shadow-md: 0 2px 6px oklch(0.45 0.01 55 / 0.12), 0 6px 20px oklch(0.45 0.01 55 / 0.10);
+    --shadow-lg: 0 4px 12px oklch(0.45 0.01 55 / 0.14), 0 12px 40px oklch(0.45 0.01 55 / 0.12);
+    --shadow-xl: 0 8px 24px oklch(0.45 0.01 55 / 0.16), 0 24px 64px oklch(0.45 0.01 55 / 0.16);
+    --shadow-primary: 0 2px 12px oklch(from var(--primary) l c h / 0.25);
+    --focus-ring: 0 0 0 3px oklch(from var(--primary) l c h / 0.15);
+
+    /* 字号 scale（base 15px = body） */
+    --fs-2xs: 0.6875rem;   /* 11px */
+    --fs-xs: 0.75rem;      /* 12px */
+    --fs-sm: 0.8125rem;    /* 13px */
+    --fs-base: 0.9375rem;  /* 15px */
+    --fs-md: 1rem;         /* 16px */
+    --fs-lg: 1.125rem;     /* 18px */
+    --fs-xl: 1.375rem;     /* 22px */
+    --fs-2xl: 1.75rem;     /* 28px */
+    --fs-3xl: 2.25rem;     /* 36px */
+
+    /* 过渡 2 档 */
+    --t-fast: 0.12s ease-out;   /* 微交互 hover：color/border/bg */
+    --t-base: 0.2s ease;        /* 结构：transform/面板/抽屉 */
+
+    /* v=160 历史别名兼容：旧代码误用的未定义变量，统一映射到正式 token。
+       此前这些 var() 解析为非法值→属性回退继承色/圆角归零；
+       现在一次性修正视觉。后续清理可逐步内联替换后删除本块（回退=删本块）。 */
+    --text: var(--ink);             /* 旧主文字色 */
+    --text-muted: var(--ink-soft);  /* 旧弱化文字色 */
+    --ink-light: var(--ink-faint);
+    --ink-mid: var(--ink-soft);
+    --ink-muted: var(--ink-soft);
+    --bg-subtle: var(--surface);
+    --bg-card: var(--raised);
+    --bg-alt: var(--surface);
+    --border-color: var(--border);
+    --accent-bg: var(--accent-light);
+    --surface-alt: var(--surface);
+    --radius: var(--radius-md);     /* 旧圆角（8 处误引用，修复归零） */
+
+    --space-xs: 6px;
+    --space-sm: 12px;
+    --space-md: 20px;
+    --space-lg: 32px;
+    --space-xl: 48px;
+    --space-2xl: 64px;
+    --space-3xl: 80px;
+
+    --content-width: 1080px;
+    --header-height: 64px;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.6; }
+  .container { max-width: var(--content-width); margin: 0 auto; padding: 0 var(--space-lg); }
+
+  /* ── Selection ──────────────────────────────────────── */
+  ::selection { background: oklch(from var(--primary) l c h / 0.18); color: var(--primary-dark); }
+
+  /* ── Smooth Scroll ──────────────────────────────────── */
+  html { scroll-behavior: smooth; }
+
+  /* ── Focus & Active 状态基座（v=160）────────────────── */
+  :focus-visible {
+    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+    outline-offset: 2px;
+  }
+  button:active:not(:disabled) { transform: translateY(0.5px); }
+  a:active { opacity: 0.85; }
+
