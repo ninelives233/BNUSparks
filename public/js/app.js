@@ -155,6 +155,14 @@ window.addEventListener('popstate', async function(e) {
     if (state.view === 'myfavorites' && typeof renderMyFavoritesPage === 'function') renderMyFavoritesPage();
     // 问答区：返回时重新渲染
     if (state.view === 'qa' && typeof renderQaView === 'function') renderQaView();
+    // 问答区发布/编辑：从历史状态恢复 mode 后重渲染（v175）
+    if (state.view === 'qaCompose' && typeof renderQaCompose === 'function') {
+      if (typeof _qaComposeMode !== 'undefined') {
+        _qaComposeMode = { type: state.type || 'question', action: state.action || 'create', qid: state.qid, aid: state.aid };
+      }
+      renderQaCompose();
+      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+    }
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
@@ -253,6 +261,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
       case 'rankings': showTopDownloaded(); break;
       case 'qa': showQa(); break;
+      case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
       case 'leaderboard': showLeaderboard(); break;
       case 'recentAll': showRecentAll(); break;
       case 'profile': showProfile(); break;

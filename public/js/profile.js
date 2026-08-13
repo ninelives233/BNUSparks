@@ -94,8 +94,11 @@
         headers: { 'Authorization': 'Bearer ' + token },
         body: fd,
       });
-      var data = await resp.json();
-      if (!data.ok) throw new Error(data.error || '上传失败');
+      var data = null;
+      try { data = await resp.json(); } catch (e) { data = null; } // 429 限流/网关页非 JSON → 可读报错
+      if (!resp.ok || !data || !data.ok) {
+        throw new Error((data && data.error) || (resp.status === 429 ? '上传过于频繁，请稍后重试' : '上传失败（' + resp.status + '）'));
+      }
       // 刷新头像显示
       if (currentUser) currentUser.avatar_url = data.data.avatar_url;
       loadProfile();

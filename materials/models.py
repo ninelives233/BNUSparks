@@ -172,10 +172,14 @@ class Material(models.Model):
 
     created_at = models.DateTimeField("上传时间", auto_now_add=True)
 
+    # ── 目录置顶（管理模式可置顶，默认视图置顶优先）──
+    is_pinned = models.BooleanField("置顶", default=False)
+    pinned_at = models.DateTimeField("置顶时间", null=True, blank=True)
+
     class Meta:
         verbose_name = "资料"
         verbose_name_plural = "资料"
-        ordering = ["-created_at"]
+        ordering = ["-is_pinned", "-created_at"]
 
     def __str__(self):
         return self.title

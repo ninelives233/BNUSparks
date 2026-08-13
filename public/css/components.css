@@ -1,0 +1,109 @@
+/* ════════════════════════════════════════════════════════════
+   PHASE 2 · 组件统一层（v=160）
+   不动任何家族原有尺寸/配色，只归一共性形态与交互模型；
+   家族差异（尺寸/颜色/背景）仍在各自规则里保留。
+   ════════════════════════════════════════════════════════════ */
+
+/* ── 按钮：flex 居中 + 统一游标/过渡（不强制圆角，避免误伤分段控件与胶囊CTA） ── */
+:is(.admin-btn, .admin-btn-approve, .admin-btn-reject, .admin-btn-primary,
+    .admin-btn-secondary, .admin-btn-sm, .fd-btn, .fd-btn-primary,
+    .fd-btn-secondary, .fd-btn-danger, .nc-btn-primary, .nc-btn-secondary,
+    .mf-btn, .ms-copy-btn, .notif-mark-all-btn, .notif-mark-btn,
+    .reupload-btn, .fi-preview-btn, .fi-download-btn, .pc-btn-detail,
+    .pv-dl-btn, .announcement-create-btn, .fa-filter-btn,
+    .profile-edit-btn, .profile-action-btn, .so-new-btn, .nc-level-btn,
+    .ppc-save-btn, .fm-action-btn, .mgmt-new-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background-color var(--t-fast), border-color var(--t-fast),
+              color var(--t-fast), box-shadow var(--t-fast),
+              opacity var(--t-fast), transform var(--t-fast);
+}
+/* 图标+文字按钮：内隙统一 */
+:is(.fd-btn, .fd-btn-primary, .fd-btn-secondary, .fd-btn-danger,
+    .fi-preview-btn, .fi-download-btn, .fa-filter-btn, .announcement-create-btn,
+    .reupload-btn, .ms-copy-btn, .notif-mark-all-btn, .notif-mark-btn) {
+  gap: 6px;
+}
+
+/* ── 头像：图片类统一圆形裁切，首字类统一圆形居中 ── */
+:is(.admin-user-avatar, .lb-avatar, .cr-pill-avatar, .user-public-avatar,
+    .ai-avatar, .fdu-avatar-img) {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+:is(.user-avatar-circle, .dm-avatar, .admin-user-avatar-placeholder,
+    .cr-pill-avatar-ph, .lb-avatar-placeholder, .user-public-avatar-placeholder,
+    .ai-avatar-placeholder, .fdu-avatar, .profile-avatar-circle) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ── 类型标签 / 审核徽章：统一胶囊形态 ── */
+:is(.cr-tag, .sg-pill, .sg-pill-general, .sg-pill-major, .hc-tag-general, .hc-tag-major) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+:is(.review-badge, .review-badge-pending, .review-badge-approved, .review-badge-rejected,
+    .admin-table .status-tag) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+/* ── Overlay 关闭钮：统一游标/过渡/悬停反馈 ── */
+:is(.modal-close, .search-overlay-close, .sg-close, .notif-drawer-close, .preview-close) {
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color var(--t-fast), color var(--t-fast), opacity var(--t-fast);
+}
+:is(.modal-close, .search-overlay-close, .sg-close, .notif-drawer-close):hover {
+  color: var(--ink);
+  background: var(--primary-surface);
+}
+/* 搜索覆盖层关闭钮并入圆形标准（与 .modal-close 同形） */
+.search-overlay-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* ── 空态：紧凑变体（容器内"加载中/暂无数据/加载失败"消息） ── */
+.empty-state.compact { padding: 32px 16px; }
+
+/* ── Phase 3 · ICONS 尺寸（SVG 不带内联尺寸，尺寸集中在此） ── */
+.ico-nav { display: inline-flex; align-items: center; justify-content: center; }
+.side-nav .ico-nav { width: 18px; height: 18px; }
+.side-nav .ico-nav svg { width: 18px; height: 18px; }
+.sn-icon.ico-nav { width: 20px; height: 20px; }
+.sn-icon.ico-nav svg { width: 20px; height: 20px; }
+.header-login .login-icon svg { width: 20px; height: 20px; display: block; }
+.empty-state .es-icon svg { width: 40px; height: 40px; }
+
+/* ── v160 反馈修复：待审卡片「详情」按钮 SVG 图标实体（原 📄 emoji 渲染弱） ── */
+.admin-pending-card .pc-actions .admin-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.admin-pending-card .pc-actions .admin-btn { gap: 6px; }
+

@@ -32,6 +32,7 @@ urlpatterns = [
     path("files/<int:file_id>/download-token/", views.api_download_token, name="api_download_token"),
     path("files/<int:file_id>/delete/", views.api_file_delete, name="api_file_delete"),
     path("files/<int:file_id>/update/", views.api_file_update, name="api_file_update"),
+    path("files/<int:file_id>/pin/", views.api_file_pin, name="api_file_pin"),
     path("files/batch-delete/", views.api_file_batch_delete, name="api_file_batch_delete"),
     path("files/batch-edit/", views.api_file_batch_edit, name="api_file_batch_edit"),
     path("files/<int:file_id>/report/", views.api_file_report, name="api_file_report"),
@@ -121,6 +122,10 @@ urlpatterns = [
     path("admin/qa/answers/<int:aid>/rollback/", views.api_qa_admin_answer_rollback, name="api_qa_admin_answer_rollback"),
     path("admin/qa/records/", views.api_qa_admin_records, name="api_qa_admin_records"),
     path("admin/qa/pending/", views.api_qa_admin_pending, name="api_qa_admin_pending"),
+    path("admin/qa/questions/<int:qid>/approve/", views.api_qa_admin_question_approve, name="api_qa_admin_question_approve"),
+    path("admin/qa/questions/<int:qid>/reject/", views.api_qa_admin_question_reject, name="api_qa_admin_question_reject"),
+    path("admin/qa/answers/<int:aid>/approve/", views.api_qa_admin_answer_approve, name="api_qa_admin_answer_approve"),
+    path("admin/qa/answers/<int:aid>/reject/", views.api_qa_admin_answer_reject, name="api_qa_admin_answer_reject"),
     path("admin/qa/upload-image/", views.api_qa_admin_upload_image, name="api_qa_admin_upload_image"),
 
     # 用户管理（Iter 3 — 仅 super_admin）

@@ -57,7 +57,7 @@ from .moderation import (
 
 # 文件管理 / 文件夹 / 操作
 from .operations import (
-    api_file_update, api_folder_create, api_folder_delete,
+    api_file_update, api_file_pin, api_folder_create, api_folder_delete,
     api_folder_rename, api_folder_set_course,
     api_operations, api_folder_restore,
     api_restore_deletion,
@@ -95,6 +95,8 @@ from .qa import (
     api_qa_admin_answer_update, api_qa_admin_answer_delete,
     api_qa_admin_answer_history, api_qa_admin_answer_rollback,
     api_qa_admin_records, api_qa_admin_pending, api_qa_admin_upload_image,
+    api_qa_admin_question_approve, api_qa_admin_question_reject,
+    api_qa_admin_answer_approve, api_qa_admin_answer_reject,
 )
 
 # ── 内部辅助函数（供测试套件引用）──

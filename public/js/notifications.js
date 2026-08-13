@@ -185,6 +185,8 @@
     document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
       link.style.display = (currentUser && currentUser.role !== 'user') ? '' : 'none';
     });
+    // 文件详情页/弹窗即时反馈
+    _refreshModeSensitiveViews();
   }
 
   function toggleCivilianMode() {
@@ -204,6 +206,19 @@
     document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
       link.style.display = (_civilianMode || !currentUser || currentUser.role === 'user') ? 'none' : '';
     });
+    // 文件详情页/弹窗即时反馈
+    _refreshModeSensitiveViews();
+  }
+
+  // 模式切换后即时重渲染依赖 _civilianMode 的视图（文件详情页 + 文件信息弹窗）
+  function _refreshModeSensitiveViews() {
+    var fdv = document.getElementById('fileDetailView');
+    if (fdv && fdv.classList.contains('active') && window._currentDetailFile) {
+      _renderFileDetail(window._currentDetailFile);
+    }
+    if (document.querySelector('.file-info-overlay') && window._currentInfoFile) {
+      showFileInfoModal(window._currentInfoFile);
+    }
   }
 
   function isMgmtActive() { return _mgmtMode && !_civilianMode && currentUser && currentUser.role !== 'user'; }
