@@ -45,8 +45,11 @@
 - **文件详情页**：单文件详情 + 资料类型标记 + 列表筛选/排序
 - **公告系统**：首页公告栏 + 管理端发布，发布推送至通知中心
 - **管理后台**：概览统计、待审核面板、审核历史、用户管理、删除记录（可恢复）、文件管理模式
+- **问答区**：提问/回答、两级标签体系、置顶精选、独立编辑视图、审核管理 + 日报/48h 硬删定时任务
+- **举报系统**：文件/课程举报 + 受理/记录面板（管理后台收口，处理浮窗引导四问）
+- **文件置顶**：管理端置顶资料（`is_pinned`）+ 前端图钉徽章
 - **响应式设计**：桌面侧边栏 + 移动端滑出抽屉
-- **性能优化**：N+1 查询修复、接口缓存、前端请求并行化
+- **性能优化**：N+1 查询修复、接口缓存、前端请求并行化 + v179 巨型文件拆分（facade 模式，日常任务按功能模块读取）
 
 ### 🗓️ 迭代记录
 
@@ -66,6 +69,14 @@
 | Iter 9 | 管理模式课程树编辑（新建/重命名/移动/删除/改课程代码）+ 搜索覆层 UI 重构 | 7月19日 |
 | 性能优化 | N+1 查询修复、接口缓存、前端并行化 | 7月20日 |
 
+> 此后迭代改用 **v 版本号**（当前 v=179），详见 `CHANGELOG.md` 与仓库提交记录。
+
+| 版本 | 内容 |
+|------|------|
+| v163-v174 | 审核路由广播式重构、上传上下文定专业、举报系统、问答区 Phase 1 上线 |
+| v175-v178 | 问答区四项前端（独立编辑视图/标签徽章/精选置顶）、文件置顶、筛选面板动画、文字录入 500 根因修复 |
+| v179 | **巨型文件拆分**：后端 views 4 文件 → facade+19 域子模块、前端 explorer/admin 拆分、CSS 6740→9 文件、deploy.sh 通配符根治 |
+
 ### 📋 待办
 
 - [ ] ICP 备案状态确认（域名已生效，备案情况待核实）
@@ -80,11 +91,11 @@
 
 | 层级 | 技术 | 说明 |
 |------|------|------|
-| **前端** | 纯 HTML + CSS + Vanilla JS | SPA 架构，零框架，8 模块 ~6,200 行 |
-| **后端** | Django 6.x + Gunicorn | 纯 Python，无 DRF，视图包 12 模块 ~4,100 行 |
+| **前端** | 纯 HTML + CSS + Vanilla JS | SPA 架构，零框架，21 个 JS 文件 ~9,400 行（v179 按功能拆分） |
+| **后端** | Django 6.x + Gunicorn | 纯 Python，无 DRF，视图包 34 个模块 ~8,400 行（v179 facade + 域子模块） |
 | **数据库** | SQLite | 单用户量级足够，零配置 |
 | **认证** | 手工 JWT（HMAC-SHA256） | 仅存 user_id + exp，角色从 DB 实时读取 |
-| **样式** | OKLCH 色彩空间 + CSS 变量 | `--brand-hue` 控制全局调性，~4,700 行 |
+| **样式** | OKLCH 色彩空间 + CSS 变量 | `--brand-hue` 控制全局调性，9 个 CSS 文件 ~6,700 行 |
 | **部署** | Nginx → Gunicorn → Supervisor | 腾讯云，进程守护，`deploy.sh` 一键部署 + `deploy_verify.sh` 验证 |
 | **邮件** | SMTP via 163.com（SSL 465） | 注册邮箱验证 + 密码重置通知 |
 | **文件** | 服务器磁盘 `data/materials/` | 上传自动清理 EXIF 地理信息 |
@@ -150,34 +161,40 @@ BNUSparks/
 │   ├── settings_prod.py   # 生产配置（DEBUG=False，安全头）
 │   └── urls.py            # 根路由
 ├── materials/             # 核心应用
-│   ├── views/             # 视图包（12 个模块，~4,100 行）
-│   │   ├── auth.py        # 认证 API
-│   │   ├── courses.py     # 课程/搜索/统计
-│   │   ├── files.py       # 文件上传/下载/详情
-│   │   ├── favorites.py   # 收藏
-│   │   ├── moderation.py  # 审核 API
-│   │   ├── admin.py       # 管理员 API
-│   │   ├── operations.py  # 文件夹/文件管理
-│   │   └── ...            # 通知/个人资料/公告/工具
-│   ├── models.py          # 12 个数据模型（383 行）
+│   ├── views/             # 视图包（34 个模块，~8,400 行；v179 facade + 域子模块）
+│   │   ├── utils.py       # 工具 facade → utils_security/auth/trash/quota/course_tree/moderation
+│   │   ├── files.py       # 文件 facade → files_upload/download/delete/zip
+│   │   ├── qa.py          # 问答 facade → qa_helpers/public/admin/tasks
+│   │   ├── operations.py  # 管理 facade → operations_helpers/folder/records/batch/manage
+│   │   ├── auth.py        # 认证 / courses.py # 课程/搜索/统计
+│   │   ├── profile.py     # 个人中心 / favorites.py # 收藏 / reports.py # 举报
+│   │   ├── moderation.py  # 审核 / admin.py # 管理员
+│   │   ├── announcements.py # 公告 / notifications.py # 通知
+│   │   └── course_requests.py # 课程申请
+│   ├── models.py          # 22 个数据模型（826 行）
 │   ├── urls.py            # API 路由（57 条）
 │   └── tests/             # 测试套件（本地保留，公开仓库不含）
-├── public/                # 前端 SPA（8 模块，~6,200 行）
+├── public/                # 前端 SPA（21 个 JS + 9 个 CSS，~9,400 行）
 │   ├── index.html         # 入口 + 视图 DOM
-│   ├── css/style.css      # 设计系统（OKLCH）
-│   └── js/
+│   ├── css/               # OKLCH 设计系统（9 文件：tokens 最先 / components 覆盖层最后）
+│   │   ├── tokens.css     # 设计 token 变量（:root + --brand-hue）
+│   │   ├── base.css       # 布局基础（header/侧栏/首页/模态框）
+│   │   ├── admin.css      # 管理后台 / user.css # 个人中心+通知
+│   │   ├── files.css      # 文件列表/详情 / course.css # 课程页
+│   │   ├── announcement.css # 公告 / qa.css # 问答区
+│   │   └── components.css # 全局覆盖层（最后加载）
+│   └── js/                # 21 个文件，v179 按功能拆分
 │       ├── app.js         # 入口初始化
-│       ├── utils.js       # 工具函数
-│       ├── auth.js        # 认证流程
-│       ├── profile.js     # 个人中心
-│       ├── notifications.js # 通知中心
-│       ├── views.js       # 视图导航/静态页
-│       ├── explorer.js    # 课程浏览器
-│       └── admin.js       # 管理后台
+│       ├── utils.js       # 工具函数 / auth.js # 认证 / profile.js # 个人中心
+│       ├── notifications.js # 通知中心 / views.js # 视图导航/静态页
+│       ├── explorer-core/render/file/upload/mgmt/preview.js # 课程浏览器（6 文件）
+│       ├── admin-core/pending/records/users.js # 管理后台（4 文件）
+│       ├── newcourse.js   # 新课申请
+│       └── qa.js / qa-editor.js / qa-admin.js / qa-compose.js # 问答区
 ├── data/                  # 数据库 + 上传文件
 ├── docs/                  # 项目文档
-├── scripts/               # 种子/修复/部署脚本
-├── deploy.sh              # 一键部署脚本
+├── scripts/               # 种子/修复/部署脚本（本地保留，公开仓库不含）
+├── deploy.sh              # 一键部署脚本（本地保留，公开仓库不含）
 ├── README.md
 └── requirements.txt       # django>=6.0 + gunicorn + Pillow + pypdf
 ```
