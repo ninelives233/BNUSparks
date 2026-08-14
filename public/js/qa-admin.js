@@ -82,7 +82,7 @@ function _qaRecordCardHtml(it) {
   } else {
     actions += '<button class="admin-btn admin-btn-reject admin-btn-sm" onclick="qaAdminDelete(\'' + it.kind + '\',' + it.id + ')">删除</button>';
   }
-  return '<div class="qa-record-card">' +
+  return '<div class="qa-record-card qa-status-' + (it.status || '') + '">' +
     '<div class="qa-record-main">' +
       '<div class="qa-record-title">' + (it.kind === 'question' ? '❓ ' : '💬 ') + esc(it.title) + pinHtml +
         '<span class="review-badge ' + statusCls + '" style="margin-left:6px">' + statusLabel + '</span>' + '</div>' +
@@ -98,7 +98,7 @@ function _qaForumPendingCardHtml(item) {
   var statusLabel = _QA_STATUS_LABEL[item.status] || item.status;
   var kindIcon = item.kind === 'answer' ? '💬' : '❓';
   var reasonBtn = '驳回原因（可选）';
-  return '<div class="qa-record-card">' +
+  return '<div class="qa-record-card qa-status-' + (item.status || '') + '">' +
     '<div class="qa-record-main">' +
       '<div class="qa-record-title">' + kindIcon + ' ' + esc(item.title || '') +
         '<span class="review-badge review-badge-pending" style="margin-left:6px">' + statusLabel + '</span></div>' +

@@ -9,7 +9,7 @@ from datetime import date, timedelta
 
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import F, Q
+from django.db.models import F, Q, Count
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -132,7 +132,15 @@ def api_moderation_batch_approve(request):
     count = qs.count()
     if count == 0:
         return _ok({"approved_count": 0})
-    uploader_ids = list(qs.values_list("uploader_id", flat=True).distinct())
+    # v=175.2：更新前先按上传者聚合计数——qs.update() 之后 qs 仍带
+    # review_status="pending" 过滤，若 update 后再 count 会全部归零（通知永远
+    # 显示「0 份」，且 material=None 匹配不上补发守卫）。先取数再更新。
+    uploader_counts = dict(
+        qs.filter(uploader_id__isnull=False)
+          .values_list("uploader_id")
+          .annotate(c=Count("id"))
+    )
+    uploader_ids = list(uploader_counts.keys())
     now = timezone.now()
     qs.update(
         is_approved=True, review_status="approved",
@@ -148,7 +156,7 @@ def api_moderation_batch_approve(request):
             up = User.objects.get(id=uid)
         except User.DoesNotExist:
             continue
-        n = qs.filter(uploader_id=uid).count()
+        n = uploader_counts.get(uid, 0)
         _create_notification(
             recipient=up, type=Notification.Type.APPROVED,
             title="你的资料已通过审核",

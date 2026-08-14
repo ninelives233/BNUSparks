@@ -80,22 +80,23 @@
       var profile = results[1];
       var html = '<div class="admin-section-label">📊 数据概览</div>' +
         '<div class="admin-stats-grid">' +
-        '<div class="admin-stat-card"><div class="stat-number">' + (stats.pending_count || 0) + '</div><div class="stat-label">⏳ 待审核</div></div>' +
-        '<div class="admin-stat-card"><div class="stat-number">' + (stats.total_approved || 0) + '</div><div class="stat-label">✅ 已通过</div></div>' +
-        '<div class="admin-stat-card"><div class="stat-number">' + (stats.approved_today || 0) + '</div><div class="stat-label">📈 今日通过</div></div>' +
-        '<div class="admin-stat-card"><div class="stat-number">' + (stats.total_materials || 0) + '</div><div class="stat-label">📦 管辖范围总数</div></div>' +
+        '<div class="admin-stat-card stat-card--lead"><div class="stat-icon stat-icon--amber">⏳</div><div class="stat-number">' + (stats.pending_count || 0) + '</div><div class="stat-label">待审核</div></div>' +
+        '<div class="admin-stat-card"><div class="stat-icon">✅</div><div class="stat-number">' + (stats.total_approved || 0) + '</div><div class="stat-label">已通过</div></div>' +
+        '<div class="admin-stat-card"><div class="stat-icon stat-icon--green">📈</div><div class="stat-number">' + (stats.approved_today || 0) + '</div><div class="stat-label">今日通过</div></div>' +
+        '<div class="admin-stat-card"><div class="stat-icon stat-icon--orange">📦</div><div class="stat-number">' + (stats.total_materials || 0) + '</div><div class="stat-label">管辖范围总数</div></div>' +
         '</div>';
-      // 待审核快速入口
+      // 待审核快速入口（v180：收进卡片容器 + 分区线）
       if (stats.pending_count > 0) {
-        html += '<div class="ov-quick-actions"><button class="admin-btn admin-btn-primary" onclick="switchAdminTab(\'pending\');document.querySelector(\'[data-tab=pending]\').click()">查看 ' + stats.pending_count + ' 条待审核资料 →</button></div>';
+        html += '<div class="pc-section-divider"></div><div class="ov-tool-card"><div class="pc-title">⏳ 待审核快速入口</div>' +
+          '<button class="admin-btn admin-btn-primary" onclick="switchAdminTab(\'pending\');document.querySelector(\'[data-tab=pending]\').click()">查看 ' + stats.pending_count + ' 条待审核资料 →</button></div>';
       }
-      // 自动托管开关（仅版主/小版主有 can_auto_approve 时显示）
+      // 自动托管开关（仅版主/小版主有 can_auto_approve 时显示，v180 收进卡片容器）
       if (profile.can_auto_approve) {
         var isOn = profile.auto_approve;
-        html += '<div class="admin-auto-toggle">' +
+        html += '<div class="pc-section-divider"></div><div class="ov-tool-card"><div class="admin-auto-toggle">' +
           '<span><strong>🤖 自动托管审核</strong><br><span class="at-hint">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
           '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + (isOn ? '✅ 已开启' : '⏸ 已关闭') + '</button>' +
-        '</div>';
+        '</div></div>';
       }
       content.innerHTML = html;
     }).catch(function(err) {

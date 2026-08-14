@@ -118,6 +118,10 @@ def api_course_files(request, course_code):
 
     from datetime import timedelta
     delay_boundary = timezone.now() - timedelta(minutes=1)
+    # v=175.2：补发「已通过审核」通知仅限 48h 内被批准的近期资料——老种子资料
+    # （入库直置 approved、从未走过审批流）reviewed_at 已远超窗口或为空，一律不
+    # 补发，根治「清空通知→再浏览→又补一遍」的循环轰炸。
+    backfill_boundary = timezone.now() - timedelta(hours=48)
     user_id = user.id if user is not None else None
 
     def _serialize_file(m):
@@ -136,6 +140,8 @@ def api_course_files(request, course_code):
               and m.reviewed_by_id is not None
               and m.reviewed_by_id != user.id
               and m.uploader_id != m.reviewed_by_id
+              and m.reviewed_at is not None
+              and m.reviewed_at >= backfill_boundary
               and not Notification.objects.filter(
                   recipient=user, material=m,
                   type=Notification.Type.APPROVED,

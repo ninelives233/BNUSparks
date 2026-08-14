@@ -15,28 +15,31 @@
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       };
       var html = '<div class="admin-section-label">🗑️ 删除记录</div>' +
-        '<div class="admin-table-wrap"><table class="admin-table">';
-      html += '<thead><tr><th>资料标题</th><th>课程</th><th>大小</th><th>上传者</th><th>删除人</th><th>删除时间</th><th>操作</th></tr></thead><tbody>';
+        '<div class="admin-pending-list">';
       data.items.forEach(function(r) {
         var restoreBtn = '';
         if (r.can_restore && !r.is_restored) {
-          restoreBtn = '<button class="admin-btn admin-btn-sm admin-btn-approve" onclick="restoreDeletion(' + r.id + ', this)">↩ 撤销</button>';
+          restoreBtn = '<button class="admin-btn admin-btn-sm admin-btn-approve" data-deleter="' + _esc(r.deleted_by_name) + '" onclick="restoreDeletion(' + r.id + ', this)">↩ 撤销</button>';
         } else if (r.is_restored) {
           restoreBtn = '<span class="status-restored">✅ 已恢复</span>';
         } else {
           restoreBtn = '<span class="status-expired">⏰ 已过期</span>';
         }
-        html += '<tr>' +
-          '<td><strong>' + _esc(r.title) + '</strong><br><span class="ft-meta">' + _esc(r.file_name) + '</span></td>' +
-          '<td>' + _esc(r.course_name) + '<br><span class="ft-meta">' + _esc(r.course_code) + '</span></td>' +
-          '<td>' + formatSize(r.file_size) + '</td>' +
-          '<td>' + _esc(r.uploader_name) + '</td>' +
-          '<td>' + _esc(r.deleted_by_name) + '</td>' +
-          '<td>' + _esc(r.deleted_at) + '</td>' +
-          '<td>' + restoreBtn + '</td>' +
-          '</tr>';
+        var delCls = r.is_restored ? 'del-restored' : (!r.can_restore ? 'del-expired' : 'del-restorable');
+        html += '<div class="admin-pending-card del-card ' + delCls + '">' +
+          '<div class="pc-title">' + _esc(r.title) + '</div>' +
+          '<div class="pc-meta">' +
+            '<span>📄 ' + _esc(r.file_name) + '</span>' +
+            '<span>📚 ' + _esc(r.course_name) + ' (' + _esc(r.course_code) + ')</span>' +
+            '<span>💾 ' + formatSize(r.file_size) + '</span>' +
+            '<span>👤 ' + _esc(r.uploader_name) + '</span>' +
+            '<span>🗑 ' + _esc(r.deleted_by_name) + '</span>' +
+            '<span>🕐 ' + _esc(r.deleted_at) + '</span>' +
+          '</div>' +
+          '<div class="pc-actions">' + restoreBtn + '</div>' +
+        '</div>';
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
       if (data.total_pages > 1) {
         html += '<div class="admin-pagination">';
         if (page > 1) {
@@ -60,13 +63,10 @@
 
   // ── 撤销删除（管理后台删除记录） ──
   function restoreDeletion(delId, btn) {
-    var isSelf = btn && btn.closest('tr') && btn.closest('tr').querySelector('td:nth-child(5)');
-    // 检查是否需要填理由（非本人操作）
+    // v=180 卡片化：从按钮 data-deleter 读删除人名（原表格读 td:nth-child(5)，行为一致）
     var isOwn = true;
-    var cells = btn ? btn.closest('tr').querySelectorAll('td') : [];
-    if (cells.length >= 5) {
-      // 简单判断：若删除人列包含当前用户名，则视为本人
-      var deletedByName = cells[4].textContent.trim();
+    if (btn) {
+      var deletedByName = (btn.getAttribute('data-deleter') || '').trim();
       isOwn = deletedByName === (currentUser ? currentUser.nickname || currentUser.username : '');
     }
     if (isOwn) {
@@ -134,8 +134,7 @@
         return;
       }
       var html = '<div class="admin-section-label">📋 操作记录</div>' +
-        '<div class="admin-table-wrap"><table class="admin-table">';
-      html += '<thead><tr><th>操作人</th><th>操作</th><th>文件夹</th><th>路径</th><th>类型</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+        '<div class="admin-pending-list">';
       data.items.forEach(function(op) {
         var restoreBtn = '';
         if (op.can_restore && !op.is_restored) {
@@ -145,17 +144,20 @@
         } else {
           restoreBtn = '<span class="status-expired">⏰ 已过期</span>';
         }
-        html += '<tr>' +
-          '<td>' + esc(op.user_name) + '</td>' +
-          '<td><span class="status-tag ' + (op.action === 'create' ? 'status-approved' : 'status-rejected') + '">' + op.action_label + '</span></td>' +
-          '<td>' + esc(op.category_name) + '</td>' +
-          '<td class="td-muted">' + esc(op.parent_path) + '</td>' +
-          '<td>' + (op.folder_type === 'leaf' ? '底层' : '普通') + '</td>' +
-          '<td>' + esc(op.created_at) + '</td>' +
-          '<td>' + restoreBtn + '</td>' +
-          '</tr>';
+        var isCreate = op.action === 'create';
+        html += '<div class="admin-pending-card op-card ' + (isCreate ? 'op-create' : 'op-other') + '">' +
+          '<div class="pc-title"><span class="review-badge ' + (isCreate ? 'review-badge-approved' : 'review-badge-rejected') + '">' + esc(op.action_label) + '</span></div>' +
+          '<div class="pc-meta">' +
+            '<span>👤 ' + esc(op.user_name) + '</span>' +
+            '<span>📁 ' + esc(op.category_name) + '</span>' +
+            '<span>📂 ' + esc(op.parent_path) + '</span>' +
+            '<span>🏷 ' + (op.folder_type === 'leaf' ? '底层' : '普通') + '</span>' +
+            '<span>🕐 ' + esc(op.created_at) + '</span>' +
+          '</div>' +
+          '<div class="pc-actions">' + restoreBtn + '</div>' +
+        '</div>';
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
       if (data.total_pages > 1) {
         html += '<div class="admin-pagination">';
         if (_opPage > 1) {
@@ -405,25 +407,26 @@
         return;
       }
       var html = '<div class="admin-section-label">📄 举报记录</div>' +
-        '<div class="admin-table-wrap"><table class="admin-table">' +
-        '<thead><tr><th>类型</th><th>被举报</th><th>课程</th><th>举报人</th><th>原因</th><th>状态</th><th>处理人</th><th>举报时间</th><th>处理时间</th></tr></thead><tbody>';
+        '<div class="admin-pending-list">';
       data.items.forEach(function(r) {
         var target = r.kind === 'material' ? (r.material_title || '资料已删除') : ('用户：' + (r.target_user_name || '匿名'));
         var stCls = r.status === 'handled' ? 'report-status-handled'
           : r.status === 'escalated' ? 'report-status-escalated' : 'report-status-pending';
-        html += '<tr>' +
-          '<td>' + esc(r.kind_label) + '</td>' +
-          '<td>' + esc(target) + '</td>' +
-          '<td class="td-muted">' + esc(r.course_name) + '</td>' +
-          '<td>' + esc(r.reporter_name) + '</td>' +
-          '<td>' + (r.reason_labels || []).map(function(x) { return '<span class="report-reason-tag report-reason-tag-sm">' + esc(x) + '</span>'; }).join('') + '</td>' +
-          '<td><span class="report-status-tag ' + stCls + '">' + esc(r.status_label) + '</span></td>' +
-          '<td>' + esc(r.handled_by_name || '—') + '</td>' +
-          '<td>' + esc(r.created_at) + '</td>' +
-          '<td>' + esc(r.handled_at || '—') + '</td>' +
-        '</tr>';
+        var rsCls = r.status === 'handled' ? 'rs-handled' : r.status === 'escalated' ? 'rs-escalated' : 'rs-pending';
+        html += '<div class="admin-pending-card report-card ' + rsCls + '">' +
+          '<div class="pc-title">' + esc(r.kind_label) + ' · ' + esc(target) +
+            '<span class="report-status-tag ' + stCls + '" style="margin-left:6px">' + esc(r.status_label) + '</span></div>' +
+          '<div class="pc-meta">' +
+            '<span>📚 ' + esc(r.course_name) + '</span>' +
+            '<span>👤 ' + esc(r.reporter_name) + '</span>' +
+            '<span>🚩 ' + esc(r.created_at) + '</span>' +
+            '<span>🛠 ' + esc(r.handled_by_name || '—') + '</span>' +
+            '<span>⏱ ' + esc(r.handled_at || '—') + '</span>' +
+          '</div>' +
+          '<div class="report-reason-tags">' + (r.reason_labels || []).map(function(x) { return '<span class="report-reason-tag">' + esc(x) + '</span>'; }).join('') + '</div>' +
+        '</div>';
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
       if (data.total_pages > 1) {
         html += '<div class="admin-pagination">';
         if (page > 1) html += '<button onclick="renderAdminReportHistory(document.getElementById(\'adminContent\'), ' + (page - 1) + ')">← 上一页</button>';
