@@ -565,12 +565,9 @@
         return;
       }
       var html = '<div class="admin-section-label">📋 审核历史</div>' +
-        '<div class="admin-table-wrap"><table class="admin-table">' +
-        '<thead><tr>' +
-          '<th>资料</th><th>课程</th><th>上传者</th><th>审核人</th><th>结果</th><th>备注</th><th>审核时间</th><th>操作</th>' +
-        '</tr></thead><tbody>';
+        '<div class="admin-pending-list">';
       data.items.forEach(function(m) {
-        var statusClass = m.review_status === 'approved' ? 'status-approved' : 'status-rejected';
+        var statusClass = m.review_status === 'approved' ? 'review-badge-approved' : 'review-badge-rejected';
         var statusText = m.review_status === 'approved' ? '✓ 通过' : '✗ 驳回';
         var adminBadge = m.is_admin_uploaded ? '<span class="admin-uploaded-badge">🛡️ 管理员自传</span>' : '';
         var reviewerName = m.is_admin_uploaded ? escapeHtml(m.uploader_name) + ' (自传)' : escapeHtml(m.reviewed_by_name);
@@ -578,22 +575,23 @@
         if (m.can_object && m.review_status === 'approved') {
           objHtml = '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">💬 异议</button>';
         } else {
-          objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">💬</button>';
+          objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">💬 查看异议</button>';
         }
-        html += '<tr>' +
-          '<td>' + escapeHtml(m.title) + adminBadge + '</td>' +
-          '<td>' + escapeHtml(m.course_name) + '</td>' +
-          '<td>' + escapeHtml(m.uploader_name) + '</td>' +
-          '<td>' + reviewerName + '</td>' +
-          '<td><span class="status-tag ' + statusClass + '">' + statusText + '</span></td>' +
-          '<td>' + escapeHtml(m.review_notes || '') + '</td>' +
-          '<td>' + (m.is_admin_uploaded ? m.created_at : m.reviewed_at) + '</td>' +
-          '<td>' + objHtml + '</td>' +
-        '</tr>';
-        // 异议详情行（隐藏，展开时显示）
-        html += '<tr id="hc-comments-row-' + m.id + '" style="display:none" class="hc-comments-row"><td colspan="8"><div class="pc-comments" id="hc-comments-' + m.id + '"></div></td></tr>';
+        html += '<div class="admin-pending-card hist-card ' + (m.review_status === 'approved' ? 'hc-approved' : 'hc-rejected') + '">' +
+          '<div class="pc-title">' + escapeHtml(m.title) + adminBadge +
+            '<span class="review-badge ' + statusClass + '" style="margin-left:6px">' + statusText + '</span></div>' +
+          '<div class="pc-meta">' +
+            '<span>📚 ' + escapeHtml(m.course_name) + '</span>' +
+            '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
+            '<span>🔍 ' + reviewerName + '</span>' +
+            '<span>📝 ' + escapeHtml(m.review_notes || '') + '</span>' +
+            '<span>🕐 ' + (m.is_admin_uploaded ? m.created_at : m.reviewed_at) + '</span>' +
+          '</div>' +
+          '<div class="pc-actions">' + objHtml + '</div>' +
+          '<div class="hc-comments-row hc-comments-card" id="hc-comments-row-' + m.id + '" style="display:none"><div class="pc-comments" id="hc-comments-' + m.id + '"></div></div>' +
+        '</div>';
       });
-      html += '</tbody></table></div>';
+      html += '</div>';
       // 分页
       if (data.total_pages > 1) {
         html += '<div class="admin-pagination">';
@@ -617,7 +615,7 @@
         _highlightDisputeMaterialId = null; // 只触发一次
         var targetRow = document.getElementById('hc-comments-row-' + targetId);
         if (targetRow) {
-          targetRow.style.display = 'table-row';
+          targetRow.style.display = 'block';
           var div = document.getElementById('hc-comments-' + targetId);
           if (div) {
             toggleComments(targetId, null, true);

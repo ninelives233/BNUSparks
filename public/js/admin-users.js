@@ -27,7 +27,7 @@
         '<button onclick="adminSearchUsers()">搜索</button>' +
         '</div>';
       var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
-      html += '<div class="admin-table-wrap"><table class="admin-table">' +
+      html += '<div class="admin-pending-card admin-users-card admin-card--static"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr>' +
           '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>下载数</th><th>注册时间</th>' +
         '</tr></thead><tbody>';
@@ -96,7 +96,7 @@
           '<td>' + u.date_joined + '</td>' +
         '</tr>';
       });
-      html += '</tbody></table></div>';
+      html += '</tbody></table></div></div>';
       // 分页控件
       var totalPages = resp.total_pages || 1;
       if (totalPages > 1) {
@@ -462,8 +462,9 @@
     if (isHistory) {
       var row = document.getElementById('hc-comments-row-' + fileId);
       if (row) {
-        if (row.style.display === 'table-row') { row.style.display = 'none'; return; }
-        row.style.display = 'table-row';
+        // v=180 卡片化：历史异议区由 <tr>（table-row）改为卡片内 <div>（block），判定统一
+        if (row.style.display === 'none' || row.style.display === '') { row.style.display = 'block'; }
+        else { row.style.display = 'none'; return; }
         commentsDiv = document.getElementById('hc-comments-' + fileId);
       }
     }
