@@ -63,6 +63,7 @@
     // 论坛管理待审仅问答区版主/超管拉取（非问答区版主访问该端点会 403，故不加入请求）
     var canQA = currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa);
     var forumIdx = -1;
+    var configIdx = -1;
     var requests = [
       api(url),
       api('/api/auth/profile/'),
@@ -72,14 +73,20 @@
     if (canQA) {
       forumIdx = requests.length;
       requests.push(api('/api/admin/qa/pending/'));
+      // v183：论坛管理 seg 顺带拉站点开关，保证总管理员开关状态准确（未进问答区也正确）
+      configIdx = requests.length;
+      requests.push(api('/api/qa/config/'));
     }
     Promise.all(requests).then(function(results) {
       var list = results[0];
       var profile = results[1];
       var courseRequests = results[2] || [];
       var reportData = results[3] || {};
-      var forumItems = forumIdx >= 0 ? ((results[forumIdx] || {}).items || []) : [];
-      var reportGroups = (reportData.material_groups || []).concat(reportData.user_groups || []);
+      if (configIdx >= 0) window._qaUserOpen = !!((results[configIdx] || {}).user_open);
+      var forumData = forumIdx >= 0 ? (results[forumIdx] || {}) : {};
+      var forumItems = forumData.items || [];
+      var forumDelReqs = forumData.delete_requests || [];
+      var reportGroups = (reportData.material_groups || []).concat(reportData.user_groups || []).concat(reportData.qa_groups || []);
       _pendingItems = {};
       (list || []).forEach(function(m) { _pendingItems[m.id] = m; });
 
@@ -102,7 +109,7 @@
         '<div class="pc-seg" role="tablist">' +
           '<button class="pc-seg-btn' + (_pendingType === 'file' ? ' active' : '') + '" data-type="file" onclick="switchPendingType(\'file\')">📄 文件上传<span class="pc-seg-count">' + fileCount + '</span></button>' +
           '<button class="pc-seg-btn' + (_pendingType === 'course' ? ' active' : '') + '" data-type="course" onclick="switchPendingType(\'course\')">✏️ 课程创建<span class="pc-seg-count">' + courseRequests.length + '</span></button>' +
-          (canQA ? '<button class="pc-seg-btn' + (_pendingType === 'forum' ? ' active' : '') + '" data-type="forum" onclick="switchPendingType(\'forum\')">💬 论坛管理<span class="pc-seg-count">' + forumItems.length + '</span></button>' : '') +
+          (canQA ? '<button class="pc-seg-btn' + (_pendingType === 'forum' ? ' active' : '') + '" data-type="forum" onclick="switchPendingType(\'forum\')">💬 论坛管理<span class="pc-seg-count">' + (forumItems.length + forumDelReqs.length) + '</span></button>' : '') +
           '<button class="pc-seg-btn' + (_pendingType === 'report' ? ' active' : '') + '" data-type="report" onclick="switchPendingType(\'report\')">🚩 举报受理<span class="pc-seg-count">' + reportGroups.length + '</span></button>' +
         '</div>';
       if (isMod && _pendingType !== 'report' && _pendingType !== 'forum') {
@@ -125,8 +132,10 @@
           _reportGroups = {};
           var mg = reportData.material_groups || [];
           var ug = reportData.user_groups || [];
+          var qg = reportData.qa_groups || [];
           mg.forEach(function(g) { _reportGroups[g.group_key] = g; });
           ug.forEach(function(g) { _reportGroups[g.group_key] = g; });
+          qg.forEach(function(g) { _reportGroups[g.group_key] = g; });
           if (mg.length) {
             html += '<div class="pc-section-label">🚩 待处理资料举报</div><div class="admin-pending-list">';
             mg.forEach(function(g) { html += _reportCardHtml(g); });
@@ -136,6 +145,12 @@
             if (mg.length) html += '<div class="pc-section-divider"></div>';
             html += '<div class="pc-section-label">🚩 待处理连带举报</div><div class="admin-pending-list">';
             ug.forEach(function(g) { html += _reportCardHtml(g); });
+            html += '</div>';
+          }
+          if (qg.length) {
+            if (mg.length || ug.length) html += '<div class="pc-section-divider"></div>';
+            html += '<div class="pc-section-label">🚩 待处理问答区举报</div><div class="admin-pending-list">';
+            qg.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }
         }
@@ -156,12 +171,27 @@
 
       // ── 论坛管理视图（问答区文字内容审核，仅问答区版主可见；Phase 1 管理员直发 → 恒空）──
       if (_pendingType === 'forum') {
+        // v183：总管理员开关（普通用户提问/回答开放状态；关闭时普通用户只能浏览）
+        if (currentUser && currentUser.role === 'super_admin') {
+          var userOpen = !!window._qaUserOpen;
+          html += '<div class="admin-auto-toggle">' +
+            '<span><strong>👥 普通用户提问/回答</strong><br><span class="at-hint">开启后普通用户可以提问、回答；提交内容需审核后公开，删除需留痕</span></span>' +
+            '<button class="admin-btn ' + (userOpen ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleQaUserOpen(this)">' + (userOpen ? '✅ 已开放' : '⏸ 已关闭') + '</button>' +
+          '</div>';
+        }
         if (forumItems.length) {
           html += '<div class="pc-section-label">💬 待审核的问答区内容</div><div class="admin-pending-list">';
           forumItems.forEach(function(item) { html += _qaForumPendingCardHtml(item); });
           html += '</div>';
         } else {
           html += '<div class="admin-empty">🎉 没有待审核的问答区内容</div>';
+        }
+        // v183：用户提交的删除申请（有互动的内容删除需管理员批准）
+        if (forumDelReqs.length) {
+          html += '<div class="pc-section-divider"></div>';
+          html += '<div class="pc-section-label">🗑️ 待批准的删除申请</div><div class="admin-pending-list">';
+          forumDelReqs.forEach(function(req) { html += _qaDeleteRequestCardHtml(req); });
+          html += '</div>';
         }
         content.innerHTML = html;
         return;
@@ -449,6 +479,16 @@
     });
   }
 
+  // v183：总管理员切换「普通用户提问/回答」开放状态（论坛管理 seg）
+  function toggleQaUserOpen(btn) {
+    api('/api/admin/qa/config/', { method: 'POST' }).then(function(data) {
+      window._qaUserOpen = !!data.user_open;
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert('操作失败：' + ((err && err.message) || '请稍后再试'));
+    });
+  }
+
   function _removeOverlay(el) {
     if (el) { el.remove(); unlockScroll(); _popModalHistory(); }
   }
@@ -565,9 +605,10 @@
         return;
       }
       var html = '<div class="admin-section-label">📋 审核历史</div>' +
-        '<div class="admin-pending-list">';
+        '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
+        '<thead><tr><th>资料</th><th>课程</th><th>上传者</th><th>审核人</th><th>结果</th><th>备注</th><th>审核时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(m) {
-        var statusClass = m.review_status === 'approved' ? 'review-badge-approved' : 'review-badge-rejected';
+        var statusClass = m.review_status === 'approved' ? 'status-approved' : 'status-rejected';
         var statusText = m.review_status === 'approved' ? '✓ 通过' : '✗ 驳回';
         var adminBadge = m.is_admin_uploaded ? '<span class="admin-uploaded-badge">🛡️ 管理员自传</span>' : '';
         var reviewerName = m.is_admin_uploaded ? escapeHtml(m.uploader_name) + ' (自传)' : escapeHtml(m.reviewed_by_name);
@@ -577,21 +618,19 @@
         } else {
           objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">💬 查看异议</button>';
         }
-        html += '<div class="admin-pending-card hist-card ' + (m.review_status === 'approved' ? 'hc-approved' : 'hc-rejected') + '">' +
-          '<div class="pc-title">' + escapeHtml(m.title) + adminBadge +
-            '<span class="review-badge ' + statusClass + '" style="margin-left:6px">' + statusText + '</span></div>' +
-          '<div class="pc-meta">' +
-            '<span>📚 ' + escapeHtml(m.course_name) + '</span>' +
-            '<span>👤 ' + escapeHtml(m.uploader_name) + '</span>' +
-            '<span>🔍 ' + reviewerName + '</span>' +
-            '<span>📝 ' + escapeHtml(m.review_notes || '') + '</span>' +
-            '<span>🕐 ' + (m.is_admin_uploaded ? m.created_at : m.reviewed_at) + '</span>' +
-          '</div>' +
-          '<div class="pc-actions">' + objHtml + '</div>' +
-          '<div class="hc-comments-row hc-comments-card" id="hc-comments-row-' + m.id + '" style="display:none"><div class="pc-comments" id="hc-comments-' + m.id + '"></div></div>' +
-        '</div>';
+        html += '<tr>' +
+          '<td>' + escapeHtml(m.title) + adminBadge + '</td>' +
+          '<td>' + escapeHtml(m.course_name) + '</td>' +
+          '<td>' + escapeHtml(m.uploader_name) + '</td>' +
+          '<td>' + reviewerName + '</td>' +
+          '<td><span class="status-tag ' + statusClass + '">' + statusText + '</span></td>' +
+          '<td>' + escapeHtml(m.review_notes || '') + '</td>' +
+          '<td>' + (m.is_admin_uploaded ? m.created_at : m.reviewed_at) + '</td>' +
+          '<td>' + objHtml + '</td>' +
+        '</tr>' +
+        '<tr class="hc-comments-row" id="hc-comments-row-' + m.id + '" style="display:none"><td colspan="8"><div class="pc-comments" id="hc-comments-' + m.id + '"></div></td></tr>';
       });
-      html += '</div>';
+      html += '</tbody></table></div></div>';
       // 分页
       if (data.total_pages > 1) {
         html += '<div class="admin-pagination">';
@@ -615,7 +654,7 @@
         _highlightDisputeMaterialId = null; // 只触发一次
         var targetRow = document.getElementById('hc-comments-row-' + targetId);
         if (targetRow) {
-          targetRow.style.display = 'block';
+          targetRow.style.display = 'table-row';
           var div = document.getElementById('hc-comments-' + targetId);
           if (div) {
             toggleComments(targetId, null, true);

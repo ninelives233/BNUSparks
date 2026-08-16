@@ -29,8 +29,8 @@
 }
 .nc-seg-btn:hover { color: var(--ink); }
 .nc-seg-btn.active {
-  background: var(--accent); color: #fff;
-  box-shadow: 0 1px 3px oklch(from var(--accent) l c h / 0.35);
+  background: var(--primary-surface); color: var(--primary-dark);
+  box-shadow: none;
 }
 
 /* 编号步骤（开课申请表：01 课程信息 → 02 随附资料） */

@@ -9,6 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
+from django.db import transaction
 
 from ..models import DeletionRecord
 
@@ -69,23 +70,25 @@ def _perform_soft_delete(material, deleted_by, delete_reason=""):
     trash_path 为空即「删除无实际效果」的判别基础）。material.delete() 触发
     post_delete 信号自动失效课程树/统计缓存并 bump 上传者公开页代际。
     """
-    dr = DeletionRecord.objects.create(
-        material_id=material.id,
-        title=material.title,
-        file_name=material.file_name,
-        file_size=material.file_size,
-        course_code=material.course.code if material.course else "",
-        course_name=material.course.name if material.course else "",
-        college_id=material.course.college_id if material.course and material.course.college else None,
-        uploader_name=material.uploader_name or (material.uploader.first_name if material.uploader else "匿名"),
-        deleted_by=deleted_by,
-        delete_reason=delete_reason,
-    )
-    trash_rel = _stage_file_to_trash(material)
-    if trash_rel:
-        dr.trash_path = trash_rel
-        dr.save(update_fields=["trash_path"])
-    material.delete()
+    # v=182：原子提交，杜绝「记录已建但行未删」的幽灵残留
+    with transaction.atomic():
+        dr = DeletionRecord.objects.create(
+            material_id=material.id,
+            title=material.title,
+            file_name=material.file_name,
+            file_size=material.file_size,
+            course_code=material.course.code if material.course else "",
+            course_name=material.course.name if material.course else "",
+            college_id=material.course.college_id if material.course and material.course.college else None,
+            uploader_name=material.uploader_name or (material.uploader.first_name if material.uploader else "匿名"),
+            deleted_by=deleted_by,
+            delete_reason=delete_reason,
+        )
+        trash_rel = _stage_file_to_trash(material)
+        if trash_rel:
+            dr.trash_path = trash_rel
+            dr.save(update_fields=["trash_path"])
+        material.delete()
     return dr, trash_rel
 
 

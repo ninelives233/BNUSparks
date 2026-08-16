@@ -97,19 +97,31 @@ urlpatterns = [
     path("moderation/reports/<int:report_id>/handle/", views.api_report_handle, name="api_report_handle"),
     path("moderation/reports/<int:report_id>/finish/", views.api_report_finish, name="api_report_finish"),
 
-    # 问答区（新生指南，Phase 1）
+    # 问答区（新生指南，Phase 1 + Phase 2 v183）
     path("qa/tags/", views.api_qa_tags, name="api_qa_tags"),
+    path("qa/config/", views.api_qa_config, name="api_qa_config"),
     path("qa/questions/", views.api_qa_questions, name="api_qa_questions"),
     path("qa/questions/<int:qid>/", views.api_qa_question_detail, name="api_qa_question_detail"),
     path("qa/questions/<int:qid>/view/", views.api_qa_question_view, name="api_qa_question_view"),
     path("qa/questions/<int:qid>/favorite/", views.api_qa_question_favorite, name="api_qa_question_favorite"),
+    path("qa/questions/<int:qid>/answers/", views.api_qa_answer_create_user, name="api_qa_answer_create_user"),
+    path("qa/questions/<int:target_id>/report/", views.api_qa_report, {"kind": "questions"}, name="api_qa_question_report"),
+    path("qa/questions/<int:target_id>/report-status/", views.api_qa_report_status, {"kind": "questions"}, name="api_qa_question_report_status"),
+    path("qa/answers/<int:aid>/", views.api_qa_answer_edit_user, name="api_qa_answer_edit_user"),
+    path("qa/answers/<int:aid>/accept/", views.api_qa_answer_accept, name="api_qa_answer_accept"),
+    path("qa/answers/<int:target_id>/report/", views.api_qa_report, {"kind": "answers"}, name="api_qa_answer_report"),
+    path("qa/answers/<int:target_id>/report-status/", views.api_qa_report_status, {"kind": "answers"}, name="api_qa_answer_report_status"),
     path("qa/answers/<int:aid>/favorite/", views.api_qa_answer_favorite, name="api_qa_answer_favorite"),
     path("qa/answers/<int:aid>/like/", views.api_qa_answer_like, name="api_qa_answer_like"),
     path("qa/user/favorites/", views.api_qa_user_favorites, name="api_qa_user_favorites"),
     path("qa/guest/verify/", views.api_qa_guest_verify, name="api_qa_guest_verify"),
     path("qa/ask-click/", views.api_qa_ask_click, name="api_qa_ask_click"),
 
-    # 问答区管理（问答区版主 / 超管，Phase 1）
+    # 问答区管理（问答区版主 / 超管，Phase 1 + Phase 2 v183）
+    path("admin/qa/config/", views.api_qa_admin_config_toggle, name="api_qa_admin_config_toggle"),
+    path("admin/qa/delete-requests/", views.api_qa_admin_delete_requests, name="api_qa_admin_delete_requests"),
+    path("admin/qa/delete-requests/<int:req_id>/approve/", views.api_qa_admin_delete_request_approve, name="api_qa_admin_delete_request_approve"),
+    path("admin/qa/delete-requests/<int:req_id>/reject/", views.api_qa_admin_delete_request_reject, name="api_qa_admin_delete_request_reject"),
     path("admin/qa/questions/", views.api_qa_admin_question_create, name="api_qa_admin_question_create"),
     path("admin/qa/questions/<int:qid>/", views.api_qa_admin_question_update, name="api_qa_admin_question_update"),
     path("admin/qa/questions/<int:qid>/delete/", views.api_qa_admin_question_delete, name="api_qa_admin_question_delete"),

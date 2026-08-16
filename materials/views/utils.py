@@ -21,8 +21,8 @@ from .utils_security import (
 )
 from .utils_auth import (
     _err, _generate_download_token, _get_or_create_profile, _get_user,
-    _jwt_decode, _jwt_encode, _ok, _verify_download_token, require_login,
-    require_role,
+    _identity_can_edit, _jwt_decode, _jwt_encode, _normalize_identity, _ok,
+    _verify_download_token, require_login, require_role,
 )
 from .utils_course_tree import (
     _build_tree_node, _clear_category_preload, _college_node_of,

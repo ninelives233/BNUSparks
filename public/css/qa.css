@@ -75,7 +75,7 @@
   border-radius: 999px; cursor: pointer; transition: all var(--t-fast);
 }
 .qa-pill:hover { border-color: var(--primary); color: var(--primary); }
-.qa-pill.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.qa-pill.on { background: var(--primary-surface); border-color: var(--primary-light); color: var(--primary-dark); font-weight: 600; }
 .qa-sort-row { display: flex; gap: 6px; margin-top: var(--space-sm); padding-top: var(--space-sm); border-top: 1px dashed var(--border-light); }
 .qa-tag-desc { margin-top: var(--space-xs); font-size: 0.78rem; color: var(--ink-faint); padding-left: 3.5em; }
 
@@ -268,7 +268,7 @@
 /* 筛选 pill 分级配色：L1 选中 accent（暖色层级更高）/ L2 选中 primary */
 .qa-pill-l1:hover { border-color: var(--accent); color: var(--accent); }
 .qa-pill-l1.on { background: var(--accent-hover); border-color: var(--accent-hover); }
-.qa-pill-l2.on { background: var(--primary); border-color: var(--primary); }
+.qa-pill-l2.on { background: var(--primary-surface); border-color: var(--primary-light); }
 
 @media (max-width: 640px) {
   .qa-pin-card { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
@@ -396,3 +396,113 @@
 }
 .qe-img-file-label:hover { border-color: var(--primary); }
 .qe-img-file { display: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   v183 问答区 Phase 2 · 采纳徽章 / 状态 banner / 作者操作 / 举报钮 /
+   采纳按钮 / 编辑历史面板 / 删除理由弹窗 / 删除申请卡
+   全部派生既有 OKLCH token（--success/--danger/--accent/--primary/--star…）
+   ═══════════════════════════════════════════════════════════ */
+
+/* 已解决 / 最佳回答徽章（成功绿系，含勾） */
+.qa-accepted-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; font-size: 0.7rem; font-weight: 600;
+  color: var(--success); background: var(--success-light);
+  border: 1px solid oklch(from var(--success) l c h / 0.3); border-radius: 999px;
+}
+.qa-accepted-badge svg { width: 11px; height: 11px; }
+.qa-accepted-badge--sm { padding: 1px 5px; }
+.qa-accepted-badge--answer { margin-left: 2px; }
+
+/* 详情状态 banner（作者视角：审核中 / 已驳回） */
+.qa-status-banner {
+  padding: 10px 14px; font-size: 0.82rem; font-weight: 500;
+  border-radius: var(--radius-md); margin-bottom: var(--space-md);
+}
+.qa-status-banner--pending {
+  color: var(--primary); background: var(--primary-surface);
+  border: 1px solid oklch(from var(--primary) l c h / 0.25);
+}
+.qa-status-banner--rejected {
+  color: var(--danger-dark); background: var(--danger-light);
+  border: 1px solid var(--danger-border);
+}
+
+/* 作者操作栏（编辑 / 编辑历史 / 删除） */
+.qa-owner-actions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: var(--space-sm); padding-top: var(--space-xs);
+  border-top: 1px dashed var(--border-light);
+}
+.qa-owner-actions--answer { border-top: none; padding-top: 0; margin-top: var(--space-xs); }
+.qa-owner-btn {
+  padding: 3px 10px; font-size: 0.76rem; color: var(--ink-faint);
+  background: transparent; border: 1px solid var(--border); border-radius: 999px;
+  cursor: pointer; transition: all var(--t-fast);
+}
+.qa-owner-btn:hover { color: var(--primary); border-color: var(--primary); }
+.qa-owner-btn--danger:hover { color: var(--danger); border-color: var(--danger); }
+
+/* 举报按钮（低调：小字号、低对比，卡片右下角） */
+.qa-report-btn {
+  margin-left: auto;
+  padding: 3px 10px; font-size: 0.72rem; color: var(--ink-faint);
+  background: transparent; border: 1px solid transparent; border-radius: 999px;
+  cursor: pointer; transition: color var(--t-fast), border-color var(--t-fast);
+}
+.qa-report-btn:hover { color: var(--danger); border-color: var(--danger-border); }
+
+/* 采纳 / 取消采纳按钮（成功绿系） */
+.qa-accept-btn {
+  display: inline-flex; align-items: center;
+  padding: 5px 12px; font-size: 0.78rem; color: var(--success);
+  background: var(--surface); border: 1px solid oklch(from var(--success) l c h / 0.4);
+  border-radius: 999px; cursor: pointer; transition: all var(--t-fast);
+}
+.qa-accept-btn:hover { background: var(--success-light); }
+.qa-accept-btn.on {
+  color: var(--surface); background: var(--success); border-color: var(--success);
+}
+
+/* 编辑历史面板（知乎式） */
+.qa-history-card { max-width: 560px; width: 100%; }
+.qa-history-body { max-height: 60vh; overflow-y: auto; margin-top: var(--space-md); }
+.qa-history-empty { padding: 24px; text-align: center; font-size: 0.85rem; color: var(--ink-faint); }
+.qa-history-list { display: flex; flex-direction: column; }
+.qa-history-item { padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-light); }
+.qa-history-item:last-child { border-bottom: none; }
+.qa-history-meta {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-bottom: 4px;
+}
+.qa-history-editor { font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); }
+.qa-history-time { font-size: 0.72rem; color: var(--ink-faint); }
+.qa-history-diff { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.qa-history-old { font-size: 0.8rem; color: var(--ink-faint); text-decoration: line-through; }
+.qa-history-arrow { font-size: 0.75rem; color: var(--ink-faint); }
+.qa-history-new { font-size: 0.8rem; color: var(--ink); font-weight: 500; }
+
+/* 删除理由弹窗 */
+.qa-del-card { max-width: 440px; width: 100%; }
+.qa-del-hint { font-size: 0.8rem; color: var(--ink-soft); line-height: 1.7; margin: 0 0 var(--space-md); }
+.qa-del-reason {
+  width: 100%; min-height: 90px; padding: 10px 12px;
+  font-size: 0.88rem; color: var(--ink); font-family: inherit; line-height: 1.6;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  resize: vertical; outline: none; transition: border-color var(--t-fast);
+}
+.qa-del-reason:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.qa-del-error { margin-top: var(--space-xs); font-size: 0.8rem; color: var(--danger); }
+.qa-del-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: var(--space-md); }
+
+/* 删除申请卡（管理后台论坛管理 pending） */
+.qa-delete-req-card { border-left: 3px solid var(--danger-border); }
+.qa-delreq-reason {
+  margin-top: 4px; padding: 6px 10px; font-size: 0.78rem; color: var(--ink-soft);
+  background: var(--bg-subtle, var(--surface-alt)); border-radius: var(--radius-sm);
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .qa-history-meta { flex-direction: column; gap: 2px; }
+}

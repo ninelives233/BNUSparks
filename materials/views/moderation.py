@@ -475,7 +475,8 @@ def api_moderation_history(request):
     total = qs.count()
     items = qs[(page - 1) * per_page : page * per_page]
 
-    recently = timezone.now() - timedelta(hours=24)
+    # v=182：异议窗口 24h→48h（用户拍板，只放宽窗口、不加后端校验）
+    recently = timezone.now() - timedelta(hours=48)
     return _ok({
         "total": total,
         "page": page,

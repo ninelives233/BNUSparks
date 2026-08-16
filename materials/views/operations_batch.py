@@ -4,6 +4,7 @@ BNU Sparks · 木铎星火 — 批量删除 / 批量编辑 API
 
 import json
 
+from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 
 from ..models import Material, UserProfile, DeletionRecord, Notification
@@ -49,21 +50,24 @@ def api_file_batch_delete(request):
             else:
                 errors.append(f"文件#{fid}：无权删除")
                 continue
-            dr = DeletionRecord.objects.create(
-                material_id=m.id, title=m.title,
-                file_name=m.file_name, file_size=m.file_size,
-                course_code=m.course.code if m.course else "",
-                course_name=m.course.name if m.course else "",
-                college_id=m.course.college_id if m.course and m.course.college else None,
-                uploader_name=m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
-                deleted_by=request.user, delete_reason=reason,
-            )
-            # 软删除：物理文件移入暂存区（顺带修复此前批删不留文件、磁盘残留孤儿的问题）
-            trash_rel = _stage_file_to_trash(m)
-            if trash_rel:
-                dr.trash_path = trash_rel
-                dr.save(update_fields=["trash_path"])
-            m.delete()
+            # v=182.1：单文件删除原子化——建记录/暂存文件/删行要么全成要么全回滚，
+            # 杜绝批删中途 DB 异常留下「记录在、行还在」的幽灵（与 api_file_delete 同款修复）
+            with transaction.atomic():
+                dr = DeletionRecord.objects.create(
+                    material_id=m.id, title=m.title,
+                    file_name=m.file_name, file_size=m.file_size,
+                    course_code=m.course.code if m.course else "",
+                    course_name=m.course.name if m.course else "",
+                    college_id=m.course.college_id if m.course and m.course.college else None,
+                    uploader_name=m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
+                    deleted_by=request.user, delete_reason=reason,
+                )
+                # 软删除：物理文件移入暂存区（顺带修复此前批删不留文件、磁盘残留孤儿的问题）
+                trash_rel = _stage_file_to_trash(m)
+                if trash_rel:
+                    dr.trash_path = trash_rel
+                    dr.save(update_fields=["trash_path"])
+                m.delete()
             deleted += 1
         except Material.DoesNotExist:
             errors.append(f"文件#{fid}：不存在")

@@ -42,6 +42,13 @@ class UserProfile(models.Model):
     bio = models.TextField("个人简介", max_length=200, blank=True, default="",
         help_text="200字以内")
 
+    # 身份标签（学院 + 专业，v183）—— 存名称而非 FK，对课程树种子重建健壮；空 = 未设置/「其他」
+    identity_college = models.CharField("身份学院", max_length=100, blank=True, default="")
+    identity_major = models.CharField("身份专业", max_length=100, blank=True, default="")
+    show_college_public = models.BooleanField("公开资料显示学院", default=False)
+    show_major_public = models.BooleanField("公开资料显示专业", default=False)
+    identity_updated_at = models.DateTimeField("身份最近修改时间", null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -503,6 +510,9 @@ class Report(models.Model):
     class Kind(models.TextChoices):
         MATERIAL = "material", "资料举报"
         USER = "user", "连带举报用户"
+        # v183：问答区举报（复用本模型，受理走问答区版主）
+        QUESTION = "question", "问题举报"
+        ANSWER = "answer", "回答举报"
 
     class Status(models.TextChoices):
         PENDING = "pending", "待处理"
@@ -514,7 +524,8 @@ class Report(models.Model):
         KEEP = "keep", "保留"
 
     kind = models.CharField("举报类型", max_length=10, choices=Kind.choices, default=Kind.MATERIAL)
-    # 被举报对象（二选一：material-kind 有 material，user-kind 有 target_user）
+    # 被举报对象（material-kind 有 material，user-kind 有 target_user；
+    # v183 question-kind 有 qa_question，answer-kind 有 qa_answer）
     material = models.ForeignKey(
         Material, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="reports", verbose_name="被举报资料",
@@ -525,6 +536,20 @@ class Report(models.Model):
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="reported", verbose_name="被连带举报用户",
     )
+    qa_question = models.ForeignKey(
+        "QaQuestion", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reports", verbose_name="被举报问题",
+    )
+    qa_question_pk = models.IntegerField("被举报问题ID", null=True, blank=True,
+        help_text="冗余：问题删除后 FK 置空，此字段保留原始 ID 供聚合/处理定位")
+    qa_answer = models.ForeignKey(
+        "QaAnswer", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reports", verbose_name="被举报回答",
+    )
+    qa_answer_pk = models.IntegerField("被举报回答ID", null=True, blank=True,
+        help_text="冗余：回答删除后 FK 置空，此字段保留原始 ID 供聚合/处理定位")
+    qa_question_title = models.CharField("问题标题", max_length=200, blank=True,
+        help_text="冗余：问答区举报记被举报问题标题（回答举报记父问题标题），FK 失效后仍可读")
     # 举报内容
     reporter = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
@@ -562,7 +587,8 @@ class Report(models.Model):
         verbose_name_plural = "举报"
         ordering = ["-created_at"]
         constraints = [
-            # 同一用户同一资料只报一次；连带举报按被举报用户防重复
+            # 同一用户同一资料只报一次；连带举报按被举报用户防重复；
+            # v183 问答区举报：同一用户对同一问题/回答只报一次
             models.UniqueConstraint(
                 fields=["reporter", "material"], condition=Q(kind="material"),
                 name="uniq_material_report",
@@ -571,11 +597,23 @@ class Report(models.Model):
                 fields=["reporter", "target_user"], condition=Q(kind="user"),
                 name="uniq_user_report",
             ),
+            models.UniqueConstraint(
+                fields=["reporter", "qa_question"], condition=Q(kind="question"),
+                name="uniq_qa_question_report",
+            ),
+            models.UniqueConstraint(
+                fields=["reporter", "qa_answer"], condition=Q(kind="answer"),
+                name="uniq_qa_answer_report",
+            ),
         ]
 
     def __str__(self):
         if self.kind == self.Kind.MATERIAL:
             return f"[举报资料] {self.material_title} by {self.reporter_name}"
+        if self.kind == self.Kind.QUESTION:
+            return f"[举报问题] {self.qa_question_title} by {self.reporter_name}"
+        if self.kind == self.Kind.ANSWER:
+            return f"[举报回答] {self.qa_question_title} by {self.reporter_name}"
         return f"[举报用户] {self.target_user_name} by {self.reporter_name}"
 
 
@@ -824,3 +862,78 @@ class QaAskClickDaily(models.Model):
 
     def __str__(self):
         return f"{self.date}: {self.count}"
+
+
+class QaConfig(models.Model):
+    """站点级问答区配置（单例 pk=1）：普通用户提问/回答开放开关（Phase 2 v183）
+
+    默认关闭。总管理员在 管理后台→待审核→论坛管理 切换；后端用户提交端点
+    必须读此开关（关→403），前端按钮只是 UX 门控。
+    """
+    user_open = models.BooleanField("普通用户提问/回答开放", default=False)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="qa_config_updates", verbose_name="最近操作人",
+    )
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "问答区配置"
+        verbose_name_plural = "问答区配置"
+
+    @classmethod
+    def user_can_post(cls):
+        cfg, _ = cls.objects.get_or_create(pk=1)
+        return cfg.user_open
+
+    def __str__(self):
+        return f"问答区开放：{'开' if self.user_open else '关'}"
+
+
+class QaDeleteRequest(models.Model):
+    """问答区删除申请（Phase 2 v183）：用户删除有互动内容 → 管理员批准/驳回
+
+    target 用 (target_type, target_id) 无 FK 设计，48h 硬删后申请记录仍可追溯展示；
+    简单删除（无互动）自动批准并立即软删，auto_approved=True 留痕。
+    部分唯一约束防同一用户对同一目标重复提交 PENDING 申请（并发 IntegrityError 兜底）。
+    """
+    class Status(models.TextChoices):
+        PENDING = "pending", "待批准"
+        APPROVED = "approved", "已批准"
+        REJECTED = "rejected", "已驳回"
+
+    TARGET_CHOICES = [("question", "问题"), ("answer", "回答")]
+
+    target_type = models.CharField("目标类型", max_length=10, choices=TARGET_CHOICES)
+    target_id = models.PositiveIntegerField("目标ID")
+    requester = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="qa_delete_requests",
+        verbose_name="申请人",
+    )
+    reason = models.TextField("删除理由", max_length=500)
+    status = models.CharField("状态", max_length=10, choices=Status.choices, default=Status.PENDING)
+    auto_approved = models.BooleanField("简单删除自动批准", default=False)
+    handled_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="qa_delreq_handled", verbose_name="处理人",
+    )
+    handled_at = models.DateTimeField("处理时间", null=True, blank=True)
+    created_at = models.DateTimeField("申请时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "问答区删除申请"
+        verbose_name_plural = "问答区删除申请"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["target_type", "target_id"], name="qa_delreq_target"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["requester", "target_type", "target_id"],
+                condition=Q(status="pending"),
+                name="uniq_qa_delreq_pending",
+            ),
+        ]
+
+    def __str__(self):
+        return f"删{self.get_target_type_display()}{self.target_id} by {self.requester_id} [{self.status}]"

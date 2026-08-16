@@ -15,7 +15,8 @@ from django.core.mail import send_mail
 
 from .utils import (
     _err, _ok, _jwt_encode, _get_user, _get_or_create_profile,
-    require_login, UserProfile, DAILY_DOWNLOAD_LIMIT,
+    _identity_can_edit, _normalize_identity, require_login, UserProfile,
+    DAILY_DOWNLOAD_LIMIT,
 )
 
 
@@ -36,6 +37,8 @@ def api_register(request):
     email = (body.get("email") or "").strip().lower()
     nickname = (body.get("nickname") or "").strip()
     password = (body.get("password") or "").strip()
+    college = (body.get("college") or "").strip()
+    major = (body.get("major") or "").strip()
 
     if not email:
         return _err("邮箱不能为空")
@@ -59,7 +62,12 @@ def api_register(request):
         username=email, password=password, email=email,
         first_name=nickname, is_active=False,
     )
-    _get_or_create_profile(user)
+    profile = _get_or_create_profile(user)
+    # 身份标签（选填）：注册初始设置不占用每日一次修改额度（identity_updated_at 保持空）
+    profile.identity_college = _normalize_identity(college)
+    profile.identity_major = _normalize_identity(major)
+    if profile.identity_college or profile.identity_major:
+        profile.save(update_fields=["identity_college", "identity_major"])
 
     token = default_token_generator.make_token(user)
     link = request.build_absolute_uri(f'/verify-email/?uid={user.id}&vtoken={token}')
@@ -122,6 +130,9 @@ def api_verify_email(request):
                 "email": user.email,
                 "role": profile.role,
                 "avatar_url": profile.avatar.url if profile.avatar else "",
+                "identity_college": profile.identity_college or "",
+                "identity_major": profile.identity_major or "",
+                "identity_can_edit": _identity_can_edit(profile),
             },
         })
 
@@ -159,6 +170,9 @@ def api_verify_email(request):
             "email": user.email,
             "role": profile.role,
             "avatar_url": profile.avatar.url if profile.avatar else "",
+            "identity_college": profile.identity_college or "",
+            "identity_major": profile.identity_major or "",
+            "identity_can_edit": _identity_can_edit(profile),
         },
     })
 
@@ -234,6 +248,9 @@ def api_login(request):
             "email": user.email,
             "role": profile.role,
             "avatar_url": profile.avatar.url if profile.avatar else "",
+            "identity_college": profile.identity_college or "",
+            "identity_major": profile.identity_major or "",
+            "identity_can_edit": _identity_can_edit(profile),
         },
     })
 
@@ -272,6 +289,11 @@ def api_me(request):
         "daily_download_remaining": remaining,
         "is_staff": user.is_staff,
         "avatar_url": profile.avatar.url if profile.avatar else "",
+        "identity_college": profile.identity_college or "",
+        "identity_major": profile.identity_major or "",
+        "show_college_public": profile.show_college_public,
+        "show_major_public": profile.show_major_public,
+        "identity_can_edit": _identity_can_edit(profile),
     })
 
 

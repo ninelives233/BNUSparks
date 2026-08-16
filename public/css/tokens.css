@@ -90,7 +90,6 @@
     --shadow-md: 0 2px 6px oklch(0.45 0.01 55 / 0.12), 0 6px 20px oklch(0.45 0.01 55 / 0.10);
     --shadow-lg: 0 4px 12px oklch(0.45 0.01 55 / 0.14), 0 12px 40px oklch(0.45 0.01 55 / 0.12);
     --shadow-xl: 0 8px 24px oklch(0.45 0.01 55 / 0.16), 0 24px 64px oklch(0.45 0.01 55 / 0.16);
-    --shadow-primary: 0 2px 12px oklch(from var(--primary) l c h / 0.25);
     --focus-ring: 0 0 0 3px oklch(from var(--primary) l c h / 0.15);
 
     /* 字号 scale（base 15px = body） */

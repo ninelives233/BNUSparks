@@ -36,6 +36,7 @@ from .files import (
 # 举报
 from .reports import (
     api_file_report, api_file_report_status,
+    api_qa_report, api_qa_report_status,
     api_report_pending, api_report_handle,
     api_report_finish, api_report_history,
 )
@@ -83,12 +84,15 @@ from .admin import (
 # 公告
 from .announcements import api_announcements, api_announcement_delete
 
-# 问答区（新生指南，Phase 1）
+# 问答区（新生指南，Phase 1 + Phase 2 v183）
 from .qa import (
     api_qa_tags, api_qa_questions, api_qa_question_detail,
     api_qa_question_view, api_qa_question_favorite,
     api_qa_answer_favorite, api_qa_answer_like, api_qa_user_favorites,
     api_qa_guest_verify, api_qa_ask_click,
+    api_qa_config, api_qa_admin_config_toggle,
+    api_qa_question_create_user, api_qa_question_edit_user,
+    api_qa_answer_create_user, api_qa_answer_edit_user, api_qa_answer_accept,
     api_qa_admin_question_create, api_qa_admin_question_update,
     api_qa_admin_question_delete, api_qa_admin_question_history,
     api_qa_admin_question_rollback, api_qa_admin_answer_create,
@@ -97,6 +101,8 @@ from .qa import (
     api_qa_admin_records, api_qa_admin_pending, api_qa_admin_upload_image,
     api_qa_admin_question_approve, api_qa_admin_question_reject,
     api_qa_admin_answer_approve, api_qa_admin_answer_reject,
+    api_qa_admin_delete_requests,
+    api_qa_admin_delete_request_approve, api_qa_admin_delete_request_reject,
 )
 
 # ── 内部辅助函数（供测试套件引用）──

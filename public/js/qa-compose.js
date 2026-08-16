@@ -17,12 +17,17 @@ function _qaComposeCanManage() {
 
 function _qaComposeGuard() {
   if (!currentUser) { showLoginModal(); return false; }
-  if (!_qaComposeCanManage()) {
-    alert('仅问答区版主可发布内容');
+  if (!_qaComposeCanManage() && !window._qaUserOpen) {
+    alert('提问/回答功能暂未开放');
     if (typeof showQa === 'function') showQa();
     return false;
   }
   return true;
+}
+
+// v183：user 模式 = 普通用户且站点开放（非管理端）。管理端仍走 admin 端点，普通用户走 /api/qa/ 端点
+function _qaComposeIsUser() {
+  return !!currentUser && !_qaComposeCanManage();
 }
 
 function showQaCompose(mode) {
@@ -52,10 +57,16 @@ function renderQaCompose() {
 
   tagsPromise.then(function(tags) {
     var load = null;
+    var isUser = _qaComposeIsUser();
     if (mode.type === 'question' && mode.action === 'edit' && mode.qid) {
-      load = api('/api/admin/qa/questions/' + mode.qid + '/');
+      // v183：user 模式走作者编辑端点（GET /api/qa/questions/{qid}/）
+      load = isUser
+        ? api('/api/qa/questions/' + mode.qid + '/')
+        : api('/api/admin/qa/questions/' + mode.qid + '/');
     } else if (mode.type === 'answer' && mode.action === 'edit' && mode.aid) {
-      load = api('/api/admin/qa/answers/' + mode.aid + '/');
+      load = isUser
+        ? api('/api/qa/answers/' + mode.aid + '/')
+        : api('/api/admin/qa/answers/' + mode.aid + '/');
     } else if (mode.type === 'answer' && mode.action === 'create' && mode.qid) {
       load = api('/api/qa/questions/' + mode.qid + '/'); // 只读标题展示
     }
@@ -108,7 +119,7 @@ function _renderQaComposeForm(container, tags, data) {
         '<label>正文 <span class="qc-hint">富文本，最长 1000 字</span></label>' +
         '<div id="qcEditor"></div>' +
       '</div>' +
-      '<label class="qe-pin-row"><input type="checkbox" id="qcPin" ' + (pin ? 'checked' : '') + '> 置顶此问题（全局最多 5 篇）</label>' +
+      (_qaComposeIsUser() ? '' : '<label class="qe-pin-row"><input type="checkbox" id="qcPin" ' + (pin ? 'checked' : '') + '> 置顶此问题（全局最多 5 篇）</label>') +
     '</div>';
   } else {
     var contextLabel = isEdit ? '正在编辑回答' : '回答此问题';
@@ -123,7 +134,7 @@ function _renderQaComposeForm(container, tags, data) {
         '<label>回答正文 <span class="qc-hint">富文本，最长 2 万字</span></label>' +
         '<div id="qcEditor"></div>' +
       '</div>' +
-      '<label class="qe-pin-row"><input type="checkbox" id="qcPin" ' + (pin ? 'checked' : '') + '> 在回答中置顶展示</label>' +
+      (_qaComposeIsUser() ? '' : '<label class="qe-pin-row"><input type="checkbox" id="qcPin" ' + (pin ? 'checked' : '') + '> 在回答中置顶展示</label>') +
     '</div>';
   }
 
@@ -202,6 +213,7 @@ function submitQaCompose(btn) {
   var mode = _qaComposeMode || {};
   var isQuestion = mode.type === 'question';
   var isEdit = mode.action === 'edit';
+  var isUser = _qaComposeIsUser();
   var errEl = document.getElementById('qcError');
   var _err = function(m) { if (errEl) { errEl.style.display = 'block'; errEl.textContent = m; } btn.disabled = false; };
 
@@ -218,12 +230,21 @@ function submitQaCompose(btn) {
     var body = {
       title: title, content: content,
       tag_l1: parseInt(_qaComposeTagL1, 10), tag_l2: parseInt(_qaComposeTagL2, 10),
-      is_pinned: pin,
     };
+    // v183：user 模式禁置顶（后端亦忽略，前端不发送）
+    if (!isUser) body.is_pinned = pin;
     btn.disabled = true;
-    var req = (isEdit && mode.qid)
-      ? api('/api/admin/qa/questions/' + mode.qid + '/', { method: 'PUT', body: body })
-      : api('/api/admin/qa/questions/', { method: 'POST', body: body });
+    // v183：user 模式走 /api/qa/ 端点（进待审核），管理端走 admin 端点
+    var req;
+    if (isEdit && mode.qid) {
+      req = isUser
+        ? api('/api/qa/questions/' + mode.qid + '/', { method: 'PUT', body: body })
+        : api('/api/admin/qa/questions/' + mode.qid + '/', { method: 'PUT', body: body });
+    } else {
+      req = isUser
+        ? api('/api/qa/questions/', { method: 'POST', body: body })
+        : api('/api/admin/qa/questions/', { method: 'POST', body: body });
+    }
     req.then(function(d) { qaComposeAfterSave(d.id); })
        .catch(function(e) { _err((e && (e.message || e.error)) || '保存失败'); });
     return;
@@ -234,12 +255,17 @@ function submitQaCompose(btn) {
   if (!content) { _err('请填写回答正文'); return; }
   if (qaEditorVisibleLen(content) > 20000) { _err('回答最长 2 万字'); return; }
   btn.disabled = true;
-  var body = { content: content, is_pinned: pin };
+  var body = { content: content };
+  if (!isUser) body.is_pinned = pin;
   var req;
   if (isEdit && mode.aid) {
-    req = api('/api/admin/qa/answers/' + mode.aid + '/', { method: 'PUT', body: body });
+    req = isUser
+      ? api('/api/qa/answers/' + mode.aid + '/', { method: 'PUT', body: body })
+      : api('/api/admin/qa/answers/' + mode.aid + '/', { method: 'PUT', body: body });
   } else if (mode.qid) {
-    req = api('/api/admin/qa/questions/' + mode.qid + '/answers/', { method: 'POST', body: body });
+    req = isUser
+      ? api('/api/qa/questions/' + mode.qid + '/answers/', { method: 'POST', body: body })
+      : api('/api/admin/qa/questions/' + mode.qid + '/answers/', { method: 'POST', body: body });
   } else {
     _err('缺少问题上下文'); btn.disabled = false; return;
   }

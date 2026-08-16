@@ -12,6 +12,7 @@ from functools import wraps
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.http import JsonResponse
+from django.utils import timezone
 
 from ..models import UserProfile
 
@@ -152,6 +153,23 @@ def _get_or_create_profile(user):
         return user.profile
     except UserProfile.DoesNotExist:
         return UserProfile.objects.create(user=user, role=UserProfile.Role.USER)
+
+
+def _normalize_identity(value, max_len=100):
+    """身份字段归一化：去空白、「其他」与空 → 空串，超长截断（v183）"""
+    val = (value or "").strip()
+    if not val or val == "其他":
+        return ""
+    return val[:max_len]
+
+
+def _identity_can_edit(profile):
+    """身份标签修改权限：仅普通 user 每日限改 1 次，其余角色不限（v183）"""
+    if profile.role != UserProfile.Role.USER:
+        return True
+    if not profile.identity_updated_at:
+        return True
+    return profile.identity_updated_at.date() != timezone.now().date()
 
 
 def require_role(*roles):
