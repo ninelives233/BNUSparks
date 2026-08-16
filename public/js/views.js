@@ -311,6 +311,7 @@
   var _IC_MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
   var _IC_MSG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   var _IC_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+  var _IC_ID = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4M7 13h4M15 9h2M15 13h2"/></svg>';
 
   function showLeaderboard() {
     pushViewState('leaderboard', {});
@@ -448,10 +449,17 @@
       var ms = u.member_since.split('-');
       memberHtml = '<div class="upi-member"><span class="upi-ico">' + _IC_CLOCK + '</span> 注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</div>';
     }
+    // 身份标签（v183：后端已按公开开关过滤，非空才显示）
+    var identityHtml = '';
+    if (u.college || u.major) {
+      identityHtml = '<div class="upi-identity"><span class="upi-ico">' + _IC_ID + '</span> ' +
+        (u.college ? esc(u.college) : '') + (u.college && u.major ? ' · ' : '') + (u.major ? esc(u.major) : '') + '</div>';
+    }
     var html = '<div class="user-public-card">' + avatarHtml +
       '<div class="user-public-info">' +
         '<div class="upi-name">' + esc(u.nickname) + '</div>' +
         '<div class="upi-bio">' + esc(u.bio || '此人神秘，未留简介') + '</div>' +
+        identityHtml +
         memberHtml +
         contactHtml +
       '</div></div>';

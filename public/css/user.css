@@ -61,11 +61,11 @@
   /* v=164.1：hover 微交互——轻微上浮 + 暖影（未读已有左边框，不叠加内阴影避免双线） */
   .notif-full-item:hover {
     border-color: var(--primary-light);
-    box-shadow: 0 2px 10px oklch(0 0 0 / 0.06);
+    box-shadow: 0 2px 10px oklch(0.45 0.01 55 / 0.06);
     transform: translateY(-1px);
   }
   .notif-full-item:not(.notif-full-item-unread):hover {
-    box-shadow: inset 3px 0 0 var(--primary), 0 2px 10px oklch(0 0 0 / 0.06);
+    box-shadow: inset 3px 0 0 var(--primary), 0 2px 10px oklch(0.45 0.01 55 / 0.06);
   }
   .notif-full-item-unread {
     border-left: 3px solid var(--primary);
@@ -382,7 +382,7 @@
   background: #fff;
   /* 圆角左缘 + 分层阴影 + 品牌发丝线：强化页面与抽屉的边界 */
   border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  box-shadow: -12px 0 32px oklch(0 0 0 / 0.14), -1px 0 0 oklch(from var(--primary) l c h / 0.10);
+  box-shadow: -12px 0 32px oklch(0.45 0.01 55 / 0.14), -1px 0 0 oklch(from var(--primary) l c h / 0.10);
   display: flex; flex-direction: column;
   z-index: 1000;
   animation: notifSlideIn 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -497,7 +497,7 @@
 /* v=172 举报系统 4 类型（琥珀旗标色系延续 --accent/--star 家族） */
 .notif-ico-report_alert { color: oklch(0.52 0.12 45); }
 .notif-ico-report_result { color: oklch(0.48 0.12 150); }
-.notif-ico-report_escalated { color: oklch(0.55 0.14 265); }
+.notif-ico-report_escalated { color: var(--accent); }
 .notif-ico-report_malicious { color: oklch(0.55 0.16 25); }
 .notif-item-read .notif-item-ico,
 .notif-full-item:not(.notif-full-item-unread) .notif-full-ico { color: var(--ink-light, oklch(0.5 0 0)); }
@@ -553,7 +553,7 @@
 }
 .notif-footer .notif-view-all:hover {
   background: oklch(0.90 0.03 250);
-  box-shadow: 0 1px 6px oklch(from var(--primary) l c h / 0.18);
+  box-shadow: var(--shadow-xs);
 }
 .notif-empty {
   text-align: center;
@@ -829,9 +829,9 @@
 }
 
 .leaderboard-tabs .lb-tab.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+  background: var(--primary-surface);
+  color: var(--primary-dark);
+  border-color: var(--primary-light);
 }
 
 /* v=164：卡片列表 + 印章徽章（弃表格） */
@@ -859,7 +859,7 @@
 }
 /* 前三名行：极淡底色提示（金/银/铜），不喧宾夺主 */
 .lb-row.top-1 { background: oklch(0.97 0.02 70 / 0.45); }
-.lb-row.top-2 { background: oklch(0.97 0.012 210 / 0.35); }
+.lb-row.top-2 { background: oklch(0.97 0.012 250 / 0.35); }
 .lb-row.top-3 { background: oklch(0.97 0.015 40 / 0.35); }
 
 /* 排名印章：前三名圆形徽章（衬线数字 + 描边 + 淡底），4 名以后弱化 */
@@ -881,9 +881,9 @@
   background: oklch(0.95 0.045 70);
 }
 .lb-rank-seal.top-2 {
-  color: oklch(0.55 0.08 210);
-  border-color: oklch(0.55 0.08 210);
-  background: oklch(0.95 0.025 210);
+  color: oklch(0.5 0.06 250);
+  border-color: oklch(0.5 0.06 250);
+  background: oklch(0.95 0.02 250);
 }
 .lb-rank-seal.top-3 {
   color: oklch(0.5 0.1 40);
@@ -1040,18 +1040,34 @@
   color: var(--ink-soft);
   line-height: 1.6;
   white-space: pre-wrap;
+  /* v=182：多行正文左对齐（覆盖窄屏 .user-public-card 继承的 center）+ 长链接断行 */
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .user-public-info .upi-contact {
   font-size: 0.82rem;
   color: var(--ink-faint);
   margin-top: 8px;
+  /* v=182：联系方式左对齐 + 长链接断行，防溢出截断 */
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .user-public-info .upi-member {
   font-size: 0.78rem;
   color: var(--ink-faint);
   margin-top: 6px;
+}
+
+/* v=183：公开卡身份标签（学院 · 专业） */
+.user-public-info .upi-identity {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin-top: 8px;
+  overflow-wrap: break-word;
 }
 
 /* v=164：公开卡联系/注册信息 SVG 图标（去 emoji） */
@@ -1096,7 +1112,7 @@
   font-family: var(--sans);
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
-  box-shadow: 0 2px 12px oklch(from var(--primary) l c h / 0.25);
+  box-shadow: 0 2px 12px oklch(0.45 0.01 55 / 0.20);
 }
 
 .home-upload-btn:hover {
@@ -1300,7 +1316,7 @@
 }
 .pc-empty-cta:hover {
   background: oklch(0.90 0.03 250);
-  box-shadow: 0 1px 6px oklch(from var(--primary) l c h / 0.18);
+  box-shadow: var(--shadow-xs);
 }
 
 /* 窄屏收紧 */

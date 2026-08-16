@@ -11,6 +11,7 @@ from ..models import (
     Notification,
     QaAnswer,
     QaAskClickDaily,
+    QaDeleteRequest,
     QaEditHistory,
     QaFavorite,
     QaQuestion,
@@ -50,7 +51,8 @@ def _purge_expired_qa(retention_hours=48):
     - 回答真删：级联清 QaAnswerLike + 回答级 QaFavorite
     - 问题真删：级联清 QaAnswer/QaViewLog/问题级 QaFavorite（含其下回答的点赞与收藏）
     - 兜底清理：QaEditHistory 是 target_type/target_id 无 FK，硬删内容后需按现存 id 收尾；
-      QaFavorite 正常路径已级联，仅防 SQLite FK 未强制时的残留。
+      QaFavorite 正常路径已级联，仅防 SQLite FK 未强制时的残留；
+      QaDeleteRequest 同为无 FK 设计（v183），目标已硬删但申请仍 PENDING → 一并清理防滞留。
     返回 (硬删问题数, 硬删回答数)。
     """
     now = timezone.now()
@@ -73,4 +75,9 @@ def _purge_expired_qa(retention_hours=48):
     ).delete()
     # 兜底：孤儿收藏（正常路径 FK 级联已清，防 SQLite 未强制 FK 时残留）
     QaFavorite.objects.exclude(question_id__in=QaQuestion.objects.values("id")).delete()
+    # 孤儿删除申请（v183）：目标已被硬删/不存在但申请仍 PENDING → 硬删，防永久滞留待审列表
+    QaDeleteRequest.objects.filter(status=QaDeleteRequest.Status.PENDING).exclude(
+        Q(target_type="question", target_id__in=QaQuestion.objects.values("id"))
+        | Q(target_type="answer", target_id__in=QaAnswer.objects.values("id"))
+    ).delete()
     return question_count, answer_count

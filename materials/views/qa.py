@@ -6,7 +6,7 @@ Phase 1：管理员/问答区版主（can_moderate_qa）发布图文问题与回
 Phase 2 预留（仅字段/枚举，不实现）：用户提问/回答、最佳回答采纳、通知、热度排序。
 """
 
-# 问答区按功能拆分为 4 个子模块（qa_helpers / qa_public / qa_admin / qa_tasks），
+# 问答区按功能拆分为 5 个子模块（qa_helpers / qa_public / qa_user / qa_admin / qa_tasks），
 # 本文件为薄 facade，显式重导出全部顶层符号，保持 `from .qa import X` 的既有调用面不变。
 from .qa_helpers import (
     _QA_ALLOWED_TAGS,
@@ -17,11 +17,23 @@ from .qa_helpers import (
     _json_body,
     _nickname,
     _qa_answer_item,
+    _qa_bump_heat,
+    _qa_delete_needs_approval,
     _qa_moderator_audience,
     _qa_question_summary,
+    _qa_user_open,
     _sanitize_html,
     _strip_html,
     require_qa_manager,
+)
+from .qa_user import (
+    api_qa_admin_config_toggle,
+    api_qa_answer_accept,
+    api_qa_answer_create_user,
+    api_qa_answer_edit_user,
+    api_qa_config,
+    api_qa_question_create_user,
+    api_qa_question_edit_user,
 )
 from .qa_public import (
     _ensure_question_fav,
@@ -50,6 +62,9 @@ from .qa_admin import (
     api_qa_admin_answer_reject,
     api_qa_admin_answer_rollback,
     api_qa_admin_answer_update,
+    api_qa_admin_delete_request_approve,
+    api_qa_admin_delete_request_reject,
+    api_qa_admin_delete_requests,
     api_qa_admin_pending,
     api_qa_admin_question_approve,
     api_qa_admin_question_create,

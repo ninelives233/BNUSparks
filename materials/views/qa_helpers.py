@@ -8,13 +8,15 @@ from functools import wraps
 from html import unescape
 from html.parser import HTMLParser
 
-from django.db.models import Q
+from django.db.models import F, Q
 
 from ..models import (
     College,
     QaAnswer,
     QaAnswerLike,
+    QaConfig,
     QaFavorite,
+    QaQuestion,
     QaTag,
     UserProfile,
 )
@@ -145,6 +147,38 @@ def require_qa_manager(view):
     return wrapper
 
 
+# ═══════════════════════════════════════════════════════════════
+# 站点开关 / 热度 / 删除判定（Phase 2 v183）
+# ═══════════════════════════════════════════════════════════════
+
+def _qa_user_open():
+    """普通用户提问/回答开放开关（站点级单例 QaConfig pk=1）"""
+    return QaConfig.user_can_post()
+
+
+def _qa_bump_heat(q, delta):
+    """问题热度 +delta（F 原子更新；负增量加防负护栏，热度永不回退为负）"""
+    if delta >= 0:
+        QaQuestion.objects.filter(id=q.id).update(heat_score=F("heat_score") + delta)
+    else:
+        QaQuestion.objects.filter(id=q.id, heat_score__gte=abs(delta)).update(
+            heat_score=F("heat_score") + delta)
+
+
+def _qa_delete_needs_approval(target):
+    """删除是否需要管理员批准：
+    - question → 有 PUBLISHED 回答
+    - answer → 有赞或有收藏
+    简单删除（无互动）自动批准直接软删，留 auto_approved 痕。
+    """
+    if isinstance(target, QaAnswer):
+        if target.like_count > 0:
+            return True
+        return QaFavorite.objects.filter(answer=target).exists()
+    # question
+    return QaAnswer.objects.filter(question=target, status=QaAnswer.Status.PUBLISHED).exists()
+
+
 def _qa_question_summary(q):
     return {
         "id": q.id,
@@ -158,24 +192,31 @@ def _qa_question_summary(q):
         "favorite_count": q.favorite_count,
         "answer_count": q.answers.filter(status=QaAnswer.Status.PUBLISHED).count(),
         "is_pinned": q.is_pinned,
+        # v183：热度分 / 是否有最佳回答
+        "heat_score": q.heat_score,
+        "has_accepted": q.answers.filter(is_accepted=True).exists(),
         "created_at": q.created_at.strftime("%Y-%m-%d %H:%M"),
         "content_preview": _strip_html(q.content)[:80],
     }
 
 
-def _qa_answer_item(a, user=None):
+def _qa_answer_item(a, user=None, qa_fav_count=None):
     liked = False
     is_favorited = False
     if user is not None:
         liked = QaAnswerLike.objects.filter(user=user, answer=a).exists()
         is_favorited = QaFavorite.objects.filter(user=user, answer=a).exists()
+    # v183：favorite_count 传参避免逐条查询 N+1（未传时保持旧行为）
+    favorite_count = qa_fav_count if qa_fav_count is not None else QaFavorite.objects.filter(answer=a).count()
     return {
         "id": a.id,
         "content": a.content,
         "author": _nickname(a.author),
+        "author_id": a.author_id,
         "is_pinned": a.is_pinned,
+        "is_accepted": a.is_accepted,
         "like_count": a.like_count,
-        "favorite_count": QaFavorite.objects.filter(answer=a).count(),
+        "favorite_count": favorite_count,
         "liked": liked,
         "is_favorited": is_favorited,
         "created_at": a.created_at.strftime("%Y-%m-%d %H:%M"),

@@ -10,6 +10,7 @@ candidates 重设为全部总管理员，显式出现在超管的举报受理界
 
 import json
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
@@ -23,7 +24,9 @@ from .utils import (
     _safe_int, DAILY_REPORT_LIMIT,
     UserProfile, Material, Notification, DeletionRecord,
 )
-from ..models import Report
+from .qa_helpers import _qa_moderator_audience
+from .qa_user import _soft_delete_answer, _soft_delete_question
+from ..models import QaAnswer, QaQuestion, Report
 
 # 举报原因 code → 中文标签（与前端 report_form.html 选项一致，用于通知文案）
 REPORT_REASON_LABELS = {
@@ -45,6 +48,25 @@ REPORT_REASON_LABELS = {
     "other": "其他原因",
 }
 VALID_REASONS = set(REPORT_REASON_LABELS.keys())
+
+# 问答区举报理由（v183，独立于文件理由集；other 同规则强制 detail）
+QA_REPORT_REASONS = {
+    "harassment": "人身攻击/辱骂",
+    "hate": "歧视/仇恨言论",
+    "privacy": "隐私泄露",
+    "politics": "内容违规",
+    "error": "内容错误/误导",
+    "irrelevant": "答非所问/离题",
+    "plagiarism": "抄袭/搬运",
+    "ads": "广告/营销",
+    "suspicious": "钓鱼/可疑链接",
+    "other": "其他原因",
+}
+QA_VALID_REASONS = set(QA_REPORT_REASONS.keys())
+
+
+def _qa_reason_label(code):
+    return QA_REPORT_REASONS.get(code, code)
 
 
 def _display_name(user):
@@ -181,6 +203,123 @@ def api_file_report_status(request, file_id):
     })
 
 
+@csrf_exempt
+@require_login
+def api_qa_report(request, kind, target_id):
+    """POST /api/qa/{kind}/{id}/report/ — 提交问答区举报（kind=questions|answers，v183）
+
+    镜像文件举报：防自报 / 防重复（部分唯一约束兜底）/ 每日限额 / reason 校验 /
+    other 必填 detail / 冗余字段 / candidates=问答区版主（非课程路由）。
+    """
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    if kind == "questions":
+        target = QaQuestion.objects.filter(id=target_id, status=QaQuestion.Status.PUBLISHED).first()
+        if not target:
+            return _err("内容不存在", 404)
+        if target.author_id == request.user.id:
+            return _err("不能举报自己发布的内容", 400)
+        dup = Report.objects.filter(
+            kind=Report.Kind.QUESTION, qa_question=target, reporter=request.user).exists()
+    elif kind == "answers":
+        target = QaAnswer.objects.select_related("question").filter(
+            id=target_id, status=QaAnswer.Status.PUBLISHED).first()
+        if not target:
+            return _err("内容不存在", 404)
+        if target.author_id == request.user.id:
+            return _err("不能举报自己发布的内容", 400)
+        dup = Report.objects.filter(
+            kind=Report.Kind.ANSWER, qa_answer=target, reporter=request.user).exists()
+    else:
+        return _err("非法目标", 400)
+    if dup:
+        return _err("你已举报过该内容", 400)
+
+    allowed, _, qmsg = _check_report_quota(request.user)
+    if not allowed:
+        return _err(qmsg, 429)
+
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except Exception:
+        body = {}
+    reasons = body.get("reasons") or []
+    if not isinstance(reasons, list) or not reasons:
+        return _err("请至少选择一个举报原因", 400)
+    reasons = [str(r) for r in reasons]
+    if any(r not in QA_VALID_REASONS for r in reasons):
+        return _err("举报原因不合法", 400)
+    detail = str(body.get("detail") or "").strip()
+    if "other" in reasons and not detail:
+        return _err('选择"其他原因"时，必须填写详细说明', 400)
+
+    is_question = kind == "questions"
+    question_title = target.title if is_question else target.question.title
+    candidates = [c for c in _qa_moderator_audience() if c.id != request.user.id]
+
+    kwargs = {
+        "kind": Report.Kind.QUESTION if is_question else Report.Kind.ANSWER,
+        "reporter": request.user,
+        "reporter_name": _display_name(request.user),
+        "qa_question_title": question_title,
+        "reasons": reasons,
+        "detail": detail,
+    }
+    if is_question:
+        kwargs.update(qa_question=target, qa_question_pk=target.id)
+    else:
+        kwargs.update(
+            qa_answer=target, qa_answer_pk=target.id,
+            qa_question=target.question, qa_question_pk=target.question_id,
+        )
+    try:
+        rep = Report.objects.create(**kwargs)
+    except IntegrityError:
+        return _err("你已举报过该内容", 400)
+    if candidates:
+        rep.candidates.set(candidates)
+
+    for u in candidates:
+        _create_notification(
+            recipient=u, type=Notification.Type.REPORT_ALERT,
+            title="有新的举报待处理",
+            message=f"问答内容「{question_title}」被举报，请前往『举报受理』处理。",
+            triggered_by=request.user,
+        )
+    return _ok({"reported": True})
+
+
+@require_login
+def api_qa_report_status(request, kind, target_id):
+    """GET /api/qa/{kind}/{id}/report-status/ — 当前用户对目标内容的举报状态（v183）"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    if kind == "questions":
+        if not QaQuestion.objects.filter(id=target_id).exists():
+            return _err("内容不存在", 404)
+        reported = Report.objects.filter(
+            kind=Report.Kind.QUESTION, qa_question_id=target_id, reporter=request.user).exists()
+    elif kind == "answers":
+        if not QaAnswer.objects.filter(id=target_id).exists():
+            return _err("内容不存在", 404)
+        reported = Report.objects.filter(
+            kind=Report.Kind.ANSWER, qa_answer_id=target_id, reporter=request.user).exists()
+    else:
+        return _err("非法目标", 400)
+    profile = _get_or_create_profile(request.user)
+    if profile.role != UserProfile.Role.USER:
+        quota_left = -1  # 管理员不限量
+    else:
+        from datetime import date
+        today = date.today()
+        if profile.last_report_date != today:
+            quota_left = DAILY_REPORT_LIMIT
+        else:
+            quota_left = max(0, DAILY_REPORT_LIMIT - profile.daily_report_count)
+    can_report = not reported and (quota_left == -1 or quota_left > 0)
+    return _ok({"reported": reported, "can_report": can_report, "quota_left": quota_left})
+
+
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_report_pending(request):
     """GET /api/moderation/reports/pending/ — 举报受理（聚合卡片）
@@ -193,7 +332,9 @@ def api_report_pending(request):
         candidates__id=user.id,
         status__in=[Report.Status.PENDING, Report.Status.ESCALATED],
     ).select_related("material", "material__course", "material__uploader",
-                     "target_user", "reporter")
+                     "target_user", "reporter",
+                     "qa_question", "qa_question__author",
+                     "qa_answer", "qa_answer__author", "qa_answer__question")
         .prefetch_related("candidates__profile"))
 
     # ── 材料举报聚合（pending）──
@@ -284,7 +425,54 @@ def api_report_pending(request):
         })
     user_groups.sort(key=lambda g: g["latest_reported_at"], reverse=True)
 
-    return _ok({"material_groups": material_groups, "user_groups": user_groups})
+    # ── 问答区举报聚合（pending，v183）──
+    qa_rows = [r for r in qs if r.kind in (Report.Kind.QUESTION, Report.Kind.ANSWER)]
+    qgroups = {}
+    for r in qa_rows:
+        if r.kind == Report.Kind.QUESTION:
+            key = f"q:{r.qa_question_pk or r.qa_question_id}"
+        else:
+            key = f"a:{r.qa_answer_pk or r.qa_answer_id}"
+        qgroups.setdefault(key, []).append(r)
+
+    qa_groups = []
+    for _key, rows in qgroups.items():
+        rows.sort(key=lambda r: r.created_at, reverse=True)
+        latest = rows[0]
+        reasons, reporter_names = [], []
+        for r in rows:
+            for rc in (r.reasons or []):
+                if rc not in reasons:
+                    reasons.append(rc)
+            nm = r.reporter_name or "匿名"
+            if nm not in reporter_names:
+                reporter_names.append(nm)
+        is_question = latest.kind == Report.Kind.QUESTION
+        target = latest.qa_question if is_question else latest.qa_answer
+        if is_question:
+            target_id = latest.qa_question_pk or latest.qa_question_id
+            title = latest.qa_question_title or (target.title if target else "内容")
+        else:
+            target_id = latest.qa_answer_pk or latest.qa_answer_id
+            title = latest.qa_question_title or (
+                f"回答 · {target.question.title}" if target else "回答")
+        qa_groups.append({
+            "group_key": f"qa:{'question' if is_question else 'answer'}:{target_id}",
+            "kind": "question" if is_question else "answer",
+            "report_id": latest.id,
+            "target_id": target_id,
+            "target_title": title,
+            "author_name": _display_name(target.author) if target else "匿名",
+            "reporter_count": len(rows),
+            "reasons": reasons,
+            "reason_labels": [_qa_reason_label(rc) for rc in reasons],
+            "reporter_names": reporter_names,
+            "latest_detail": latest.detail,
+            "latest_reported_at": latest.created_at.strftime("%Y-%m-%d %H:%M") if latest.created_at else "",
+        })
+    qa_groups.sort(key=lambda g: g["latest_reported_at"], reverse=True)
+
+    return _ok({"material_groups": material_groups, "user_groups": user_groups, "qa_groups": qa_groups})
 
 
 @csrf_exempt
@@ -312,7 +500,97 @@ def api_report_handle(request, report_id):
 
     if report.kind == Report.Kind.MATERIAL:
         return _handle_material(request, report, is_true, actual_situation, action, allow_retry, is_malicious)
+    if report.kind in (Report.Kind.QUESTION, Report.Kind.ANSWER):
+        return _handle_qa(request, report, is_true, actual_situation, is_malicious)
     return _handle_user(request, report, is_true, actual_situation, is_malicious)
+
+
+def _handle_qa(request, report, is_true, actual_situation, is_malicious):
+    """问答区举报处理（v183）：属实 → 软删目标（走 QA 软删路径，非 _perform_soft_delete）
+    + 通知举报人「已删除」+ 通知作者「被举报并删除」；不属实 → 保留 + 反馈举报人。
+    is_malicious 逻辑同材料举报（保留分支判定恶意后广播全部超管）。
+    无「允许重传」问项（问答内容无重传概念）。
+    """
+    if is_true is False and not actual_situation:
+        return _err("选择不属实时，必须填写实际情况", 400)
+
+    if report.kind == Report.Kind.QUESTION:
+        pk = report.qa_question_pk or report.qa_question_id
+        target = QaQuestion.objects.select_related("author").filter(id=pk).first()
+        title = report.qa_question_title or (target.title if target else "内容")
+        group_rows = list(Report.objects.filter(
+            kind=Report.Kind.QUESTION, qa_question_pk=pk, status=Report.Status.PENDING))
+    else:
+        pk = report.qa_answer_pk or report.qa_answer_id
+        target = QaAnswer.objects.select_related("author", "question").filter(id=pk).first()
+        title = report.qa_question_title or (f"回答 · {target.question.title}" if target else "回答")
+        group_rows = list(Report.objects.filter(
+            kind=Report.Kind.ANSWER, qa_answer_pk=pk, status=Report.Status.PENDING))
+
+    reporters = [r.reporter for r in group_rows if r.reporter]
+    all_reasons, merged_detail = [], ""
+    for r in group_rows:
+        for rc in (r.reasons or []):
+            if rc not in all_reasons:
+                all_reasons.append(rc)
+        if r.detail and r.detail not in merged_detail:
+            merged_detail = (merged_detail + "；" if merged_detail else "") + r.detail
+    merged_reasons = "；".join(_qa_reason_label(rc) for rc in all_reasons)
+    author = target.author if target else None
+
+    Report.objects.filter(id__in=[r.id for r in group_rows]).update(
+        status=Report.Status.HANDLED,
+        is_true=is_true,
+        actual_situation=actual_situation,
+        action=Report.Action.DELETE if is_true else Report.Action.KEEP,
+        is_malicious=None if is_true else (is_malicious or None),
+        handled_by=request.user,
+        handled_at=timezone.now(),
+    )
+
+    if is_true:
+        # 软删目标（幂等：已删则跳过）
+        if target:
+            if report.kind == Report.Kind.QUESTION:
+                _soft_delete_question(target)
+            else:
+                _soft_delete_answer(target)
+        for rep in reporters:
+            _create_notification(
+                recipient=rep, type=Notification.Type.REPORT_RESULT,
+                title="举报已处理",
+                message=f"你举报的问答内容「{title}」已删除，感谢反馈。",
+                triggered_by=request.user,
+            )
+        if author and author.id != request.user.id:
+            delete_reason_text = merged_reasons + (("：" + merged_detail) if merged_detail else "")
+            _create_notification(
+                recipient=author, type=Notification.Type.REPORT_RESULT,
+                title="你的内容被举报并删除",
+                message=f"你的问答内容「{title}」被举报并删除。\n删除原因：{delete_reason_text}",
+                triggered_by=request.user,
+            )
+    else:
+        msg = f"经核实，你举报的问答内容「{title}」不存在所述问题，已保留。"
+        if actual_situation:
+            msg += f"\n保留原因：{actual_situation}"
+        for rep in reporters:
+            _create_notification(
+                recipient=rep, type=Notification.Type.REPORT_RESULT,
+                title="举报已处理", message=msg, triggered_by=request.user,
+            )
+        if is_malicious:
+            for u in _all_super_admins():
+                if u.id == request.user.id:
+                    continue
+                _create_notification(
+                    recipient=u, type=Notification.Type.REPORT_MALICIOUS,
+                    title="恶意举报提醒",
+                    message=f"举报人「{report.reporter_name or '匿名'}」的举报被判定为恶意，请留意其后续举报行为。",
+                    triggered_by=request.user,
+                )
+
+    return _ok({"message": "已处理", "file_already_deleted": False})
 
 
 def _handle_material(request, report, is_true, actual_situation, action, allow_retry, is_malicious):
@@ -517,17 +795,20 @@ def api_report_history(request):
     def _serialize(r):
         # v173：升级到总管理的举报，在记录里标「已提交」
         status_label = "已提交" if r.status == Report.Status.ESCALATED else dict(Report.Status.choices).get(r.status, r.status)
+        is_qa = r.kind in (Report.Kind.QUESTION, Report.Kind.ANSWER)
+        label = _qa_reason_label if is_qa else _reason_label
         return {
             "report_id": r.id,
             "kind": r.kind,
             "kind_label": r.get_kind_display(),
             "material_title": r.material_title or "",
+            "qa_question_title": r.qa_question_title or "",
             "target_user_name": r.target_user_name or "",
             "course_code": r.course_code,
             "course_name": r.course_name,
             "reporter_name": r.reporter_name or "匿名",
             "reasons": r.reasons or [],
-            "reason_labels": [_reason_label(rc) for rc in (r.reasons or [])],
+            "reason_labels": [label(rc) for rc in (r.reasons or [])],
             "detail": r.detail,
             "status": r.status,
             "status_label": status_label,

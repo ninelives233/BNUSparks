@@ -275,7 +275,7 @@
 
 .fdu-card:hover {
   border-color: var(--primary);
-  box-shadow: 0 2px 8px oklch(0 0 0 / 0.06);
+  box-shadow: 0 2px 8px oklch(0.45 0.01 55 / 0.06);
 }
 
 .fdu-avatar {

@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/tokens.css?v=180">
-<link rel="stylesheet" href="/static/css/base.css?v=180">
-<link rel="stylesheet" href="/static/css/admin.css?v=180">
-<link rel="stylesheet" href="/static/css/user.css?v=180">
-<link rel="stylesheet" href="/static/css/files.css?v=180">
-<link rel="stylesheet" href="/static/css/course.css?v=180">
-<link rel="stylesheet" href="/static/css/announcement.css?v=180">
-<link rel="stylesheet" href="/static/css/qa.css?v=180">
-<link rel="stylesheet" href="/static/css/components.css?v=180">
+<link rel="stylesheet" href="/static/css/tokens.css?v=183">
+<link rel="stylesheet" href="/static/css/base.css?v=183">
+<link rel="stylesheet" href="/static/css/admin.css?v=183">
+<link rel="stylesheet" href="/static/css/user.css?v=183">
+<link rel="stylesheet" href="/static/css/files.css?v=183">
+<link rel="stylesheet" href="/static/css/course.css?v=183">
+<link rel="stylesheet" href="/static/css/announcement.css?v=183">
+<link rel="stylesheet" href="/static/css/qa.css?v=183">
+<link rel="stylesheet" href="/static/css/components.css?v=183">
 </head>
 <body>
 
@@ -289,6 +289,7 @@
           <button class="qa-ask-btn" id="qaAskBtn" onclick="qaAskClick()">我要提问</button>
         </div>
       </div>
+      <div id="qaToolbar"></div>
       <div id="qaContent"><div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div></div>
     </div>
   </div>
@@ -451,6 +452,11 @@
             <span class="profile-label">管辖板块</span>
             <span class="profile-value" id="profileSections">-</span>
           </div>
+          <div class="profile-row" id="profileIdentityRow" style="display:none">
+            <span class="profile-label">身份标签</span>
+            <span class="profile-value" id="profileIdentity">-</span>
+            <button class="profile-edit-btn" onclick="editIdentity()">✎ 编辑</button>
+          </div>
           <div class="profile-row">
             <span class="profile-label">注册时间</span>
             <span class="profile-value" id="profileJoined">-</span>
@@ -495,12 +501,37 @@
             <div id="nicknameError" class="mf-error" style="display:none"></div>
           </div>
         </div>
+
+        <!-- 身份标签编辑内联模态 -->
+        <div class="profile-edit-overlay" id="identityEditor" style="display:none">
+          <div class="profile-edit-dialog">
+            <h3>编辑身份标签</h3>
+            <div class="mf-ident-row" style="margin-bottom:10px">
+              <select id="_idnCollege" class="mf-input" onchange="onIdentityCollegeChange()"></select>
+              <select id="_idnMajor" class="mf-input"></select>
+            </div>
+            <p class="mf-email-hint" style="margin-top:0">普通用户每天仅可更改一次身份标签。设置为「其他」将清除身份。</p>
+            <div class="pe-actions">
+              <button class="mf-btn" onclick="saveIdentity()">保存</button>
+              <button class="mf-btn mf-btn-secondary" onclick="closeIdentityEditor()">取消</button>
+            </div>
+            <div id="identityError" class="mf-error" style="display:none"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 公开资料卡片 -->
       <div class="profile-public-card">
         <div class="ppc-title">公开资料</div>
         <p class="ppc-hint">这是你对其他用户除头像和昵称之外，处于可见状态的个人信息。不填写则隐藏。您上传的文件列表也在展示范围内。</p>
+        <div class="dm-toggle-row">
+          <span class="dm-toggle-label">在公开资料中显示学院</span>
+          <span class="ios-toggle" id="toggleShowCollege" onclick="toggleIdentityPublic('college')"><span class="ios-toggle-knob"></span></span>
+        </div>
+        <div class="dm-toggle-row">
+          <span class="dm-toggle-label">在公开资料中显示专业</span>
+          <span class="ios-toggle" id="toggleShowMajor" onclick="toggleIdentityPublic('major')"><span class="ios-toggle-knob"></span></span>
+        </div>
         <div class="ppc-field">
           <label>联系邮箱</label>
           <input type="email" id="pubContactEmail" placeholder="不填写则视为不可见">
@@ -936,6 +967,13 @@
         <input type="text" id="regNickname" class="mf-input" required placeholder="如：木铎新生">
       </div>
       <div class="mf-group">
+        <label>身份标签（选填，用于专业课置顶与搜索定位，可在个人中心修改）</label>
+        <div class="mf-ident-row">
+          <select id="regCollege" class="mf-input" onchange="onRegCollegeChange()"></select>
+          <select id="regMajor" class="mf-input"></select>
+        </div>
+      </div>
+      <div class="mf-group">
         <label>密码（至少 8 位）</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="regPassword" class="mf-input mf-pwd-input" required minlength="8" placeholder="设置你的登录密码" autocomplete="new-password">
@@ -1087,27 +1125,27 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=180" defer></script>
-<script src="/static/js/auth.js?v=180" defer></script>
-<script src="/static/js/profile.js?v=180" defer></script>
-<script src="/static/js/notifications.js?v=180" defer></script>
-<script src="/static/js/admin-core.js?v=180" defer></script>
-<script src="/static/js/admin-pending.js?v=180" defer></script>
-<script src="/static/js/admin-records.js?v=180" defer></script>
-<script src="/static/js/admin-users.js?v=180" defer></script>
-<script src="/static/js/views.js?v=180" defer></script>
-<script src="/static/js/explorer-core.js?v=180" defer></script>
-<script src="/static/js/explorer-upload.js?v=180" defer></script>
-<script src="/static/js/explorer-mgmt.js?v=180" defer></script>
-<script src="/static/js/explorer-render.js?v=180" defer></script>
-<script src="/static/js/explorer-file.js?v=180" defer></script>
-<script src="/static/js/explorer-preview.js?v=180" defer></script>
-<script src="/static/js/newcourse.js?v=180" defer></script>
-<script src="/static/js/qa.js?v=180" defer></script>
-<script src="/static/js/qa-editor.js?v=180" defer></script>
-<script src="/static/js/qa-admin.js?v=180" defer></script>
-<script src="/static/js/qa-compose.js?v=180" defer></script>
-<script src="/static/js/app.js?v=180" defer></script>
+<script src="/static/js/utils.js?v=183" defer></script>
+<script src="/static/js/auth.js?v=183" defer></script>
+<script src="/static/js/profile.js?v=183" defer></script>
+<script src="/static/js/notifications.js?v=183" defer></script>
+<script src="/static/js/admin-core.js?v=183" defer></script>
+<script src="/static/js/admin-pending.js?v=183" defer></script>
+<script src="/static/js/admin-records.js?v=183" defer></script>
+<script src="/static/js/admin-users.js?v=183" defer></script>
+<script src="/static/js/views.js?v=183" defer></script>
+<script src="/static/js/explorer-core.js?v=183" defer></script>
+<script src="/static/js/explorer-upload.js?v=183" defer></script>
+<script src="/static/js/explorer-mgmt.js?v=183" defer></script>
+<script src="/static/js/explorer-render.js?v=183" defer></script>
+<script src="/static/js/explorer-file.js?v=183" defer></script>
+<script src="/static/js/explorer-preview.js?v=183" defer></script>
+<script src="/static/js/newcourse.js?v=183" defer></script>
+<script src="/static/js/qa.js?v=183" defer></script>
+<script src="/static/js/qa-editor.js?v=183" defer></script>
+<script src="/static/js/qa-admin.js?v=183" defer></script>
+<script src="/static/js/qa-compose.js?v=183" defer></script>
+<script src="/static/js/app.js?v=183" defer></script>
 
 </body>
 </html>

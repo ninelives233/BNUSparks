@@ -3,8 +3,8 @@
     display: inline-block;
     margin-left: 6px;
     font-size: 0.65rem;
-    background: oklch(0.65 0.12 250);
-    color: #fff;
+    background: var(--accent);
+    color: var(--ink);
     padding: 1px 6px;
     border-radius: 4px;
     vertical-align: middle;
@@ -391,6 +391,10 @@
   background: oklch(0.92 0.06 80);
   color: oklch(0.5 0.12 80);
 }
+.admin-table .status-deleted {
+  background: oklch(0.92 0.005 60);
+  color: var(--ink-faint);
+}
 
 /* ── 用户管理角色选择 ── */
 .admin-role-select {
@@ -651,7 +655,7 @@
   font-size: 0.72rem; font-weight: 600; margin-left: 6px;
 }
 .report-status-pending { background: oklch(0.92 0.06 80); color: oklch(0.5 0.12 80); }
-.report-status-escalated { background: oklch(0.91 0.05 265); color: oklch(0.42 0.14 265); }
+.report-status-escalated { background: var(--accent-light); color: var(--accent-hover); }
 .report-status-handled { background: oklch(0.92 0.06 145); color: oklch(0.4 0.1 145); }
 
 /* 举报处理浮窗（复用 .admin-reject-overlay/.admin-reject-dialog 基座） */
@@ -784,14 +788,14 @@
   padding: 6px 0 2px; font-weight: 500;
 }
 .pc-sub-handled {
-  border-left: 3px solid oklch(0.55 0.14 265);
-  background: oklch(0.97 0.03 265 / 0.1);
+  border-left: 3px solid oklch(0.45 0.09 250);
+  background: oklch(0.97 0.02 250 / 0.1);
 }
 .sub-tag {
   display: inline-block;
   font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
-  background: oklch(0.55 0.14 265 / 0.15);
-  color: oklch(0.35 0.14 265);
+  background: var(--primary-surface);
+  color: var(--primary-dark);
   margin-bottom: 4px;
 }
 
@@ -810,8 +814,8 @@
   background: oklch(1 0 0 / 0.75);
 }
 .cr-card.cr-waiting-card {
-  border-left: 3px solid oklch(0.6 0.12 265);
-  background: oklch(0.985 0.006 265 / 0.35);
+  border-left: 3px solid oklch(0.6 0.12 60);
+  background: oklch(0.985 0.02 70 / 0.3);
 }
 .cr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cr-tag {
@@ -929,7 +933,7 @@
 .admin-pending-card:hover {
   transform: translateY(-2px);
   border-color: oklch(0.82 0.03 250 / 0.35);
-  box-shadow: 0 6px 24px oklch(0.3 0.02 250 / 0.08);
+  box-shadow: 0 6px 24px oklch(0.35 0.015 55 / 0.10);
 }
 
 /* 同僚已通过卡片：柔和绿色胶囊说明 */
@@ -1269,9 +1273,9 @@
   transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 .mu-tab.active {
-  background: var(--accent, #c97d2d);
-  color: #fff;
-  border-color: var(--accent, #c97d2d);
+  background: var(--primary-surface);
+  color: var(--primary-dark);
+  border-color: var(--primary-light);
 }
 .mu-tab:hover:not(.active) { border-color: var(--accent, #c97d2d); }
 
@@ -1532,32 +1536,44 @@
 .fi-actions .fi-download-btn { margin-top: 0; }
 
 /* ═══════════════════════════════════════════════════════════════
-   v=180 管理后台记录类 tab 卡片化
-   复用 .admin-pending-card 基座（207/920），仅加左色条状态变体与特化。
-   语义绿/蓝/琥珀/红镜像 .pc-peer-approved/.pc-sub-handled/.report-status-* 字面量。
+   v=181 管理后台记录类 tab：美化版表格
+   记录类 tab（历史/删除/操作/举报/问答记录）恢复高密度表格，套白面
+   容器（延续 .admin-pending-card 表面语言，无 hover 上浮）。
+   操作场景（待审核 tab）仍用卡片，见 .admin-pending-card 基座。
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── 左色条状态变体（绿=通过/恢复/处理 红=驳回/其他 蓝=升级 琥珀=待办/待审 灰=过期/删除）── */
-.hist-card.hc-approved  { border-left: 3px solid oklch(0.55 0.12 150); background: oklch(0.97 0.03 150 / 0.15); }
-.hist-card.hc-rejected  { border-left: 3px solid oklch(0.55 0.15 30);  background: oklch(0.97 0.03 25 / 0.12); }
-.del-card.del-restorable { border-left: 3px solid oklch(0.55 0.12 150); }
-.del-card.del-restored  { border-left: 3px solid oklch(0.6 0.12 70);  background: oklch(0.985 0.02 70 / 0.12); }
-.del-card.del-expired   { border-left: 3px solid oklch(0.7 0.01 60);  background: oklch(0.985 0.004 60 / 0.5); }
-.op-card.op-create { border-left: 3px solid oklch(0.55 0.12 150); }
-.op-card.op-other  { border-left: 3px solid oklch(0.55 0.15 30); }
-.report-card.rs-handled   { border-left: 3px solid oklch(0.55 0.12 150); background: oklch(0.97 0.03 150 / 0.15); }
-.report-card.rs-escalated { border-left: 3px solid oklch(0.55 0.14 265); background: oklch(0.97 0.03 265 / 0.1); }
-.report-card.rs-pending   { border-left: 3px solid oklch(0.6 0.12 70);  background: oklch(0.985 0.02 70 / 0.12); }
-
-/* ── history 异议内嵌区（卡片化后 id/class 契约保留：#hc-comments-row-{id} / #hc-comments-{id}）── */
-.hc-comments-row.hc-comments-card {
-  border-top: 1px solid var(--border-light);
-  margin-top: 4px;
-  padding-top: 8px;
+/* ── 表格容器：白面卡（overflow 裁表头圆角；容器无 hover 上浮）── */
+.admin-table-card {
+  background: oklch(1 0 0 / 0.6);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  backdrop-filter: blur(4px);
+  overflow: hidden;
 }
+.admin-table-card .admin-table-wrap { width: 100%; overflow-x: auto; }
+.admin-table-card .admin-table { width: 100%; }
+.admin-table-card .admin-table th {
+  text-align: left; padding: 9px 12px;
+  border-bottom: 1px solid var(--border-light);   /* 发丝线替代原 2px 重线 */
+  font-weight: 600; color: var(--text-muted);
+  white-space: nowrap; font-size: 0.78rem;
+  background: oklch(0.97 0.008 250 / 0.5);
+}
+.admin-table-card .admin-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text); vertical-align: middle;
+}
+.admin-table-card .admin-table tr:last-child td { border-bottom: none; }
+.admin-table-card .admin-table tr:hover td { background: oklch(0.95 0.01 250 / 0.3); }
+.admin-table-card .admin-table td:first-child { font-weight: 600; color: var(--ink); }
+.admin-table-card .admin-table td:last-child { white-space: nowrap; }
+/* 删除记录表：标题下副行（文件名/课程代码） */
+.ft-meta { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 400; }
 
-/* ── 问答区记录卡（qa-admin.js 已输出 .qa-record-*，纯 CSS 补齐）── */
-.qa-record-list { display: flex; flex-direction: column; gap: 12px; }
+/* ── 问答区记录卡（qa-admin.js：qa-records tab 已表格化；此卡仍被
+      pending tab 问答区段 _qaForumPendingCardHtml 使用，勿删）── */
 .qa-record-card {
   background: oklch(1 0 0 / 0.6);
   border-radius: var(--radius-md);
@@ -1570,7 +1586,7 @@
 .qa-record-card:hover {
   transform: translateY(-2px);
   border-color: oklch(0.82 0.03 250 / 0.35);
-  box-shadow: 0 6px 24px oklch(0.3 0.02 250 / 0.08);
+  box-shadow: 0 6px 24px oklch(0.35 0.015 55 / 0.10);
 }
 .qa-status-published { border-left: 3px solid oklch(0.55 0.12 150); background: oklch(0.97 0.03 150 / 0.15); }
 .qa-status-pending   { border-left: 3px solid oklch(0.6 0.12 70);  background: oklch(0.985 0.02 70 / 0.12); }
@@ -1586,18 +1602,7 @@
 }
 .qa-record-actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 
-/* ── users 表格卡片容器（套基座 + 静态化，禁整卡 hover 上浮）── */
-.admin-pending-card.admin-card--static { box-shadow: var(--shadow-xs); }
-.admin-pending-card.admin-card--static:hover {
-  transform: none;
-  border-color: var(--border-light);
-  box-shadow: var(--shadow-xs);
-}
-.admin-users-card { padding: 14px 18px; }
-.admin-users-card .admin-table-wrap { width: 100%; }
-.admin-users-card tbody tr { transition: background 0.15s; }
-.admin-users-card tbody tr:hover { background: oklch(0.95 0.01 250 / 0.4); }
-.admin-users-card tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--primary-light); }
+/* ── 用户管理美化（表格结构不动，只美容器/头像/角色胶囊/托管/搜索）── */
 .admin-user-avatar, .admin-user-avatar-placeholder { width: 40px; height: 40px; font-size: 1rem; }
 .admin-role-select {
   border-radius: var(--radius-full);
@@ -1643,14 +1648,13 @@
 .ov-tool-card .pc-title { font-weight: 600; font-size: 0.95rem; color: var(--text); margin-bottom: 10px; }
 .ov-tool-card .admin-auto-toggle { background: transparent; border: none; box-shadow: none; padding: 0; margin: 0; }
 
-/* ── 记录类卡 @640 移动端 ── */
+/* ── 问答区卡片 / 概览 @640 移动端（记录表继承 wrap 横向滚动，无需额外）── */
 @media (max-width: 640px) {
   .qa-record-card { padding: 12px 14px; }
   .qa-record-title { font-size: 0.9rem; }
   .qa-record-meta { flex-direction: column; gap: 4px; font-size: 0.78rem; }
   .qa-record-actions { flex-direction: column; gap: 6px; align-items: stretch; }
   .qa-record-actions .admin-btn-sm { justify-content: center; }
-  .admin-users-card { padding: 10px 12px; }
   .stat-card--lead .stat-number { font-size: 1.6rem; }
 }
 

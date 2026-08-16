@@ -25,6 +25,30 @@ var _QA_IC_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 var _QA_IC_ANSWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 var _QA_IC_THUMB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.9L14 10h5a2 2 0 0 1 2 2.5l-1.7 7A2 2 0 0 1 17.3 21H8a1 1 0 0 1-1-1V11a1 1 0 0 1 .6-.9L12 8l1.2-4.3A2 2 0 0 1 15 5.9z"/></svg>';
 var _QA_IC_THUMB_FILLED = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M7 10v12H3a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h4zm2 12h8a2 2 0 0 0 1.9-1.4l1.7-7A2 2 0 0 0 18.6 10H14l1-4.3A2 2 0 0 0 12.9 3.2L12 8 8.9 10.6A1 1 0 0 0 9 12v10z"/></svg>';
+var _QA_IC_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+
+// v183：普通用户提问/回答开放开关（renderQaView 从 /api/qa/config/ 拉取）
+window._qaUserOpen = false;
+// 当前详情问题 id（采纳/删除后重渲用）
+var _qaCurrentDetailId = null;
+
+// v183：问答区举报理由（10 项，用户确认；other 必填详细说明）
+var _QA_REPORT_ITEMS = [
+  ['harassment', '人身攻击/辱骂'],
+  ['hate', '歧视/仇恨言论'],
+  ['privacy', '隐私泄露'],
+  ['politics', '内容违规'],
+  ['error', '内容错误/误导'],
+  ['irrelevant', '答非所问/离题'],
+  ['plagiarism', '抄袭/搬运'],
+  ['ads', '广告/营销'],
+  ['suspicious', '钓鱼/可疑链接'],
+  ['other', '其他原因（必填说明）'],
+];
+
+function _qaIsManager() {
+  return !!(currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa));
+}
 
 function isQaViewActive() {
   var el = document.getElementById('qaView');
@@ -54,6 +78,12 @@ async function renderQaView() {
     showQaGate();
     return;
   }
+  // v183：拉站点开关（普通用户提问/回答开放状态），失败默认关闭
+  api('/api/qa/config/').then(function(cfg) {
+    window._qaUserOpen = !!(cfg && cfg.user_open);
+  }).catch(function() {
+    window._qaUserOpen = false;
+  });
   renderQaList();
 }
 
@@ -118,6 +148,8 @@ async function renderQaList() {
     if (!_qaTags) {
       _qaTags = await api('/api/qa/tags/');
     }
+    // v183 筛选修复：工具栏是 #qaContent 之外的常驻容器，列表刷新不重建它
+    _ensureQaToolbar();
     var params = '?page=' + _qaPage + '&pageSize=' + _qaPageSize + '&sort=' + encodeURIComponent(_qaSort);
     if (_qaTagL1) params += '&tag_l1=' + _qaTagL1;
     if (_qaTagL2) params += '&tag_l2=' + _qaTagL2;
@@ -130,10 +162,18 @@ async function renderQaList() {
   }
 }
 
+// v183：常驻筛选工具栏（幂等渲染，展开/收起状态在列表刷新间保持）
+function _ensureQaToolbar() {
+  var holder = document.getElementById('qaToolbar');
+  if (!holder) return;
+  if (holder.childElementCount === 0) {
+    holder.innerHTML = _qaFilterBarHtml();
+  }
+}
+
 function _qaListHtml(data) {
   var html = '';
-  // 筛选工具栏
-  html += _qaFilterBarHtml();
+  // 筛选工具栏在 #qaToolbar 常驻容器内渲染，不再随列表重建（v183 修复筛选整页刷新）
   // 置顶精选区：仅无筛选且第一页时独立展示（上限 5 由后端保障）
   var showPinned = !_qaTagL1 && !_qaTagL2 && _qaPage === 1;
   var pinnedItems = [];
@@ -203,10 +243,11 @@ function _qaFilterBarHtml() {
     }
   }
 
-  // 排序
+  // 排序（v183 加「最热」）
   html += '<div class="qa-sort-row">' +
     '<button class="qa-pill qa-sort' + (_qaSort === 'default' ? ' on' : '') + '" onclick="qaSort(\'default\')">默认</button>' +
     '<button class="qa-pill qa-sort' + (_qaSort === 'latest' ? ' on' : '') + '" onclick="qaSort(\'latest\')">最新</button>' +
+    '<button class="qa-pill qa-sort' + (_qaSort === 'heat' ? ' on' : '') + '" onclick="qaSort(\'heat\')">最热</button>' +
   '</div>';
 
   html += '</div></div>';
@@ -231,13 +272,14 @@ function _qaStatHtml(q) {
 function _qaCardHtml(q) {
   var badges = _qaBadgesHtml(q);
   var pinHtml = q.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '';
+  var solved = q.has_accepted ? '<span class="qa-accepted-badge qa-accepted-badge--sm" title="已有最佳回答">' + _QA_IC_CHECK + '</span>' : '';
   return '<div class="qa-card' + (q.is_pinned ? ' qa-card--pinned' : '') + '" onclick="qaOpenDetail(' + q.id + ')">' +
     '<div class="qa-card-head">' +
       (badges ? '<span class="qa-card-tags">' + badges + '</span>' : '') +
       (pinHtml ? pinHtml : '') +
       '<span class="qa-card-date">' + esc(q.created_at) + '</span>' +
     '</div>' +
-    '<div class="qa-card-title">' + esc(q.title) + '</div>' +
+    '<div class="qa-card-title">' + solved + esc(q.title) + '</div>' +
     (q.content_preview ? '<div class="qa-card-preview">' + esc(q.content_preview) + '</div>' : '') +
     '<div class="qa-card-foot">' +
       '<span class="qa-card-author">' + esc(q.author) + '</span>' +
@@ -250,7 +292,7 @@ function _qaCardHtml(q) {
 function _qaPinCardHtml(q) {
   return '<div class="qa-pin-card" onclick="qaOpenDetail(' + q.id + ')">' +
     '<div class="qa-pin-main">' +
-      '<div class="qa-pin-title">' + esc(q.title) + '</div>' +
+      '<div class="qa-pin-title">' + (q.has_accepted ? '<span class="qa-accepted-badge qa-accepted-badge--sm" title="已有最佳回答">' + _QA_IC_CHECK + '</span>' : '') + esc(q.title) + '</div>' +
       (q.content_preview ? '<div class="qa-pin-preview">' + esc(q.content_preview) + '</div>' : '') +
     '</div>' +
     '<div class="qa-pin-side">' +
@@ -306,7 +348,8 @@ function qaGoPage(p) {
 // ── 筛选面板展开/收起（v177）──
 function toggleQaFilter() {
   _qaFilterOpen = !_qaFilterOpen;
-  var panel = document.querySelector('#qaContent .qa-toolbar');
+  // v183：工具栏在常驻 #qaToolbar 内，选择器同步
+  var panel = document.querySelector('#qaToolbar .qa-toolbar');
   if (panel) panel.classList.toggle('qa-toolbar-collapsed', !_qaFilterOpen);
   _updateQaFilterButton();
 }
@@ -329,6 +372,7 @@ function qaOpenDetail(id) {
 async function renderQaDetail(id) {
   var container = document.getElementById('qaContent');
   if (!container) return;
+  _qaCurrentDetailId = id;
   container.innerHTML = '<div class="empty-state compact" style="padding:40px">加载中...</div>';
   try {
     var data = await api('/api/qa/questions/' + id + '/');
@@ -355,15 +399,26 @@ async function renderQaDetail(id) {
 
 function _qaDetailHtml(d) {
   var html = '<div class="qa-detail">';
+  var isManager = _qaIsManager();
+  var isOwner = !!(currentUser && currentUser.id === d.owner_id);
+
+  // v183 状态 banner（作者视角：待审核/已驳回）
+  if (d.status === 'pending') {
+    html += '<div class="qa-status-banner qa-status-banner--pending">⏳ 内容审核中，通过后将公开展示</div>';
+  } else if (d.status === 'rejected') {
+    html += '<div class="qa-status-banner qa-status-banner--rejected">已驳回，编辑后可重新提交审核</div>';
+  }
 
   // 问题卡
   var favState = d.is_favorited ? 'on' : '';
   var favIcon = window.ICONS[d.is_favorited ? 'starFilled' : 'star'];
   var badges = _qaBadgesHtml({ tag_l1: d.tag_l1, tag_l2: d.tag_l2 });
+  var solvedBadge = d.has_accepted ? '<span class="qa-accepted-badge" title="已有最佳回答">' + _QA_IC_CHECK + ' 已解决</span>' : '';
   var stats = '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + d.view_count + '</b></span>' +
     '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + d.answers.length + '</b></span>';
   html += '<div class="qa-q-card">' +
     (d.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '') +
+    solvedBadge +
     '<h3 class="qa-q-title">' + esc(d.title) + '</h3>' +
     (badges ? '<div class="qa-q-tags">' + badges + '</div>' : '') +
     '<div class="qa-rich">' + d.content + '</div>' +
@@ -371,14 +426,20 @@ function _qaDetailHtml(d) {
     '<div class="qa-q-foot">' +
       '<span class="qa-card-author">' + esc(d.author) + ' · ' + esc(d.created_at) + '</span>' +
       '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleQuestionFav(' + d.id + ', this)">' + favIcon + '<span>' + (d.is_favorited ? '已收藏' : '收藏') + '</span><b class="qa-count">' + d.favorite_count + '</b></button>' +
+      '<button class="qa-report-btn" onclick="openQaReportModal(\'question\', ' + d.id + ')">举报</button>' +
     '</div>' +
+    // v183 作者操作栏（编辑/编辑历史/删除）
+    (isOwner ? '<div class="qa-owner-actions">' +
+      '<button class="qa-owner-btn" onclick="showQaCompose({ type: \'question\', action: \'edit\', qid: ' + d.id + ' })">编辑</button>' +
+      '<button class="qa-owner-btn" onclick="showQaEditHistory(\'question\', ' + d.id + ')">编辑历史</button>' +
+      '<button class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'question\', ' + d.id + ')">删除</button>' +
+    '</div>' : '') +
   '</div>';
 
-  // 发布回答入口（仅问答区版主/超管，v175）
-  var canManage = !!(currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa));
-  if (canManage) {
+  // 发布回答入口（问答区版主/超管 或 站点开放时普通用户，v183）
+  if (isManager || d.qa_user_open) {
     html += '<div class="qa-answer-publish">' +
-      '<span class="qa-answer-publish-hint">你是问答区版主</span>' +
+      '<span class="qa-answer-publish-hint">' + (isManager ? '你是问答区版主' : '分享你的回答') + '</span>' +
       '<button class="qa-gate-btn qa-answer-publish-btn" onclick="showQaCompose({ type: \'answer\', action: \'create\', qid: ' + d.id + ' })">发布回答</button>' +
     '</div>';
   }
@@ -388,7 +449,7 @@ function _qaDetailHtml(d) {
     html += '<div class="qa-answers">';
     d.answers.forEach(function(a, idx) {
       var expanded = d.answers.length === 1 ? ' expanded' : '';
-      html += _qaAnswerHtml(a, idx, expanded, d.answers.length);
+      html += _qaAnswerHtml(a, idx, expanded, d.answers.length, d);
     });
     html += '</div>';
   } else {
@@ -403,7 +464,7 @@ function _qaDetailHtml(d) {
   return html;
 }
 
-function _qaAnswerHtml(a, idx, expanded, total) {
+function _qaAnswerHtml(a, idx, expanded, total, d) {
   var likeState = a.liked ? 'on' : '';
   var likeIcon = a.liked ? _QA_IC_THUMB_FILLED : _QA_IC_THUMB;
   var favState = a.is_favorited ? 'on' : '';
@@ -412,14 +473,36 @@ function _qaAnswerHtml(a, idx, expanded, total) {
   var collapseBtn = total > 1
     ? '<button class="qa-answer-toggle" onclick="qaToggleAnswer(this)">' + (expanded ? '收起' : '展开') + '</button>'
     : '';
+
+  // v183 采纳徽章 + 采纳按钮
+  var acceptedBadge = a.is_accepted
+    ? '<span class="qa-accepted-badge qa-accepted-badge--answer" title="最佳回答">' + _QA_IC_CHECK + ' 最佳回答</span>'
+    : '';
+  var canAccept = d && (_qaIsManager() || (currentUser && currentUser.id === d.owner_id && d.qa_user_open));
+  var acceptBtn = canAccept
+    ? '<button class="qa-accept-btn' + (a.is_accepted ? ' on' : '') + '" onclick="qaAcceptAnswer(' + a.id + ', this)">' +
+      (a.is_accepted ? '取消采纳' : '采纳为最佳回答') + '</button>'
+    : '';
+
+  // v183 作者操作栏（编辑/编辑历史/删除）
+  var isAnswerOwner = !!(currentUser && currentUser.id === a.author_id);
+  var ownerActions = isAnswerOwner ? '<div class="qa-owner-actions qa-owner-actions--answer">' +
+    '<button class="qa-owner-btn" onclick="showQaCompose({ type: \'answer\', action: \'edit\', qid: ' + (d ? d.id : '') + ', aid: ' + a.id + ' })">编辑</button>' +
+    '<button class="qa-owner-btn" onclick="showQaEditHistory(\'answer\', ' + a.id + ')">编辑历史</button>' +
+    '<button class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'answer\', ' + a.id + ')">删除</button>' +
+  '</div>' : '';
+
   return '<div class="qa-answer' + expanded + '" data-qa-answer>' +
-    '<div class="qa-answer-head">' + pin + '<span class="qa-answer-author">' + esc(a.author) + '</span>' +
+    '<div class="qa-answer-head">' + pin + acceptedBadge + '<span class="qa-answer-author">' + esc(a.author) + '</span>' +
       '<span class="qa-answer-date">' + esc(a.created_at) + '</span>' + collapseBtn + '</div>' +
     '<div class="qa-answer-body"><div class="qa-rich">' + a.content + '</div></div>' +
     '<div class="qa-answer-actions">' +
       '<button class="qa-like-btn ' + likeState + '" onclick="qaToggleAnswerLike(' + a.id + ', this)">' + likeIcon + '<span>赞</span><b class="qa-count">' + a.like_count + '</b></button>' +
       '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleAnswerFav(' + a.id + ', this)">' + favIcon + '<span>收藏</span><b class="qa-count">' + a.favorite_count + '</b></button>' +
+      acceptBtn +
+      '<button class="qa-report-btn" onclick="openQaReportModal(\'answer\', ' + a.id + ')">举报</button>' +
     '</div>' +
+    ownerActions +
   '</div>';
 }
 
@@ -520,9 +603,10 @@ async function qaSearch(q) {
 
 // ── 「我要提问」按钮 ──
 function qaAskClick() {
+  if (!currentUser) { showLoginModal(); return; }
   var canAsk = currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa);
-  if (canAsk) {
-    // 问答区版主 / 超管 → 独立发布视图（v175 qa-compose.js）
+  if (canAsk || window._qaUserOpen) {
+    // 问答区版主 / 超管 → 管理端独立发布视图；普通用户（站点开放）→ 用户提交视图
     if (typeof showQaCompose === 'function') {
       showQaCompose({ type: 'question', action: 'create' });
     } else {
@@ -530,9 +614,238 @@ function qaAskClick() {
     }
     return;
   }
-  // 无权限：埋点 + 提示
+  // 未开放：埋点 + 提示
   api('/api/qa/ask-click/', { method: 'POST' }).catch(function() {});
   alert('提问功能即将开放，敬请期待！');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v183 · 问答区举报（复用文件举报系统：Report 双 kind + 参数化弹窗）
+// 弹窗本体复用 report-overlay/report-dialog/report-option/rd-* 全套 CSS
+// 与 explorer-file.js 的全局交互函数（toggleReportOption/closeReportModal/
+// _getSelectedReport/_updateReportState/_showReportError）
+// ═══════════════════════════════════════════════════════════════
+
+function openQaReportModal(kind, id) {
+  if (!currentUser) { showLoginModal(); return; }
+  var seg = kind === 'answer' ? 'answers' : 'questions';
+  // 先查状态：已举报/超限 → 仅提示，不进入举报界面
+  api('/api/qa/' + seg + '/' + id + '/report-status/').then(function(rs) {
+    if (rs.reported) { alert('你已举报过该内容'); return; }
+    if (rs.can_report === false) { alert('今日举报次数过多'); return; }
+    _renderQaReportModal(kind, id);
+  }).catch(function() {
+    _renderQaReportModal(kind, id);
+  });
+}
+
+function _renderQaReportModal(kind, id) {
+  var old = document.querySelector('.report-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.className = 'report-overlay';
+  var itemsHtml = _QA_REPORT_ITEMS.map(function(it) {
+    return '<div class="report-option" data-value="' + it[0] + '" onclick="toggleReportOption(this)">' +
+      '<span class="ro-cb"></span>' +
+      '<span class="ro-text"><span class="ro-label">' + it[1] + '</span></span>' +
+    '</div>';
+  }).join('');
+  var kindLabel = kind === 'answer' ? '回答举报' : '问题举报';
+  overlay.innerHTML =
+    '<div class="report-dialog" role="dialog" aria-modal="true">' +
+      '<div class="rd-head">' +
+        '<div class="rd-title">' + kindLabel + '</div>' +
+        '<div class="rd-sub">请选择至少一个举报原因（可多选），问答区管理员将在 1–3 个工作日内处理</div>' +
+        '<button class="rd-close" onclick="closeReportModal(event)" aria-label="关闭">✕</button>' +
+      '</div>' +
+      '<div class="rd-body">' +
+        '<div class="report-group"><div class="rg-head">举报原因</div><div class="rg-options">' + itemsHtml + '</div></div>' +
+        '<div class="report-group rd-detail-group">' +
+          '<div class="rg-head">详细说明（可选）</div>' +
+          '<textarea id="rdDetail" placeholder="可以提供更详细的举报原因说明，以帮助管理员更好地判断"></textarea>' +
+          '<div class="rd-hint" id="rdDetailHint">如果选择了「其他原因」，则必须填写详细说明。</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rd-error" id="rdError" style="display:none"></div>' +
+      '<div class="rd-actions">' +
+        '<button class="admin-btn admin-btn-primary" id="rdSubmitBtn" onclick="submitQaReport(\'' + kind + '\', ' + id + ')" disabled>提交举报</button>' +
+        '<button class="admin-btn admin-btn-secondary" onclick="closeReportModal(event)">取消</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.onclick = function(e) { if (e.target === overlay) closeReportModal(null); };
+  lockScroll();
+  _pushModalHistory();
+}
+
+function submitQaReport(kind, id) {
+  var sel = _getSelectedReport();
+  if (!sel.length) { _showReportError('请至少选择一个举报原因'); return; }
+  var detailEl = document.getElementById('rdDetail');
+  var detail = detailEl ? detailEl.value.trim() : '';
+  if (sel.indexOf('other') >= 0 && !detail) {
+    _showReportError('选择「其他原因」时，必须填写详细说明');
+    if (detailEl) detailEl.focus();
+    return;
+  }
+  var btn = document.getElementById('rdSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+  var seg = kind === 'answer' ? 'answers' : 'questions';
+  api('/api/qa/' + seg + '/' + id + '/report/', { method: 'POST', body: { reasons: sel, detail: detail } })
+    .then(function() {
+      closeReportModal(null);
+      alert('举报已提交，管理员将在 1–3 个工作日内处理');
+    })
+    .catch(function(err) {
+      _showReportError((err && err.message) || '提交失败，请稍后重试');
+      if (btn) { btn.disabled = false; btn.textContent = '提交举报'; }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v183 · 最佳回答采纳
+// ═══════════════════════════════════════════════════════════════
+
+async function qaAcceptAnswer(id, btn) {
+  if (!currentUser) { showLoginModal(); return; }
+  if (btn) { btn.disabled = true; }
+  try {
+    var r = await api('/api/qa/answers/' + id + '/accept/', { method: 'POST' });
+    alert(r && r.accepted ? '已采纳为最佳回答' : '已取消采纳');
+    if (_qaCurrentDetailId) renderQaDetail(_qaCurrentDetailId);
+  } catch (err) {
+    alert('操作失败：' + ((err && (err.message || err.error)) || '请稍后再试'));
+    if (btn) { btn.disabled = false; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v183 · 编辑历史（知乎式面板；history 端点作者/管理端可读）
+// ═══════════════════════════════════════════════════════════════
+
+function _qaStripHtml(html) {
+  var d = document.createElement('div');
+  d.innerHTML = html || '';
+  return d.textContent || d.innerText || '';
+}
+
+async function showQaEditHistory(kind, id) {
+  if (!currentUser) { showLoginModal(); return; }
+  var seg = kind === 'answer' ? 'answers' : 'questions';
+  try {
+    var data = await api('/api/admin/qa/' + seg + '/' + id + '/history/');
+    _renderQaHistoryModal(kind, data && data.items ? data.items : []);
+  } catch (err) {
+    alert('加载失败：' + ((err && (err.message || err.error)) || '请稍后再试'));
+  }
+}
+
+function _renderQaHistoryModal(kind, items) {
+  var old = document.querySelector('.qa-history-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay qa-history-overlay';
+  var bodyHtml = '';
+  if (!items.length) {
+    bodyHtml = '<div class="qa-history-empty">暂无编辑记录</div>';
+  } else {
+    bodyHtml = '<div class="qa-history-list">';
+    items.forEach(function(h) {
+      var diff = '';
+      if (kind === 'answer') {
+        var o = _qaStripHtml(h.old_content).slice(0, 80);
+        var n = _qaStripHtml(h.new_content).slice(0, 80);
+        diff = (o !== n)
+          ? '<div class="qa-history-diff"><span class="qa-history-old">' + esc(o || '（空）') + '</span><span class="qa-history-arrow">→</span><span class="qa-history-new">' + esc(n || '（空）') + '</span></div>'
+          : '<div class="qa-history-diff"><span class="qa-history-new">' + esc(n || '（空）') + '</span></div>';
+      } else {
+        var ot = h.old_title, nt = h.new_title;
+        diff = (ot && ot !== nt)
+          ? '<div class="qa-history-diff"><span class="qa-history-old">' + esc(ot) + '</span><span class="qa-history-arrow">→</span><span class="qa-history-new">' + esc(nt) + '</span></div>'
+          : '<div class="qa-history-diff"><span class="qa-history-new">' + esc(nt || ot || '') + '</span></div>';
+      }
+      bodyHtml += '<div class="qa-history-item">' +
+        '<div class="qa-history-meta"><span class="qa-history-editor">' + esc(h.editor) + '</span><span class="qa-history-time">' + esc(h.created_at) + '</span></div>' +
+        diff +
+      '</div>';
+    });
+    bodyHtml += '</div>';
+  }
+  overlay.innerHTML =
+    '<div class="modal-card qa-history-card">' +
+      '<button class="modal-close" onclick="closeQaHistory()">✕</button>' +
+      '<h3 class="modal-title">编辑历史 · ' + (kind === 'answer' ? '回答' : '问题') + '</h3>' +
+      '<div class="qa-history-body">' + bodyHtml + '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  lockScroll();
+  _pushModalHistory();
+}
+
+function closeQaHistory() {
+  var el = document.querySelector('.qa-history-overlay');
+  if (el) { el.remove(); unlockScroll(); _popModalHistory(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v183 · 删除（理由弹窗 → 自动软删 / 删除申请待批准）
+// ═══════════════════════════════════════════════════════════════
+
+function qaAskDelete(kind, id) {
+  var old = document.querySelector('.qa-del-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay qa-del-overlay';
+  var kindLabel = kind === 'answer' ? '回答' : '问题';
+  var needHint = kind === 'answer'
+    ? '若该回答已获赞或收藏，删除需管理员批准；简单情况将直接删除。'
+    : '若该问题下已有回答，删除需管理员批准；简单情况将直接删除。';
+  overlay.innerHTML =
+    '<div class="modal-card qa-del-card">' +
+      '<button class="modal-close" onclick="closeQaDelete()">✕</button>' +
+      '<h3 class="modal-title">删除' + kindLabel + '</h3>' +
+      '<p class="qa-del-hint">' + needHint + '</p>' +
+      '<textarea id="qaDelReason" class="qa-del-reason" maxlength="500" placeholder="请填写删除理由（必填，≤500 字）"></textarea>' +
+      '<div class="qa-del-error" id="qaDelError" style="display:none"></div>' +
+      '<div class="qa-del-actions">' +
+        '<button class="admin-btn admin-btn-primary" onclick="qaConfirmDelete(\'' + kind + '\', ' + id + ')">提交删除</button>' +
+        '<button class="admin-btn admin-btn-secondary" onclick="closeQaDelete()">取消</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  lockScroll();
+  _pushModalHistory();
+  var inp = document.getElementById('qaDelReason');
+  if (inp) inp.focus();
+}
+
+function closeQaDelete() {
+  var el = document.querySelector('.qa-del-overlay');
+  if (el) { el.remove(); unlockScroll(); _popModalHistory(); }
+}
+
+async function qaConfirmDelete(kind, id) {
+  var reasonEl = document.getElementById('qaDelReason');
+  var reason = reasonEl ? reasonEl.value.trim() : '';
+  if (!reason) {
+    var errEl = document.getElementById('qaDelError');
+    if (errEl) { errEl.textContent = '请填写删除理由'; errEl.style.display = ''; }
+    if (reasonEl) reasonEl.focus();
+    return;
+  }
+  var seg = kind === 'answer' ? 'answers' : 'questions';
+  var btn = document.querySelector('.qa-del-card .admin-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+  try {
+    var r = await api('/api/qa/' + seg + '/' + id + '/', { method: 'DELETE', body: { reason: reason } });
+    closeQaDelete();
+    alert(r && r.submitted ? '已提交删除申请，等待管理员审核' : '已删除');
+    if (_qaCurrentDetailId) renderQaDetail(_qaCurrentDetailId);
+  } catch (err) {
+    var e = document.getElementById('qaDelError');
+    if (e) { e.textContent = (err && (err.message || err.error)) || '删除失败，请稍后重试'; e.style.display = ''; }
+    if (btn) { btn.disabled = false; btn.textContent = '提交删除'; }
+  }
 }
 
 // 模块加载即初始化 placeholder 观察器（defer 保证 DOM 已就绪）

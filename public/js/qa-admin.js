@@ -41,9 +41,10 @@ function renderAdminQaRecords(content, page) {
     if (!items.length) {
       html += '<div class="admin-empty">暂无问答区内容，去发布第一篇吧。</div>';
     } else {
-      html += '<div class="qa-record-list">';
-      items.forEach(function(it) { html += _qaRecordCardHtml(it); });
-      html += '</div>';
+      html += '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
+        '<thead><tr><th>内容</th><th>作者</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+      items.forEach(function(it) { html += _qaRecordRowHtml(it); });
+      html += '</tbody></table></div></div>';
       if (data.total_pages > 1) {
         html += '<div class="file-pagination" style="justify-content:center;margin-top:14px">' +
           '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" onclick="qaRecordsGoPage(' + (page - 1) + ')">◀</button>' +
@@ -63,9 +64,9 @@ function qaRecordsGoPage(page) {
 }
 
 var _QA_STATUS_LABEL = { published: '已发布', deleted: '已删除', pending: '待审核', rejected: '已驳回' };
-var _QA_STATUS_CLS = { published: 'review-badge-approved', deleted: 'review-badge-rejected', pending: 'review-badge-pending', rejected: 'review-badge-rejected' };
+var _QA_STATUS_CLS = { published: 'status-approved', deleted: 'status-deleted', pending: 'status-pending', rejected: 'status-rejected' };
 
-function _qaRecordCardHtml(it) {
+function _qaRecordRowHtml(it) {
   var statusLabel = _QA_STATUS_LABEL[it.status] || it.status;
   var statusCls = _QA_STATUS_CLS[it.status] || '';
   var pinHtml = it.is_pinned ? '<span class="qa-pin-badge qa-pin-badge-sm" style="margin-left:6px">置顶</span>' : '';
@@ -82,15 +83,13 @@ function _qaRecordCardHtml(it) {
   } else {
     actions += '<button class="admin-btn admin-btn-reject admin-btn-sm" onclick="qaAdminDelete(\'' + it.kind + '\',' + it.id + ')">删除</button>';
   }
-  return '<div class="qa-record-card qa-status-' + (it.status || '') + '">' +
-    '<div class="qa-record-main">' +
-      '<div class="qa-record-title">' + (it.kind === 'question' ? '❓ ' : '💬 ') + esc(it.title) + pinHtml +
-        '<span class="review-badge ' + statusCls + '" style="margin-left:6px">' + statusLabel + '</span>' + '</div>' +
-      '<div class="qa-record-meta">' + (it.kind === 'question' ? '问题' : '回答') + ' · ' + esc(it.author) + ' · ' + esc(it.created_at) +
-        (it.content_preview ? ' · ' + esc(it.content_preview) : '') + '</div>' +
-    '</div>' +
-    '<div class="qa-record-actions">' + actions + '</div>' +
-  '</div>';
+  return '<tr>' +
+    '<td>' + (it.kind === 'question' ? '❓ ' : '💬 ') + esc(it.title) + pinHtml + '</td>' +
+    '<td>' + esc(it.author) + '</td>' +
+    '<td><span class="status-tag ' + statusCls + '">' + statusLabel + '</span></td>' +
+    '<td>' + esc(it.created_at) + '</td>' +
+    '<td>' + actions + '</td>' +
+  '</tr>';
 }
 
 // ── 论坛管理待审（v175：真实 pending 列表 + 通过/驳回）──
@@ -132,6 +131,49 @@ function qaAdminReject(kind, id) {
       ? '/api/admin/qa/questions/' + id + '/reject/'
       : '/api/admin/qa/answers/' + id + '/reject/', { method: 'POST', body: { reason: reason } })
     .then(function() {
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert((err && (err.message || err.error)) || '操作失败');
+      renderAdminPending(document.getElementById('adminContent'));
+    });
+}
+
+// ── v183 删除申请（用户提交 → 管理员批准/驳回）──
+function _qaDeleteRequestCardHtml(req) {
+  var kindLabel = req.target_type === 'answer' ? '回答' : '问题';
+  return '<div class="qa-record-card qa-delete-req-card">' +
+    '<div class="qa-record-main">' +
+      '<div class="qa-record-title">🗑️ 删除申请 · ' + kindLabel +
+        '<span class="review-badge review-badge-pending" style="margin-left:6px">待批准</span></div>' +
+      '<div class="qa-record-meta">目标：' + esc(req.target_title || '') + '</div>' +
+      '<div class="qa-record-meta">申请人：' + esc(req.requester || '') + ' · ' + esc(req.created_at || '') + '</div>' +
+      '<div class="qa-record-meta qa-delreq-reason">理由：' + esc(req.reason || '') + '</div>' +
+    '</div>' +
+    '<div class="qa-record-actions">' +
+      '<button class="admin-btn admin-btn-approve admin-btn-sm" onclick="qaDeleteRequestApprove(' + req.id + ')">批准</button>' +
+      '<button class="admin-btn admin-btn-reject admin-btn-sm" onclick="qaDeleteRequestReject(' + req.id + ')">驳回</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function qaDeleteRequestApprove(id) {
+  if (!confirm('批准后该内容将被删除（48 小时内可恢复）。确定批准？')) return;
+  api('/api/admin/qa/delete-requests/' + id + '/approve/', { method: 'POST' })
+    .then(function() {
+      alert('已批准删除');
+      renderAdminPending(document.getElementById('adminContent'));
+    }).catch(function(err) {
+      alert((err && (err.message || err.error)) || '操作失败');
+      renderAdminPending(document.getElementById('adminContent'));
+    });
+}
+
+function qaDeleteRequestReject(id) {
+  var note = prompt('驳回备注（可选，将通知申请人）：', '');
+  if (note === null) return; // 用户取消
+  api('/api/admin/qa/delete-requests/' + id + '/reject/', { method: 'POST', body: { reason: note || '' } })
+    .then(function() {
+      alert('已驳回删除申请');
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert((err && (err.message || err.error)) || '操作失败');

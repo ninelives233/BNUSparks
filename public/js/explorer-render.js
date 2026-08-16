@@ -4,11 +4,19 @@
     // 所有大类/学院卡片统一进同一个 folder-grid，由 CSS flex-wrap + clamp 自适应列数
     // （不再有「第三行特排」：国际视野与文明对话/数学类/实用文件 与其余通识大类一起排布）。
     const regularItems = items.filter(i => !i.divider);
+    // v183：专业课顶层——本人学院卡片置顶（仅重排顺序，不改任何样式）
+    let gridItems = regularItems;
+    if (expPath.length === 1 && expPath[0] === '专业课' && currentUser && currentUser.identity_college) {
+      const mine = regularItems.findIndex(i => i.name === currentUser.identity_college);
+      if (mine > 0) {
+        gridItems = [regularItems[mine]].concat(regularItems.slice(0, mine), regularItems.slice(mine + 1));
+      }
+    }
     const mgmt = isMgmtActive();
     let html = '';
 
     html += '<div class="folder-grid">' +
-      regularItems.map(item => _cardHtml(item, mgmt)).join('') +
+      gridItems.map(item => _cardHtml(item, mgmt)).join('') +
     '</div>';
 
     parent.innerHTML = html;

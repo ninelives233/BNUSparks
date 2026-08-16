@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from PIL import Image as PILImage
@@ -13,20 +14,28 @@ from PIL import Image as PILImage
 from ..models import (
     Notification,
     QaAnswer,
+    QaDeleteRequest,
     QaEditHistory,
     QaQuestion,
     QaTag,
 )
 from .qa_helpers import (
+    _can_manage_qa,
     _json_body,
     _nickname,
+    _qa_bump_heat,
     _sanitize_html,
     _strip_html,
     require_qa_manager,
 )
+from .qa_user import (
+    _soft_delete_answer,
+    _soft_delete_question,
+)
 from .utils import (
     _create_notification,
     _err,
+    _get_user,
     _ok,
     _safe_int,
 )
@@ -173,13 +182,22 @@ def api_qa_admin_question_delete(request, qid):
     return _ok({"id": q.id})
 
 
-@require_qa_manager
 def api_qa_admin_question_history(request, qid):
-    """GET /api/admin/qa/questions/{id}/history/ — 编辑历史"""
+    """GET /api/admin/qa/questions/{id}/history/ — 编辑历史（作者可读自己，管理端可读全部）
+
+    安全（v183）：待审核/已驳回目标的 history 仅作者/管理端可读——非作者一律 403，
+    天然防经 history 侧漏待审内容。
+    """
     if request.method != "GET":
         return _err("仅支持 GET", 405)
-    if not QaQuestion.objects.filter(id=qid).exists():
+    user = _get_user(request)
+    if user is None:
+        return _err("请先登录", 401)
+    q = QaQuestion.objects.filter(id=qid).first()
+    if not q:
         return _err("内容不存在", 404)
+    if not _can_manage_qa(user) and q.author_id != user.id:
+        return _err("权限不足", 403)
     rows = QaEditHistory.objects.filter(target_type="question", target_id=qid).select_related(
         "editor").order_by("-created_at")
     return _ok({"items": [{
@@ -237,6 +255,12 @@ def api_qa_admin_answer_create(request, qid):
         question=q, author=request.user, content=_sanitize_html(content),
         is_pinned=is_pinned, pinned_at=timezone.now() if is_pinned else None,
     )
+    # v183 通知闭环：管理端直发回答 → 通知提问者（非自己）
+    if q.author_id != request.user.id:
+        _create_notification(
+            recipient=q.author, type=Notification.Type.OPERATION,
+            title="有新的回答", message=f"「{q.title}」收到一条新回答。",
+        )
     return _ok({"id": a.id})
 
 
@@ -304,13 +328,18 @@ def api_qa_admin_answer_delete(request, aid):
 
 
 @csrf_exempt
-@require_qa_manager
 def api_qa_admin_answer_history(request, aid):
-    """GET /api/admin/qa/answers/{id}/history/ — 回答编辑历史"""
+    """GET /api/admin/qa/answers/{id}/history/ — 回答编辑历史（作者可读自己，管理端可读全部）"""
     if request.method != "GET":
         return _err("仅支持 GET", 405)
-    if not QaAnswer.objects.filter(id=aid).exists():
+    user = _get_user(request)
+    if user is None:
+        return _err("请先登录", 401)
+    a = QaAnswer.objects.filter(id=aid).first()
+    if not a:
         return _err("内容不存在", 404)
+    if not _can_manage_qa(user) and a.author_id != user.id:
+        return _err("权限不足", 403)
     rows = QaEditHistory.objects.filter(target_type="answer", target_id=aid).select_related(
         "editor").order_by("-created_at")
     return _ok({"items": [{
@@ -443,20 +472,153 @@ def api_qa_admin_pending(request):
     combined.sort(key=lambda r: r["created_at"], reverse=True)
     total = len(combined)
     items = combined[(page - 1) * page_size: page * page_size]
+
+    # v183：待批准的删除申请（用户对有互动内容提交的删除请求）
+    delreq_items = []
+    for r in QaDeleteRequest.objects.filter(
+            status=QaDeleteRequest.Status.PENDING).select_related("requester").order_by("-created_at"):
+        delreq_items.append({
+            "id": r.id,
+            "target_type": r.target_type,
+            "target_id": r.target_id,
+            "target_title": _delreq_target_title(r),
+            "requester": _nickname(r.requester),
+            "requester_id": r.requester_id,
+            "reason": r.reason,
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M"),
+        })
+
     return _ok({
         "total": total,
         "page": page,
         "pageSize": page_size,
         "total_pages": max(1, (total + page_size - 1) // page_size),
         "items": items,
+        "delete_requests": delreq_items,
     })
 
 
-def _qa_approve_question(qid):
-    """原子条件更新防双审：仅 pending 可置 published。返回 (ok, err)"""
+def _delreq_target_title(r):
+    """删除申请目标标题（target 可能已 48h 硬删，容错返回占位）"""
+    if r.target_type == "question":
+        q = QaQuestion.objects.filter(id=r.target_id).first()
+        return q.title if q else "内容已删除"
+    a = QaAnswer.objects.select_related("question").filter(id=r.target_id).first()
+    return f"回答 · {a.question.title}" if a else "内容已删除"
+
+
+@require_qa_manager
+def api_qa_admin_delete_requests(request):
+    """GET /api/admin/qa/delete-requests/ — 删除申请记录（含已处理，管理后台留痕）"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
+    page_size = _safe_int(request.GET.get("pageSize"), 10, lo=1, hi=50)
+    qs = QaDeleteRequest.objects.select_related("requester", "handled_by")
+    status = (request.GET.get("status") or "").strip()
+    if status:
+        qs = qs.filter(status=status)
+    total = qs.count()
+    rows = qs.order_by("-created_at")[(page - 1) * page_size: page * page_size]
+    return _ok({
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+        "items": [{
+            "id": r.id,
+            "target_type": r.target_type,
+            "target_id": r.target_id,
+            "target_title": _delreq_target_title(r),
+            "requester": _nickname(r.requester),
+            "reason": r.reason,
+            "status": r.status,
+            "auto_approved": r.auto_approved,
+            "handled_by": _nickname(r.handled_by) if r.handled_by_id else "",
+            "handled_at": r.handled_at.strftime("%Y-%m-%d %H:%M") if r.handled_at else "",
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M"),
+        } for r in rows],
+    })
+
+
+@csrf_exempt
+@require_qa_manager
+def api_qa_admin_delete_request_approve(request, req_id):
+    """POST /api/admin/qa/delete-requests/{id}/approve/ — 批准删除申请：软删目标 + 通知申请人
+
+    原子条件更新防双批（并发下仅一个请求能把 PENDING → APPROVED）。
+    """
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    with transaction.atomic():
+        updated = QaDeleteRequest.objects.filter(
+            id=req_id, status=QaDeleteRequest.Status.PENDING).update(
+            status=QaDeleteRequest.Status.APPROVED,
+            handled_by=request.user, handled_at=timezone.now())
+    if not updated:
+        return _err("该申请已处理", 400)
+    req = QaDeleteRequest.objects.get(id=req_id)
+    _apply_delreq_soft_delete(req)
+    _create_notification(
+        recipient=req.requester, type=Notification.Type.OPERATION,
+        title="你的删除申请已通过",
+        message=f"你申请删除的{'问题' if req.target_type == 'question' else '回答'}已删除。",
+    )
+    return _ok({"id": req_id})
+
+
+@csrf_exempt
+@require_qa_manager
+def api_qa_admin_delete_request_reject(request, req_id):
+    """POST /api/admin/qa/delete-requests/{id}/reject/ — 驳回删除申请：内容保留 + 通知申请人（可选备注）"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    data = _json_body(request)
+    note = (data.get("reason") or "").strip()
+    with transaction.atomic():
+        updated = QaDeleteRequest.objects.filter(
+            id=req_id, status=QaDeleteRequest.Status.PENDING).update(
+            status=QaDeleteRequest.Status.REJECTED,
+            handled_by=request.user, handled_at=timezone.now())
+    if not updated:
+        return _err("该申请已处理", 400)
+    req = QaDeleteRequest.objects.get(id=req_id)
+    msg = f"你申请删除的{'问题' if req.target_type == 'question' else '回答'}未获批准，内容已保留。"
+    if note:
+        msg += f"管理员备注：{note}"
+    _create_notification(
+        recipient=req.requester, type=Notification.Type.OPERATION,
+        title="你的删除申请未通过", message=msg,
+    )
+    return _ok({"id": req_id})
+
+
+def _apply_delreq_soft_delete(req):
+    """按申请软删目标（幂等：目标已删/不存在则跳过）"""
+    if req.target_type == "question":
+        q = QaQuestion.objects.filter(id=req.target_id).first()
+        if q:
+            _soft_delete_question(q)
+    else:
+        a = QaAnswer.objects.filter(id=req.target_id).first()
+        if a:
+            _soft_delete_answer(a)
+
+
+def _qa_approve_question(qid, approver=None):
+    """原子条件更新防双审：仅 pending 可置 published。返回 (ok, err)
+    通过后通知作者（v183 通知闭环，自审自查不发给自己）"""
     updated = QaQuestion.objects.filter(id=qid, status=QaQuestion.Status.PENDING).update(
         status=QaQuestion.Status.PUBLISHED)
-    return (True, "") if updated else (False, "该内容已审核，不可重复操作")
+    if not updated:
+        return (False, "该内容已审核，不可重复操作")
+    q = QaQuestion.objects.filter(id=qid).first()
+    if q and (approver is None or q.author_id != approver.id):
+        _create_notification(
+            recipient=q.author, type=Notification.Type.OPERATION,
+            title="你的提问已通过审核", message=f"「{q.title}」已在问答区发布。",
+        )
+    return (True, "")
 
 
 def _qa_reject_question(qid, reason=""):
@@ -475,10 +637,22 @@ def _qa_reject_question(qid, reason=""):
     return True, ""
 
 
-def _qa_approve_answer(aid):
+def _qa_approve_answer(aid, approver=None):
+    """原子条件更新防双审：仅 pending 可置 published。返回 (ok, err)
+    通过后通知作者 + 热度 +5（v183 通知闭环/热度）"""
     updated = QaAnswer.objects.filter(id=aid, status=QaAnswer.Status.PENDING).update(
         status=QaAnswer.Status.PUBLISHED)
-    return (True, "") if updated else (False, "该内容已审核，不可重复操作")
+    if not updated:
+        return (False, "该内容已审核，不可重复操作")
+    a = QaAnswer.objects.select_related("question").filter(id=aid).first()
+    if a:
+        _qa_bump_heat(a.question, 5)
+        if approver is None or a.author_id != approver.id:
+            _create_notification(
+                recipient=a.author, type=Notification.Type.OPERATION,
+                title="你的回答已通过审核", message=f"你的回答已在「{a.question.title}」下发布。",
+            )
+    return (True, "")
 
 
 def _qa_reject_answer(aid, reason=""):
@@ -502,7 +676,7 @@ def api_qa_admin_question_approve(request, qid):
     """POST /api/admin/qa/questions/{id}/approve/ — 通过待审问题"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
-    ok, err = _qa_approve_question(qid)
+    ok, err = _qa_approve_question(qid, approver=request.user)
     return _ok({"id": qid}) if ok else _err(err, 400)
 
 
@@ -523,7 +697,7 @@ def api_qa_admin_answer_approve(request, aid):
     """POST /api/admin/qa/answers/{id}/approve/ — 通过待审回答"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
-    ok, err = _qa_approve_answer(aid)
+    ok, err = _qa_approve_answer(aid, approver=request.user)
     return _ok({"id": aid}) if ok else _err(err, 400)
 
 

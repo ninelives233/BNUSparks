@@ -133,7 +133,7 @@
     color: #fff; font-size: 0.55rem; font-weight: 700;
     border-radius: 8px; display: flex; align-items: center; justify-content: center;
     padding: 0 4px; line-height: 1; pointer-events: none;
-    box-shadow: 0 1px 3px oklch(0 0 0 / 0.2);
+    box-shadow: 0 1px 3px oklch(0.3 0.01 55 / 0.22);
   }
 
   /* ════════════════════════════════════════════════════════════
@@ -521,13 +521,13 @@
   }
   .folder-card::after {
     content: ''; position: absolute; inset: 0;
-    background: linear-gradient(135deg, transparent 60%, oklch(from var(--primary) l c h / 0.03));
+    background: linear-gradient(135deg, transparent 60%, oklch(from var(--accent) l c h / 0.03));
     pointer-events: none;
   }
   .folder-card:hover {
     border-color: var(--primary-light);
     transform: translateY(-4px);
-    box-shadow: 0 8px 24px oklch(0 0 0 / 0.05);
+    box-shadow: 0 8px 24px oklch(0.45 0.01 55 / 0.05);
   }
   .folder-card .fc-icon {
     width: 52px; height: 52px;
@@ -814,6 +814,11 @@
   }
   .mf-input:focus { outline: none; border-color: var(--primary); }
   .mf-textarea { min-height: 70px; resize: vertical; }
+  /* ── v183 身份标签：学院+专业并排下拉 ── */
+  .mf-ident-row {
+    display: flex; gap: 8px;
+  }
+  .mf-ident-row .mf-input { flex: 1; min-width: 0; }
 
   /* ── 邮箱后缀输入 ── */
   .mf-email-wrap {
@@ -887,9 +892,9 @@
   .um-tab:not(:last-child) { border-right: 1px solid var(--border-light); }
   .um-tab:hover { background: var(--bg-alt); color: var(--ink); }
   .um-tab-active {
-    background: var(--primary); color: #fff; font-weight: 600;
+    background: var(--primary-surface); color: var(--primary-dark); font-weight: 600;
   }
-  .um-tab-active:hover { background: var(--primary-dark); color: #fff; }
+  .um-tab-active:hover { background: var(--primary-surface); color: var(--primary-dark); }
 
   .upload-mode-pane { margin-bottom: var(--space-sm); }
 
@@ -1806,9 +1811,9 @@
     background: var(--primary-surface);
   }
   .filter-bar .fb-pill.fb-active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
+    background: var(--primary-surface);
+    color: var(--primary-dark);
+    border-color: var(--primary-light);
   }
 
   /* ═══════════════════════════════════════════
@@ -1841,9 +1846,10 @@
   }
 
   .about-tab.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
+    background: var(--primary-surface);
+    color: var(--primary-dark);
+    border-color: var(--primary-light);
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
 
   /* ═══════════════════════════════════════════

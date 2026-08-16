@@ -71,7 +71,11 @@
   }
 
   function showLoginModal() { document.getElementById('loginModal').style.display = 'flex'; lockScroll(); _pushModalHistory(); }
-  function showRegister() { document.getElementById('loginModal').style.display = 'none'; document.getElementById('registerModal').style.display = 'flex'; }
+  function showRegister() {
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('registerModal').style.display = 'flex';
+    populateIdentitySelects('regCollege', 'regMajor', {});
+  }
   function showLogin() { document.getElementById('registerModal').style.display = 'none'; document.getElementById('loginModal').style.display = 'flex'; }
   function closeAuthModal() {
     document.getElementById('loginModal').style.display = 'none';
@@ -87,6 +91,62 @@
     var pwc = document.getElementById('regPasswordConfirm');
     if (pw) pw.value = '';
     if (pwc) pwc.value = '';
+  }
+
+  // ── v183 身份标签：注册/个人中心编辑共用的学院+专业下拉填充 ──
+  // preset = { college, major }，用于编辑时回填当前身份
+  async function populateIdentitySelects(collegeSelId, majorSelId, preset) {
+    preset = preset || {};
+    const collegeSel = document.getElementById(collegeSelId);
+    const majorSel = document.getElementById(majorSelId);
+    if (!collegeSel || !majorSel) return;
+    let colleges = [];
+    try { colleges = await api('/api/colleges/'); } catch(e) { /* 拉取失败则只有「其他」 */ }
+    // 经济与工商管理学院排第一，其余保持原顺序，最后「其他」（预防学院未收录）
+    var ordered = colleges.slice().sort(function(a, b) {
+      var aEc = /经济与工商/.test(a.name);
+      var bEc = /经济与工商/.test(b.name);
+      return aEc === bEc ? 0 : (aEc ? -1 : 1);
+    });
+    collegeSel.innerHTML = '<option value="">学院</option>' +
+      ordered.map(function(c) { return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>'; }).join('') +
+      '<option value="其他">其他</option>';
+    if (preset.college) collegeSel.value = preset.college;
+    await fillIdentityMajors(collegeSelId, majorSelId, preset.major || '');
+  }
+
+  // 依据所选学院联动专业列表；「其他」学院 → 专业强制「其他」
+  async function fillIdentityMajors(collegeSelId, majorSelId, presetMajor) {
+    const collegeSel = document.getElementById(collegeSelId);
+    const majorSel = document.getElementById(majorSelId);
+    if (!collegeSel || !majorSel) return;
+    var college = collegeSel.value;
+    if (!college || college === '其他') {
+      majorSel.innerHTML = '<option value="其他">其他</option>';
+      majorSel.value = '其他';
+      majorSel.disabled = college === '其他';
+      return;
+    }
+    if (!courseTree || !courseTree['专业课']) {
+      if (typeof loadCourseTree === 'function') await loadCourseTree();
+    }
+    var kids = (courseTree && courseTree['专业课'] && courseTree['专业课'].children) || [];
+    var colNode = kids.find(function(c) { return c.name === college; }) || null;
+    // 只抓取「父节点」（有子目录）作为专业选项，过滤 divider
+    var majors = (colNode && colNode.children || []).filter(function(c) {
+      return !c.divider && c.children && c.children.length;
+    });
+    majorSel.innerHTML = '<option value="">请选择专业…</option>' +
+      majors.map(function(m) { return '<option value="' + esc(m.name) + '">' + esc(m.name) + '</option>'; }).join('') +
+      '<option value="其他">其他</option>';
+    majorSel.disabled = false;
+    if (presetMajor && majors.some(function(m) { return m.name === presetMajor; })) {
+      majorSel.value = presetMajor;
+    }
+  }
+
+  function onRegCollegeChange() {
+    fillIdentityMajors('regCollege', 'regMajor', '');
   }
 
   async function handleLogin(e) {
@@ -243,7 +303,9 @@
       await api('/api/auth/register/', { method: 'POST',
         body: { email: email,
                 nickname: document.getElementById('regNickname').value.trim(),
-                password: password } });
+                password: password,
+                college: (document.getElementById('regCollege') || { value: '' }).value || '',
+                major: (document.getElementById('regMajor') || { value: '' }).value || '' } });
       // 不自动登录 — 用户需要先验证邮箱
       el.style.display = 'none';
       form.style.display = 'none';

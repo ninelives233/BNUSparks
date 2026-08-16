@@ -1,22 +1,35 @@
 /* BNU Sparks · explorer-core.js —— 共享核心：状态/常量/课程树/收藏/面包屑/导航。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
   function findPathByCourseId(code) {
+    // v183：收集全部匹配路径，按「本人专业 → 本人学院 → 默认首条」优先。
+    // path 结构：专业课 = [专业课, 学院, 专业, 课程]；通识课 = [通识课, 分类, 课程]。
+    var matches = [];
     function walk(nodes, path) {
-      for (const n of nodes) {
-        if (n.courseId === code) return [...path, n.name];
-        if (n.children) {
-          const found = walk(n.children, [...path, n.name]);
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-    for (const [key, val] of Object.entries(courseTree || {})) {
-      if (val.children) {
-        const found = walk(val.children, [key]);
-        if (found) return found;
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.courseId === code) matches.push(path.concat(n.name));
+        if (n.children) walk(n.children, path.concat(n.name));
       }
     }
-    return null;
+    for (var key in (courseTree || {})) {
+      if (courseTree[key] && courseTree[key].children) {
+        walk(courseTree[key].children, [key]);
+      }
+    }
+    if (!matches.length) return null;
+    // 身份优先：仅对专业课路径生效；未设身份或匹配不到则回退默认首条
+    var idMaj = currentUser && currentUser.identity_major;
+    var idCol = currentUser && currentUser.identity_college;
+    if (idMaj || idCol) {
+      for (var m = 0; m < matches.length; m++) {
+        var p = matches[m];
+        if (p[0] === '专业课' && idMaj && p.length >= 4 && p[2] === idMaj) return p;
+      }
+      for (var n2 = 0; n2 < matches.length; n2++) {
+        var q = matches[n2];
+        if (q[0] === '专业课' && idCol && q.length >= 3 && q[1] === idCol) return q;
+      }
+    }
+    return matches[0];
   }
 
   function navToLast(code) {

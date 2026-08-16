@@ -15,13 +15,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
+from django.utils import timezone
 
 from .utils import (
-    _err, _ok, _get_user, _get_or_create_profile, _strip_exif, _safe_int,
-    require_login, Notification, UserProfile, Material, DownloadRecord,
-    DeletionRecord, ReviewComment, Course, CourseCategory, F,
-    Favorite, _bump_user_public_gen, DAILY_DOWNLOAD_LIMIT,
+    _err, _ok, _get_user, _get_or_create_profile, _identity_can_edit,
+    _normalize_identity, _strip_exif, _safe_int, require_login, Notification,
+    UserProfile, Material, DownloadRecord, DeletionRecord, ReviewComment,
+    Course, CourseCategory, F, Favorite, _bump_user_public_gen,
+    DAILY_DOWNLOAD_LIMIT,
 )
 
 
@@ -77,6 +79,11 @@ def _profile_payload(request, profile):
         "contact_email": profile.contact_email or "",
         "contact_way": profile.contact_way or "",
         "bio": profile.bio or "",
+        "identity_college": profile.identity_college or "",
+        "identity_major": profile.identity_major or "",
+        "show_college_public": profile.show_college_public,
+        "show_major_public": profile.show_major_public,
+        "identity_can_edit": _identity_can_edit(profile),
         "sections_display": sections_display,
         "upload_count": Material.objects.filter(uploader=request.user).count(),
         "download_count": DownloadRecord.objects.filter(user=request.user).count(),
@@ -113,6 +120,30 @@ def api_profile(request):
                 _bump_user_public_gen(request.user.id)
                 changed.append("nickname")
 
+        # 身份标签（学院/专业）：仅普通 user 每日限改 1 次，「其他」→ 空
+        identity_dirty = False
+        for field in ("identity_college", "identity_major"):
+            if field in body and isinstance(body[field], str):
+                val = _normalize_identity(body[field])
+                if val != getattr(profile, field, ""):
+                    if not _identity_can_edit(profile):
+                        return _err("身份标签一天仅可更改一次，请明天再试", 400)
+                    setattr(profile, field, val)
+                    identity_dirty = True
+                    changed.append(field)
+        if identity_dirty:
+            profile.identity_updated_at = timezone.now()
+            changed.append("identity_updated_at")
+
+        # 公开资料开关（布尔，不限次；兼容 JSON 布尔与字符串态）
+        for field in ("show_college_public", "show_major_public"):
+            if field in body:
+                raw = body.get(field)
+                val = raw.strip().lower() in ("true", "1", "yes", "on") if isinstance(raw, str) else bool(raw)
+                if val != getattr(profile, field):
+                    setattr(profile, field, val)
+                    changed.append(field)
+
         for field in allowed_fields:
             if field in body and isinstance(body[field], str):
                 val = body[field].strip()
@@ -121,7 +152,10 @@ def api_profile(request):
                     changed.append(field)
 
         if changed:
-            profile.save(update_fields=list(allowed_fields & set(changed)))
+            # nickname 落在 request.user.first_name 上，Profile.save 需过滤掉
+            profile_fields = [f for f in changed if f != "nickname"]
+            if profile_fields:
+                profile.save(update_fields=profile_fields)
         # 返回完整资料，前端可直接用 data.nickname 等字段即时刷新，无需 reload
         payload = _profile_payload(request, profile)
         payload["message"] = "已更新" if changed else "无变化"
@@ -248,9 +282,14 @@ def api_user_rankings(request):
         return _ok(cached)
 
     if rank_type == "upload":
+        # v=182：上传量只算「已通过审核」且非幽灵（有 DeletionRecord 但行残留）的资料，
+        # 与公开主页 upload_count 口径统一（用户拍板）。
+        ghost_ids = DeletionRecord.objects.values_list("material_id", flat=True)
         qs = User.objects.filter(is_active=True, uploads__isnull=False) \
             .select_related('profile') \
-            .annotate(count=Count("uploads")) \
+            .annotate(count=Count("uploads", filter=(
+                Q(uploads__review_status="approved") & ~Q(uploads__id__in=ghost_ids)
+            ))) \
             .filter(count__gt=0) \
             .order_by("-count")[:50]
     elif rank_type == "collection":
@@ -313,18 +352,23 @@ def api_user_public(request, uid):
 
     user = get_object_or_404(User, id=uid, is_active=True)
     profile = _get_or_create_profile(user)
-    upload_count = Material.objects.filter(uploader=user, review_status="approved").count()
+    # v=182：幽灵排除——存在 DeletionRecord 但 Material 行残留（删除中途失败的残留行），
+    # 不再计入公开页列表与各项计数。
+    ghost_ids = DeletionRecord.objects.values_list("material_id", flat=True)
+    upload_count = Material.objects.filter(
+        uploader=user, review_status="approved"
+    ).exclude(id__in=ghost_ids).count()
     # 被下载次数 = 该用户已通过资料被下载的总次数（此前误统计为用户自己的下载记录）
     download_count = Material.objects.filter(
         uploader=user, review_status="approved"
-    ).aggregate(total=Sum("download_count"))["total"] or 0
+    ).exclude(id__in=ghost_ids).aggregate(total=Sum("download_count"))["total"] or 0
     contact_email = profile.contact_email if profile.contact_email and profile.role != UserProfile.Role.USER else ""
 
     # 分页查询该用户上传的文件
     per_page = 20
     materials_qs = Material.objects.filter(
         uploader=user, review_status="approved"
-    ).select_related("course").order_by("-created_at")
+    ).exclude(id__in=ghost_ids).select_related("course").order_by("-created_at")
     total = materials_qs.count()
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, total_pages))
@@ -345,6 +389,14 @@ def api_user_public(request, uid):
             "created_at": m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
         })
 
+    # 身份标签（v183）：跟随用户各自的公开开关，未开启或不展示则空串
+    identity_college = profile.identity_college if (
+        profile.identity_college and profile.show_college_public
+    ) else ""
+    identity_major = profile.identity_major if (
+        profile.identity_major and profile.show_major_public
+    ) else ""
+
     result = {
         "user": {
             "nickname": user.first_name or user.username,
@@ -352,6 +404,8 @@ def api_user_public(request, uid):
             "bio": profile.bio or "",
             "contact_email": contact_email,
             "contact_way": profile.contact_way or "",
+            "college": identity_college,
+            "major": identity_major,
             "upload_count": upload_count,
             "download_count": download_count,
             "collection_count": 0,
