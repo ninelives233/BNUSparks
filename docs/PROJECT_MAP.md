@@ -1,0 +1,209 @@
+# BNU Sparks · 木铎星火项目地图
+
+> 给人看的维护地图，不是 API 文档的替代品。需要精确路由或字段时，以代码为准。
+>
+> 基线日期：2026-08-31。行号来自当前工作树；修改代码后只更新本图中受影响的数字和入口。
+
+## 1. 先看这张总图
+
+```text
+浏览器
+  └─ public/index.html
+       ├─ CSS：tokens → base → admin/user/files/course/announcement/qa → components
+       └─ JS：utils → auth → profile → notifications → admin-* → views
+                    → explorer-* → newcourse → qa* → app
+                          │ fetch /api/
+                          ▼
+                    bnusparks/urls.py
+                          ├─ /api/ → materials/urls.py → materials/views/
+                          ├─ SPA fallback → public/index.html
+                          └─ 媒体/受保护文件出口
+                          ▼
+                    SQLite + data/materials/
+```
+
+最常见的生命周期：
+
+```text
+注册/登录 → JWT → 浏览课程/搜索 → 上传资料 → 待审核
+                                  ↓
+                        版主按管辖范围审核
+                         ↙                  ↘
+                     驳回+通知             通过+可下载
+                                             ↓
+                      下载配额/记录 → 收藏/举报 → 删除/恢复
+```
+
+## 2. 当前仓库基线
+
+| 区域 | 当前事实 | 维护提示 |
+|---|---:|---|
+| `materials/models.py` | 1012 行，27 个 Django 模型；另有 `CourseType` 枚举 | `class` 总数不要直接当模型数 |
+| `materials/urls.py` | 151 行，117 个 `path()` 路由 | 新增 API 先改路由，再补测试和前端调用 |
+| `materials/views/` | 37 个 Python 文件，10470 行 | facade 与子模块一起看，勿把薄 facade 当业务实现 |
+| `materials/tests/` | 33 个 Python 文件，6980 行，424 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
+| `materials/management/commands/` | 7 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
+| `public/index.html` | 1167 行 | 页面骨架、表单、弹窗和核心/懒加载脚本入口都在这里 |
+| `public/js/` | 22 个文件，10944 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
+| `public/css/` | 9 个文件，7328 行 | `tokens.css` 先加载，`components.css` 最后覆盖 |
+| `data/` | SQLite、媒体文件、课程映射等运行数据 | 不提交、不用清理脚本替代备份 |
+
+## 3. 入口、配置与部署
+
+| 文件 | 负责什么 | 什么时候改 |
+|---|---|---|
+| `manage.py` | Django 管理命令入口 | 新增管理命令或改变启动配置 |
+| `bnusparks/urls.py` | 根路由、`/api/` 前缀、SPA fallback、媒体入口 | 新增根级入口、静态策略或受保护文件出口 |
+| `bnusparks/settings.py` | 开发基础配置、SQLite、邮件、缓存、媒体、CORS | 修改本地运行、存储、邮件或基础限制 |
+| `bnusparks/settings_prod.py` | 生产 DEBUG、Host、安全头、X-Accel、Cookie | 发布前安全策略、反代行为变化 |
+| `bnusparks/settings_test.py` | 测试数据库/密码哈希等测试配置 | 改测试隔离或测试速度 |
+| `requirements.txt` | Python 依赖，当前声明 Django 6.x | 升级 Django、Pillow、pypdf 或 Gunicorn |
+| `deploy.sh` | 严格校验 SSH host key；停服冻结 SQLite 后用 Python 标准库备份代码/数据库与 Nginx 配置，再同步、校验并重载 Nginx、迁移、验证；失败自动回滚 | 发布流程变化；首次使用先可信核对服务器指纹；不依赖服务器安装 sqlite3 CLI |
+| `scripts/deploy_verify.sh` | 部署后在线检查 | 修改检查路径或线上验证行为 |
+| `scripts/security-audit.sh` | 生产安全审计命令 | 修改检查项；禁止输出密钥/`.env` 内容 |
+
+## 4. 数据模型地图
+
+主文件：[`materials/models.py`](../materials/models.py)。字段和约束变更后必须检查 migrations、序列化、权限和测试。
+
+| 领域 | 模型 | 用途 |
+|---|---|---|
+| 用户 | `UserProfile` | 角色、管辖学院/专业、自动审核、下载计数、培养层次/学院/专业身份及公开开关、问答审核能力 |
+| 课程 | `College`、`Course`、`CourseCategory`、`CourseType` | 学院、课程、导航树、通识/专业类型；`Course.college` 可为空 |
+| 资料 | `Material`、`MaterialType` | 文件元数据、课程归属、审核状态、置顶、下载数；同时存在 `is_approved` 与 `review_status` |
+| 文件操作 | `FolderOperation`、`DeletionRecord` | 管理模式下的移动/改名/批量操作、软删除暂存与恢复 |
+| 审核 | `ReviewComment` | 驳回、异议和审核说明 |
+| 通知/公告 | `Notification`、`Announcement` | 审核、删除、举报、公告等站内通知 |
+| 行为统计 | `DownloadRecord`、`DownloadQuotaReservation` | 访问流水区分正式下载/预览/旧记录，并以令牌行为编号幂等去重；资料删除后保留快照；按“用户+资料+日期”唯一占位，原子去重每日配额 |
+| 收藏 | `Favorite`、`CourseFavorite` | 资料、课程收藏；唯一约束吸收并发重复创建 |
+| 课程申请 | `CourseCreationRequest` | 新课程和随附资料申请、审批与迁移 |
+| 举报 | `Report` | 材料、问答、用户举报及候选审核人；非总管理员的读取/处理/历史统一受 candidates 限制 |
+| 问答 | `QaTag`、`QaQuestion`、`QaAnswer`、`QaAnswerLike`、`QaFavorite`、`QaEditHistory`、`QaViewLog`、`QaAskClickDaily`、`QaConfig`、`QaDeleteRequest` | 标签、问题、回答、点赞/收藏、编辑、浏览、日报、配置和删除申请；每题最多一个最佳回答由条件唯一约束保证 |
+
+迁移目录：`materials/migrations/`。不要只改模型不补迁移；不要把物理文件移动误认为可由数据库事务回滚。
+
+## 5. API 与后端模块
+
+精确路由唯一事实源：[`materials/urls.py`](../materials/urls.py)。下表是按维护任务归类的导航，不重复列出 117 条路径。
+
+| API/业务域 | 主要实现文件 | 什么时候改 |
+|---|---|---|
+| 注册、重发验证邮件、登录、邮箱验证、改密、找回/重置 | `views/auth.py`、`views/utils_auth.py` | 认证、JWT、密码、邮件和 IP/账号限流策略变化 |
+| 课程列表、课程树、课程文件、搜索、统计、学院 | `views/courses.py`、`utils_course_tree.py` | 课程查询、树结构、聚合、缓存、ETag 变化 |
+| 文件上传、文字录入 | `views/files_upload.py`、`utils_upload.py`、`utils_security.py` | 服务端硬限额、临时写入、失败清理、类型、文件名、EXIF 变化 |
+| 文件下载、预览、下载令牌、X-Accel | `views/files_download.py`、`utils_auth.py`、`utils_quota.py` | 正式下载/预览分类、同 IP 跨浏览器移交令牌、幂等留痕、响应头、权限、配额和 X-Accel/FileResponse 共用的路径边界变化 |
+| 单删、批删、软删除、恢复 | `views/files_delete.py`、`utils_trash.py`、`operations_records.py` | 文件生命周期和恢复策略变化 |
+| 文件详情、更新、置顶、批量编辑 | `views/operations_manage.py`、`operations_batch.py` | 管理模式、元数据或批量操作变化 |
+| 文件夹创建、删除、移动、操作记录 | `views/operations_folder.py`、`operations_records.py` | 课程目录和文件操作日志变化 |
+| 待审、通过、驳回、重分配、历史、统计 | `views/moderation.py`、`utils_moderation.py` | 审核范围、并发幂等、自动审核变化 |
+| 新课程申请及随附资料迁移 | `views/course_requests.py` | 课程创建、审批、物理文件迁移变化 |
+| 个人资料、公开主页、排行、上传/下载历史 | `views/profile.py` | 用户公开信息和统计变化 |
+| 收藏 | `views/favorites.py`、`qa_public.py` | 资料/课程/问答收藏、分页、计数及唯一键并发冲突变化 |
+| 公告 | `views/announcements.py` | 管理员发布、纯文本约束、公告列表变化 |
+| 通知 | `views/notifications.py` | 未读、已读、删除、跳转数据变化 |
+| 举报 | `views/reports.py` | 举报对象、候选版主、对象级 candidates 权限、处理和历史作用域变化 |
+| 问答 | `views/qa.py` facade、`qa_public.py`、`qa_user.py`、`qa_admin.py`、`qa_tasks.py`、`qa_helpers.py` | 问题/回答、净化、置顶锁、最佳回答唯一约束、删除申请冲突和任务变化 |
+| 管理员用户/板块/自动审核 | `views/admin.py` | 角色、管辖范围、管理员设置变化 |
+| 总管理员用户监测/访问追溯 | `views/admin_monitoring.py`；`/api/admin/monitoring/`、`/api/admin/users/<uid>/downloads/` | 正式下载趋势、预览统计、三项身份分布、全站访问流水筛选、运行状态、单用户访问记录变化 |
+
+### 后端 facade 关系
+
+```text
+views/__init__.py  ← 旧 import / 路由兼容出口，并导出 admin_monitoring API
+views/files.py     → files_upload / files_download / files_delete / files_zip
+views/operations.py→ operations_helpers / folder / records / batch / manage
+views/qa.py        → qa_helpers / qa_public / qa_user / qa_admin / qa_tasks
+views/utils.py     → utils_auth / security / quota / trash / course_tree / moderation
+```
+
+facade 变更规则：保留旧导入路径；新增业务放子模块；拆分后跑全量测试并检查管理命令、URL 和测试中的私有 import。
+
+## 6. 权限与关键调用链
+
+### 角色
+
+| 角色/能力 | 作用 |
+|---|---|
+| `user` | 上传、下载、搜索、个人中心 |
+| `sub_moderator` | 指定学院/专业范围审核，可自动审核 |
+| `moderator` | 主责板块审核，通常含通识/专业范围 |
+| `super_admin` | 全局审核、用户/板块/自动审核管理、用户监测与下载追溯 |
+| `can_moderate_qa` | 问答管理能力，不能只用课程审核角色替代 |
+| 未登录 guest | 浏览公开内容；不等于数据库角色 |
+
+### 关键链路
+
+1. 课程树：`api_course_tree()` → 缓存 → `CourseCategory` 分组 → 课程/已审核资料聚合 → `_build_tree_node()` → ETag JSON。
+2. 上传：登录用户 → 元数据/硬大小校验 → 同目录临时文件原子落盘 → `Material` 入库（失败删文件）→ `pending` 或自动通过 → best-effort 通知。
+3. 审核：待审查询 → `_get_moderated_material_qs()` → 单条或批量更新 → 上传者通知。
+4. 新课程：申请查重/范围校验 → 审批 → 事务内解析课程并迁移随附 `Material`；失败时逆向恢复物理文件。
+5. 下载：Bearer/JWT 或短时令牌（已审核资料可同 IP 跨浏览器移交，待审核资料仍绑 session）→ 可见性/权限 → `DownloadQuotaReservation` 唯一占位 → `DownloadRecord` 按行为编号幂等留痕；仅正式下载增加资料下载量，预览独立统计；删除资料后快照仍可追溯。
+6. 删除：对象权限 → 物理文件移入 trash → `DeletionRecord`/数据库变更；数据库失败时文件移回原位 → 管理员恢复或清理。
+7. 前端导航：`switchView()` → `pushViewState()` → URL/sessionStorage 恢复；弹窗历史同时管理焦点陷阱、Esc 和焦点归还。
+8. 举报受理：角色门槛 → `_report_accessible_qs()`（非总管理员必须在 `candidates`）→ 对象读取/聚合处理/历史；升级后的用户举报仅总管理员可见并收尾。
+9. 问答并发：收藏/点赞由唯一约束吸收重复创建；置顶通过 `QaConfig` 单例写锁串行化“计数→写入”；最佳回答由事务加条件唯一约束保证每题最多一条。
+
+## 7. 前端地图
+
+入口：[`public/index.html`](../public/index.html)。核心脚本使用 `defer`，非核心模块由 `feature-loader.js` 按视图顺序加载；入口区在 `public/index.html:1154-1164`：
+
+```text
+utils → auth → profile → notifications → admin-core → views → explorer-core
+→ explorer-file → explorer-preview → feature-loader → app
+
+按需模块：
+  explorer → explorer-upload → explorer-mgmt → explorer-render → newcourse
+  qa → qa → qa-editor → qa-compose
+  admin → qa → qa-editor → qa-compose → admin-pending → admin-records → admin-users → qa-admin
+```
+
+| 文件/组 | 负责什么 | 什么时候改 |
+|---|---|---|
+| `public/js/utils.js` | `api`、token 清理、HTML/JS 转义、路由解析、下载、弹窗滚动/焦点 | 公共 API、令牌、路由、dialog 或跨页工具变化 |
+| `public/js/auth.js` | 注册、登录、验证、改密、找回、token 持久化 | 认证前端变化 |
+| `public/js/views.js` | 普通视图、公告、排行、搜索、公开用户页及管理模式下载追溯、`pushViewState` | 页面导航和公共视图变化 |
+| `public/js/profile.js` | 个人中心、公开资料、上传/下载/收藏页 | 用户模块变化 |
+| `public/js/notifications.js` | 通知抽屉、通知中心、管理/平民模式 | 通知和用户菜单变化 |
+| `public/js/admin-*.js` | 管理概览、待审、记录、用户；`admin-users.js` 含趋势/三项身份/访问流水筛选/运行状态/用户名单 | 后台 tab、用户监测和管理动作变化 |
+| `public/js/explorer-*.js` | 课程树、上传、文件列表、管理、预览 | 课程浏览与文件操作变化 |
+| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin 脚本和对应 CSS，并复用加载 Promise | 首屏资源、模块依赖顺序或懒加载入口变化 |
+| `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
+| `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
+| `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
+| `public/css/tokens.css` | OKLCH 色彩、字体、间距、动效变量 | 设计系统变化 |
+| `public/css/base.css` | 全局布局、表单、弹窗、移动基础 | 基础 UI 变化 |
+| `public/css/admin.css` | 审核/管理后台 | 管理 UI 变化 |
+| `public/css/user.css` | 个人中心、用户页、通知抽屉 | 用户 UI 变化 |
+| `public/css/files.css` | 文件列表、详情、举报、上传下载 | 文件 UI 变化 |
+| `public/css/course.css` | 课程树和课程页面 | 课程浏览 UI 变化 |
+| `public/css/announcement.css` | 公告 UI | 公告页面变化 |
+| `public/css/qa.css` | 问答与编辑器 UI | 问答 UI 变化 |
+| `public/css/components.css` | 跨页面覆盖组件、全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |
+
+跨文件契约：顶层函数和全局变量被大量内联 `onclick` 与其他模块调用；改名/删除前必须 `rg` 全仓库。SPA 深链当前覆盖静态页、explorer、用户、文件、问答编辑，但问答编辑参数需要重点回归。
+
+## 8. 测试与运维定位
+
+| 目标 | 入口/文件 | 说明 |
+|---|---|---|
+| 全量回归 | `bash scripts/run_tests.sh` | 使用 `bnusparks/settings_test.py`；改安全/状态机后必须跑 |
+| 认证/权限 | `test_auth_registration.py`、`test_permissions.py`、`test_hardening_v167.py`、`test_audit_fixes.py` | 停用用户、限流、CSRF/Bearer 边界 |
+| 文件生命周期 | `test_upload_text.py`、`test_delete_restore.py`、`test_xaccel_download.py`、`test_zip_structure.py`、`test_audit_fixes.py` | 大小上限、失败清理、磁盘补偿、fallback containment |
+| 审核/课程 | `test_review_*.py`、`test_course_*.py`、`test_auto_approve.py` | 追加批量审核保护、迁移失败、同名合并 |
+| 问答/举报 | `test_qa.py`、`test_reports.py`、`test_audit_fixes.py` | 净化器、候选人越权（含目标删除后）、历史作用域、删除申请与最佳回答并发一致性 |
+| 用户监测/追溯 | `test_admin_monitoring.py` | 总管理员权限、趋势桶、三项身份聚合、预览/下载筛选、资料删除后留痕和运行状态 |
+| 管理命令 | `materials/management/commands/` | 数据标注/清理任务必须先 dry-run；失败重试、备份恢复要单测/演练 |
+| 部署 | `deploy.sh`、`deploy.sh.template`、`scripts/deploy_verify.sh` | 发布前必须有备份、失败即停、回滚和固定 host key |
+
+## 9. 维护者最先检查的风险入口
+
+这不是漏洞清单，而是改动时的风险导航：
+
+- 富文本：`materials/views/qa_helpers.py` → `public/js/qa.js`/`qa-editor.js`。必须保证文本、属性和 URL 协议的安全序列化。
+- 身份失效：`materials/views/utils_auth.py`。停用用户、token_version、下载令牌要用同一套有效性规则。
+- 文件写入：`files_upload.py`、`utils_upload.py`、`course_requests.py`、`operations_manage.py`、`utils_trash.py`。数据库事务不能自动回滚文件系统移动，新增路径必须沿用补偿模式。
+- 管辖权限：`utils_moderation.py`、`moderation.py`、`reports.py`。举报入口统一复用 `_report_accessible_qs()`；新增入口不得只检查角色。
+- 并发状态：`utils_quota.py`、`favorites.py`、`qa_public.py`、`qa_admin.py`、`qa_user.py`。唯一约束、条件更新或锁才是最终保证，前置查询只用于友好提示。
+- 前端模板：所有 `innerHTML`、内联事件和用户内容必须明确区分纯文本与已净化 HTML。
+
+最后更新时间：2026-08-31。若目录、路由、模型或模块拆分改变，先更新本文件和根目录 `project-map.md`，再更新 AGENTS/README 中的摘要数字。

@@ -125,6 +125,9 @@ MEDIA_ROOT = BASE_DIR / 'data' / 'materials'
 # 开发/测试（DEBUG）保持 Django FileResponse；仅 settings_prod 开启。
 USE_X_ACCEL = False
 
+# 只有来自本机 Nginx 的请求才读取 X-Real-IP，防止客户端直接伪造代理头绕过限流。
+TRUSTED_PROXY_IPS = {"127.0.0.1", "::1"}
+
 # ── CORS ──
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
@@ -139,6 +142,9 @@ CORS_ALLOWED_ORIGINS = [
 
 # ── 文件上传限制（50MB） ──
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+# DATA_UPLOAD_MAX_MEMORY_SIZE 只约束非文件表单体；真正的文件流仍须在业务层
+# 按 chunks() 累计校验。允许部署环境下调，但不建议高于 Nginx client_max_body_size。
+MAX_UPLOAD_FILE_SIZE = int(os.environ.get('MAX_UPLOAD_FILE_SIZE', 50 * 1024 * 1024))
 
 LOGIN_URL = '/admin/login/'
 

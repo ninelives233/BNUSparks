@@ -22,7 +22,7 @@ from .utils import (
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
-from ..models import COURSE_TREE_CACHE_KEY
+from ..models import COURSE_TREE_CACHE_KEY, get_stats_cache_key
 
 
 def _etag_json_response(request, data):
@@ -278,7 +278,11 @@ def api_search(request):
 
 def api_stats(request):
     """GET /api/stats/ — 首页统计（缓存120s）"""
-    CACHE_KEY = 'api_stats_data'
+    try:
+        limit = max(1, min(int(request.GET.get("limit", 10)), 100))
+    except (TypeError, ValueError):
+        limit = 10
+    CACHE_KEY = get_stats_cache_key(limit)
     cached = cache.get(CACHE_KEY)
     if cached is not None:
         return _ok(cached)
@@ -298,11 +302,9 @@ def api_stats(request):
         course_type="major", materials__review_status="approved"
     ).distinct().count()
 
-    limit = int(request.GET.get("limit", 10))
-
     popular = Material.objects.filter(review_status="approved") \
         .order_by("-download_count") \
-        .select_related("course")[:limit]
+        .select_related("course", "course__college")[:limit]
     top_downloaded = [{
         "id": m.id,
         "title": m.title,
@@ -315,7 +317,7 @@ def api_stats(request):
 
     recent = Material.objects.filter(review_status="approved") \
         .order_by("-created_at") \
-        .select_related("course", "uploader")[:limit]
+        .select_related("course", "course__college", "uploader")[:limit]
     recent_uploads = [{
         "id": m.id,
         "title": m.title,

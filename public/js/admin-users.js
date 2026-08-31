@@ -1,8 +1,286 @@
-/* BNU Sparks · admin-users.js —— 用户管理+辖区树+异议回复+分流+自动托管：renderAdminUsers/onRoleChange/treeCheckPropagate 等。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
+/* BNU Sparks · admin-users.js —— 用户监测+用户管理+辖区树+角色与自动托管。顶层函数为跨文件契约。 */
   // ── 用户管理（仅 super_admin） ──
   var _userPage = 1;
   var _userRoleFilter = ''; // '' | 'admin' | 'user'
+  var _adminUserSection = 'trend';
+  var _monitorPeriod = 'week';
+  var _downloadActivity = 'all';
+  var _identityMonitorData = null;
+
+  function _adminUserSectionButton(section, label) {
+    return '<button class="pc-seg-btn' + (_adminUserSection === section ? ' active' : '') + '" ' +
+      'role="tab" aria-selected="' + (_adminUserSection === section ? 'true' : 'false') + '" ' +
+      'onclick="switchAdminUserSection(\'' + section + '\')">' + label + '</button>';
+  }
+
   function renderAdminUsers(content, search, page) {
+    if (!content) return;
+    content.innerHTML = '<div class="pc-type-bar admin-user-monitor-nav">' +
+        '<span class="pc-type-label">功能分区</span>' +
+        '<div class="pc-seg" role="tablist" aria-label="用户管理功能分区">' +
+          _adminUserSectionButton('trend', '活动趋势') +
+          _adminUserSectionButton('identity', '身份分布') +
+          _adminUserSectionButton('downloads', '访问流水') +
+          _adminUserSectionButton('health', '运行状态') +
+          _adminUserSectionButton('users', '用户名单') +
+        '</div>' +
+      '</div>' +
+      '<div id="adminUserSectionContent" class="admin-user-section-content"></div>';
+    var sectionContent = document.getElementById('adminUserSectionContent');
+    if (_adminUserSection === 'trend') renderAdminMonitoringTrend(sectionContent);
+    else if (_adminUserSection === 'identity') renderAdminIdentityDistribution(sectionContent);
+    else if (_adminUserSection === 'downloads') renderAdminDownloadStream(sectionContent, page || 1);
+    else if (_adminUserSection === 'health') renderAdminSiteHealth(sectionContent);
+    else renderAdminUserList(sectionContent, search || '', page || 1);
+  }
+
+  function switchAdminUserSection(section) {
+    _adminUserSection = section;
+    renderAdminUsers(document.getElementById('adminContent'), '', 1);
+  }
+
+  function setMonitoringPeriod(period) {
+    _monitorPeriod = period;
+    renderAdminMonitoringTrend(document.getElementById('adminUserSectionContent'));
+  }
+
+  function _monitorPeriodButtons() {
+    var periods = [
+      ['day', '近 24 小时'], ['week', '近 7 天'],
+      ['month', '近 30 天'], ['all', '全部时间']
+    ];
+    return '<div class="pc-seg monitor-period-seg" role="tablist" aria-label="趋势时间范围">' + periods.map(function(p) {
+      return '<button class="pc-seg-btn' + (_monitorPeriod === p[0] ? ' active' : '') + '" role="tab" ' +
+        'aria-selected="' + (_monitorPeriod === p[0] ? 'true' : 'false') + '" onclick="setMonitoringPeriod(\'' + p[0] + '\')">' + p[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function _monitorStat(value, label, tone) {
+    return '<div class="monitor-stat-card ' + (tone || '') + '">' +
+      '<div class="monitor-stat-value">' + Number(value || 0).toLocaleString('zh-CN') + '</div>' +
+      '<div class="monitor-stat-label">' + label + '</div></div>';
+  }
+
+  function _monitorLinePath(values, width, height, left, top, right, bottom, maxValue) {
+    var innerW = width - left - right;
+    var innerH = height - top - bottom;
+    return values.map(function(value, index) {
+      var x = left + (values.length <= 1 ? innerW / 2 : index * innerW / (values.length - 1));
+      var y = top + innerH - (Number(value || 0) / maxValue) * innerH;
+      return (index ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    }).join(' ');
+  }
+
+  function _monitorTrendChart(data) {
+    var labels = data.labels || [];
+    var uploads = data.uploads || [];
+    var downloads = data.downloads || [];
+    var width = 960, height = 300, left = 48, right = 18, top = 20, bottom = 42;
+    var maxValue = Math.max(1, Math.max.apply(null, uploads.concat(downloads)));
+    var grid = '', yLabels = '';
+    var tickCount = Math.min(4, Math.ceil(maxValue));
+    for (var t = 0; t <= tickCount; t++) {
+      var y = top + (height - top - bottom) * t / tickCount;
+      var tickValue = Math.round(maxValue * (tickCount - t) / tickCount);
+      grid += '<line x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" />';
+      yLabels += '<text x="' + (left - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + tickValue + '</text>';
+    }
+    var xLabels = '';
+    var labelStep = Math.max(1, Math.ceil(labels.length / 7));
+    labels.forEach(function(label, index) {
+      if (index % labelStep !== 0 && index !== labels.length - 1) return;
+      var x = left + (labels.length <= 1 ? (width - left - right) / 2 : index * (width - left - right) / (labels.length - 1));
+      xLabels += '<text x="' + x + '" y="' + (height - 13) + '" text-anchor="middle">' + esc(label) + '</text>';
+    });
+    return '<div class="monitor-chart-card">' +
+      '<div class="monitor-chart-legend"><span class="legend-upload"><i></i>上传</span><span class="legend-download"><i></i>下载</span></div>' +
+      '<div class="monitor-chart-wrap"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + esc(data.period_label) + '上传与下载趋势">' +
+        '<g class="monitor-grid">' + grid + '</g><g class="monitor-axis-labels">' + yLabels + xLabels + '</g>' +
+        '<path class="monitor-line monitor-line-upload" d="' + _monitorLinePath(uploads, width, height, left, top, right, bottom, maxValue) + '" />' +
+        '<path class="monitor-line monitor-line-download" d="' + _monitorLinePath(downloads, width, height, left, top, right, bottom, maxValue) + '" />' +
+      '</svg></div></div>';
+  }
+
+  function renderAdminMonitoringTrend(content) {
+    if (!content) return;
+    content.innerHTML = '<div class="admin-loading">加载活动趋势…</div>';
+    api('/api/admin/monitoring/?section=trend&period=' + encodeURIComponent(_monitorPeriod)).then(function(data) {
+      var summary = data.summary || {};
+      content.innerHTML = '<div class="monitor-section-head"><div><h3>文件流动趋势</h3>' +
+        '<p>下载曲线仅统计正式下载；文件预览单独计数，不再抬高下载量。</p></div>' + _monitorPeriodButtons() + '</div>' +
+        '<div class="monitor-stats-grid">' +
+          _monitorStat(summary.upload_count, '期间上传', 'tone-upload') +
+          _monitorStat(summary.download_count, '正式下载', 'tone-download') +
+          _monitorStat(summary.preview_count, '文件预览') +
+          _monitorStat(summary.unique_downloaders, '下载用户') +
+        '</div>' + _monitorTrendChart(data);
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">活动趋势加载失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  function _distributionBars(rows, selectedIndex, onclickName) {
+    // “其他”是兜底值，不作为看板的可视化类别；保留真实归属，减少噪音。
+    rows = (rows || []).filter(function(row) {
+      return row && row.name && row.name !== '其他' && row.name !== '其它';
+    });
+    if (!rows || !rows.length) return '<div class="monitor-sub-empty">暂无可统计的身份标签</div>';
+    var max = Math.max.apply(null, rows.map(function(row) { return row.count || 0; })) || 1;
+    return '<div class="identity-bars">' + rows.map(function(row, index) {
+      var selected = index === selectedIndex;
+      var attrs = onclickName ? ' onclick="' + onclickName + '(' + index + ')"' : '';
+      return '<button type="button" class="identity-bar-row' + (selected ? ' active' : '') + '"' + attrs + '>' +
+        '<span class="identity-bar-label">' + esc(row.name) + '</span>' +
+        '<span class="identity-bar-track"><span style="width:' + Math.max(2, (row.count || 0) / max * 100) + '%"></span></span>' +
+        '<strong>' + (row.count || 0) + '</strong></button>';
+    }).join('') + '</div>';
+  }
+
+  function selectIdentityCollege(index) {
+    if (!_identityMonitorData) return;
+    _identityMonitorData.selectedIndex = index;
+    var colleges = _identityMonitorData.colleges || [];
+    var collegeList = document.getElementById('identityCollegeBars');
+    var majorPanel = document.getElementById('identityMajorPanel');
+    if (collegeList) collegeList.innerHTML = _distributionBars(colleges, index, 'selectIdentityCollege');
+    if (majorPanel) {
+      var selected = colleges[index];
+      majorPanel.innerHTML = selected
+        ? '<div class="monitor-card-head"><h4>' + esc(selected.name) + ' · 专业</h4><span>' + (selected.majors && selected.majors.length ? selected.count + ' 人' : '暂无具体专业标签') + '</span></div>' + _distributionBars(selected.majors || [], -1, '')
+        : '<div class="monitor-sub-empty">选择左侧学院查看专业分布</div>';
+    }
+  }
+
+  function renderAdminIdentityDistribution(content) {
+    if (!content) return;
+    content.innerHTML = '<div class="admin-loading">加载身份分布…</div>';
+    api('/api/admin/monitoring/?section=identity').then(function(data) {
+      data.selectedIndex = data.colleges && data.colleges.length ? 0 : -1;
+      _identityMonitorData = data;
+      var coverage = data.total_users ? Math.round(data.tagged_users / data.total_users * 100) : 0;
+      content.innerHTML = '<div class="monitor-section-head"><div><h3>入站身份分布</h3>' +
+        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。</p></div></div>' +
+        '<div class="monitor-stats-grid monitor-stats-grid--three">' +
+          _monitorStat(data.total_users, '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
+          _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
+        '<div class="identity-monitor-grid">' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (data.untagged_users || 0) + ' 人未补全</span></div>' +
+            _distributionBars(data.education_levels || [], -1, '') + '</section>' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>学院分布</h4><span>' + (data.untagged_users || 0) + ' 人未填写</span></div><div id="identityCollegeBars">' +
+            _distributionBars(data.colleges || [], data.selectedIndex, 'selectIdentityCollege') + '</div></section>' +
+          '<section class="monitor-data-card" id="identityMajorPanel"></section></div>';
+      selectIdentityCollege(data.selectedIndex);
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">身份分布加载失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  function _monitorPagination(page, totalPages, callbackName) {
+    if (totalPages <= 1) return '';
+    return '<div class="admin-pagination">' +
+      '<button ' + (page <= 1 ? 'disabled' : 'onclick="' + callbackName + '(' + (page - 1) + ')"') + '>← 上一页</button>' +
+      '<span class="page-info">第 ' + page + ' / ' + totalPages + ' 页</span>' +
+      '<button ' + (page >= totalPages ? 'disabled' : 'onclick="' + callbackName + '(' + (page + 1) + ')"') + '>下一页 →</button></div>';
+  }
+
+  function monitorDownloadPage(page) {
+    renderAdminDownloadStream(document.getElementById('adminUserSectionContent'), page);
+  }
+
+  function setDownloadActivity(activity) {
+    _downloadActivity = activity;
+    renderAdminDownloadStream(document.getElementById('adminUserSectionContent'), 1);
+  }
+
+  function _downloadActivityButtons() {
+    var options = [['all', '全部'], ['download', '正式下载'], ['preview', '预览'], ['legacy', '旧记录']];
+    return '<div class="pc-seg download-activity-seg" role="tablist" aria-label="文件访问行为类型">' + options.map(function(option) {
+      return '<button class="pc-seg-btn' + (_downloadActivity === option[0] ? ' active' : '') + '" role="tab" aria-selected="' +
+        (_downloadActivity === option[0] ? 'true' : 'false') + '" onclick="setDownloadActivity(\'' + option[0] + '\')">' + option[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function renderAdminDownloadStream(content, page) {
+    if (!content) return;
+    content.innerHTML = '<div class="admin-loading">加载访问流水…</div>';
+    api('/api/admin/monitoring/?section=downloads&page=' + (page || 1) + '&activity=' + encodeURIComponent(_downloadActivity)).then(function(data) {
+      var items = data.items || [];
+      var html = '<div class="monitor-section-head"><div><h3>文件访问流水</h3>' +
+        '<p>预览与正式下载分别留痕；旧记录因历史口径无法再反推类型。</p></div><div class="monitor-stream-tools">' +
+        _downloadActivityButtons() + '<span class="monitor-total-note">共 ' + (data.total || 0) + ' 条</span></div></div>';
+      if (!items.length) {
+        content.innerHTML = html + '<div class="admin-empty">当前筛选下暂无文件访问行为</div>';
+        return;
+      }
+      html += '<div class="download-stream">';
+      var lastDate = '';
+      items.forEach(function(item) {
+        if (item.date !== lastDate) {
+          lastDate = item.date;
+          html += '<div class="download-stream-date">' + esc(lastDate) + '</div>';
+        }
+        var avatar = item.avatar_url
+          ? '<img src="' + esc(item.avatar_url) + '" alt="">'
+          : '<span>' + esc((item.nickname || '?').charAt(0).toUpperCase()) + '</span>';
+        var identity = [item.education, item.college, item.major].filter(Boolean).join(' · ');
+        var material = item.can_open
+          ? '<button class="download-stream-file" onclick="showFileDetail({id:' + item.material_id + ',title:\'' + escJs(item.material_title) + '\',course_code:\'' + escJs(item.course_code) + '\',course_name:\'' + escJs(item.course_name) + '\'})">' + esc(item.material_title) + '</button>'
+          : '<span class="download-stream-file is-deleted">' + esc(item.material_title) + '（资料已删除）</span>';
+        html += '<div class="download-stream-row">' +
+          '<time>' + esc(item.created_at.slice(11)) + '</time>' +
+          '<button class="download-stream-user" onclick="showUserPublic(' + item.user_id + ')">' + avatar + '<span><strong>' + esc(item.nickname) + '</strong>' +
+            (identity ? '<small>' + esc(identity) + '</small>' : '<small>身份未填写</small>') + '</span></button>' +
+          '<span class="download-stream-action activity-' + esc(item.activity_type || 'legacy') + '">' + esc(item.activity_label || '访问了') + '</span><div class="download-stream-target">' + material +
+            '<small>' + esc(item.course_name || '课程信息缺失') + (item.course_code ? ' · ' + esc(item.course_code) : '') + '</small></div></div>';
+      });
+      html += '</div>' + _monitorPagination(data.page, data.total_pages, 'monitorDownloadPage');
+      content.innerHTML = html;
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">访问流水加载失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  function _healthStatusLabel(status) {
+    if (status === 'healthy') return '运行正常';
+    if (status === 'warning') return '需要关注';
+    return '存在异常';
+  }
+
+  function _formatStorageSize(bytes) {
+    var value = Number(bytes || 0);
+    if (!Number.isFinite(value) || value <= 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var unitIndex = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+    var scaled = value / Math.pow(1024, unitIndex);
+    var decimals = unitIndex >= 3 ? 1 : (scaled < 10 && unitIndex > 0 ? 1 : 0);
+    return scaled.toFixed(decimals) + ' ' + units[unitIndex];
+  }
+
+  function renderAdminSiteHealth(content) {
+    if (!content) return;
+    content.innerHTML = '<div class="admin-loading">检查网站运行状态…</div>';
+    api('/api/admin/monitoring/?section=health').then(function(data) {
+      var db = data.database || {}, storage = data.storage || {}, activity = data.activity || {};
+      var used = Math.max(0, Math.min(100, Number(storage.used_percent || 0)));
+      content.innerHTML = '<div class="monitor-section-head"><div><h3>网站运行状态</h3><p>实时检查当前请求所在服务进程、数据库与资料存储。</p></div>' +
+        '<button class="admin-btn admin-btn-secondary" onclick="renderAdminSiteHealth(document.getElementById(\'adminUserSectionContent\'))">刷新状态</button></div>' +
+        '<div class="health-overall health-' + esc(data.overall) + '"><span class="health-dot"></span><div><strong>' + _healthStatusLabel(data.overall) + '</strong>' +
+          '<small>检查于 ' + esc(data.checked_at) + '</small></div></div>' +
+        '<div class="health-grid">' +
+          '<section class="health-card"><div class="health-card-title"><span class="health-dot is-ok"></span>应用服务</div><strong>响应正常</strong><small>监测接口已成功完成本次请求</small></section>' +
+          '<section class="health-card"><div class="health-card-title"><span class="health-dot ' + (db.ok ? 'is-ok' : 'is-bad') + '"></span>数据库</div><strong>' + (db.ok ? '连接正常' : '连接异常') + '</strong><small>' + esc((db.vendor || 'database').toUpperCase()) + ' · ' + (db.latency_ms == null ? '延迟未知' : db.latency_ms + ' ms') + ' · ' + _formatStorageSize(db.size_bytes || 0) + '</small></section>' +
+          '<section class="health-card health-card--wide"><div class="health-card-title"><span class="health-dot ' + (storage.ok ? 'is-ok' : 'is-bad') + '"></span>资料存储</div>' +
+            '<strong>' + (storage.ok ? '目录可写' : '目录不可用') + '</strong><small>剩余 ' + _formatStorageSize(storage.free_bytes || 0) + ' / ' + _formatStorageSize(storage.total_bytes || 0) + '</small>' +
+            '<div class="storage-meter"><span style="width:' + used + '%"></span></div><small>已使用 ' + used + '%</small></section>' +
+          '<section class="health-card health-card--wide"><div class="health-card-title"><span class="health-dot is-neutral"></span>最近活动</div>' +
+            '<div class="health-activity"><span>最近上传<strong>' + esc(activity.last_upload_at || '暂无') + '</strong></span><span>最近下载<strong>' + esc(activity.last_download_at || '暂无') + '</strong></span></div></section>' +
+        '</div>';
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">运行状态检查失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  function renderAdminUserList(content, search, page) {
     _userPage = page || 1;
     content.innerHTML = '<div class="admin-loading">加载中…</div>';
     var params = [];
@@ -16,7 +294,7 @@
         content.innerHTML = '<div class="admin-empty">未找到用户</div>';
         return;
       }
-      var html = '<div class="admin-section-label">👥 用户管理</div>' +
+      var html = '<div class="monitor-section-head"><div><h3>用户名单</h3><p>搜索用户并配置角色、管辖板块与自动托管权限。</p></div><span class="monitor-total-note">共 ' + (resp.total || 0) + ' 人</span></div>' +
         '<div class="admin-search-box">' +
         '<input type="text" id="adminUserSearch" placeholder="搜索昵称 / 邮箱…" value="' + escapeHtml(search) + '" onkeydown="if(event.key===\'Enter\')adminSearchUsers()">' +
         '<select class="admin-role-filter" onchange="adminFilterUsers(this.value)">' +
@@ -29,7 +307,7 @@
       var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
       html += '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr>' +
-          '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>下载数</th><th>注册时间</th>' +
+          '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>下载数</th><th>预览数</th><th>注册时间</th>' +
         '</tr></thead><tbody>';
       users.forEach(function(u) {
         var canChange = u.id !== (currentUser ? currentUser.id : -1) && u.role !== 'super_admin';
@@ -84,15 +362,21 @@
         var avatarCell = u.avatar_url
           ? '<img src="' + escapeHtml(u.avatar_url) + '" class="admin-user-avatar" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">'
           : '<div class="admin-user-avatar-placeholder" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">' + escapeHtml((u.nickname || '?').charAt(0).toUpperCase()) + '</div>';
+        var identity = [u.education, u.college, u.major].filter(function(value) {
+          return value && value !== '其他' && value !== '其它';
+        }).join(' · ');
+        var nameCell = '<span class="admin-user-name-stack"><a href="javascript:void(0)" class="admin-user-name" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">' + escapeHtml(u.nickname) + '</a>' +
+          (identity ? '<small class="admin-user-identity">' + escapeHtml(identity) + '</small>' : '') + '</span>';
         html += '<tr>' +
           '<td>' + avatarCell + '</td>' +
-          '<td><a href="javascript:void(0)" class="admin-user-name" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">' + escapeHtml(u.nickname) + '</a></td>' +
+          '<td>' + nameCell + '</td>' +
           '<td class="td-muted">' + escapeHtml(u.email) + '</td>' +
           '<td>' + roleOptions + '</td>' +
           '<td class="td-muted">' + sections + '</td>' +
           autoApproveCell +
           '<td>' + (u.material_count || 0) + '</td>' +
           '<td>' + (u.download_count || 0) + '</td>' +
+          '<td>' + (u.preview_count || 0) + '</td>' +
           '<td>' + u.date_joined + '</td>' +
         '</tr>';
       });
@@ -102,13 +386,13 @@
       if (totalPages > 1) {
         html += '<div class="admin-pagination">';
         if (_userPage > 1) {
-          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escJs(search) + '\', ' + (_userPage - 1) + ')">← 上一页</button>';
+          html += '<button onclick="renderAdminUserList(document.getElementById(\'adminUserSectionContent\'), \'' + escJs(search) + '\', ' + (_userPage - 1) + ')">← 上一页</button>';
         } else {
           html += '<button disabled>← 上一页</button>';
         }
         html += '<span class="page-info">第 ' + _userPage + ' / ' + totalPages + ' 页（共 ' + resp.total + ' 条）</span>';
         if (_userPage < totalPages) {
-          html += '<button onclick="renderAdminUsers(document.getElementById(\'adminContent\'), \'' + escJs(search) + '\', ' + (_userPage + 1) + ')">下一页 →</button>';
+          html += '<button onclick="renderAdminUserList(document.getElementById(\'adminUserSectionContent\'), \'' + escJs(search) + '\', ' + (_userPage + 1) + ')">下一页 →</button>';
         } else {
           html += '<button disabled>下一页 →</button>';
         }
@@ -122,13 +406,13 @@
 
   function adminSearchUsers() {
     var q = document.getElementById('adminUserSearch');
-    renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '', 1);
+    renderAdminUserList(document.getElementById('adminUserSectionContent'), q ? q.value.trim() : '', 1);
   }
 
   function adminFilterUsers(value) {
     _userRoleFilter = value;
     var q = document.getElementById('adminUserSearch');
-    renderAdminUsers(document.getElementById('adminContent'), q ? q.value.trim() : '', 1);
+    renderAdminUserList(document.getElementById('adminUserSectionContent'), q ? q.value.trim() : '', 1);
   }
 
   function onRoleChange(uid, newRole, nickname) {

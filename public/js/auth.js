@@ -1,4 +1,6 @@
   var currentUser = null;
+  var _pendingVerificationEmail = '';
+  var _verificationResendTimer = null;
 
   function updateAuthUI() {
     const container = document.getElementById('headerLogin');
@@ -70,20 +72,35 @@
     }
   }
 
-  function showLoginModal() { document.getElementById('loginModal').style.display = 'flex'; lockScroll(); _pushModalHistory(); }
+  function showLoginModal() {
+    var modal = document.getElementById('loginModal');
+    modal.style.display = 'flex';
+    lockScroll();
+    _pushModalHistory(modal);
+  }
   function showRegister() {
     document.getElementById('loginModal').style.display = 'none';
-    document.getElementById('registerModal').style.display = 'flex';
+    var modal = document.getElementById('registerModal');
+    modal.style.display = 'flex';
+    activateDialog(modal);
     populateIdentitySelects('regCollege', 'regMajor', {});
   }
-  function showLogin() { document.getElementById('registerModal').style.display = 'none'; document.getElementById('loginModal').style.display = 'flex'; }
+  function showLogin() {
+    document.getElementById('registerModal').style.display = 'none';
+    var modal = document.getElementById('loginModal');
+    modal.style.display = 'flex';
+    activateDialog(modal);
+  }
   function closeAuthModal() {
     document.getElementById('loginModal').style.display = 'none';
     document.getElementById('registerModal').style.display = 'none';
     document.getElementById('loginError').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
+    document.getElementById('registerResendAction').style.display = 'none';
     document.getElementById('registerSuccess').style.display = 'none';
     document.getElementById('registerForm').style.display = 'block';
+    _clearVerificationResendState();
+    _pendingVerificationEmail = '';
     unlockScroll();
     _popModalHistory();
     // 清除密码字段
@@ -93,8 +110,8 @@
     if (pwc) pwc.value = '';
   }
 
-  // ── v183 身份标签：注册/个人中心编辑共用的学院+专业下拉填充 ──
-  // preset = { college, major }，用于编辑时回填当前身份
+  // 身份标签：注册/个人中心编辑共用的学院+专业联动；培养层次为固定四项。
+  // preset = { college, major }，用于编辑时回填当前身份。
   async function populateIdentitySelects(collegeSelId, majorSelId, preset) {
     preset = preset || {};
     const collegeSel = document.getElementById(collegeSelId);
@@ -121,16 +138,25 @@
     const majorSel = document.getElementById(majorSelId);
     if (!collegeSel || !majorSel) return;
     var college = collegeSel.value;
-    if (!college || college === '其他') {
-      majorSel.innerHTML = '<option value="其他">其他</option>';
-      majorSel.value = '其他';
-      majorSel.disabled = college === '其他';
+    if (!college) {
+      majorSel.innerHTML = '<option value="">专业</option>';
+      majorSel.value = '';
+      majorSel.disabled = true;
       return;
     }
-    if (!courseTree || !courseTree['专业课']) {
+    if (college === '其他') {
+      majorSel.innerHTML = '<option value="其他">其他</option>';
+      majorSel.value = '其他';
+      majorSel.disabled = true;
+      return;
+    }
+    if (typeof courseTree === 'undefined' || !courseTree || !courseTree['专业课']) {
+      if (typeof ensureFeature === 'function' && typeof loadCourseTree !== 'function') {
+        await ensureFeature('explorer');
+      }
       if (typeof loadCourseTree === 'function') await loadCourseTree();
     }
-    var kids = (courseTree && courseTree['专业课'] && courseTree['专业课'].children) || [];
+    var kids = (typeof courseTree !== 'undefined' && courseTree && courseTree['专业课'] && courseTree['专业课'].children) || [];
     var colNode = kids.find(function(c) { return c.name === college; }) || null;
     // 只抓取「父节点」（有子目录）作为专业选项，过滤 divider
     var majors = (colNode && colNode.children || []).filter(function(c) {
@@ -168,13 +194,18 @@
 
   // ── 忘记密码 ──
   function showForgotPassword() {
+    var hadAuthModal = ['loginModal', 'registerModal'].some(function(id) {
+      return document.getElementById(id).style.display !== 'none';
+    });
     document.getElementById('loginModal').style.display = 'none';
-    document.getElementById('forgotPwdModal').style.display = 'flex';
+    document.getElementById('registerModal').style.display = 'none';
+    var modal = document.getElementById('forgotPwdModal');
+    modal.style.display = 'flex';
     document.getElementById('forgotPwdForm').style.display = 'block';
     document.getElementById('forgotPwdSuccess').style.display = 'none';
     document.getElementById('forgotPwdError').style.display = 'none';
-    lockScroll();
-    _pushModalHistory();
+    if (!hadAuthModal) { lockScroll(); _pushModalHistory(modal); }
+    else activateDialog(modal);
   }
 
   function closeForgotPwdModal() {
@@ -215,14 +246,15 @@
     _resetToken = token;
     document.getElementById('forgotPwdModal').style.display = 'none';
     document.getElementById('loginModal').style.display = 'none';
-    document.getElementById('resetPwdModal').style.display = 'flex';
+    var modal = document.getElementById('resetPwdModal');
+    modal.style.display = 'flex';
     document.getElementById('resetPwdForm').style.display = 'block';
     document.getElementById('resetPwdSuccess').style.display = 'none';
     document.getElementById('resetPwdError').style.display = 'none';
     document.getElementById('resetNewPwd').value = '';
     document.getElementById('resetConfirmPwd').value = '';
     lockScroll();
-    _pushModalHistory();
+    _pushModalHistory(modal);
   }
 
   function closeResetPwdModal() {
@@ -286,6 +318,66 @@
     }
   })();
 
+  // ── 注册验证邮件重发 ──
+  function _clearVerificationResendState() {
+    if (_verificationResendTimer) {
+      clearTimeout(_verificationResendTimer);
+      _verificationResendTimer = null;
+    }
+    document.querySelectorAll('.register-resend-btn').forEach(function(btn) {
+      btn.disabled = false;
+      btn.textContent = '重新发送验证邮件';
+    });
+    document.querySelectorAll('.register-resend-status').forEach(function(status) {
+      status.textContent = '';
+    });
+  }
+
+  function _startVerificationResendCooldown(seconds, message) {
+    var remaining = Math.max(1, Number(seconds) || 60);
+    if (_verificationResendTimer) clearTimeout(_verificationResendTimer);
+    document.querySelectorAll('.register-resend-btn').forEach(function(btn) {
+      btn.disabled = true;
+    });
+
+    function tick() {
+      var suffix = remaining > 0 ? '（' + remaining + ' 秒后可再次发送）' : '';
+      document.querySelectorAll('.register-resend-btn').forEach(function(btn) {
+        btn.disabled = remaining > 0;
+        btn.textContent = remaining > 0 ? '重新发送（' + remaining + ' 秒）' : '重新发送验证邮件';
+      });
+      document.querySelectorAll('.register-resend-status').forEach(function(status) {
+        status.textContent = (message || '验证邮件已重新发送。') + suffix;
+      });
+      if (remaining > 0) {
+        remaining--;
+        _verificationResendTimer = setTimeout(tick, 1000);
+      } else {
+        _verificationResendTimer = null;
+      }
+    }
+    tick();
+  }
+
+  async function resendVerificationEmail() {
+    var statuses = document.querySelectorAll('.register-resend-status');
+    var buttons = document.querySelectorAll('.register-resend-btn');
+    if (!_pendingVerificationEmail) {
+      statuses.forEach(function(status) { status.textContent = '请先提交注册信息。'; });
+      return;
+    }
+    buttons.forEach(function(btn) { btn.disabled = true; });
+    statuses.forEach(function(status) { status.textContent = '正在发送验证邮件…'; });
+    try {
+      var data = await api('/api/auth/resend-verification/', { method: 'POST',
+        body: { email: _pendingVerificationEmail } });
+      _startVerificationResendCooldown(data.cooldown_seconds, data.message);
+    } catch (err) {
+      buttons.forEach(function(btn) { btn.disabled = false; });
+      statuses.forEach(function(status) { status.textContent = err.message; });
+    }
+  }
+
   async function handleRegister(e) {
     e.preventDefault();
     const el = document.getElementById('registerError');
@@ -296,32 +388,44 @@
       if (!sid) throw new Error('请输入学号');
       var suffix = document.getElementById('regEmailSuffix') ? document.getElementById('regEmailSuffix').value : '@mail.bnu.edu.cn';
       var email = sid + suffix;
+      _pendingVerificationEmail = email;
       var password = document.getElementById('regPassword').value;
       var passwordConfirm = document.getElementById('regPasswordConfirm').value;
+      var education = (document.getElementById('regEducation') || { value: '' }).value || '';
+      var college = (document.getElementById('regCollege') || { value: '' }).value || '';
+      var major = (document.getElementById('regMajor') || { value: '' }).value || '';
       if (password.length < 8) throw new Error('密码长度至少 8 位');
       if (password !== passwordConfirm) throw new Error('两次密码输入不一致');
+      if (!education || !college || !major) throw new Error('请选择培养层次、学院和专业');
       await api('/api/auth/register/', { method: 'POST',
         body: { email: email,
                 nickname: document.getElementById('regNickname').value.trim(),
                 password: password,
-                college: (document.getElementById('regCollege') || { value: '' }).value || '',
-                major: (document.getElementById('regMajor') || { value: '' }).value || '' } });
+                education: education,
+                college: college,
+                major: major } });
       // 不自动登录 — 用户需要先验证邮箱
       el.style.display = 'none';
       form.style.display = 'none';
+      document.getElementById('registerResendAction').style.display = 'none';
       success.style.display = 'block';
       // 清除密码字段
       document.getElementById('regPassword').value = '';
       document.getElementById('regPasswordConfirm').value = '';
-    } catch (err) { el.textContent = err.message; el.style.display = 'block'; success.style.display = 'none'; }
+    } catch (err) {
+      el.textContent = err.message;
+      el.style.display = 'block';
+      success.style.display = 'none';
+      var resendAction = document.getElementById('registerResendAction');
+      var canResend = (err.message || '').indexOf('未验证') !== -1;
+      resendAction.style.display = canResend ? 'block' : 'none';
+      if (!canResend) _clearVerificationResendState();
+    }
     return false;
   }
 
   function logout() {
-    sessionStorage.removeItem('token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('_loginTime');
-    localStorage.removeItem('_loginRemember');
+    clearAuthToken();
     sessionStorage.removeItem('bnusparks_qa_guest'); // 问答区 2026 门控标记
     currentUser = null;
     location.reload();
@@ -329,6 +433,7 @@
 
   // ── Token 持久化：sessionStorage（当前会话）+ localStorage（跨会话） ──
   function _persistToken(token, remember, userId) {
+    setAuthTokenCache(token);
     sessionStorage.setItem('token', token);
     localStorage.setItem('token', token);
     localStorage.setItem('_loginTime', Date.now().toString());
@@ -352,32 +457,34 @@
     try {
       currentUser = await api('/api/auth/me/');
       updateAuthUI();
-      // 异步加载未读通知数
-      loadNotifCount();
     }
-    catch {
-      // token 过期或无效——检查 localStorage 中的时间戳决定是否自动清除
-      _clearStaleToken();
+    catch (err) {
+      // 只有服务端明确拒绝认证时才清 token；断网/超时保留会话，避免误登出。
+      if (err && (err.status === 401 || err.status === 403)) _clearStaleToken();
       updateAuthUI();
     }
   }
 
   function _clearStaleToken() {
-    var remember = localStorage.getItem('_loginRemember') === '1';
-
-    if (remember) {
-      // 记住我：不清除 token 本身，让用户手动重登（避免服务端 key 轮换时误删）
-      return;
-    }
-
-    // 未勾选"记住我"：清除过期的 token
-    sessionStorage.removeItem('token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('_loginTime');
-    localStorage.removeItem('_loginRemember');
+    clearAuthToken();
   }
 
-  async function loadNotifCount() {
+  var _notifCountPromise = null;
+
+  // 启动、focus、visibilitychange 可能同时触发徽章刷新；复用进行中的请求。
+  function loadNotifCount() {
+    if (_notifCountPromise) return _notifCountPromise;
+    var promise = _loadNotifCount();
+    _notifCountPromise = promise;
+    promise.then(function() {
+      if (_notifCountPromise === promise) _notifCountPromise = null;
+    }, function() {
+      if (_notifCountPromise === promise) _notifCountPromise = null;
+    });
+    return promise;
+  }
+
+  async function _loadNotifCount() {
     try {
       const data = await api('/api/auth/notifications/?unread_only=1');
       const badge = document.getElementById('notifBadge');

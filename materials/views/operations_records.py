@@ -9,6 +9,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -173,55 +174,76 @@ def api_restore_deletion(request, deletion_id):
     # v=167 从暂存区取回物理文件：移回课程目录并填真实 file_path，杜绝旧版 file_path=""
     # 的幽灵记录（下载直接 500/404）。暂存文件不存在（历史记录或已超期硬删）→ 拒绝恢复。
     rel_path = ""
+    staged = None
+    dest = None
     if dr.trash_path:
         staged = Path(settings.MEDIA_ROOT) / dr.trash_path
         if staged.is_file():
-            new_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(course.code)
+            course_dir = _safe_dir_name(course.code)
+            new_dir = Path(settings.MEDIA_ROOT) / course_dir
             new_dir.mkdir(parents=True, exist_ok=True)
             dest = new_dir / staged.name
+            if dest.exists():
+                return _err("恢复目标已存在同名文件，请联系管理员处理", 409)
             try:
                 shutil.move(str(staged), str(dest))
-                rel_path = f"{course.code}/{staged.name}"
+                rel_path = f"{course_dir}/{staged.name}"
             except OSError:
                 return _err("文件恢复失败（暂存文件不可用）", 400)
     if not rel_path:
         return _err("原文件已被物理清除，无法恢复", 400)
 
-    material = Material.objects.create(
-        course=course, title=dr.title, file_name=dr.file_name,
-        file_size=dr.file_size, file_path=rel_path,
-        uploader_name=dr.uploader_name,
-        review_status="approved", is_approved=True,
-        reviewed_by=dr.deleted_by,
-    )
-
     try:
-        from git_storage import commit_file
-        commit_file(rel_path)
-    except Exception:
-        pass
+        with transaction.atomic():
+            material = Material.objects.create(
+                course=course, title=dr.title, file_name=dr.file_name,
+                file_size=dr.file_size, file_path=rel_path,
+                uploader_name=dr.uploader_name,
+                review_status="approved", is_approved=True,
+                reviewed_by=dr.deleted_by,
+            )
 
-    dr.is_restored = True
-    dr.restored_at = timezone.now()
-    dr.restored_by = request.user
-    dr.save(update_fields=["is_restored", "restored_at", "restored_by"])
+            dr.is_restored = True
+            dr.restored_at = timezone.now()
+            dr.restored_by = request.user
+            dr.save(update_fields=["is_restored", "restored_at", "restored_by"])
+
+            def _commit_restored_file():
+                try:
+                    from git_storage import commit_file
+                    commit_file(rel_path)
+                except Exception:
+                    pass
+            transaction.on_commit(_commit_restored_file)
+    except Exception:
+        # Material/DeletionRecord 回滚时，物理文件也必须回到 trash。
+        try:
+            if dest and dest.is_file() and staged:
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(dest), str(staged))
+        except OSError:
+            pass
+        return _err("恢复失败，暂存文件与删除记录已保留", 500)
 
     original_uploader = User.objects.filter(username=dr.uploader_name).first()
-    if original_uploader and original_uploader != request.user:
-        _create_notification(
-            recipient=original_uploader, type=Notification.Type.OPERATION,
-            title="你的资料已被恢复",
-            message=f"管理员恢复了你的资料「{dr.title}」，现在可以查看和下载了。",
-            material=material, triggered_by=request.user,
-        )
+    try:
+        if original_uploader and original_uploader != request.user:
+            _create_notification(
+                recipient=original_uploader, type=Notification.Type.OPERATION,
+                title="你的资料已被恢复",
+                message=f"管理员恢复了你的资料「{dr.title}」，现在可以查看和下载了。",
+                material=material, triggered_by=request.user,
+            )
 
-    if reason and dr.deleted_by and dr.deleted_by_id != request.user.id:
-        _create_notification(
-            recipient=dr.deleted_by, type=Notification.Type.OPERATION,
-            title="你的删除操作已被撤销",
-            message=f"管理员撤销了你对资料「{dr.title}」的删除操作。撤销理由：{reason}",
-            material=material, course_code=dr.course_code,
-            course_name=dr.course_name, triggered_by=request.user,
-        )
+        if reason and dr.deleted_by and dr.deleted_by_id != request.user.id:
+            _create_notification(
+                recipient=dr.deleted_by, type=Notification.Type.OPERATION,
+                title="你的删除操作已被撤销",
+                message=f"管理员撤销了你对资料「{dr.title}」的删除操作。撤销理由：{reason}",
+                material=material, course_code=dr.course_code,
+                course_name=dr.course_name, triggered_by=request.user,
+            )
+    except Exception:
+        pass
 
     return _ok({"message": "文件已恢复", "material_id": material.id})

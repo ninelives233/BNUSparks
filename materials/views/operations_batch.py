@@ -4,13 +4,13 @@ BNU Sparks · 木铎星火 — 批量删除 / 批量编辑 API
 
 import json
 
-from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 
-from ..models import Material, UserProfile, DeletionRecord, Notification
+from ..models import Material, UserProfile, Notification
 from .utils import (
     _err, _ok, _get_or_create_profile, _check_moderator_access,
-    _create_notification, _stage_file_to_trash, _purge_expired_trash,
+    _create_notification, _perform_soft_delete, _purge_expired_trash,
+    TrashStageError,
     require_login, require_role,
 )
 
@@ -32,6 +32,7 @@ def api_file_batch_delete(request):
     profile = _get_or_create_profile(request.user)
     deleted = 0
     errors = []
+    uploader_snapshots = {}
     for fid in file_ids:
         try:
             m = Material.objects.get(id=fid)
@@ -50,45 +51,37 @@ def api_file_batch_delete(request):
             else:
                 errors.append(f"文件#{fid}：无权删除")
                 continue
-            # v=182.1：单文件删除原子化——建记录/暂存文件/删行要么全成要么全回滚，
-            # 杜绝批删中途 DB 异常留下「记录在、行还在」的幽灵（与 api_file_delete 同款修复）
-            with transaction.atomic():
-                dr = DeletionRecord.objects.create(
-                    material_id=m.id, title=m.title,
-                    file_name=m.file_name, file_size=m.file_size,
-                    course_code=m.course.code if m.course else "",
-                    course_name=m.course.name if m.course else "",
-                    college_id=m.course.college_id if m.course and m.course.college else None,
-                    uploader_name=m.uploader_name or (m.uploader.first_name if m.uploader else "匿名"),
-                    deleted_by=request.user, delete_reason=reason,
-                )
-                # 软删除：物理文件移入暂存区（顺带修复此前批删不留文件、磁盘残留孤儿的问题）
-                trash_rel = _stage_file_to_trash(m)
-                if trash_rel:
-                    dr.trash_path = trash_rel
-                    dr.save(update_fields=["trash_path"])
-                m.delete()
+            uploader = m.uploader
+            course = m.course
+            snapshot = {
+                "recipient": uploader,
+                "course_code": course.code if course else "",
+                "course_name": course.name if course else "",
+            }
+            _perform_soft_delete(m, request.user, delete_reason=reason)
             deleted += 1
+            if reason and uploader and uploader.id != request.user.id:
+                uploader_snapshots.setdefault(uploader.id, snapshot)
         except Material.DoesNotExist:
             errors.append(f"文件#{fid}：不存在")
+        except TrashStageError:
+            errors.append(f"文件#{fid}：文件暂存失败，未删除")
+        except Exception:
+            errors.append(f"文件#{fid}：删除失败，已回滚")
     if deleted > 0 and reason:
-        notified_uploaders = set()
-        for fid in file_ids:
+        # 快照在删除前保存；不能在 Material 行删除后重新按 fid 查询。
+        for snapshot in uploader_snapshots.values():
             try:
-                m = Material.objects.get(id=fid)
-                if m.uploader and m.uploader_id not in notified_uploaders:
-                    if m.uploader_id != request.user.id:
-                        _create_notification(
-                            recipient=m.uploader, type=Notification.Type.FILE_DELETED,
-                            title="你的资料被管理员批量删除",
-                            message=f"管理员批量删除了你的一部分资料。\n删除理由：{reason}\n如有疑问请联系管理员。",
-                            course_code=m.course.code if m.course else "",
-                            course_name=m.course.name if m.course else "",
-                            triggered_by=request.user,
-                        )
-                        notified_uploaders.add(m.uploader_id)
-            except Material.DoesNotExist:
-                continue
+                _create_notification(
+                    recipient=snapshot["recipient"], type=Notification.Type.FILE_DELETED,
+                    title="你的资料被管理员批量删除",
+                    message=f"管理员批量删除了你的一部分资料。\n删除理由：{reason}\n如有疑问请联系管理员。",
+                    course_code=snapshot["course_code"],
+                    course_name=snapshot["course_name"],
+                    triggered_by=request.user,
+                )
+            except Exception:
+                pass
     return _ok({"deleted": deleted, "errors": errors, "total": len(file_ids)})
 
 

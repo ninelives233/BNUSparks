@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BNU Sparks · 木铎星火</title>
+<link rel="stylesheet" href="public/css/tokens.css">
+<link rel="stylesheet" href="public/css/base.css">
+<link rel="stylesheet" href="public/css/admin.css">
+<link rel="stylesheet" href="public/css/user.css">
+<link rel="stylesheet" href="public/css/files.css">
+<link rel="stylesheet" href="public/css/course.css">
+<link rel="stylesheet" href="public/css/announcement.css">
+<link rel="stylesheet" href="public/css/qa.css">
+<link rel="stylesheet" href="public/css/components.css">
+<style>
+:root {
+  --demo-ease: cubic-bezier(.23,1,.32,1);
+  --demo-camera: cubic-bezier(.77,0,.175,1);
+  --demo-stage: cubic-bezier(.16,1,.3,1);
+  --demo-depth: 1500px;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+.demo-chrome {
+  position: fixed; inset: 0 0 auto; z-index: 60; height: var(--header-height);
+  background: oklch(from var(--surface) l c h / .96); border-bottom: 1px solid var(--border-light);
+  box-shadow: 0 1px 8px oklch(.45 .01 55 / .04); opacity: 0; transform: none;
+  pointer-events: none; transition: opacity 220ms var(--demo-ease);
+}
+.demo-chrome.visible { opacity: 1; pointer-events: auto; }
+.demo-chrome.focus { transform: none; background: transparent; border-bottom-color: transparent; box-shadow: none; pointer-events: none; }
+.demo-chrome.results-open { opacity: 0; pointer-events: none; }
+.demo-chrome.focus .demo-logo, .demo-chrome.focus .demo-login { opacity: 0; }
+.demo-chrome .header-inner { max-width: var(--content-width); height: 100%; margin: 0 auto; padding: 0 var(--space-lg); display: flex; align-items: center; gap: var(--space-lg); }
+.demo-logo { display: flex; align-items: center; gap: 9px; min-width: 175px; color: var(--ink); transition: opacity 160ms var(--demo-ease); }
+.demo-logo .hl-mark { width: 29px; height: 29px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--accent); color: #fff; font-size: .95rem; }
+.demo-logo .hl-texts { display: flex; flex-direction: column; line-height: 1.05; }
+.demo-logo .hl-chinese { font-family: var(--serif); font-size: .96rem; font-weight: 700; }
+.demo-logo .hl-english { margin-top: 3px; color: var(--ink-faint); font-size: .57rem; letter-spacing: .16em; text-transform: uppercase; }
+.demo-search { flex: 1; max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 16px; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--bg); color: var(--ink-faint); opacity: 1; transform: none; pointer-events: auto; transition: opacity 220ms var(--demo-ease), transform 360ms var(--demo-ease), box-shadow 280ms var(--demo-ease), border-color 200ms var(--demo-ease); }
+.demo-chrome.focus .header-inner { justify-content: center; }
+.demo-chrome.focus .demo-search { position: fixed; top: 50%; left: 50%; width: min(640px, calc(100vw - 40px)); max-width: none; padding: 11px 11px 11px 22px; opacity: 0; transform: translate(-50%, -50%) scale(.975); border-color: var(--primary-light); background: oklch(from var(--raised) l c h / .92); box-shadow: 0 18px 56px oklch(.32 .04 250 / .14), 0 0 0 7px oklch(from var(--primary) l c h / .05); backdrop-filter: blur(18px) saturate(145%); }
+.demo-chrome.visible.focus .demo-search { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.demo-chrome.focus .demo-search input { font-size: 1rem; }
+.demo-chrome.focus .demo-search button { width: 38px; height: 38px; }
+.demo-search span { opacity: .65; font-size: .92rem; }
+.demo-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: .78rem; }
+.demo-search button { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--primary); color: #fff; font-size: .8rem; }
+.demo-search button { transition: transform 120ms var(--demo-ease), background-color 160ms var(--demo-ease); }
+.demo-search button:active { transform: scale(.95); }
+.demo-login { color: var(--primary); font-size: .78rem; white-space: nowrap; transition: opacity 160ms var(--demo-ease); }
+
+#stage { position: fixed; inset: 0; overflow: hidden; opacity: 0; perspective: var(--demo-depth); transition: opacity 520ms var(--demo-ease); }
+#stage.ready { opacity: 1; }
+#camera { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform; transition: transform 940ms var(--demo-camera); }
+#canvas { display: flex; width: 1000vw; height: 100%; transform-style: preserve-3d; }
+.scene { position: relative; width: 100vw; height: 100%; flex: 0 0 100vw; overflow: hidden; background: var(--bg); }
+.scene::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 92% 4%, oklch(from var(--primary) l c h / .035), transparent 30%), linear-gradient(135deg, oklch(from var(--accent) l c h / .02), transparent 35%); }
+.scene-inner { position: relative; z-index: 1; width: min(1120px, calc(100% - 64px)); height: 100%; margin: 0 auto; padding: 30px 0 78px; overflow: auto; scrollbar-width: none; }
+.scene-inner::-webkit-scrollbar { display: none; }
+.scene-inner > .container { max-width: none; padding: 0; }
+.scene .demo-motion-item { opacity: 0; transform: translate3d(0, 22px, -90px) scale(.965); transform-origin: 50% 45%; will-change: transform, opacity; }
+.scene.is-present .demo-motion-item { animation: demo-item-enter 760ms var(--demo-stage) both; animation-delay: calc(110ms + var(--demo-order, 0) * 46ms); }
+.scene .demo-motion-item.demo-motion-subtle { transform: translate3d(36px, 0, -110px) rotateY(-3deg) scale(.985); }
+.scene[data-slot="1"] .demo-motion-item { transform: translate3d(0, 46px, -220px) scale(.88); }
+.scene[data-slot="2"] .upload-demo-card.demo-motion-item { transform: translate3d(80px, 18px, -260px) rotateY(-10deg) scale(.9); transform-origin: 100% 50%; }
+.scene[data-slot="3"] .folder-card.demo-motion-item { transform: translate3d(0, 64px, -260px) rotateX(12deg) scale(.9); transform-origin: 50% 100%; }
+.scene[data-slot="4"] .folder-list-item.demo-motion-item { transform: translate3d(76px, 0, -160px) rotateY(-5deg) scale(.97); transform-origin: 100% 50%; }
+.scene[data-slot="5"] .file-table tbody tr.demo-motion-item { transform: translate3d(0, 38px, -170px) rotateX(8deg) scale(.985); transform-origin: 50% 0; }
+.scene[data-slot="7"] .demo-motion-item { transform: translate3d(0, 0, -360px) scale(.76); }
+.scene.cinema-out > .scene-inner, .scene.cinema-out > .preview-overlay { animation: cinema-scene-out 740ms var(--demo-camera) both; }
+.scene.cinema-in > .scene-inner { animation: cinema-scene-in 980ms var(--demo-stage) both; }
+@keyframes demo-item-enter { to { opacity: 1; transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) scale(1); } }
+@keyframes cinema-scene-out { to { opacity: .32; transform: perspective(var(--demo-depth)) translate3d(-3vw, 0, -260px) rotateY(-4deg) scale(.93); } }
+@keyframes cinema-scene-in { from { opacity: .18; transform: perspective(var(--demo-depth)) translate3d(4vw, 0, -320px) rotateY(5deg) scale(.88); } to { opacity: 1; transform: perspective(var(--demo-depth)) translate3d(0, 0, 0) rotateY(0) scale(1); } }
+.opening-scene { display: grid; place-items: center; background: var(--bg); }
+.opening-scene::after { content: ''; position: absolute; width: min(70vw, 720px); height: min(70vw, 720px); border: 1px solid oklch(from var(--primary) l c h / .09); border-radius: 50%; transform: scale(.8); opacity: 0; animation: opening-orbit 1600ms var(--demo-ease) 240ms forwards; }
+.opening-content { position: relative; z-index: 1; text-align: center; }
+.opening-mark { width: 68px; height: 68px; display: grid; place-items: center; margin: 0 auto 22px; border-radius: var(--radius-lg); background: var(--accent); color: #fff; font-size: 2rem; box-shadow: var(--shadow-md); animation: mark-in 700ms var(--demo-ease) both; }
+.opening-content h1 { margin: 0; font-family: var(--serif); font-size: clamp(2.2rem, 6vw, 4.2rem); line-height: 1.15; letter-spacing: .08em; animation: text-in 700ms var(--demo-ease) 120ms both; }
+.opening-content p { margin: 12px 0 0; color: var(--ink-faint); font-size: .86rem; letter-spacing: .16em; animation: text-in 700ms var(--demo-ease) 220ms both; }
+.opening-start { margin-top: 28px; animation: text-in 700ms var(--demo-ease) 360ms both; }
+.register-stage { position: relative; z-index: 2; width: min(100%, 520px); padding: 28px 20px; }
+.register-stage::before { content: 'BNU SPARKS'; position: absolute; top: -28px; left: 22px; color: var(--ink-faint); font-size: .62rem; font-weight: 700; letter-spacing: .18em; }
+.register-demo-card { width: 100%; max-width: 520px; max-height: calc(100vh - 56px); margin: 0; animation: register-card-in 520ms var(--demo-ease) both; }
+.register-demo-card .modal-title { margin-bottom: var(--space-md); }
+.register-demo-card .mf-email-hint { min-height: 32px; overflow: hidden; opacity: 0; margin: 6px 0 0; transform: translate3d(0,-6px,0); visibility: hidden; transition: opacity 260ms var(--demo-ease), transform 260ms var(--demo-ease); }
+.register-demo-card.preparing .mf-email-hint { opacity: 1; transform: translate3d(0,0,0); visibility: visible; }
+.register-demo-card .mf-group { opacity: .48; transform: translateY(6px); transition: opacity 360ms var(--demo-ease), transform 360ms var(--demo-ease); }
+.register-demo-card .mf-group.is-ready { opacity: 1; transform: translateY(0); }
+.register-demo-card .mf-btn { transition: background-color 160ms ease-out, transform 160ms ease-out, opacity 160ms ease-out; }
+.register-demo-card .mf-btn:active { transform: scale(.98); }
+.register-demo-card .mf-success { display: none; }
+.register-demo-card.registered form, .register-demo-card.registered .external-access { display: none; }
+.register-demo-card.registered .mf-success { display: block !important; animation: text-in 260ms var(--demo-ease) both; }
+@keyframes register-card-in { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes opening-orbit { to { opacity: 1; transform: scale(1); } }
+@keyframes mark-in { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+@keyframes text-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.hero { padding: 38px 0 24px; }
+.demo-home-hero.hero { padding: 80px 0 60px; }
+.demo-home-hero { text-align: center; }
+.demo-home-hero .hero-title-zh { margin: 0; font-family: var(--serif); font-size: clamp(2.6rem, 5.5vw, 3.8rem); line-height: 1.05; letter-spacing: .02em; }
+.demo-home-hero .hl-accent { color: var(--accent); }
+.demo-home-hero .hero-title-en { margin: 0 0 var(--space-lg); color: var(--ink-faint); font-size: clamp(.9rem, 1.8vw, 1.2rem); font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.demo-home-hero .hero-desc { max-width: 520px; margin: 0 auto var(--space-md); color: var(--ink-soft); font-size: clamp(1rem, 1.5vw, 1.1rem); line-height: 1.4; letter-spacing: .03em; }
+.demo-home-hero .hero-stats-label { margin: 0 0 8px; color: var(--ink-faint); font-size: .8rem; font-weight: 600; letter-spacing: .1em; }
+.stats-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.stat-pill { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 15px; border: 1px solid var(--border-light); border-radius: var(--radius-full); background: var(--raised); color: var(--ink-faint); font-size: .75rem; box-shadow: var(--shadow-xs); }
+.stat-pill strong { color: var(--ink); font-size: .94rem; }
+.home-upload-section { margin-top: 20px; text-align: center; }
+.demo-home-hero .home-upload-section--hero { display: block; padding-bottom: 0; }
+.home-upload-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 22px; border: 1px solid var(--primary); border-radius: var(--radius-full); background: var(--primary); color: #fff; font-size: .82rem; font-weight: 600; box-shadow: 0 4px 14px oklch(.4 .09 250 / .16); transition: background var(--t-fast), transform var(--t-fast); }
+.home-upload-btn:hover { background: var(--primary-dark); }
+.home-upload-btn:active { transform: scale(.98); }
+.home-upload-btn svg { width: 16px; height: 16px; }
+.home-materials-count { margin: 8px 0 0; color: var(--ink-faint); font-size: .72rem; }
+.home-materials-count strong { color: var(--ink-soft); }
+.demo-home-hero .hero-deco { z-index: 0; }
+.demo-home-hero .hero-footer { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 22px 0 0; color: var(--ink-faint); font-size: .72rem; }
+.demo-home-hero .hero-footer + .hero-footer { margin-top: 4px; }
+.demo-home-hero .hf-email { color: var(--primary); text-decoration: none; }
+.upload-flow-mark { display: flex; align-items: center; gap: 8px; margin-top: 26px; color: var(--ink-faint); font-size: .68rem; }
+.upload-flow-mark i { width: 18px; height: 1px; background: var(--border); }
+.home-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; margin-top: 28px; }
+.hc-panel { overflow: hidden; border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-sm); }
+.hc-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid var(--border-light); }
+.hc-panel-header h3 { margin: 0; font-family: var(--serif); font-size: .94rem; font-weight: 600; }
+.section-accent::before { content: ''; display: inline-block; width: 3px; height: 1em; margin-right: 9px; border-radius: 2px; background: var(--accent); vertical-align: -2px; }
+.hc-more { color: var(--ink-faint); font-size: .73rem; }
+.home-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid oklch(from var(--border-light) l c h / .65); }
+.home-item:last-child { border-bottom: 0; }
+.item-main { min-width: 0; flex: 1; }
+.item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; font-weight: 500; }
+.item-meta { margin-top: 2px; color: var(--ink-faint); font-size: .68rem; }
+.item-count { color: var(--ink-faint); font-size: .7rem; white-space: nowrap; }
+.item-pill { padding: 2px 8px; border-radius: var(--radius-full); background: var(--primary-surface); color: var(--primary); font-size: .62rem; font-weight: 600; }
+
+.demo-upload-search { z-index: 100; }
+.demo-upload-search .search-overlay-inner { max-width: 580px; }
+.demo-upload-search .so-result-item { border: 1px solid transparent; cursor: default; }
+.demo-upload-search .so-result-item.is-selected { border-color: var(--primary-light); background: var(--primary-surface); }
+
+.scene-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 0 0 14px; }
+.scene-heading h1, .scene-heading h2 { margin: 0; font-family: var(--serif); font-weight: 600; color: var(--ink); }
+.scene-heading h1 { font-size: 1.48rem; }
+.scene-heading h2 { font-size: 1.28rem; }
+.scene-heading p { margin: 4px 0 0; color: var(--ink-faint); font-size: .76rem; }
+.scene-heading .count { color: var(--ink-faint); font-size: .75rem; white-space: nowrap; }
+.demo-upload-page { max-width: 930px; margin: 0 auto; }
+.demo-upload-page .breadcrumb { padding: 10px 0 18px; }
+.demo-upload-layout { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(430px, 1.2fr); gap: 34px; align-items: start; }
+.demo-upload-copy { padding: 42px 0 0; }
+.demo-upload-copy .eyebrow { color: var(--accent-hover); font-size: .68rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.demo-upload-copy h1 { margin: 12px 0 10px; font-family: var(--serif); font-size: 2rem; line-height: 1.2; }
+.demo-upload-copy p { max-width: 290px; margin: 0; color: var(--ink-soft); font-size: .86rem; line-height: 1.75; }
+.upload-demo-card { position: relative; padding: 24px 26px 26px; border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-lg); }
+.upload-demo-card .modal-title { margin: 0 0 18px; }
+.upload-demo-card .mf-group { margin-bottom: 13px; }
+.upload-demo-card .mf-input { background: var(--surface); }
+.upload-demo-card .mf-input[readonly] { background: var(--bg); }
+.upload-demo-card .mf-input { transition: border-color 280ms var(--demo-ease), box-shadow 280ms var(--demo-ease), background-color 280ms var(--demo-ease); }
+.upload-demo-card .mf-group.is-ready .mf-input { border-color: var(--primary-light); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / .045); background: var(--surface); }
+.upload-demo-card.preparing .demo-upload-submit { opacity: .45; cursor: wait; }
+.upload-prep-status { display: flex; align-items: center; gap: 8px; min-height: 23px; margin: 2px 0 12px; color: var(--ink-faint); font-size: .72rem; }
+.upload-prep-status::before { content: ''; width: 7px; height: 7px; border: 1.5px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: status-spin 900ms linear infinite; }
+.upload-prep-status.ready { color: var(--success); }
+.upload-prep-status.ready::before { border: 0; background: var(--success); animation: none; }
+@keyframes status-spin { to { transform: rotate(360deg); } }
+.upload-mode-tabs { display: flex; margin: 0 0 16px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); overflow: hidden; }
+.um-tab { flex: 1; padding: 8px 12px; border: 0; border-right: 1px solid var(--border-light); background: var(--surface); color: var(--ink-soft); font-size: .8rem; }
+.um-tab:last-child { border-right: 0; }
+.um-tab-active { background: var(--primary-surface); color: var(--primary-dark); font-weight: 600; }
+.demo-upload-submit { width: 100%; margin-top: 4px; padding: 10px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-weight: 600; font-size: .9rem; transition: background-color 160ms ease-out, transform 160ms ease-out, opacity 160ms ease-out; }
+.demo-upload-submit:hover { background: var(--primary-dark); }
+.demo-upload-submit:active { transform: scale(.98); }
+.demo-upload-submit:disabled { cursor: wait; }
+.demo-progress { margin-top: 14px; }
+.demo-progress .mf-progress-bar { height: 6px; }
+.demo-progress .mf-progress-fill { width: 100%; transform: scaleX(0); transform-origin: left; transition: transform 120ms linear; }
+.upload-success { display: none; margin-top: 14px; padding: 12px 14px; border: 1px solid oklch(from var(--success) l c h / .2); border-radius: var(--radius-md); background: var(--success-light); color: var(--success); font-size: .8rem; }
+.upload-success.open { display: block; animation: text-in 360ms var(--demo-ease) both; }
+.upload-success strong { display: block; margin-bottom: 2px; }
+.demo-next { display: none; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border: 1px solid var(--primary); border-radius: var(--radius-md); background: var(--primary); color: #fff; font-size: .78rem; font-weight: 600; box-shadow: var(--shadow-sm); transition: background var(--t-fast), transform var(--t-fast); }
+.demo-next:hover { background: var(--primary-dark); }
+.demo-next:active { transform: scale(.98); }
+.demo-next.visible { display: inline-flex; }
+.upload-demo-card .demo-next { width: 100%; margin-top: 12px; }
+
+.demo-explorer .breadcrumb { padding: 10px 0 16px; }
+.scene-inner.demo-explorer, .scene-inner.demo-files { width: min(1500px, calc(100% - 64px)); }
+.demo-explorer .explorer-header { margin: 0 0 8px; }
+.demo-explorer .explorer-header h2 { font-size: 1.32rem; }
+.demo-explorer .explorer-header .eh-count { font-size: .76rem; }
+.demo-explorer .folder-grid { justify-content: space-evenly; padding-top: 12px; }
+.demo-explorer .folder-card { flex-basis: clamp(150px, calc((100% - 4 * var(--space-md)) / 5), 218px); }
+.demo-explorer .folder-card.is-active { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+.demo-explorer .folder-card.is-active .fc-icon { background: var(--primary-surface); }
+.demo-explorer .folder-card .fc-name { font-size: .84rem; }
+.demo-explorer .folder-card .fc-count { font-size: .7rem; }
+.demo-explorer .folder-card .fc-icon { width: 48px; height: 48px; }
+.demo-explorer .folder-card .fc-icon svg { width: 25px; height: 25px; }
+.demo-explorer .folder-card.is-static, .demo-explorer .folder-list-item.is-static { cursor: default; opacity: 1; pointer-events: none; }
+.demo-explorer .demo-course-trigger { cursor: pointer; }
+.demo-explorer .fli-fav-star { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; box-shadow: none; color: var(--ink-faint); font: inherit; font-size: 1.08rem; line-height: 1; transition: color 150ms var(--demo-ease), background-color 150ms var(--demo-ease), transform 120ms var(--demo-ease); }
+.demo-explorer .fli-fav-star.favorited { color: var(--star); }
+.demo-explorer .fli-fav-star:active { transform: scale(.9); }
+.demo-explorer .fli-fav-star:focus-visible { outline: 2px solid var(--primary-light); outline-offset: 2px; }
+.demo-explorer .folder-list-item { position: relative; }
+.inline-course-favorite { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-left: 2px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-faint); font-size: 1.08rem; line-height: 1; transition: color 150ms var(--demo-ease), transform 120ms var(--demo-ease); }
+.inline-course-favorite.favorited { color: var(--star); }
+.inline-course-favorite:active { transform: scale(.9); }
+
+.demo-files .breadcrumb { padding: 10px 0 15px; }
+.demo-files .file-area-header { margin-bottom: 11px; }
+.demo-files .file-area-header .section-accent { margin: 0; overflow: hidden; color: var(--ink); font-family: var(--serif); font-size: 1.25rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.demo-files .file-area-header .file-tools { color: var(--ink-faint); font-size: .75rem; }
+.demo-files .file-table-wrap { overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.demo-files .file-table { font-size: .78rem; }
+.demo-files .file-table thead th { padding: 11px 12px; background: transparent; }
+.demo-files .file-table tbody td { padding: 12px; }
+.demo-files .ft-name { font-weight: 500; }
+.demo-files .fn-wrap { display: flex; align-items: center; gap: 8px; }
+.demo-files .fn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ext-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 34px; height: 22px; margin-right: 8px; padding: 0 5px; border: 1.5px solid var(--border); border-radius: 4px; background: transparent; color: var(--ink-faint); font-size: .6rem; font-weight: 700; letter-spacing: .02em; }
+.demo-files .fi-preview-btn { display: inline-flex; align-items: center; justify-content: center; padding: 5px 13px; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: transparent; color: var(--primary); font-size: .73rem; font-weight: 600; }
+.demo-files .fi-preview-btn:hover { background: var(--primary); color: #fff; }
+.demo-files .file-area-header { gap: 18px; }
+.demo-files .file-area-header .fa-filter-bar { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+.demo-files .file-area-header .fa-filter-btn { padding: 5px 11px; border: 1px solid var(--border-light); border-radius: 6px; background: var(--raised); color: var(--ink-soft); font-size: .75rem; }
+.demo-files .file-area-header .fa-upload-header-btn { display: inline-flex; margin-left: auto; }
+.demo-files .file-table .dl-link, .demo-files .file-table .pv-link { display: inline-flex; align-items: center; justify-content: center; margin: 0 2px; padding: 5px 10px; border: 1.5px solid var(--primary); border-radius: 6px; color: var(--primary); font-size: .72rem; font-weight: 600; text-decoration: none; }
+.demo-files .file-table .pv-link { border-color: var(--success); color: var(--success); }
+.demo-files .file-table tbody tr.selected td { background: var(--primary-light); }
+
+.demo-preview-scene { background: oklch(.15 .025 250); }
+.demo-preview-scene::before { display: none; }
+.preview-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; background: oklch(.15 .025 250 / .98); color: #fff; perspective: 1800px; }
+.preview-bar { height: 60px; display: flex; align-items: center; gap: 12px; padding: 0 28px; border-bottom: 1px solid oklch(1 0 0 / .13); opacity: 0; transform: translate3d(0,-100%,0); }
+.scene[data-slot="6"].is-present .preview-bar { animation: preview-bar-in 520ms var(--demo-stage) 520ms both; }
+.preview-close { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid oklch(1 0 0 / .24); border-radius: 50%; background: oklch(1 0 0 / .07); color: #fff; }
+.preview-close:hover { background: oklch(1 0 0 / .14); }
+.preview-type { color: oklch(1 0 0 / .55); font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; }
+.preview-title { flex: 1; overflow: hidden; color: #fff; font-size: .84rem; text-overflow: ellipsis; white-space: nowrap; }
+.preview-favorite { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid oklch(1 0 0 / .2); border-radius: var(--radius-full); background: oklch(1 0 0 / .06); color: oklch(1 0 0 / .72); font-size: .72rem; transition: color 150ms var(--demo-ease), background-color 150ms var(--demo-ease), transform 120ms var(--demo-ease); }
+.preview-favorite.favorited { border-color: oklch(from var(--star) l c h / .55); background: oklch(from var(--star) l c h / .13); color: oklch(.82 .14 78); }
+.preview-favorite:active { transform: scale(.96); }
+.preview-download { color: oklch(.86 .06 55); font-size: .75rem; }
+.preview-body { display: grid; place-items: center; flex: 1; padding: 24px; }
+.preview-document { width: min(700px, 86vw); height: min(600px, calc(100vh - 126px)); overflow: hidden; border: 1px solid oklch(1 0 0 / .12); background: #fff; box-shadow: 0 18px 60px oklch(0 0 0 / .3); opacity: 0; transform: perspective(1600px) translate3d(0,64px,-380px) rotateX(18deg) rotateY(-9deg) scale(.78); transform-origin: 50% 100%; will-change: transform, opacity; }
+.scene[data-slot="6"].is-present .preview-document { animation: preview-document-open 1180ms var(--demo-stage) 130ms both; }
+.scene[data-slot="6"].preview-closing .preview-document { animation: preview-document-close 520ms var(--demo-camera) both; }
+.scene[data-slot="6"].preview-closing .preview-bar { animation: preview-bar-out 240ms var(--demo-ease) both; }
+.preview-page { position: relative; height: 100%; padding: 44px 55px; color: var(--ink); overflow: hidden; }
+.preview-page::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, oklch(1 0 0 / .72), transparent); transform: translateX(-110%); }
+.preview-page.preview-playing::after { animation: page-sheen 1600ms var(--demo-ease) 700ms both; }
+@keyframes page-sheen { to { transform: translateX(110%); } }
+.preview-page-kicker { color: var(--accent-hover); font-size: .66rem; font-weight: 700; letter-spacing: .16em; }
+.preview-page h1 { margin: 12px 0 10px; font-family: var(--serif); font-size: clamp(1.5rem, 3vw, 2.35rem); font-weight: 600; }
+.preview-page-rule { width: 54px; height: 2px; margin-bottom: 22px; background: var(--accent); }
+.preview-page p { max-width: 500px; margin: 0 0 12px; color: var(--ink-soft); font-size: .84rem; line-height: 1.9; }
+.preview-lines { display: grid; gap: 10px; margin-top: 24px; }
+.preview-line { height: 8px; border-radius: 3px; background: var(--border-light); transform-origin: left; }
+.preview-page.preview-playing .preview-line { animation: line-in 520ms var(--demo-ease) both; }
+.preview-line:nth-child(1) { width: 92%; animation-delay: 850ms; }.preview-line:nth-child(2) { width: 84%; animation-delay: 930ms; }.preview-line:nth-child(3) { width: 76%; animation-delay: 1010ms; }.preview-line:nth-child(4) { width: 89%; animation-delay: 1090ms; }.preview-line:nth-child(5) { width: 64%; animation-delay: 1170ms; }
+@keyframes line-in { from { opacity: 0; transform: scaleX(.04); } to { opacity: 1; transform: scaleX(1); } }
+.preview-page-stamp { position: absolute; right: 38px; bottom: 32px; padding: 5px 10px; border: 1px solid var(--accent); color: var(--accent-hover); font-size: .62rem; letter-spacing: .12em; transform: rotate(-7deg); opacity: .72; }
+.preview-equation { margin-top: 28px; color: var(--primary); font-family: var(--serif); font-size: 1.5rem; letter-spacing: .08em; }
+.preview-next { display: none; }
+@keyframes preview-document-open { 0% { opacity: 0; transform: perspective(1600px) translate3d(0,64px,-380px) rotateX(18deg) rotateY(-9deg) scale(.78); } 48% { opacity: 1; transform: perspective(1600px) translate3d(0,-12px,45px) rotateX(-2deg) rotateY(1.5deg) scale(1.025); } 100% { opacity: 1; transform: perspective(1600px) translate3d(0,0,0) rotateX(0) rotateY(0) scale(1); } }
+@keyframes preview-document-close { from { opacity: 1; transform: perspective(1600px) translate3d(0,0,0) rotateX(0) rotateY(0) scale(1); } to { opacity: 0; transform: perspective(1600px) translate3d(0,-20px,-460px) rotateX(-16deg) rotateY(8deg) scale(.68); } }
+@keyframes preview-bar-in { to { opacity: 1; transform: translate3d(0,0,0); } }
+@keyframes preview-bar-out { to { opacity: 0; transform: translate3d(0,-100%,0); } }
+
+#motionPortal { position: fixed; inset: 0; z-index: 110; overflow: hidden; pointer-events: none; perspective: 1800px; }
+
+.demo-search-scene { display: block; }
+.demo-search-launch { position: absolute; z-index: 1; left: 50%; top: 62%; width: min(650px, calc(100% - 64px)); transform: translate(-50%, -50%); text-align: center; }
+.demo-search-launch h1 { margin: 14px 0 7px; font-family: var(--serif); font-size: clamp(1.8rem, 4vw, 2.55rem); font-weight: 600; }
+.demo-search-launch > p { margin: 0; color: var(--ink-faint); font-size: .82rem; }
+.demo-search-input { display: none; }
+.demo-search-input span { color: var(--ink-faint); }
+.demo-search-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: .92rem; }
+.demo-search-input button { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--accent); color: #fff; }
+.demo-search-results { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; margin: 0; padding: 22px; background: oklch(0 0 0 / .35); opacity: 0; pointer-events: none; text-align: left; backdrop-filter: blur(7px); transition: opacity 220ms cubic-bezier(.23,1,.32,1); }
+.demo-search-results.open { opacity: 1; pointer-events: auto; }
+.demo-search-results .search-overlay-inner { width: min(520px, calc(100vw - 44px)); max-width: 520px; max-height: min(760px, calc(100vh - 44px)); padding: 0; border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); opacity: 0; transform: translateY(12px) scale(.97); transition: opacity 240ms cubic-bezier(.23,1,.32,1), transform 240ms cubic-bezier(.23,1,.32,1); }
+.demo-search-results.open .search-overlay-inner { opacity: 1; transform: translateY(0) scale(1); }
+.demo-search-results.instant, .demo-search-results.instant .search-overlay-inner { transition-duration: .01ms; }
+.demo-search-results .sg-body { max-height: min(610px, calc(100vh - 190px)); overflow-y: auto; }
+.demo-search-results .sg-item { cursor: pointer; }
+.demo-search-results .sg-section-body { padding-bottom: 8px; }
+.so-demo-status { margin: 12px 0 0; text-align: center; color: var(--ink-faint); font-size: .75rem; }
+.scene.is-present .folder-card.cinematic-launch { z-index: 3; box-shadow: 0 34px 90px oklch(.18 .05 250 / .22); animation: category-launch 540ms var(--demo-stage) both; }
+.scene.is-present .folder-list-item.cinematic-launch { z-index: 3; box-shadow: 0 26px 80px oklch(.18 .05 250 / .18); animation: course-launch 560ms var(--demo-stage) both; }
+.scene.cinematic-focus .folder-card:not(.cinematic-launch), .scene.cinematic-focus .folder-list-item:not(.cinematic-launch) { opacity: .2; transform: translate3d(0,0,-180px) scale(.96); transition: opacity 320ms var(--demo-ease), transform 520ms var(--demo-camera); }
+@keyframes category-launch { 0% { opacity: 1; transform: translate3d(0,0,0) rotateX(0) scale(1); } 68% { opacity: 1; transform: translate3d(0,-28px,120px) rotateX(-4deg) scale(1.12); } 100% { opacity: 0; transform: translate3d(0,-18px,240px) rotateX(-7deg) scale(1.3); } }
+@keyframes course-launch { 0% { opacity: 1; transform: translate3d(0,0,0) rotateY(0) scale(1); } 68% { opacity: 1; transform: translate3d(-16px,0,130px) rotateY(2deg) scale(1.035); } 100% { opacity: 0; transform: translate3d(-40px,0,260px) rotateY(4deg) scale(1.08); } }
+
+@media (hover: hover) and (pointer: fine) {
+  .demo-explorer .folder-card:hover { transform: translateY(-2px); }
+  .demo-explorer .folder-card.is-active:hover { transform: translateY(-2px); }
+  .demo-explorer .demo-course-trigger:hover { transform: translateY(-1px); }
+  .demo-explorer .fli-fav-star:hover { color: var(--star-dark); background: oklch(.93 .06 85 / .5); }
+  .demo-files .file-table tbody tr:hover td { background: var(--primary-surface); }
+  .demo-qa .qa-card:hover, .demo-qa .qa-pin-card:hover { transform: translateY(-1px); }
+}
+
+.demo-qa .breadcrumb { padding: 10px 0 16px; }
+.demo-qa .about-header { margin-bottom: 18px; }
+.demo-qa .qa-card, .demo-qa .qa-pin-card { cursor: pointer; }
+.demo-qa-detail { display: none; }
+.demo-qa-detail.open { display: block; animation: text-in 420ms var(--demo-ease) both; }
+.demo-qa-list.hidden { display: none; }
+.demo-qa-detail .qa-q-card { margin-bottom: var(--space-md); }
+.demo-qa-detail .qa-answer { background: var(--surface); }
+.demo-qa-detail .qa-answer-publish .qa-ask-btn { position: static; }
+.demo-qa-detail .demo-next { margin-top: var(--space-lg); }
+.qa-context-pill { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 18px; padding: 7px 12px; border: 1px solid var(--border-light); border-radius: var(--radius-full); background: var(--primary-surface); color: var(--ink-soft); font-size: .72rem; }
+.qa-context-pill span { color: var(--ink-faint); }
+.qa-context-pill strong { color: var(--primary-dark); font-weight: 600; }
+.qa-context-pill em { color: var(--ink-faint); font-style: normal; }
+
+.demo-admin .admin-panel { max-width: none; padding: 10px 0 30px; }
+.demo-admin .admin-tabs { margin-bottom: 24px; }
+.demo-admin .admin-tab { padding: 10px 20px; }
+.demo-admin .admin-stat-card { background: oklch(1 0 0 / .62); }
+.demo-admin .admin-pending-card { background: oklch(1 0 0 / .62); }
+.demo-admin .admin-pending-card .pc-title { font-size: .98rem; }
+.demo-admin .pc-meta { color: var(--ink-faint); }
+.demo-admin .pc-actions { margin-top: 5px; }
+.demo-admin .admin-btn { padding: 6px 16px; }
+.demo-admin .reviewed { border-color: oklch(from var(--success) l c h / .35); background: var(--success-light); }
+.demo-admin .demo-next { margin-top: var(--space-lg); }
+
+/* One continuous stage: scenes overlap in the same world instead of exposing a 100vw conveyor. */
+#camera { transform: none !important; transition: none !important; }
+#canvas { position: relative; display: block; width: 100%; }
+.scene {
+  position: absolute; inset: 0; width: 100%; flex: none; z-index: 0;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate3d(0, 0, -140px) scale(.985);
+  transform-style: preserve-3d; will-change: transform, opacity;
+}
+.scene.is-active, .scene.scene-entering, .scene.scene-leaving { visibility: visible; }
+.scene.is-active { z-index: 2; opacity: 1; pointer-events: auto; transform: translate3d(0,0,0) scale(1); }
+.scene.scene-entering { z-index: 3; animation: world-enter 980ms var(--demo-stage) both; }
+.scene.scene-leaving { z-index: 1; animation: world-leave 780ms var(--demo-camera) both; pointer-events: none; }
+@keyframes world-enter {
+  from { opacity: 0; transform: translate3d(0, 18px, -180px) scale(.975); filter: blur(2px); }
+  58% { opacity: 1; filter: blur(0); }
+  to { opacity: 1; transform: translate3d(0,0,0) scale(1); filter: blur(0); }
+}
+@keyframes world-leave {
+  from { opacity: 1; transform: translate3d(0,0,0) scale(1); filter: blur(0); }
+  to { opacity: 0; transform: translate3d(0,-8px,-220px) scale(.965); filter: blur(2px); }
+}
+.scene.cinema-out > .scene-inner, .scene.cinema-out > .preview-overlay,
+.scene.cinema-in > .scene-inner { animation: none !important; }
+
+.scene.shared-dim .scene-inner > * { transition: opacity 420ms var(--demo-ease), transform 620ms var(--demo-camera), filter 420ms var(--demo-ease); }
+.scene.shared-dim .scene-inner > * { opacity: .58; transform: translate3d(0,0,-54px) scale(.994); filter: blur(.25px); }
+.shared-object-shell {
+  position: fixed; z-index: 12; overflow: hidden; margin: 0;
+  border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+  background: var(--raised); box-shadow: 0 34px 110px oklch(.18 .045 250 / .24);
+  transform-origin: 0 0; will-change: transform, opacity, filter;
+}
+.shared-object-shell > * { transition: opacity 260ms var(--demo-ease), filter 260ms var(--demo-ease); }
+.shared-object-shell.is-shell > * { opacity: 0; filter: blur(2px); }
+.shared-object-shell > .folder-card { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 0; background: transparent; box-shadow: none; }
+.shared-object-shell > .folder-card .fc-icon { flex: 0 0 auto; }
+.shared-object-shell > .folder-list-item { width: 100%; height: 100%; min-height: 0; display: flex; align-items: center; gap: 16px; padding: 0 18px; border: 0; background: transparent; box-shadow: none; }
+.shared-object-shell > .folder-list-item .fli-info { flex: 1; min-width: 0; }
+.shared-object-shell > .folder-list-item .fli-badge { margin-left: auto; }
+.shared-object-shell > .sg-item, .shared-object-shell > .qa-answer, .shared-object-shell > .qa-pin-card, .shared-object-shell > .qa-card { width: 100%; height: 100%; margin: 0; border: 0; background: transparent; box-shadow: none; }
+.shared-target-arrival { animation: shared-target-pulse 720ms var(--demo-stage) both; }
+@keyframes shared-target-pulse {
+  0% { box-shadow: 0 0 0 0 oklch(from var(--accent) l c h / 0); }
+  42% { box-shadow: 0 0 0 7px oklch(from var(--accent) l c h / .11), 0 22px 62px oklch(.2 .04 250 / .12); }
+  100% { box-shadow: 0 0 0 0 oklch(from var(--accent) l c h / 0); }
+}
+
+.knowledge-spark {
+  position: fixed; z-index: 16; width: 12px; height: 12px; border-radius: 50%;
+  background: oklch(.72 .16 62); box-shadow: 0 0 0 7px oklch(.72 .16 62 / .12), 0 0 38px oklch(.72 .16 62 / .58);
+  transform: translate(-50%,-50%); will-change: transform, opacity;
+}
+.knowledge-spark::after { content: ''; position: absolute; inset: 4px; border-radius: inherit; background: #fff; opacity: .78; }
+.favorite-ring {
+  position: fixed; z-index: 14; width: 44px; height: 44px; border: 1px solid oklch(from var(--star) l c h / .75);
+  border-radius: 50%; transform: translate(-50%,-50%) scale(.92); opacity: 0;
+  box-shadow: 0 0 34px oklch(from var(--star) l c h / .28); will-change: transform, opacity;
+}
+.favorite-ring::before { content: '★'; position: absolute; inset: 0; display: grid; place-items: center; color: var(--star); font-size: 1.15rem; }
+
+.paper-flight-shell {
+  position: fixed; z-index: 14; overflow: hidden; border: 1px solid var(--border-light); border-radius: var(--radius-md);
+  background: #fff; box-shadow: 0 42px 130px oklch(0 0 0 / .34); transform-origin: 0 0;
+  color: var(--ink); will-change: transform, opacity, border-radius;
+}
+.paper-flight-row { display: flex; align-items: center; gap: 12px; height: 100%; padding: 0 18px; white-space: nowrap; }
+.paper-flight-row strong { overflow: hidden; text-overflow: ellipsis; font-size: .8rem; }
+.paper-flight-face { position: absolute; inset: 0; padding: 8% 9%; opacity: 0; }
+.paper-flight-face b { display: block; margin-top: 7%; font-family: var(--serif); font-size: 1.5rem; font-weight: 600; }
+.paper-flight-face i { display: block; width: 44px; height: 2px; margin-top: 10px; background: var(--accent); }
+.paper-flight-shell.is-paper .paper-flight-row { opacity: 0; filter: blur(2px); }
+.paper-flight-shell.is-paper .paper-flight-face { opacity: 1; transition: opacity 360ms var(--demo-ease); }
+.scene[data-slot="6"].shared-arrival.is-present .preview-document { animation: none !important; opacity: 0 !important; transform: translate3d(0,0,0) scale(1) !important; }
+.scene[data-slot="6"].shared-arrival.is-present .preview-bar { animation: none !important; opacity: 0; transform: translate3d(0,-100%,0); }
+.scene[data-slot="6"].shared-arrival.document-landed.is-present .preview-document { opacity: 1 !important; transition: opacity 260ms var(--demo-ease); }
+.scene[data-slot="6"].shared-arrival.document-landed.is-present .preview-bar { animation: preview-bar-in 480ms var(--demo-stage) both !important; }
+.scene[data-slot="6"].preview-to-search .preview-document { transition: transform 760ms var(--demo-camera), opacity 520ms var(--demo-ease), filter 520ms var(--demo-ease); transform: translate3d(0,-24px,80px) scale(1.035) !important; opacity: 0 !important; filter: blur(2px); }
+.scene[data-slot="6"].preview-to-search .preview-bar { opacity: 0 !important; transform: translate3d(0,-100%,0); transition: transform 280ms var(--demo-ease), opacity 220ms var(--demo-ease); }
+.search-morph-shell {
+  position: fixed; z-index: 15; border: 1px solid var(--primary-light); border-radius: var(--radius-full);
+  background: oklch(from var(--raised) l c h / .96); box-shadow: 0 18px 56px oklch(.32 .04 250 / .14), 0 0 0 7px oklch(from var(--primary) l c h / .05);
+  transform-origin: 0 0; will-change: transform, opacity; backdrop-filter: blur(16px) saturate(140%);
+}
+.search-morph-shell::before { content: ''; position: absolute; left: 22px; top: 50%; width: 1px; height: 20px; background: var(--primary); transform: translateY(-50%); animation: caret-pulse 780ms steps(1) infinite; }
+@keyframes caret-pulse { 50% { opacity: .12; } }
+.demo-chrome.focus.committing .demo-search { transform: translate(-50%, calc(-50% - 28px)) scale(.99); }
+.demo-chrome.focus.committing { opacity: 1; }
+.demo-search-results.open .sg-item { animation: result-item-in 360ms var(--demo-stage) both; animation-delay: calc(var(--result-order, 0) * 46ms); }
+@keyframes result-item-in { from { opacity: 0; transform: translate3d(0,8px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+.demo-qa-detail.staging { display: block; visibility: hidden; }
+.demo-qa-list.detail-leaving { opacity: .18; transform: translate3d(0,-8px,-100px) scale(.985); filter: blur(1px); transition: opacity 420ms var(--demo-ease), transform 620ms var(--demo-camera), filter 420ms var(--demo-ease); }
+.demo-admin .admin-pending-card.reviewing { box-shadow: 0 0 0 6px oklch(from var(--accent) l c h / .08), 0 24px 70px oklch(.18 .035 250 / .12); transform: translate3d(0,-2px,0); transition: transform 420ms var(--demo-stage), box-shadow 420ms var(--demo-ease), background-color 420ms var(--demo-ease); }
+.closing-content { position: relative; z-index: 2; }
+#closingLayer::before, #closingLayer::after { content: ''; position: absolute; left: 50%; top: 50%; border: 1px solid oklch(1 0 0 / .12); border-radius: 50%; transform: translate(-50%,-50%) scale(.72); opacity: 0; }
+#closingLayer::before { width: min(72vw, 820px); height: min(72vw, 820px); }
+#closingLayer::after { width: min(46vw, 520px); height: min(46vw, 520px); }
+#closingLayer.active::before { animation: closing-orbit 1800ms var(--demo-stage) 160ms both; }
+#closingLayer.active::after { animation: closing-orbit 1500ms var(--demo-stage) 320ms both; }
+#closingLayer.active .closing-mark { animation: closing-mark 1200ms var(--demo-stage) both; }
+#closingLayer.active .closing-content h1, #closingLayer.active .closing-content p { animation: text-in 800ms var(--demo-stage) 420ms both; }
+@keyframes closing-orbit { to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+@keyframes closing-mark { 0% { opacity: 0; transform: scale(.92) rotate(-10deg); } 55% { opacity: 1; transform: scale(1.08) rotate(2deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+
+#hud { position: fixed; right: 24px; bottom: 20px; z-index: 70; display: flex; align-items: center; gap: 14px; color: var(--ink-faint); pointer-events: none; }
+.hud-back { display: none; align-items: center; gap: 5px; padding: 5px 9px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: oklch(from var(--raised) l c h / .9); color: var(--ink-soft); font-size: .68rem; box-shadow: var(--shadow-xs); pointer-events: auto; transition: color 160ms ease-out, border-color 160ms ease-out, background-color 160ms ease-out, transform 160ms ease-out; }
+.hud-back.visible { display: inline-flex; }
+.hud-back:hover { border-color: var(--primary-light); color: var(--primary); background: var(--primary-surface); }
+.hud-back:active { transform: scale(.97); }
+.hud-brand { font-size: .66rem; letter-spacing: .1em; }
+.dots { display: flex; gap: 6px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background 180ms var(--demo-ease), transform 180ms var(--demo-ease); }
+.dot.active { background: var(--accent); transform: scale(1.35); }
+.hud-stage { min-width: 70px; color: var(--ink-soft); font-size: .68rem; text-align: right; }
+#closingLayer { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: var(--primary-dark); color: #fff; opacity: 0; pointer-events: none; transition: opacity 700ms var(--demo-ease); }
+#closingLayer.active { opacity: 1; pointer-events: auto; }
+.closing-content { text-align: center; }
+.closing-mark { width: 64px; height: 64px; display: grid; place-items: center; margin: 0 auto 20px; border-radius: var(--radius-lg); background: var(--accent); color: #fff; font-size: 1.8rem; }
+.closing-content h1 { margin: 0; font-family: var(--serif); font-size: clamp(2rem, 5vw, 3.3rem); font-weight: 600; letter-spacing: .08em; }
+.closing-content p { margin: 12px 0 0; color: oklch(.78 .04 60); font-size: .82rem; letter-spacing: .12em; }
+
+@media (max-width: 900px) {
+  .demo-logo { min-width: 0; }
+  .demo-logo .hl-texts, .demo-login { display: none; }
+  .demo-chrome .header-inner { padding: 0 var(--space-md); gap: var(--space-sm); }
+  .demo-upload-layout { grid-template-columns: 1fr; gap: 15px; }
+  .demo-upload-copy { padding: 0; }
+  .demo-upload-copy h1 { margin: 7px 0; font-size: 1.65rem; }
+  .demo-upload-copy p { max-width: none; }
+  .demo-upload-card { max-width: 620px; }
+  .home-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .scene-inner { width: calc(100% - 40px); padding-top: 18px; }
+  .demo-chrome .header-inner { padding: 0 12px; }
+  .demo-logo .hl-mark { width: 28px; height: 28px; }
+  .demo-search { max-width: none; }
+  .demo-search input { font-size: .75rem; }
+  .demo-home-hero { padding-top: 22px; }
+  .stats-row { flex-direction: column; align-items: center; }
+  .home-item { padding: 11px 14px; }
+  .demo-upload-card { padding: 19px 17px 20px; }
+  .demo-explorer .folder-grid { gap: 12px; }
+  .demo-explorer .folder-card { flex-basis: calc(50% - 6px); min-height: 138px; }
+  .demo-files .file-table-wrap { overflow-x: auto; }
+  .demo-files .file-table { min-width: 680px; }
+  .preview-page { padding: 30px 25px; }
+  .preview-document { width: 92vw; height: min(550px, calc(100vh - 120px)); }
+  .preview-bar { padding: 0 15px; }
+  .preview-download { display: none; }
+  .demo-search-launch { padding-top: 20px; }
+  .demo-search-results .sg-inner { max-height: 55vh; overflow: auto; }
+  .demo-admin .admin-tabs { overflow-x: auto; }
+  .demo-admin .admin-tab { padding: 9px 14px; white-space: nowrap; }
+  #hud { right: 14px; bottom: 12px; }
+  .hud-brand { display: none; }
+  .hud-back { padding: 5px 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .scene .demo-motion-item, .preview-document, .preview-bar { opacity: 1 !important; transform: none !important; }
+}
+</style>
+</head>
+<body>
+<header class="demo-chrome" id="demoChrome">
+  <div class="header-inner">
+    <a class="demo-logo" href="#" aria-label="木铎星火">
+      <span class="hl-mark">✦</span>
+      <span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span>
+    </a>
+    <label class="demo-search"><span>⌕</span><input id="chromeSearch" placeholder="搜索课程、资料、课程代码…" aria-label="搜索课程、资料、课程代码"><button id="chromeSearchButton" type="button" aria-label="搜索">→</button></label>
+    <span class="demo-login">登录</span>
+  </div>
+</header>
+
+<main id="stage">
+  <div id="camera">
+    <div id="canvas">
+      <section class="scene opening-scene" data-slot="0">
+        <div class="register-stage">
+          <div class="modal-card modal-card-wide register-demo-card" id="registerCard">
+            <h2 class="modal-title">注册</h2>
+            <form id="registerDemoForm">
+              <div class="mf-group"><label>北师大邮箱</label><div class="mf-email-wrap"><input class="mf-input mf-email-prefix" value="202401010001" readonly aria-label="学号"><span class="mf-email-suffix">@mail.bnu.edu.cn</span></div><p class="mf-email-hint">新生可能暂时无法使用师大邮箱，建议关注即将推出的新生专区，无需登录也可浏览。</p></div>
+              <div class="mf-group"><label>昵称</label><input class="mf-input" value="木铎新生" readonly></div>
+              <div class="mf-group"><label>身份标签（选填，用于专业课置顶与搜索定位）</label><div class="mf-ident-row"><select class="mf-input" aria-label="学院" disabled><option>经济与工商管理学院</option></select><select class="mf-input" aria-label="专业" disabled><option>金融学</option></select></div></div>
+              <div class="mf-group"><label>密码（至少 8 位）</label><input class="mf-input" value="••••••••" readonly aria-label="密码"></div>
+              <div class="mf-group"><label>确认密码</label><input class="mf-input" value="••••••••" readonly aria-label="确认密码"></div>
+              <button class="mf-btn" id="registerButton" type="button">注册</button>
+              <p class="mf-switch">已有账号？<a href="#">登录</a></p>
+            </form>
+            <div class="mf-success" id="registerSuccess">
+              <div class="ms-check">✓</div><p class="ms-title">注册成功！</p><p class="ms-desc">验证邮件已发送到你的校园邮箱。</p><p class="ms-hint">验证通过后即可使用你设置的密码登录。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene product-scene" data-slot="1">
+        <div class="scene-inner">
+          <section class="demo-home-hero hero">
+            <div class="hero-deco"><div class="shape shape-1"></div><div class="shape shape-2"></div><div class="shape shape-3"></div></div>
+            <div class="container">
+            <h1 class="hero-title-zh">木铎<span class="hl-accent">星火</span></h1>
+            <p class="hero-title-en">BNU Sparks</p>
+            <p class="hero-desc">北京师范大学课程资源共享平台</p>
+            <p class="hero-stats-label">当前已有</p>
+            <div class="stats-row">
+              <span class="stat-pill"><strong>8</strong> 个学院</span>
+              <span class="stat-pill"><strong>42</strong> 门通识课</span>
+              <span class="stat-pill"><strong>128</strong> 门专业课</span>
+            </div>
+            <div class="home-upload-section home-upload-section--hero">
+              <button class="home-upload-btn" id="homeUpload" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>上传文件</button>
+              <p class="home-materials-count">当前已有 <strong>1,286</strong> 份资料</p>
+            </div>
+            <p class="hero-footer"><span>投稿与建议 / 加入我们</span><span class="hf-dot">·</span><a href="mailto:bnusparks@163.com" class="hf-email">bnusparks@163.com</a></p>
+            <p class="hero-footer"><a href="#" class="hf-email">提供物质支持</a></p>
+            </div>
+          </section>
+          <div class="home-grid">
+            <div class="hc-panel">
+              <div class="hc-panel-header"><h3 class="section-accent">下载最多</h3><span class="hc-more">更多 →</span></div>
+              <div class="home-item"><div class="item-main"><div class="item-name">微积分Ⅰ · 课程讲义</div><div class="item-meta">经济与工商管理学院 · 金融学</div></div><span class="item-pill">PDF</span><span class="item-count">2,340</span></div>
+              <div class="home-item"><div class="item-main"><div class="item-name">中国当代文学史重点整理</div><div class="item-meta">文学院 · 中国当代文学</div></div><span class="item-pill">PDF</span><span class="item-count">1,928</span></div>
+              <div class="home-item"><div class="item-main"><div class="item-name">高等数学期末复习提纲</div><div class="item-meta">数学科学学院 · 高等数学</div></div><span class="item-pill">DOCX</span><span class="item-count">1,612</span></div>
+            </div>
+            <div class="hc-panel">
+              <div class="hc-panel-header"><h3 class="section-accent">最近上传</h3><span class="hc-more">更多 →</span></div>
+              <div class="home-item"><div class="item-main"><div class="item-name">传播学概论课程笔记</div><div class="item-meta">刚刚</div></div></div>
+              <div class="home-item"><div class="item-main"><div class="item-name">Python 程序设计实验</div><div class="item-meta">12 分钟前</div></div></div>
+              <div class="home-item"><div class="item-main"><div class="item-name">大学英语四级词汇</div><div class="item-meta">28 分钟前</div></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene product-scene" data-slot="2">
+        <div class="scene-inner">
+          <div class="demo-upload-page">
+            <div class="breadcrumb"><span class="bc-current">首页</span><span class="bc-sep"> / </span><span class="bc-current">上传资料</span></div>
+            <div class="demo-upload-layout">
+              <div class="demo-upload-copy"><span class="eyebrow">SHARE A SPARK</span><h1>把一份资料，<br>交给下一位同学。</h1><p>资料会进入课程的共同记忆，也会在审核通过后被更多人看见。</p><div class="upload-flow-mark"><span>课程已匹配</span><i></i><span>资料待上传</span><i></i><span>进入审核</span></div></div>
+              <div class="upload-demo-card modal-card modal-card-wide">
+                <h2 class="modal-title">上传资料</h2>
+                <div class="upload-prep-status" id="uploadPrepStatus">正在准备课程信息…</div>
+                <div class="mf-group"><label for="demoCourse">课程</label><input id="demoCourse" class="mf-input" placeholder="正在匹配金融学课程…" readonly></div>
+                <div class="upload-mode-tabs"><button class="um-tab um-tab-active" type="button">上传文件</button><button class="um-tab" type="button">录入文字</button></div>
+                <div class="mf-group"><label for="demoFile">资料文件</label><input id="demoFile" class="mf-input" placeholder="等待选择文件…" readonly></div>
+                <div class="mf-group"><label for="demoTitle">资料名称</label><input id="demoTitle" class="mf-input" placeholder="等待资料名称…" readonly></div>
+                <div class="mf-group"><label for="demoTeacher">任课教师</label><input id="demoTeacher" class="mf-input" placeholder="选填" readonly></div>
+                <button class="demo-upload-submit" id="autoUploadSubmit" type="button" disabled>开始上传资料</button>
+                <div class="mf-progress demo-progress" id="demoProgress" style="display:none"><div class="mf-progress-bar"><div class="mf-progress-fill" id="demoProgressFill"></div></div><span id="demoProgressText">0%</span></div>
+                <div class="upload-success" id="demoUploadSuccess"><strong>上传成功，等待审核</strong><span>资料已经进入课程资料库。</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene product-scene" data-slot="3">
+        <div class="scene-inner demo-explorer">
+          <div class="breadcrumb"><span class="bc-current">首页</span><span class="bc-sep"> / </span><span class="bc-current">通识课</span></div>
+          <div class="explorer-header"><h2>通识课</h2><span class="eh-count">13 个分类</span></div>
+          <div class="folder-grid">
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M8 8h3M8 11h3"/></svg></div><div class="fc-name">思想政治理论类</div><div class="fc-count">11 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="8" width="6" height="8" rx="1.5"/><rect x="4" y="5" width="5" height="14" rx="2"/><rect x="15" y="5" width="5" height="14" rx="2"/></svg></div><div class="fc-name">体育与健康类</div><div class="fc-count">3 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 5l7-3 7 3v6c0 5-4 8-7 10-3-2-7-5-7-10V5z"/><line x1="12" y1="8" x2="12" y2="13"/></svg></div><div class="fc-name">军事理论与军事技能</div><div class="fc-count">2 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></svg></div><div class="fc-name">大学外语类</div><div class="fc-count">20 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8h14v9H5z"/><path d="M5 8l7-3 7 3"/><path d="M16 17l2 4M8 17l-2 4"/><line x1="8" y1="11" x2="11" y2="11"/></svg></div><div class="fc-name">教师素养类</div><div class="fc-count">4 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.5,8.5 22,9.5 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.5 8.5,8.5"/></svg></div><div class="fc-name">家国情怀与价值理想</div><div class="fc-count">7 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 18l12-12M18 6l4-4M5 19h8M8 15l-4 4"/></svg></div><div class="fc-name">艺术鉴赏与审美体验</div><div class="fc-count">1 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20V4M4 20h16M8 20v-6h4v6M14 20v-9h4v9"/></svg></div><div class="fc-name">数理基础与科学素养</div><div class="fc-count">13 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13h18M5 13V5h14v8M9 13v4h6v-4"/><rect x="10" y="9" width="4" height="4" rx="1"/></svg></div><div class="fc-name">社会发展与公民责任</div><div class="fc-count">3 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v3h8V3M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 9h8M8 13h5"/></svg></div><div class="fc-name">经典研读与文化传承</div><div class="fc-count">1 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></svg></div><div class="fc-name">国际视野与文明对话</div><div class="fc-count">6 项</div></div>
+            <div class="folder-card is-active" data-target="math"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20V4M4 20h16M8 20v-6h4v6M14 20v-9h4v9"/></svg></div><div class="fc-name">数学类</div><div class="fc-count">9 项</div></div>
+            <div class="folder-card is-static" aria-disabled="true"><div class="fc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="3"/><rect x="5.5" y="11" width="3" height="8"/><rect x="10.5" y="11" width="3" height="8"/><rect x="15.5" y="11" width="3" height="8"/><path d="M3 20h18"/></svg></div><div class="fc-name">实用文件</div><div class="fc-count">1 项</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene product-scene" data-slot="4">
+        <div class="scene-inner demo-explorer">
+          <div class="breadcrumb"><span class="bc-current">首页</span><span class="bc-sep"> / </span><span class="bc-current">通识课</span><span class="bc-sep"> / </span><span class="bc-current">数学类</span></div>
+          <div class="explorer-header"><h2>数学类</h2><span class="eh-count">9 门课程</span></div>
+          <div class="folder-list">
+            <div class="folder-list-item demo-course-trigger" data-target="calculus"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">微积分I</div><div class="fli-meta">课程代码 MAT01006</div></div><span class="fli-badge has-data">14 个文件</span><button class="fli-fav-star" id="browseFavoriteCourse" type="button" aria-label="收藏微积分I">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">微积分II</div><div class="fli-meta">课程代码 MAT01007</div></div><span class="fli-badge has-data">16 个文件</span><button class="fli-fav-star favorited" type="button" aria-label="已收藏微积分II">★</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">数学分析I</div><div class="fli-meta">课程代码 MAT11001</div></div><span class="fli-badge has-data">23 个文件</span><button class="fli-fav-star" type="button">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">数学分析II</div><div class="fli-meta">课程代码 MAT11002</div></div><span class="fli-badge has-data">21 个文件</span><button class="fli-fav-star" type="button">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">线性代数</div><div class="fli-meta">课程代码 MAT02008</div></div><span class="fli-badge has-data">1 个文件</span><button class="fli-fav-star" type="button">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">数学分析III</div><div class="fli-meta">课程代码 MAT12005</div></div><span class="fli-badge no-data">暂无资料</span><button class="fli-fav-star" type="button">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">概率论与数理统计</div><div class="fli-meta">课程代码 STA02001</div></div><span class="fli-badge no-data">暂无资料</span><button class="fli-fav-star" type="button">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">高等代数I</div><div class="fli-meta">课程代码 MAT01004</div></div><span class="fli-badge no-data">暂无资料</span><button class="fli-fav-star" type="button">☆</button></div>
+            <div class="folder-list-item is-static" aria-disabled="true"><span class="fli-icon">·</span><div class="fli-info"><div class="fli-name">高等代数II</div><div class="fli-meta">课程代码 MAT01005</div></div><span class="fli-badge no-data">暂无资料</span><button class="fli-fav-star" type="button">☆</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene product-scene" data-slot="5">
+        <div class="scene-inner demo-files">
+          <div class="breadcrumb"><span class="bc-current">首页</span><span class="bc-sep"> / </span><span class="bc-current">通识课</span><span class="bc-sep"> / </span><span class="bc-current">数学类</span><span class="bc-sep"> / </span><span class="bc-current">微积分I</span></div>
+          <div class="file-area file-area-main">
+            <div class="file-area-header">
+              <h2 class="section-accent">微积分I — 资料列表</h2><span class="fa-count">14 个文件</span><button class="inline-course-favorite" id="fileCourseFavorite" type="button" aria-label="收藏微积分I">☆</button>
+              <span class="fa-per-page">每页 <select class="ppc-select" aria-label="每页条数"><option>10</option></select> 条</span>
+              <span class="fa-filter-bar"><button class="fa-filter-btn" type="button">类型：全部 ▾</button><button class="fa-filter-btn" type="button">排序：上传时间 ▾</button></span>
+              <div class="fa-upload-header-btn"><button class="fa-upload-btn" type="button">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" type="button">⬇ 批量下载</button></div>
+            </div>
+            <div class="file-table-wrap"><div class="file-table-scroll"><table class="file-table"><thead><tr><th class="th-name">文件名</th><th class="th-type">类型</th><th class="th-size">大小</th><th class="th-uploader">上传者</th><th class="th-teacher">任课教师</th><th class="th-favcount">收藏量</th><th class="th-dlcount">下载量</th><th class="th-download">下载</th></tr></thead><tbody>
+              <tr class="selected"><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">2021–2022 学年第一学期期中考试试卷</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">698.0 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">蔡永强</td><td class="ft-favcount">0</td><td class="ft-dlcount">2</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">2025.01.06 微积分 I 期末考试试卷</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">65.2 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">蔡永强</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">2024.11 微积分 I 期中考试试卷</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">71.1 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">蔡永强</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">23秋 期末考试 A 卷</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">379.9 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">刘彦麟</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">22秋期末考试 A卷</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">357.3 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">刘彦麟</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">21 秋微积分I - 期末考试</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">250.3 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">不明</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">IMG</span><span class="fn-text">18 秋微积分期中</span></div></td><td class="ft-type-cell">真题</td><td class="ft-size-cell">165.3 KB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">不明</td><td class="ft-favcount">0</td><td class="ft-dlcount">1</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">2022 年微积分教学记录（7）</span></div></td><td class="ft-type-cell">其他</td><td class="ft-size-cell">8.9 MB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">蔡永强</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">2022 年微积分教学记录（5）</span></div></td><td class="ft-type-cell">其他</td><td class="ft-size-cell">7.7 MB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">蔡永强</td><td class="ft-favcount">0</td><td class="ft-dlcount">0</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+              <tr><td class="ft-name"><div class="fn-wrap"><span class="ext-badge">PDF</span><span class="fn-text">2022 年微积分教学记录（6）</span></div></td><td class="ft-type-cell">其他</td><td class="ft-size-cell">1.7 MB</td><td class="ft-uploader">困困抹茶</td><td class="ft-teacher">蔡永强</td><td class="ft-favcount">0</td><td class="ft-dlcount">1</td><td class="ft-download"><a class="dl-link" href="#">⬇ 下载</a><button class="pv-link demo-preview-trigger" type="button">预览</button></td></tr>
+            </tbody></table></div><div class="file-pagination"><button class="fp-btn fp-disabled" type="button">◀</button><button class="fp-btn fp-active" type="button">1</button><button class="fp-btn" type="button">2</button><button class="fp-btn" type="button">▶</button></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene demo-preview-scene" data-slot="6">
+        <div class="preview-overlay">
+          <div class="preview-bar"><button class="preview-close" id="previewClose" type="button" aria-label="关闭预览">×</button><span class="preview-type">PDF · ONLINE PREVIEW</span><span class="preview-title">微积分Ⅰ · 课程讲义</span><button class="preview-favorite" id="previewFavorite" type="button" aria-label="收藏微积分Ⅰ课程讲义">☆ 收藏资料</button><span class="preview-download">下载</span></div>
+          <div class="preview-body"><div class="preview-document"><article class="preview-page"><div class="preview-page-kicker">BNU SPARKS · COURSE MATERIAL</div><h1>微积分Ⅰ</h1><div class="preview-page-rule"></div><p>通识教育课程 · Calculus I</p><p>极限、导数与积分的基础讲义，已通过资料审核。</p><div class="preview-lines"><span class="preview-line"></span><span class="preview-line"></span><span class="preview-line"></span><span class="preview-line"></span><span class="preview-line"></span></div><div class="preview-equation">∫<sub>0</sub><sup>1</sup> x² dx = ⅓</div><span class="preview-page-stamp">已审核资料</span></article></div></div>
+        </div>
+      </section>
+
+      <section class="scene product-scene demo-search-scene" data-slot="7">
+        <div class="scene-inner">
+          <div class="demo-search-launch">
+            <span class="eyebrow">SEARCH EVERYTHING</span>
+            <h1>找到资料，也找到答案。</h1>
+            <p>课程、资料和同学留下的经验，都可以从这里开始。</p>
+            <div class="demo-search-results" id="demoSearchResults">
+              <div class="search-overlay-inner sg-inner">
+                <div class="sg-header"><button class="sg-close" id="demoSearchClose" type="button" aria-label="关闭搜索结果">✕</button><div class="sg-title-row"><span class="sg-title-icon">⌕</span><h3 class="sg-title" id="demoSearchTitle">微积分</h3></div><p class="sg-subtitle">搜索结果</p></div>
+                <div class="sg-body">
+                  <div class="sg-section"><div class="sg-section-header"><span class="sg-section-label">课程</span><span class="sg-section-badge">5</span></div><div class="sg-section-body">
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">微积分初步</span><span class="sg-item-meta"><span class="sg-pill sg-pill-major">专业</span><span class="sg-item-code">GEN04114</span></span></div><span class="sg-item-arrow">→</span></div>
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">微积分I</span><span class="sg-item-meta"><span class="sg-pill sg-pill-general">通识</span><span class="sg-item-code">MAT01006</span></span></div><span class="sg-item-arrow">→</span></div>
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">微积分II</span><span class="sg-item-meta"><span class="sg-pill sg-pill-general">通识</span><span class="sg-item-code">MAT01007</span></span></div><span class="sg-item-arrow">→</span></div>
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">一元微积分</span><span class="sg-item-meta"><span class="sg-pill sg-pill-major">专业</span><span class="sg-item-code">MAT01009</span></span></div><span class="sg-item-arrow">→</span></div>
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">多元微积分与线性代数</span><span class="sg-item-meta"><span class="sg-pill sg-pill-major">专业</span><span class="sg-item-code">MAT01010</span></span></div><span class="sg-item-arrow">→</span></div>
+                  </div></div>
+                  <div class="sg-section"><div class="sg-section-header"><span class="sg-section-label">资料</span><span class="sg-section-badge">23</span></div><div class="sg-section-body">
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">25秋 微积分初步之线性代数测试（含答案）</span><span class="sg-item-meta"><span class="sg-item-code">微积分初步 · PDF</span></span></div><span class="sg-item-arrow">→</span></div>
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">2025.01.06 微积分 I 期末考试试卷</span><span class="sg-item-meta"><span class="sg-item-code">微积分I · PDF · 65.2 KB</span></span></div><span class="sg-item-arrow">→</span></div>
+                    <div class="sg-item sg-item-link" data-target="calculus-search"><div class="sg-item-body"><span class="sg-item-name">2024.11 微积分 I 期中考试试卷</span><span class="sg-item-meta"><span class="sg-item-code">微积分I · PDF · 71.1 KB</span></span></div><span class="sg-item-arrow">→</span></div>
+                  </div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene product-scene demo-qa" data-slot="8">
+        <div class="scene-inner">
+          <div class="breadcrumb"><span class="bc-current">首页</span><span class="bc-sep"> / </span><span class="bc-current">问答区</span></div>
+          <div class="about-header qa-header"><div class="qa-head-left"><h2 class="about-title">问答区</h2><p class="about-subtitle">从课程资料，到同学经验</p></div><div class="qa-head-actions"><button class="qa-filter-btn" type="button">筛选</button><button class="qa-ask-btn" type="button">我要提问</button></div></div>
+          <div class="qa-context-pill"><span>课程</span><strong>微积分Ⅰ</strong><em>1110070281 · 数学类</em></div>
+          <div class="demo-qa-list" id="demoQaList">
+            <div class="qa-pinned-section"><div class="qa-pinned-head"><span class="qa-pinned-title">★ 精选</span><span class="qa-pinned-sub">置顶推荐 · 管理员精选</span></div><div class="qa-pinned-list"><div class="qa-pin-card demo-qa-trigger"><div><div class="qa-pin-title">微积分Ⅰ的期末复习，应该先看哪些章节？</div><div class="qa-pin-preview">把讲义、例题和历年试题串起来，复习会更有顺序。</div></div><div class="qa-pin-side"><span class="qa-badge qa-badge-l1">学习方法</span><span class="qa-pin-meta">24 个回答</span></div></div></div></div>
+            <div class="qa-list"><div class="qa-card demo-qa-trigger"><div class="qa-card-head"><span class="qa-badge qa-badge-l2">课程学习</span><span class="qa-card-date">今天</span></div><div class="qa-card-title">微积分Ⅰ的积分题，常见失分点有哪些？</div><div class="qa-card-preview">想和上传资料的同学一起确认复习范围和解题顺序。</div><div class="qa-card-foot"><span class="qa-card-author">木铎同学</span><span class="qa-card-meta">3 个回答　 128 浏览</span></div></div></div>
+          </div>
+          <div class="demo-qa-detail" id="demoQaDetail"><div class="qa-q-card"><div class="qa-card-head"><span class="qa-badge qa-badge-l2">课程学习</span><span class="qa-card-date">今天</span></div><div class="qa-q-title">微积分Ⅰ的积分题，常见失分点有哪些？</div><div class="qa-q-meta"><span>木铎同学</span><span>·</span><span>微积分Ⅰ</span><span>·</span><span>128 浏览</span></div><div class="qa-rich"><p>想和上传资料的同学一起确认复习范围和解题顺序，尤其是定积分应用这一部分。</p></div></div><div class="qa-answer-publish"><span class="qa-answer-publish-hint">有经验？分享给正在准备考试的同学。</span><button class="qa-ask-btn" type="button">发布回答</button></div><div class="qa-answers"><div class="qa-answer expanded"><div class="qa-answer-head"><span class="qa-answer-author">北师小火苗</span><span class="qa-answer-date">今天 14:20</span></div><div class="qa-rich"><p>先把换元积分和分部积分的适用条件整理成表，再做讲义里的例题；最后用试题检查步骤书写。</p></div></div></div><button class="demo-next" id="qaContinue" type="button">进入审核工作台 →</button></div>
+        </div>
+      </section>
+
+      <section class="scene product-scene demo-admin" data-slot="9">
+        <div class="scene-inner">
+          <div class="breadcrumb"><span class="bc-current">首页</span><span class="bc-sep"> / </span><span class="bc-current">管理后台</span></div>
+          <div class="admin-panel"><div class="scene-heading"><div><h1>管理后台</h1><p>让每一次分享更可靠。</p></div></div><div class="admin-tabs"><button class="admin-tab active" type="button">概览</button><button class="admin-tab" id="adminPendingTab" type="button">待审核 <span>3</span></button><button class="admin-tab" type="button">审核历史</button><button class="admin-tab" type="button">删除记录</button></div><div class="admin-stats-grid"><div class="admin-stat-card"><div class="stat-number">3</div><div class="stat-label">待审核</div></div><div class="admin-stat-card"><div class="stat-number">1,283</div><div class="stat-label">已通过</div></div><div class="admin-stat-card"><div class="stat-number">28</div><div class="stat-label">今日通过</div></div><div class="admin-stat-card"><div class="stat-number">1,286</div><div class="stat-label">管辖范围总数</div></div></div><div class="admin-pending-list"><div class="admin-pending-card" id="adminReviewCard"><div class="pc-title">微积分Ⅰ · 课程讲义</div><div class="pc-meta"><span>上传者：木铎同学</span><span>课程：微积分Ⅰ · 1110070281</span><span>PDF · 6.0 MB</span></div><div class="pc-actions"><button class="admin-btn admin-btn-primary" type="button" id="adminDetailBtn">查看详情</button><button class="admin-btn admin-btn-approve" type="button" id="adminApproveBtn">通过</button><button class="admin-btn admin-btn-reject" type="button">驳回</button></div></div><div class="admin-pending-card"><div class="pc-title">微积分Ⅰ · 重点整理</div><div class="pc-meta"><span>上传者：北师小火苗</span><span>课程：微积分Ⅰ · 1110070281</span><span>DOCX · 1.8 MB</span></div><div class="pc-actions"><button class="admin-btn admin-btn-primary" type="button">查看详情</button><button class="admin-btn admin-btn-approve" type="button">通过</button><button class="admin-btn admin-btn-reject" type="button">驳回</button></div></div></div><button class="demo-next" id="adminFinish" type="button">完成演示 →</button></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<div id="motionPortal" aria-hidden="true"></div>
+<div id="hud"><span class="hud-brand">BNU SPARKS</span><button class="hud-back" id="prevStage" type="button">← 上一幕</button><div class="dots" id="dots"></div><span class="hud-stage" id="hudStage">注册</span></div>
+<div id="closingLayer"><div class="closing-content"><div class="closing-mark">✦</div><h1>让知识继续流动</h1><p>BNU SPARKS · 木铎星火</p></div></div>
+
+<script>
+(function () {
+  'use strict';
+  var stage = document.getElementById('stage');
+  var camera = document.getElementById('camera');
+  var chrome = document.getElementById('demoChrome');
+  var dots = document.getElementById('dots');
+  var hudStage = document.getElementById('hudStage');
+  var closing = document.getElementById('closingLayer');
+  var motionPortal = document.getElementById('motionPortal');
+  var searchResultsLayer = document.getElementById('demoSearchResults');
+  document.body.appendChild(searchResultsLayer);
+  var current = 0;
+  var timers = [];
+  var transitionLock = false;
+  var courseFavorited = false;
+  var materialFavorited = false;
+  var cameraSequence = 0;
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var stages = ['注册', '首页', '上传资料', '通识课', '数学类', '课程资料', '在线预览', '全局搜索', '问答区', '审核工作台'];
+  var scenes = Array.prototype.slice.call(document.querySelectorAll('.scene[data-slot]'));
+
+  function setupSceneMotion() {
+    var groups = [
+      [1, '.hero-title-zh, .hero-title-en, .hero-desc, .hero-stats-label, .stats-row, .home-upload-section, .hero-footer, .hc-panel'],
+      [2, '.breadcrumb, .demo-upload-copy, .upload-demo-card'],
+      [3, '.breadcrumb, .explorer-header, .folder-card'],
+      [4, '.breadcrumb, .explorer-header, .folder-list-item'],
+      [5, '.breadcrumb, .file-area-header, .file-table thead, .file-table tbody tr, .file-pagination'],
+      [7, '.demo-search-launch > .eyebrow, .demo-search-launch > h1, .demo-search-launch > p']
+    ];
+    groups.forEach(function (group) {
+      var scene = document.querySelector('.scene[data-slot="' + group[0] + '"]');
+      if (!scene) return;
+      scene.querySelectorAll(group[1]).forEach(function (element, index) {
+        element.classList.add('demo-motion-item');
+        if (group[0] === 4 || group[0] === 5) element.classList.add('demo-motion-subtle');
+        element.style.setProperty('--demo-order', index);
+      });
+    });
+  }
+
+  function activateSceneMotion(slot, delay) {
+    scenes.forEach(function (scene) { scene.classList.remove('is-present'); });
+    var scene = document.querySelector('.scene[data-slot="' + slot + '"]');
+    if (!scene) return;
+    function reveal() { scene.classList.add('is-present'); }
+    if (delay && !reducedMotion) later(reveal, delay);
+    else reveal();
+  }
+
+  setupSceneMotion();
+
+  function later(fn, ms) { var id = window.setTimeout(fn, ms); timers.push(id); return id; }
+  function clearTimers() { timers.forEach(window.clearTimeout); timers = []; }
+  function sceneFor(slot) { return document.querySelector('.scene[data-slot="' + slot + '"]'); }
+  function stripDuplicateIds(root) { if (root.hasAttribute && root.hasAttribute('id')) root.removeAttribute('id'); root.querySelectorAll('[id]').forEach(function (node) { node.removeAttribute('id'); }); }
+  function pulseTarget(target) {
+    if (!target || reducedMotion) return;
+    target.classList.remove('shared-target-arrival');
+    void target.offsetWidth;
+    target.classList.add('shared-target-arrival');
+    window.setTimeout(function () { target.classList.remove('shared-target-arrival'); }, 760);
+  }
+  function morphBetween(source, targetSlot, targetSelector, settings) {
+    settings = settings || {};
+    if (!source || transitionLock) return;
+    if (reducedMotion) { go(targetSlot); return; }
+    var target = sceneFor(targetSlot).querySelector(targetSelector);
+    if (!target) { go(targetSlot); return; }
+    transitionLock = true;
+    var from = source.getBoundingClientRect();
+    var to = target.getBoundingClientRect();
+    var shell = document.createElement('div');
+    shell.className = 'shared-object-shell';
+    shell.style.left = from.left + 'px';
+    shell.style.top = from.top + 'px';
+    shell.style.width = from.width + 'px';
+    shell.style.height = from.height + 'px';
+    var content = source.cloneNode(true);
+    stripDuplicateIds(content);
+    shell.appendChild(content);
+    motionPortal.appendChild(shell);
+    var sourceScene = source.closest('.scene');
+    if (sourceScene) sourceScene.classList.add('shared-dim');
+    source.style.opacity = '.08';
+    var dx = to.left - from.left;
+    var dy = to.top - from.top;
+    var sx = Math.max(.18, to.width / Math.max(1, from.width));
+    var sy = Math.max(.18, to.height / Math.max(1, from.height));
+    /* Keep the selected object legible in flight. The destination itself expands
+       underneath it; stretching one card into an entire page creates a white slab. */
+    var flightSx = Math.min(1.08, Math.max(.82, sx));
+    var flightSy = Math.min(1.08, Math.max(.82, sy));
+    var duration = settings.duration || 1240;
+    var animation = shell.animate([
+      { opacity: 1, transform: 'translate3d(0,0,0) scale(1,1)', filter: 'blur(0)' },
+      { offset: .26, opacity: 1, transform: 'translate3d(' + (dx * .16) + 'px,' + (dy * .16 - 18) + 'px,120px) scale(1.025,1.025)', filter: 'blur(0)' },
+      { offset: .72, opacity: .96, transform: 'translate3d(' + (dx * .78) + 'px,' + (dy * .78) + 'px,42px) scale(' + flightSx + ',' + flightSy + ')', filter: 'blur(0)' },
+      { opacity: 0, transform: 'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + flightSx + ',' + flightSy + ')', filter: 'blur(1.2px)' }
+    ], { duration: duration, easing: 'cubic-bezier(.77,0,.175,1)', fill: 'forwards' });
+    window.setTimeout(function () { shell.classList.add('is-shell'); }, Math.round(duration * .68));
+    window.setTimeout(function () { go(targetSlot, { motionDelay: settings.motionDelay || 240, shared: true }); }, settings.switchAt || 330);
+    animation.finished.then(function () {
+      shell.remove();
+      source.style.opacity = '';
+      if (sourceScene) sourceScene.classList.remove('shared-dim');
+      pulseTarget(target);
+      if (settings.onFinish) settings.onFinish(target);
+      transitionLock = false;
+    }).catch(function () {
+      shell.remove(); source.style.opacity = '';
+      if (sourceScene) sourceScene.classList.remove('shared-dim');
+      transitionLock = false;
+    });
+  }
+  function sparkBridge(source, targetSlot, targetSelector, settings) {
+    settings = settings || {};
+    if (!source || transitionLock) return;
+    var targetScene = sceneFor(targetSlot);
+    var target = targetScene && targetScene.querySelector(targetSelector);
+    if (!target || reducedMotion) { go(targetSlot); return; }
+    transitionLock = true;
+    var from = source.getBoundingClientRect();
+    var to = target.getBoundingClientRect();
+    var spark = document.createElement('span');
+    spark.className = 'knowledge-spark';
+    spark.style.left = (from.left + from.width / 2) + 'px';
+    spark.style.top = (from.top + from.height / 2) + 'px';
+    motionPortal.appendChild(spark);
+    var dx = to.left + to.width / 2 - (from.left + from.width / 2);
+    var dy = to.top + to.height / 2 - (from.top + from.height / 2);
+    var duration = settings.duration || 1280;
+    var animation = spark.animate([
+      { opacity: 0, transform: 'translate(-50%,-50%) scale(.92)' },
+      { offset: .16, opacity: 1, transform: 'translate(-50%,-50%) scale(1.18)' },
+      { offset: .54, opacity: 1, transform: 'translate(calc(-50% + ' + (dx * .55) + 'px),calc(-50% + ' + (dy * .42 - 46) + 'px)) scale(.82)' },
+      { offset: .88, opacity: 1, transform: 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px)) scale(1)' },
+      { opacity: 0, transform: 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px)) scale(1.8)' }
+    ], { duration: duration, easing: 'cubic-bezier(.77,0,.175,1)', fill: 'forwards' });
+    window.setTimeout(function () { go(targetSlot, { motionDelay: settings.motionDelay || 220, shared: true }); }, settings.switchAt || 360);
+    animation.finished.then(function () { spark.remove(); pulseTarget(target); transitionLock = false; }).catch(function () { spark.remove(); transitionLock = false; });
+  }
+  function renderDots() { dots.innerHTML = stages.map(function (_, i) { return '<span class="dot' + (i === current ? ' active' : '') + '"></span>'; }).join(''); hudStage.textContent = stages[current]; document.getElementById('prevStage').classList.toggle('visible', current > 0); }
+  function resetRegister() {
+    var card = document.getElementById('registerCard');
+    if (!card) return;
+    card.classList.remove('registered', 'preparing');
+    card.querySelectorAll('.mf-group').forEach(function (group) { group.classList.remove('is-ready'); });
+    var button = document.getElementById('registerButton');
+    if (button) { button.dataset.started = ''; button.disabled = false; button.textContent = '注册'; }
+  }
+  function beginRegisterAnimation() {
+    resetRegister();
+    var card = document.getElementById('registerCard');
+    if (!card) return;
+    card.classList.add('preparing');
+    var groups = Array.prototype.slice.call(card.querySelectorAll('.mf-group'));
+    groups.forEach(function (group, index) { later(function () { group.classList.add('is-ready'); }, reducedMotion ? 0 : 180 + index * 145); });
+  }
+  function resetUpload() {
+    var card = document.querySelector('.upload-demo-card');
+    var button = document.getElementById('autoUploadSubmit');
+    var progress = document.getElementById('demoProgress');
+    var fill = document.getElementById('demoProgressFill');
+    var text = document.getElementById('demoProgressText');
+    var success = document.getElementById('demoUploadSuccess');
+    var status = document.getElementById('uploadPrepStatus');
+    if (!card || !button) return;
+    card.classList.remove('preparing');
+    card.querySelectorAll('.mf-group').forEach(function (group) { group.classList.remove('is-ready'); });
+    ['demoCourse', 'demoFile', 'demoTitle', 'demoTeacher'].forEach(function (id) { var input = document.getElementById(id); if (input) { input.value = ''; } });
+    document.getElementById('demoCourse').placeholder = '正在匹配金融学课程…';
+    document.getElementById('demoFile').placeholder = '等待选择文件…';
+    document.getElementById('demoTitle').placeholder = '等待资料名称…';
+    document.getElementById('demoTeacher').placeholder = '选填';
+    button.dataset.started = '';
+    button.disabled = true;
+    button.textContent = '开始上传资料';
+    progress.style.display = 'none';
+    fill.style.transform = 'scaleX(0)';
+    text.textContent = '0%';
+    success.classList.remove('open');
+    status.classList.remove('ready');
+    status.textContent = '正在准备课程信息…';
+  }
+  function prepareUpload() {
+    resetUpload();
+    var card = document.querySelector('.upload-demo-card');
+    var status = document.getElementById('uploadPrepStatus');
+    var button = document.getElementById('autoUploadSubmit');
+    var fields = [
+      ['demoCourse', '金融学 · 微积分I · MAT01006'],
+      ['demoFile', '微积分I-课程讲义.pdf'],
+      ['demoTitle', '微积分I · 课程讲义'],
+      ['demoTeacher', '—']
+    ];
+    card.classList.add('preparing');
+    fields.forEach(function (field, index) {
+      later(function () {
+        var input = document.getElementById(field[0]);
+        var group = input.closest('.mf-group');
+        input.value = field[1];
+        input.placeholder = '';
+        group.classList.add('is-ready');
+        status.textContent = index < fields.length - 1 ? '已匹配课程信息，正在准备资料…' : '资料已准备好，可以开始上传';
+        if (index === fields.length - 1) {
+          status.classList.add('ready');
+          card.classList.remove('preparing');
+          button.disabled = false;
+        }
+      }, reducedMotion ? 0 : 520 + index * 570);
+    });
+  }
+  function replayPreview() {
+    var page = document.querySelector('.preview-page');
+    if (!page) return;
+    page.classList.remove('preview-playing');
+    page.querySelectorAll('.preview-line').forEach(function (line) { line.style.animation = 'none'; });
+    void page.offsetWidth;
+    page.querySelectorAll('.preview-line').forEach(function (line) { line.style.animation = ''; });
+    later(function () { page.classList.add('preview-playing'); }, reducedMotion ? 0 : 80);
+  }
+  function revealSearch(sequence) {
+    if (current !== 7 || sequence !== cameraSequence) return;
+    chrome.classList.add('visible');
+  }
+  function go(slot, options) {
+    options = options || {};
+    clearTimers();
+    var previous = current;
+    current = Math.max(0, Math.min(9, slot));
+    cameraSequence += 1;
+    var sequence = cameraSequence;
+    var previousScene = document.querySelector('.scene[data-slot="' + previous + '"]');
+    var nextScene = document.querySelector('.scene[data-slot="' + current + '"]');
+    scenes.forEach(function (scene) {
+      scene.classList.remove('cinema-in', 'cinema-out', 'cinematic-focus', 'scene-entering', 'scene-leaving');
+      if (scene !== nextScene) scene.classList.remove('is-active');
+    });
+    if (previous !== current && previousScene) previousScene.classList.add('scene-leaving');
+    if (nextScene) {
+      nextScene.classList.add('is-active');
+      if (previous !== current) nextScene.classList.add('scene-entering');
+    }
+    chrome.classList.remove('visible', 'focus', 'results-open');
+    activateSceneMotion(current, options.motionDelay === undefined ? 130 : options.motionDelay);
+    renderDots();
+    document.getElementById('demoSearchResults').classList.remove('open', 'instant');
+    if (current === 2) prepareUpload();
+    if (current === 6 && !options.previewShared) replayPreview();
+    if (current === 7) {
+      var searchInput = document.getElementById('chromeSearch');
+      if (searchInput) { searchInput.value = ''; searchInput.dataset.started = ''; }
+      document.getElementById('demoSearchResults').classList.remove('open');
+      chrome.classList.add('focus');
+      if (!options.searchMorph) {
+        if (reducedMotion || previous === current) revealSearch(sequence);
+        else later(function () { revealSearch(sequence); }, 420);
+      }
+    }
+    if (current === 8) resetQa();
+    if (current === 9) resetAdmin();
+    if (current === 0) beginRegisterAnimation();
+    window.setTimeout(function () {
+      if (previousScene) previousScene.classList.remove('scene-leaving', 'preview-closing', 'preview-to-search', 'is-present');
+      if (nextScene) nextScene.classList.remove('scene-entering');
+    }, reducedMotion ? 0 : 1080);
+  }
+  function showStage() { stage.classList.add('ready'); sceneFor(0).classList.add('is-active'); activateSceneMotion(0, 0); renderDots(); }
+
+  function openUploadSearch() {
+    var old = document.getElementById('demoUploadSearch');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'demoUploadSearch';
+    overlay.className = 'search-overlay demo-upload-search';
+    overlay.innerHTML = '<div class="search-overlay-inner" onclick="event.stopPropagation()"><button class="search-overlay-close" type="button" aria-label="关闭课程搜索">✕</button><div class="so-header"><div class="so-icon">✦</div><div class="so-title">上传资料</div><div class="so-sub">搜索课程，找到你希望贡献资料的课程</div></div><div class="so-input-group"><span class="so-input-icon">⌕</span><input id="courseSearchInput" type="text" placeholder="课程名称或代码…" autocomplete="off"></div><div class="so-new-course"><div class="so-new-hint">没有要找的学院、专业或课程？</div><button class="so-new-btn" type="button">新建课程</button></div><div class="search-overlay-results" id="courseSearchResults"><div class="so-hint"><div class="so-hint-text">支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div></div></div></div>';
+    document.body.appendChild(overlay);
+    if (!reducedMotion) {
+      var triggerRect = document.getElementById('homeUpload').getBoundingClientRect();
+      var panel = overlay.querySelector('.search-overlay-inner');
+      var panelRect = panel.getBoundingClientRect();
+      var originX = triggerRect.left + triggerRect.width / 2 - (panelRect.left + panelRect.width / 2);
+      var originY = triggerRect.top + triggerRect.height / 2 - (panelRect.top + panelRect.height / 2);
+      overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.23,1,.32,1)', fill: 'both' });
+      panel.animate([
+        { opacity: 0, transform: 'translate3d(' + originX + 'px,' + originY + 'px,0) scale(.94)' },
+        { opacity: 1, transform: 'translate3d(0,0,0) scale(1)' }
+      ], { duration: 620, easing: 'cubic-bezier(.16,1,.3,1)', fill: 'both' });
+    }
+    var input = document.getElementById('courseSearchInput');
+    var results = document.getElementById('courseSearchResults');
+    overlay.querySelector('.search-overlay-close').addEventListener('click', function () { overlay.remove(); });
+    overlay.addEventListener('click', function (event) { if (event.target === overlay) overlay.remove(); });
+    input.readOnly = true;
+    var status = document.createElement('p');
+    status.className = 'so-demo-status';
+    status.textContent = '正在检索课程目录…';
+    input.parentElement.after(status);
+    var query = '微积分I';
+    var index = 0;
+    function typeNext() {
+      input.value = query.slice(0, index + 1);
+      index += 1;
+      if (index < query.length) later(typeNext, reducedMotion ? 0 : 160);
+      else later(showUploadResults, reducedMotion ? 0 : 540);
+    }
+    function showUploadResults() {
+      status.textContent = '已匹配金融学专业课程';
+      results.innerHTML = '<div class="so-results-list"><div class="so-result-item is-selected" id="uploadResult"><span class="so-ri-name">金融学 · 微积分I</span><span class="so-ri-code">MAT01006 · 专业课</span><span class="so-ri-arrow">→</span></div></div>';
+      later(function () {
+        var result = document.getElementById('uploadResult');
+        if (reducedMotion) { overlay.remove(); go(2); return; }
+        overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 760, easing: 'cubic-bezier(.23,1,.32,1)', fill: 'forwards' });
+        morphBetween(result, 2, '.upload-demo-card', { duration: 1320, switchAt: 300, motionDelay: 260, onFinish: function () { overlay.remove(); } });
+        window.setTimeout(function () { if (overlay.isConnected) overlay.remove(); }, 1450);
+      }, reducedMotion ? 0 : 1250);
+    }
+    later(typeNext, reducedMotion ? 0 : 430);
+  }
+
+  function startUpload() {
+    var button = document.getElementById('autoUploadSubmit');
+    if (!button || button.dataset.started === '1') return;
+    button.dataset.started = '1';
+    button.textContent = '上传中…';
+    button.disabled = true;
+    var progress = document.getElementById('demoProgress');
+    var fill = document.getElementById('demoProgressFill');
+    var text = document.getElementById('demoProgressText');
+    var success = document.getElementById('demoUploadSuccess');
+    progress.style.display = 'flex';
+    var value = 0;
+    function tick() { value = Math.min(100, value + (reducedMotion ? 100 : 5)); fill.style.transform = 'scaleX(' + (value / 100) + ')'; text.textContent = value + '%'; if (value < 100) later(tick, 75); else { button.textContent = '上传完成'; success.classList.add('open'); later(function () { sparkBridge(fill, 3, '.folder-card[data-target="math"]', { duration: 1380, switchAt: 380, motionDelay: 260 }); }, reducedMotion ? 0 : 900); } }
+    later(tick, reducedMotion ? 0 : 120);
+  }
+
+  function openQaDetail(card) {
+    var list = document.getElementById('demoQaList');
+    var detail = document.getElementById('demoQaDetail');
+    if (!list || !detail || detail.classList.contains('open') || transitionLock) return;
+    if (reducedMotion || !card) { list.classList.add('hidden'); detail.classList.add('open'); document.getElementById('qaContinue').classList.add('visible'); return; }
+    transitionLock = true;
+    detail.classList.add('staging');
+    var target = detail.querySelector('.qa-q-card');
+    var from = card.getBoundingClientRect();
+    var to = target.getBoundingClientRect();
+    var shell = document.createElement('div');
+    shell.className = 'shared-object-shell';
+    shell.style.left = from.left + 'px'; shell.style.top = from.top + 'px'; shell.style.width = from.width + 'px'; shell.style.height = from.height + 'px';
+    var clone = card.cloneNode(true); stripDuplicateIds(clone); shell.appendChild(clone); motionPortal.appendChild(shell);
+    var dx = to.left - from.left; var dy = to.top - from.top; var sx = to.width / from.width; var sy = to.height / from.height;
+    var animation = shell.animate([
+      { opacity: 1, transform: 'translate3d(0,0,0) scale(1,1)' },
+      { offset: .3, opacity: 1, transform: 'translate3d(0,-14px,100px) scale(1.015,1.015)' },
+      { opacity: 0, transform: 'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + sx + ',' + sy + ')', filter: 'blur(2px)' }
+    ], { duration: 980, easing: 'cubic-bezier(.77,0,.175,1)', fill: 'forwards' });
+    window.setTimeout(function () { shell.classList.add('is-shell'); list.classList.add('detail-leaving'); }, 280);
+    window.setTimeout(function () {
+      list.classList.add('hidden'); list.classList.remove('detail-leaving');
+      detail.classList.remove('staging'); detail.classList.add('open');
+      document.getElementById('qaContinue').classList.add('visible');
+    }, 470);
+    animation.finished.then(function () { shell.remove(); pulseTarget(target); transitionLock = false; }).catch(function () { shell.remove(); transitionLock = false; });
+  }
+  function startSearch(instant) {
+    var input = document.getElementById('chromeSearch');
+    var results = document.getElementById('demoSearchResults');
+    if (!input || input.dataset.started === '1' || !input.value.trim()) return;
+    input.dataset.started = '1';
+    document.getElementById('demoSearchTitle').textContent = input.value.trim();
+    results.classList.remove('instant');
+    chrome.classList.add('committing');
+    results.querySelectorAll('.sg-item').forEach(function (item, index) { item.style.setProperty('--result-order', index); });
+    later(function () {
+      results.classList.add('open');
+      chrome.classList.remove('committing');
+      chrome.classList.add('results-open');
+    }, reducedMotion ? 0 : 680);
+  }
+  function closeSearchResults() {
+    var input = document.getElementById('chromeSearch');
+    var results = document.getElementById('demoSearchResults');
+    if (results) results.classList.remove('open');
+    chrome.classList.remove('results-open', 'committing');
+    if (input) input.dataset.started = '';
+    later(function () { if (results) results.classList.remove('instant'); }, reducedMotion ? 0 : 250);
+  }
+  function resetQa() {
+    var list = document.getElementById('demoQaList');
+    var detail = document.getElementById('demoQaDetail');
+    var next = document.getElementById('qaContinue');
+    if (list) list.classList.remove('hidden', 'detail-leaving');
+    if (detail) detail.classList.remove('open', 'staging');
+    if (next) next.classList.remove('visible');
+  }
+  function syncIntegratedFavorites() {
+    ['browseFavoriteCourse', 'fileCourseFavorite'].forEach(function (id) {
+      var button = document.getElementById(id);
+      if (!button) return;
+      button.classList.toggle('favorited', courseFavorited);
+      button.textContent = courseFavorited ? '★' : '☆';
+      button.setAttribute('aria-label', courseFavorited ? '取消收藏微积分I' : '收藏微积分I');
+    });
+    var previewFavorite = document.getElementById('previewFavorite');
+    if (previewFavorite) {
+      previewFavorite.classList.toggle('favorited', materialFavorited);
+      previewFavorite.textContent = materialFavorited ? '★ 已收藏' : '☆ 收藏资料';
+      previewFavorite.setAttribute('aria-label', materialFavorited ? '取消收藏微积分Ⅰ课程讲义' : '收藏微积分Ⅰ课程讲义');
+    }
+  }
+  function emitFavoriteCinematic(source) {
+    if (reducedMotion || !source || !motionPortal) return;
+    var rect = source.getBoundingClientRect();
+    var ring = document.createElement('div');
+    ring.className = 'favorite-ring';
+    ring.style.left = (rect.left + rect.width / 2) + 'px';
+    ring.style.top = (rect.top + rect.height / 2) + 'px';
+    motionPortal.appendChild(ring);
+    var animation = ring.animate([
+      { opacity: 0, transform: 'translate(-50%,-50%) scale(.92)' },
+      { offset: .32, opacity: 1, transform: 'translate(-50%,-50%) scale(1)' },
+      { opacity: 0, transform: 'translate(-50%,-50%) scale(1.72)' }
+    ], { duration: 680, easing: 'cubic-bezier(.16,1,.3,1)', fill: 'forwards' });
+    animation.finished.then(function () { ring.remove(); }).catch(function () { ring.remove(); });
+  }
+  function animateFavoriteToggle(source) {
+    if (reducedMotion || !source) return;
+    var startTransform = getComputedStyle(source).transform;
+    source.getAnimations().forEach(function (animation) { animation.cancel(); });
+    source.animate([
+      { transform: startTransform === 'none' ? 'scale(1) rotate(0)' : startTransform },
+      { offset: .46, transform: 'scale(1.2) rotate(-6deg)' },
+      { offset: .76, transform: 'scale(.96) rotate(3deg)' },
+      { transform: 'scale(1) rotate(0)' }
+    ], { duration: 560, easing: 'cubic-bezier(.16,1,.3,1)' });
+  }
+  function toggleCourseFavorite(source) {
+    courseFavorited = !courseFavorited;
+    syncIntegratedFavorites();
+    animateFavoriteToggle(source);
+    emitFavoriteCinematic(source);
+  }
+  function toggleMaterialFavorite(source) {
+    materialFavorited = !materialFavorited;
+    syncIntegratedFavorites();
+    emitFavoriteCinematic(source);
+  }
+  function launchSceneAnchor(source, targetSlot, launchClass) {
+    var targetSelector = targetSlot === 4 ? '.folder-list-item[data-target="calculus"]' : '.file-area-header';
+    morphBetween(source, targetSlot, targetSelector, {
+      duration: targetSlot === 4 ? 1380 : 1180,
+      switchAt: targetSlot === 4 ? 360 : 300,
+      motionDelay: 230,
+      onFinish: function () {
+        if (targetSlot === 5 && courseFavorited) animateFavoriteToggle(document.getElementById('fileCourseFavorite'));
+      }
+    });
+  }
+  function openPreviewCinematic(button) {
+    if (!button || transitionLock) return;
+    var row = button.closest('tr');
+    if (!row || reducedMotion) { go(6); return; }
+    transitionLock = true;
+    var badge = row.querySelector('.ext-badge') || button;
+    var badgeRect = badge.getBoundingClientRect();
+    var rowRect = row.getBoundingClientRect();
+    var baseWidth = 220;
+    var baseHeight = 72;
+    var rect = {
+      left: badgeRect.left + badgeRect.width / 2 - baseWidth / 2,
+      top: rowRect.top + rowRect.height / 2 - baseHeight / 2,
+      width: baseWidth,
+      height: baseHeight
+    };
+    var previewScene = sceneFor(6);
+    previewScene.classList.remove('document-landed', 'preview-to-search');
+    previewScene.classList.add('shared-arrival');
+    var target = previewScene.querySelector('.preview-document').getBoundingClientRect();
+    var flight = document.createElement('div');
+    flight.className = 'paper-flight-shell';
+    flight.style.left = rect.left + 'px'; flight.style.top = rect.top + 'px'; flight.style.width = rect.width + 'px'; flight.style.height = rect.height + 'px';
+    flight.innerHTML = '<div class="paper-flight-row"><span class="ext-badge">PDF</span><strong>2021–2022 学年第一学期期中考试试卷</strong></div><div class="paper-flight-face"><span class="preview-page-kicker">BNU SPARKS · COURSE MATERIAL</span><b>微积分Ⅰ</b><i></i></div>';
+    motionPortal.appendChild(flight);
+    row.style.opacity = '.08';
+    var dx = target.left - rect.left; var dy = target.top - rect.top; var sx = target.width / rect.width; var sy = target.height / rect.height;
+    var animation = flight.animate([
+      { opacity: 0, borderRadius: '8px', transform: 'translate3d(0,0,0) rotateX(0) rotateY(0) scale(.2,.34)' },
+      { offset: .16, opacity: 1, borderRadius: '8px', transform: 'translate3d(0,-8px,100px) rotateX(-2deg) rotateY(4deg) scale(1,1)' },
+      { offset: .42, opacity: 1, borderRadius: '6px', transform: 'translate3d(' + (dx * .34) + 'px,' + (dy * .28 - 34) + 'px,190px) rotateX(-5deg) rotateY(7deg) scale(1.08,1.08)' },
+      { offset: .78, opacity: 1, borderRadius: '2px', transform: 'translate3d(' + (dx * .9) + 'px,' + (dy * .9 - 8) + 'px,45px) rotateX(-1deg) rotateY(.6deg) scale(' + (1 + (sx - 1) * .9) + ',' + (1 + (sy - 1) * .9) + ')' },
+      { opacity: 1, borderRadius: '0px', transform: 'translate3d(' + dx + 'px,' + dy + 'px,0) rotateX(0) rotateY(0) scale(' + sx + ',' + sy + ')' }
+    ], { duration: 1560, easing: 'cubic-bezier(.77,0,.175,1)', fill: 'forwards' });
+    window.setTimeout(function () { go(6, { previewShared: true, motionDelay: 0, shared: true }); }, 330);
+    window.setTimeout(function () { flight.classList.add('is-paper'); }, 540);
+    window.setTimeout(function () { previewScene.classList.add('document-landed'); replayPreview(); }, 1260);
+    animation.finished.then(function () { flight.remove(); row.style.opacity = ''; transitionLock = false; }).catch(function () { flight.remove(); row.style.opacity = ''; transitionLock = false; });
+  }
+  function closePreviewCinematic() {
+    if (transitionLock) return;
+    if (reducedMotion) { go(7); return; }
+    transitionLock = true;
+    var previewScene = sceneFor(6);
+    previewScene.classList.add('preview-to-search');
+    chrome.classList.remove('visible', 'results-open');
+    chrome.classList.add('focus');
+    var line = previewScene.querySelector('.preview-line:nth-child(3)').getBoundingClientRect();
+    var target = chrome.querySelector('.demo-search').getBoundingClientRect();
+    var shell = document.createElement('div');
+    shell.className = 'search-morph-shell';
+    shell.style.left = target.left + 'px'; shell.style.top = target.top + 'px'; shell.style.width = target.width + 'px'; shell.style.height = target.height + 'px';
+    motionPortal.appendChild(shell);
+    var dx = line.left - target.left; var dy = line.top - target.top; var sx = line.width / target.width; var sy = Math.max(.08, line.height / target.height);
+    var animation = shell.animate([
+      { opacity: .15, transform: 'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + sx + ',' + sy + ')', borderRadius: '3px' },
+      { offset: .32, opacity: 1, transform: 'translate3d(' + (dx * .62) + 'px,' + (dy * .62) + 'px,80px) scale(' + (.62 + sx * .38) + ',' + (.38 + sy * .62) + ')', borderRadius: '12px' },
+      { opacity: 1, transform: 'translate3d(0,0,0) scale(1,1)', borderRadius: '999px' }
+    ], { duration: 1520, easing: 'cubic-bezier(.77,0,.175,1)', fill: 'forwards' });
+    window.setTimeout(function () { go(7, { searchMorph: true, motionDelay: 620, shared: true }); }, 420);
+    animation.finished.then(function () {
+      shell.remove();
+      chrome.classList.add('visible');
+      previewScene.classList.remove('preview-to-search');
+      transitionLock = false;
+    }).catch(function () { shell.remove(); chrome.classList.add('visible'); transitionLock = false; });
+  }
+  function resetAdmin() {
+    var card = document.getElementById('adminReviewCard');
+    var approve = document.getElementById('adminApproveBtn');
+    var finish = document.getElementById('adminFinish');
+    if (card) card.classList.remove('reviewed', 'reviewing');
+    if (approve) { approve.disabled = false; approve.textContent = '通过'; }
+    if (finish) finish.classList.remove('visible');
+    closing.classList.remove('active');
+  }
+
+  document.getElementById('registerButton').addEventListener('click', function () {
+    var button = this;
+    if (button.dataset.started === '1') return;
+    button.dataset.started = '1';
+    button.disabled = true;
+    button.textContent = '注册中…';
+    later(function () { document.getElementById('registerCard').classList.add('registered'); }, reducedMotion ? 0 : 760);
+    later(function () { sparkBridge(document.getElementById('registerCard'), 1, '.hl-accent', { duration: 1460, switchAt: 420, motionDelay: 250 }); }, reducedMotion ? 0 : 1480);
+  });
+  document.getElementById('homeUpload').addEventListener('click', openUploadSearch);
+  document.querySelectorAll('.demo-preview-trigger').forEach(function (button) { button.addEventListener('click', function () { openPreviewCinematic(button); }); });
+  document.getElementById('previewClose').addEventListener('click', closePreviewCinematic);
+  document.querySelectorAll('.demo-qa-trigger').forEach(function (card) { card.addEventListener('click', function () { openQaDetail(card); }); });
+  document.getElementById('qaContinue').addEventListener('click', function () { morphBetween(document.querySelector('#demoQaDetail .qa-answer.expanded'), 9, '#adminReviewCard', { duration: 1320, switchAt: 340, motionDelay: 250 }); });
+  document.getElementById('autoUploadSubmit').addEventListener('click', startUpload);
+  document.getElementById('chromeSearchButton').addEventListener('click', function () { startSearch(false); });
+  document.getElementById('chromeSearch').addEventListener('keydown', function (event) { if (event.key === 'Enter') startSearch(true); });
+  document.getElementById('demoSearchClose').addEventListener('click', function (event) { event.stopPropagation(); closeSearchResults(); });
+  document.getElementById('demoSearchResults').addEventListener('click', function (event) { if (event.target === this) closeSearchResults(); });
+  document.getElementById('browseFavoriteCourse').addEventListener('click', function (event) { event.stopPropagation(); if (event.detail) this.blur(); toggleCourseFavorite(this); });
+  document.getElementById('fileCourseFavorite').addEventListener('click', function (event) { if (event.detail) this.blur(); toggleCourseFavorite(this); });
+  document.getElementById('previewFavorite').addEventListener('click', function (event) { if (event.detail) this.blur(); toggleMaterialFavorite(this); });
+  document.getElementById('adminApproveBtn').addEventListener('click', function () {
+    var button = this;
+    var card = document.getElementById('adminReviewCard');
+    var stat = document.querySelector('.demo-admin .admin-stat-card:nth-child(2)');
+    if (button.disabled) return;
+    card.classList.add('reviewing');
+    button.textContent = '审核中…'; button.disabled = true;
+    if (!reducedMotion && stat) {
+      var from = button.getBoundingClientRect(); var to = stat.getBoundingClientRect();
+      var spark = document.createElement('span'); spark.className = 'knowledge-spark';
+      spark.style.left = (from.left + from.width / 2) + 'px'; spark.style.top = (from.top + from.height / 2) + 'px'; motionPortal.appendChild(spark);
+      var dx = to.left + to.width / 2 - (from.left + from.width / 2); var dy = to.top + to.height / 2 - (from.top + from.height / 2);
+      var approval = spark.animate([
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(.92)' },
+        { offset: .2, opacity: 1, transform: 'translate(-50%,-50%) scale(1.15)' },
+        { offset: .84, opacity: 1, transform: 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px)) scale(.86)' },
+        { opacity: 0, transform: 'translate(calc(-50% + ' + dx + 'px),calc(-50% + ' + dy + 'px)) scale(1.7)' }
+      ], { duration: 980, easing: 'cubic-bezier(.77,0,.175,1)', fill: 'forwards' });
+      approval.finished.then(function () { spark.remove(); pulseTarget(stat); }).catch(function () { spark.remove(); });
+    }
+    window.setTimeout(function () {
+      card.classList.remove('reviewing'); card.classList.add('reviewed');
+      button.textContent = '已通过 ✓';
+      var count = document.querySelector('.demo-admin .admin-stat-card:nth-child(2) .stat-number'); if (count) count.textContent = '1,284';
+      document.getElementById('adminFinish').classList.add('visible');
+    }, reducedMotion ? 0 : 820);
+  });
+  document.getElementById('adminFinish').addEventListener('click', function () { closing.classList.add('active'); });
+  document.getElementById('prevStage').addEventListener('click', function () {
+    if (current <= 0) return;
+    var target = current - 1;
+    if (target === 0) resetRegister();
+    if (target === 2) resetUpload();
+    if (target === 8) resetQa();
+    if (target === 9) resetAdmin();
+    go(current - 1);
+  });
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') { var modal = document.getElementById('demoUploadSearch'); if (modal) modal.remove(); closeSearchResults(); } });
+  document.querySelector('[data-target="math"]').addEventListener('click', function () { launchSceneAnchor(this, 4, 'category-anchor'); });
+  document.querySelector('[data-target="calculus"]').addEventListener('click', function () { launchSceneAnchor(this, 5, 'course-anchor'); });
+  document.addEventListener('click', function (event) {
+    var result = event.target.closest('.demo-search-results .sg-item');
+    if (current === 7 && result) {
+      event.preventDefault();
+      morphBetween(result, 8, '.qa-context-pill', { duration: 1260, switchAt: 340, motionDelay: 250 });
+    }
+  });
+  document.querySelectorAll('.admin-tab').forEach(function (tab) { tab.addEventListener('click', function () { document.querySelectorAll('.admin-tab').forEach(function (item) { item.classList.remove('active'); }); this.classList.add('active'); }); });
+  window.addEventListener('load', function () { syncIntegratedFavorites(); showStage(); beginRegisterAnimation(); }, { once: true });
+})();
+</script>
+</body>
+</html>

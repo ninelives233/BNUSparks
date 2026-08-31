@@ -58,6 +58,17 @@
   function switchAdminTab(tab) {
     var content = document.getElementById('adminContent');
     if (!content) return;
+    // 管理端的重模块按需加载；重复调用会复用 feature-loader 的 Promise。
+    if (typeof ensureFeature === 'function' &&
+        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady.admin)) {
+      content.innerHTML = '<div class="admin-loading">管理模块加载中…</div>';
+      ensureFeature('admin').then(function() {
+        switchAdminTab(tab);
+      }).catch(function() {
+        content.innerHTML = '<div class="admin-empty">管理模块加载失败，请刷新重试。</div>';
+      });
+      return;
+    }
     if (tab === 'overview') renderAdminOverview(content);
     else if (tab === 'pending') renderAdminPending(content);
     else if (tab === 'history') renderAdminHistory(content, 1);

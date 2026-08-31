@@ -18,6 +18,19 @@
     });
   }
 
+  function setAuthTokenCache(token) {
+    _cachedToken = token || null;
+  }
+
+  function clearAuthToken() {
+    _cachedToken = null;
+    sessionStorage.removeItem('token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('_loginTime');
+    localStorage.removeItem('_loginRemember');
+    localStorage.removeItem('bnusparks_user_id');
+  }
+
   async function api(url, opts = {}) {
     // GET 请求内存缓存
     if (!opts.method || opts.method === 'GET') {
@@ -59,7 +72,11 @@
       // 避免前端暴露 "Unexpected token '<' ... is not valid JSON"
       throw new Error('服务器返回异常（HTTP ' + resp.status + '），请稍后重试');
     }
-    if (!data.ok) throw new Error(data.error || '请求失败');
+    if (!data.ok) {
+      var apiError = new Error(data.error || '请求失败');
+      apiError.status = resp.status;
+      throw apiError;
+    }
 
     // 缓存 GET 响应
     if (!opts.method || opts.method === 'GET') {
@@ -107,7 +124,70 @@
   }
 
   // ── 模态框 history 管理 ──
-  function _pushModalHistory() {
+  var _activeDialog = null;
+  var _dialogOpener = null;
+
+  function _dialogFocusable(dialog) {
+    return Array.from(dialog.querySelectorAll(
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    )).filter(function(el) { return el.offsetParent !== null; });
+  }
+
+  function activateDialog(dialog) {
+    if (!dialog) {
+      var visible = Array.from(document.querySelectorAll('[role="dialog"],.modal-overlay,.report-overlay'))
+        .filter(function(el) { return el.isConnected && getComputedStyle(el).display !== 'none'; });
+      dialog = visible[visible.length - 1];
+    }
+    if (!dialog) return;
+    if (!_activeDialog) _dialogOpener = document.activeElement;
+    _activeDialog = dialog;
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    if (!dialog.hasAttribute('aria-labelledby') && !dialog.hasAttribute('aria-label')) {
+      var title = dialog.querySelector('.modal-title,.rd-title,h1,h2,h3');
+      if (title && title.textContent.trim()) dialog.setAttribute('aria-label', title.textContent.trim());
+    }
+    requestAnimationFrame(function() {
+      var focusables = _dialogFocusable(dialog);
+      var target = dialog.querySelector('[autofocus],input:not([type="hidden"]):not([disabled]),select:not([disabled]),textarea:not([disabled])') || focusables[0];
+      if (!target) {
+        dialog.setAttribute('tabindex', '-1');
+        target = dialog;
+      }
+      target.focus();
+    });
+  }
+
+  function deactivateDialog(dialog) {
+    if (dialog && _activeDialog && dialog !== _activeDialog) return;
+    _activeDialog = null;
+    var opener = _dialogOpener;
+    _dialogOpener = null;
+    if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+  }
+
+  document.addEventListener('keydown', function(event) {
+    var dialog = _activeDialog;
+    if (!dialog || !dialog.isConnected || getComputedStyle(dialog).display === 'none') return;
+    if (event.key === 'Escape') {
+      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close');
+      if (close) { event.preventDefault(); close.click(); }
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var focusables = _dialogFocusable(dialog);
+    if (!focusables.length) { event.preventDefault(); dialog.focus(); return; }
+    var first = focusables[0], last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  });
+
+  function _pushModalHistory(dialog) {
+    activateDialog(dialog);
     var currentState = history.state;
     if (currentState && currentState._modal) {
       history.replaceState({ _bnusparks: true, _modal: true }, '');
@@ -115,7 +195,8 @@
       history.pushState({ _bnusparks: true, _modal: true }, '');
     }
   }
-  function _popModalHistory() {
+  function _popModalHistory(dialog) {
+    deactivateDialog(dialog);
     if (history.state && history.state._modal) {
       history.back();
     }
@@ -178,7 +259,7 @@
       if (segs[3]) cm.action = segs[3];
       if (segs[3] && segs[4]) {
         var cmid = parseInt(segs[4], 10);
-        if (cmid) cm[segs[3] === 'answer' ? 'aid' : 'qid'] = cmid;
+        if (cmid) cm[segs[2] === 'answer' ? 'aid' : 'qid'] = cmid;
       }
       return cm;
     }
@@ -537,9 +618,25 @@
      统计
      ═══════════════════════════════════════════════════════════ */
 
-  async function loadStats() {
+  var _statsPromise = null;
+
+  // 同一页面内只允许一个统计请求；首页切换/重复初始化时复用进行中的请求。
+  function loadStats() {
+    if (_statsPromise) return _statsPromise;
+    var promise = _loadStats();
+    _statsPromise = promise;
+    promise.then(function() {
+      if (_statsPromise === promise) _statsPromise = null;
+    }, function() {
+      if (_statsPromise === promise) _statsPromise = null;
+    });
+    return promise;
+  }
+
+  async function _loadStats() {
     try {
       const s = await api('/api/stats/');
+      const homeRankingLimit = 10;
       document.getElementById('statColleges').textContent = s.college_with_data_count;
       document.getElementById('statGeneral').textContent = s.general_with_data_count;
       document.getElementById('statMajor').textContent = s.major_with_data_count;
@@ -554,8 +651,9 @@
       }
       // 下载最多（左列）
       const topEl = document.getElementById('topDownloadedList');
-      if (topEl && s.top_downloaded && s.top_downloaded.length) {
-        topEl.innerHTML = s.top_downloaded.map(m =>
+      const homeTopDownloaded = (s.top_downloaded || []).slice(0, homeRankingLimit);
+      if (topEl && homeTopDownloaded.length) {
+        topEl.innerHTML = homeTopDownloaded.map(m =>
           '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + m.download_count + ' 次</span>' +
@@ -566,8 +664,9 @@
       }
       // 最近上传（右列）
       const recentEl = document.getElementById('recentUploadsList');
-      if (recentEl && s.recent_uploads && s.recent_uploads.length) {
-        recentEl.innerHTML = s.recent_uploads.map(function(m) {
+      const homeRecentUploads = (s.recent_uploads || []).slice(0, homeRankingLimit);
+      if (recentEl && homeRecentUploads.length) {
+        recentEl.innerHTML = homeRecentUploads.map(function(m) {
           var badge = '';
           if (m.review_status && m.review_status !== 'approved') {
             badge = '<span class="review-badge review-badge-' + m.review_status + '" style="margin-left:6px;font-size:0.7rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';

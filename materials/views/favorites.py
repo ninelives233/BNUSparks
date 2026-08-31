@@ -6,6 +6,7 @@ favorite toggle, list favorites (资料收藏 + 课程收藏)
 
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
+from django.db import IntegrityError
 
 from .utils import (
     _err, _ok, _get_or_create_profile, require_login, _safe_int,
@@ -26,12 +27,16 @@ def api_favorite_toggle(request, file_id):
         return _err("资料不存在", 404)
 
     fav = Favorite.objects.filter(user=request.user, material=material)
-    if fav.exists():
-        fav.delete()
+    deleted, _ = fav.delete()
+    if deleted:
         return _ok({"favorited": False})
-    else:
+
+    try:
         Favorite.objects.create(user=request.user, material=material)
-        return _ok({"favorited": True})
+    except IntegrityError:
+        # 另一个并发请求已经创建；唯一约束保证最终仍只有一条。
+        pass
+    return _ok({"favorited": True})
 
 
 @require_login
@@ -126,10 +131,14 @@ def api_course_favorite_toggle(request, course_code):
         return _err("课程不存在", 404)
 
     fav = CourseFavorite.objects.filter(user=request.user, course=course)
-    if fav.exists():
-        fav.delete()
+    deleted, _ = fav.delete()
+    if deleted:
         return _ok({"favorited": False})
-    CourseFavorite.objects.create(user=request.user, course=course)
+    try:
+        CourseFavorite.objects.create(user=request.user, course=course)
+    except IntegrityError:
+        # 并发创建合并为“已收藏”，不把唯一键冲突暴露成 500。
+        pass
     return _ok({"favorited": True})
 
 

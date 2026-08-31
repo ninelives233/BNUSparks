@@ -4,6 +4,17 @@
   }
 
   function renderExplorer() {
+    // 课程树和 explorer 渲染器按需加载，避免公共页面首屏被 751KB 树数据及非核心代码阻塞。
+    if (!courseTree || typeof renderGrid !== 'function' || typeof renderList !== 'function' || typeof renderFiles !== 'function') {
+      var loading = document.getElementById('explorerContent');
+      if (loading) loading.innerHTML = '<div class="empty-state compact">课程目录加载中…</div>';
+      var ready = typeof ensureFeature === 'function' ? ensureFeature('explorer') : Promise.resolve();
+      ready.then(function() { return loadCourseTree(); }).then(function() {
+        var explorer = document.getElementById('explorerView');
+        if (explorer && explorer.classList.contains('active')) renderExplorer();
+      });
+      return;
+    }
     // 自动跳过单文件夹中间层（防止恢复历史路径时落到中间节点）
     const origLen = expPath.length;
     while (true) {
@@ -89,9 +100,15 @@
       '<section class="about-section"><h3>' + esc(s.heading) + '</h3><p>' + s.text + '</p></section>'
     ).join('');
     // Update tabs
-    document.querySelectorAll('.about-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.about-tab').forEach(function(t) {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
     const tab = document.querySelector('.about-tab[onclick*="' + sectionKey + '"]');
-    if (tab) tab.classList.add('active');
+    if (tab) {
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+    }
   }
 
   function showAbout(section) {
@@ -106,15 +123,18 @@
     tutorial: {
       title: '使用教程',
       sections: [
-        { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享各门课程的教材、讲义、PPT、试卷等学习资料。以下按使用顺序介绍常用功能。' },
-        { heading: '🔑 注册与登录', text: '平台用北师大校内邮箱注册：在「注册」页填写学号（系统自动补全 @mail.bnu.edu.cn）、昵称，并设置至少 8 位的密码。提交后去校内邮箱查收验证邮件，点击链接激活账号后才能登录。登录时只需输入学号，勾选「记住我」可保持登录状态；忘记密码时在登录页点「忘记密码」，按邮件链接重置即可。如果新生不知道如何使用师大邮箱，一般来说直接登录数字京师，首页即有直达入口；若无，可能需按照录取通知书随附的指示进行激活。' },
-        { heading: '🔎 搜索资料', text: '顶栏搜索框支持按课程名称、课程代码或资料标题查找。输入关键词回车，结果会同时列出匹配的课程和资料：点课程直达课程目录，点资料直接打开文件详情页。记不清代码时直接搜课程名即可（通识课代码以 GEN 开头）。' },
-        { heading: '📁 浏览课程', text: '从首页或左侧导航进入「浏览课程」，选择「通识课」或「专业课」，按「学院 → 专业 → 课程」逐层展开。进入课程后可见该课程的全部资料，顶部可按类型筛选、按上传时间/下载量/收藏量排序。' },
-        { heading: '⬇️ 下载资料', text: '每份资料右侧都有「下载」按钮，点击即可保存。每位用户每天有 15 次下载额度，建议合理安排。一次要下多份时，可在列表中勾选多行后点「⬇ 批量下载」。注意：部分浏览器（如 Edge）对批量下载有限制，可能出现漏下，建议用 Chrome 或分小批下载。' },
-        { heading: '📄 文件详情与收藏', text: '点击文件所在行进入详情页，可查看资料类型、大小、任课教师、上传者、下载量与收藏量。觉得有用的资料可点「收藏」，之后在右上角头像菜单 →「我的收藏」里随时查看，无需重复搜索。手机浏览器天然不支持预览PDF文件，出现显示问题请谅解。' },
-        { heading: '⬆️ 上传资料', text: '登录后进入任意课程页面，点「+ 上传资料」，填写标题、任课教师并选择文件即可提交。资料进入审核队列，通过后对所有人可见；被驳回时可在通知中查看原因并重新上传。建议上传前确认文件归属课程正确、命名清晰，审核会更快通过。' },
-        { heading: '🔔 通知中心', text: '点击右上角头像打开菜单，即可进入「通知中心」。审核通过/驳回、文件被删除等消息都会推送在这里，点击通知可直接跳转到对应课程或文件处理。' },
-        { heading: '📱 移动端', text: '在手机上点击左上角的 ☰ 菜单按钮，即可像桌面端一样浏览课程、搜索、上传和下载全部功能。更加推荐使用电脑或平板进行浏览，信息显示更全，操作更加方便。' },
+        { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享课程教材、笔记、讲义、PPT、试卷、论文和软件教程，也可以在问答区交流新生指南类问题。未登录时可以浏览课程、搜索资料、查看公告和排行榜；注册并验证北师大邮箱后，才能上传、下载、收藏、参与问答和使用个人中心。' },
+        { heading: '🔑 注册与登录', text: '平台使用北师大校内邮箱注册：点击「注册」，填写 @bnu.edu.cn 或 @mail.bnu.edu.cn 邮箱、昵称和至少 8 位密码。提交后前往校园邮箱查收验证邮件，点击邮件链接激活账号。登录时可以输入完整邮箱或学号；勾选「记住我」可以延长登录状态。忘记密码时点击「忘记密码」，按邮件中的链接设置新密码；修改或重置密码后需要重新登录。' },
+        { heading: '🔍 搜索课程和资料', text: '顶部搜索框支持按课程名称、课程代码、资料标题、任课教师或资料描述搜索。点击课程结果进入课程目录，点击资料结果直接打开资料详情；记不清代码时直接搜索课程名即可，通识课代码通常以 GEN 开头。进入问答区后，搜索框会自动切换为搜索问题和回答。' },
+        { heading: '📁 浏览课程', text: '从首页或左侧导航进入「通识课」或「专业课」，按课程树逐层展开：通识课通常是「通识分类 → 课程 → 资料」，专业课通常是「学院 → 专业/方向 → 课程 → 资料」。课程资料列表支持按资料类型筛选，并按上传时间、下载量、收藏量或任课教师排序；管理员置顶资料会优先显示。' },
+        { heading: '📄 查看、预览和收藏', text: '点击资料行或文件名可查看标题、课程、文件大小、资料类型、教师、上传者、简介、下载量和收藏量。可在线预览 PDF、图片和常见文本/代码文件；ZIP 文件可以查看内部目录结构。PPT/PPTX 等暂不支持在线渲染，可直接下载。觉得资料有用时点击「收藏」，之后从右上角头像菜单 →「我的收藏」查看课程、资料和问答帖子。' },
+        { heading: '⬇️ 下载资料', text: '登录后点击资料右侧「下载」即可保存。普通用户每天最多下载 15 个不同资料，管理员角色不限额；待审核资料通过后才会对其他用户开放。一次要下多份时，可在列表中勾选多行后点「批量下载」。部分浏览器（如 Edge）会限制连续多文件下载，建议允许本站的多文件下载权限，或使用 Chrome、分小批下载。' },
+        { heading: '⬆️ 上传资料', text: '登录后进入课程页面，点击「上传资料」；首页的「上传文件」按钮会先搜索课程。上传时选择资料类型并填写任课教师，可补充简介；单个文件不超过 50 MB，也可以切换到「文字录入」模式提交文本。普通用户上传后进入审核队列，通过后对所有人可见；被驳回时，通知和「我的上传」会显示原因，点击「重新上传」即可修改后再次提交。' },
+        { heading: '🆕 找不到课程？申请新建课程', text: '在上传入口中点击「新建课程」。通识课需要填写课程名称、课程代码和通识分类；专业课需要选择学院、专业和课程归属层级。可以在申请中附带文件或文字资料。系统会检查课程代码：如果该位置已有课程，应直接进入课程上传；如果课程已在其他位置存在，申请通过后会链接到原有课程。普通用户的新建课程申请需要管理员审核。' },
+        { heading: '🔔 通知中心和个人中心', text: '点击右上角头像：「通知中心」会显示审核、资料删除、举报处理、公告和问答互动等消息；「我的上传」可按已发布、审核中、已驳回、已删除查看资料；「我的下载」可查看正式下载记录；「我的收藏」可管理课程、资料和问答收藏；「个人中心」可修改昵称、简介、联系方式、头像、培养层次/学院/专业身份标签和密码。普通用户每天可修改一次完整身份标签，也可以决定这些身份是否显示在公开主页。' },
+        { heading: '💬 问答区', text: '进入左侧「问答区」后，首次访问的未登录访客需要填写学号完成当前标签页验证。登录用户可以在站点开放提问/回答时参与内容创作。问答区支持两级标签筛选、默认/最新/最热排序、搜索、精选置顶、收藏问题或回答、回答点赞和采纳最佳回答。普通用户发布的问题和回答会先进入审核；被驳回后编辑内容即可重新提交。作者删除内容时需要填写理由，已有回答、点赞或收藏的内容会转为管理员审核的删除申请。' },
+        { heading: '🚩 举报与反馈', text: '资料详情和问答内容中都有「举报」入口。至少选择一个举报原因；选择「其他原因」时必须填写详细说明。普通用户每天最多提交 15 次举报。网站问题、课程树缺失、课程申请建议或合作事项，可通过 bnusparks@163.com 联系维护者，也可以在 GitHub 项目提交 Issue 或 PR。' },
+        { heading: '📱 移动端', text: '手机上点击左上角 ☰ 打开导航抽屉，即可浏览课程、搜索、查看资料、上传和下载。资料筛选、批量操作、问答编辑和文件预览在电脑或平板上显示更完整；批量下载也更适合在电脑浏览器中使用。' },
       ]
     },
     announcements: {
@@ -326,7 +346,18 @@
     pushViewState('qa', {});
     switchView('qa');
     updateSidebar('qa');
-    if (typeof renderQaView === 'function') renderQaView();
+    if (typeof renderQaView === 'function') {
+      renderQaView();
+      return;
+    }
+    var content = document.getElementById('qaContent');
+    if (content) content.innerHTML = '<div class="empty-state compact">问答区加载中…</div>';
+    if (typeof ensureFeature === 'function') {
+      ensureFeature('qa').then(function() {
+        var qaView = document.getElementById('qaView');
+        if (qaView && qaView.classList.contains('active')) renderQaView();
+      });
+    }
   }
 
   function switchLeaderboardTab(type) {
@@ -391,14 +422,19 @@
 
   var _userPublicId = null;
   var _userPublicPage = 1;
+  var _userPublicDetailTab = 'uploads';
+  var _userPublicDownloadPage = 1;
 
   var _userPublicViewSource = null; // 'leaderboard' | null
 
   function showUserPublic(userId) {
     _userPublicId = userId;
     _userPublicPage = 1;
+    _userPublicDetailTab = 'uploads';
+    _userPublicDownloadPage = 1;
     // 记录来源视图用于面包屑
-    _userPublicViewSource = history.state && history.state.view === 'leaderboard' ? 'leaderboard' : null;
+    var sourceView = history.state && history.state.view;
+    _userPublicViewSource = sourceView === 'leaderboard' ? 'leaderboard' : (sourceView === 'admin' ? 'admin' : null);
     // 渲染动态面包屑
     renderUserPublicBreadcrumb(_userPublicViewSource);
     pushViewState('userPublic', { userId: userId });
@@ -414,6 +450,10 @@
       el.innerHTML = '<a onclick="showHome()">首页</a><span class="bc-sep"> / </span>' +
         '<a onclick="showLeaderboard()">用户排行榜</a><span class="bc-sep"> / </span>' +
         '<span class="bc-current">用户主页</span>';
+    } else if (source === 'admin') {
+      el.innerHTML = '<a onclick="showHome()">首页</a><span class="bc-sep"> / </span>' +
+        '<a onclick="showAdminPanel()">管理后台</a><span class="bc-sep"> / </span>' +
+        '<span class="bc-current">用户主页</span>';
     } else {
       el.innerHTML = '<a onclick="showHome()">首页</a><span class="bc-sep"> / </span>' +
         '<span class="bc-current">用户主页</span>';
@@ -425,6 +465,44 @@
   // 文件删除/资料变更后调用，清空公开页前端缓存，避免删除自传后仍残留显示
   function clearUserPublicCache() {
     _userPublicCache = {};
+  }
+
+  function switchUserPublicDetailTab(tab) {
+    _userPublicDetailTab = tab === 'downloads' ? 'downloads' : 'uploads';
+    _userPublicDownloadPage = 1;
+    renderUserPublic(_userPublicId, 1);
+  }
+
+  function renderAdminUserPublicDownloads(userId, page) {
+    var target = document.getElementById('userPublicActivityContent');
+    if (!target) return;
+    _userPublicDownloadPage = page || 1;
+    target.innerHTML = '<div class="admin-loading">加载访问记录…</div>';
+    api('/api/admin/users/' + userId + '/downloads/?page=' + _userPublicDownloadPage).then(function(data) {
+      var items = data.items || [];
+      if (!items.length) {
+        target.innerHTML = _pcEmpty('该用户还没有访问记录', '预览或下载行为发生后会按时间倒序显示在这里。');
+        return;
+      }
+      var html = '<div class="user-trace-head"><span>文件访问记录</span><small>共 ' + (data.total || 0) + ' 条，仅总管理员管理模式可见</small></div><div class="pc-list user-download-trace-list">';
+      items.forEach(function(record) {
+        var deleted = !record.can_open;
+        var title = esc(record.material_title) + (deleted ? '<span class="trace-deleted-badge">资料已删除</span>' : '');
+        var meta = esc(record.activity_label || '访问了') + ' · ' + esc(record.course_name || '课程信息缺失') + (record.course_code ? ' · ' + esc(record.course_code) : '') + ' · ' + esc(record.created_at);
+        var onClick = deleted ? '' : 'showFileDetail({id:' + record.material_id + ',title:\'' + escJs(record.material_title) + '\',course_code:\'' + escJs(record.course_code) + '\',course_name:\'' + escJs(record.course_name) + '\'})';
+        html += _pcItem(_fileGlyph(record.file_name), title, meta, '', deleted ? '留痕' : '<span class="pc-side-icon">' + _IC_DOWN + '</span>', onClick);
+      });
+      html += '</div>';
+      if (data.total_pages > 1) {
+        html += '<div class="leaderboard-pagination" style="margin-top:var(--space-md)">' +
+          '<button onclick="renderAdminUserPublicDownloads(' + userId + ',' + Math.max(1, data.page - 1) + ')" ' + (data.page <= 1 ? 'disabled' : '') + '>‹</button>' +
+          '<span class="user-trace-page">第 ' + data.page + ' / ' + data.total_pages + ' 页</span>' +
+          '<button onclick="renderAdminUserPublicDownloads(' + userId + ',' + Math.min(data.total_pages, data.page + 1) + ')" ' + (data.page >= data.total_pages ? 'disabled' : '') + '>›</button></div>';
+      }
+      target.innerHTML = html;
+    }).catch(function(err) {
+      target.innerHTML = _pcEmpty('访问记录加载失败', esc(err.message || '请稍后重试。'));
+    });
   }
 
   function _renderUserPublicHTML(container, userId, page, data) {
@@ -449,11 +527,11 @@
       var ms = u.member_since.split('-');
       memberHtml = '<div class="upi-member"><span class="upi-ico">' + _IC_CLOCK + '</span> 注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</div>';
     }
-    // 身份标签（v183：后端已按公开开关过滤，非空才显示）
+    // 身份标签：后端已按三个公开开关分别过滤。
     var identityHtml = '';
-    if (u.college || u.major) {
+    if (u.education || u.college || u.major) {
       identityHtml = '<div class="upi-identity"><span class="upi-ico">' + _IC_ID + '</span> ' +
-        (u.college ? esc(u.college) : '') + (u.college && u.major ? ' · ' : '') + (u.major ? esc(u.major) : '') + '</div>';
+        [u.education, u.college, u.major].filter(Boolean).map(esc).join(' · ') + '</div>';
     }
     var html = '<div class="user-public-card">' + avatarHtml +
       '<div class="user-public-info">' +
@@ -470,6 +548,26 @@
       '<div class="user-stat-card"><div class="usc-value">' + (u.download_count || 0) + '</div><div class="usc-label">被下载次数</div></div>' +
       '<div class="user-stat-card"><div class="usc-value">' + (u.collection_count || 0) + '</div><div class="usc-label">被收藏次数</div></div>' +
     '</div>';
+
+    var canTraceDownloads = currentUser && currentUser.role === 'super_admin' &&
+      typeof isMgmtActive === 'function' && isMgmtActive();
+    if (canTraceDownloads) {
+      html += '<div class="pc-type-bar user-public-admin-tabs"><span class="pc-type-label">管理视图</span>' +
+        '<div class="pc-seg" role="tablist" aria-label="用户行为记录">' +
+          '<button class="pc-seg-btn' + (_userPublicDetailTab === 'uploads' ? ' active' : '') + '" onclick="switchUserPublicDetailTab(\'uploads\')">上传资料</button>' +
+          '<button class="pc-seg-btn' + (_userPublicDetailTab === 'downloads' ? ' active' : '') + '" onclick="switchUserPublicDetailTab(\'downloads\')">访问记录</button>' +
+        '</div></div>';
+    } else {
+      _userPublicDetailTab = 'uploads';
+    }
+    html += '<div id="userPublicActivityContent">';
+
+    if (canTraceDownloads && _userPublicDetailTab === 'downloads') {
+      html += '<div class="admin-loading">加载访问记录…</div></div>';
+      container.innerHTML = html;
+      renderAdminUserPublicDownloads(userId, _userPublicDownloadPage);
+      return;
+    }
 
     // 文件列表（v=164 与收藏/下载/上传统一用 _pcItem/_fileGlyph 组件）
     if (data.materials && data.materials.length) {
@@ -505,6 +603,7 @@
       html += _pcEmpty('该用户尚未上传资料', '等 TA 上传第一份课程资料，这里就会热闹起来。');
     }
 
+    html += '</div>';
     container.innerHTML = html;
   }
 
@@ -637,7 +736,7 @@
     overlay.className = 'search-overlay';
     overlay.innerHTML =
       '<div class="search-overlay-inner" onclick="event.stopPropagation()">' +
-        '<button class="search-overlay-close" onclick="_removeOverlay(this.closest(\'.search-overlay\'))">✕</button>' +
+        '<button type="button" class="search-overlay-close" aria-label="关闭课程搜索" onclick="_removeOverlay(this.closest(\'.search-overlay\'))">✕</button>' +
         '<div class="so-header">' +
           '<div class="so-icon">📤</div>' +
           '<div class="so-title">上传资料</div>' +
@@ -659,27 +758,31 @@
       '</div>';
     document.body.appendChild(overlay);
     lockScroll();
+    _pushModalHistory(overlay);
     document.getElementById('courseSearchInput').focus();
 
     var timer;
+    var searchSeq = 0;
     document.getElementById('courseSearchInput').addEventListener('input', function() {
       clearTimeout(timer);
+      var seq = ++searchSeq;
       var q = this.value.trim();
       if (q.length < 1) {
         document.getElementById('courseSearchResults').innerHTML =
           '<div class="so-hint"><div class="so-hint-text">💡 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div></div>';
         return;
       }
-      timer = setTimeout(function() { searchCourses(q); }, 300);
+      timer = setTimeout(function() { searchCourses(q, overlay, seq, function() { return searchSeq; }); }, 300);
     });
     overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
   }
 
-  async function searchCourses(q) {
-    var resultsEl = document.getElementById('courseSearchResults');
+  async function searchCourses(q, overlay, requestSeq, currentSeq) {
+    var resultsEl = overlay ? overlay.querySelector('#courseSearchResults') : document.getElementById('courseSearchResults');
     if (!resultsEl) return;
     try {
       var data = await api('/api/search/?q=' + encodeURIComponent(q));
+      if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
       var courses = data.courses || [];
       if (!courses.length) {
         resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">🔍</div><div class="so-empty-text">未找到相关课程，试试其他关键词</div></div>';
@@ -696,6 +799,7 @@
       html += '</div>';
       resultsEl.innerHTML = html;
     } catch(e) {
+      if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
       resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">⚠️</div><div class="so-empty-text">搜索失败</div></div>';
     }
   }
@@ -731,6 +835,8 @@
   }
 
   function showHome(restoreScrollY) {
+    // 首页统计不再阻塞视图展示；切回首页时复用 API 内存缓存/进行中的请求。
+    if (typeof loadStats === 'function') loadStats();
     pushViewState('home', {}, _initialNav);
     _initialNav = false;
     returnState = null;
@@ -744,11 +850,26 @@
   }
 
   function showExplorer(type) {
-    expPath = [type];
     pushViewState('explorer', { expPath: [type] });
-    renderExplorer();
     switchView('explorer');
     updateSidebar(type === '通识课' ? 'general' : 'major');
+    var render = function() {
+      expPath = [type];
+      renderExplorer();
+      if (currentUser && typeof loadCourseFavorites === 'function') {
+        loadCourseFavorites().then(function() {
+          var explorer = document.getElementById('explorerView');
+          if (explorer && explorer.classList.contains('active')) renderExplorer();
+        });
+      }
+    };
+    if (typeof loadCourseTree === 'function') {
+      render();
+    } else if (typeof ensureFeature === 'function') {
+      var content = document.getElementById('explorerContent');
+      if (content) content.innerHTML = '<div class="empty-state compact">课程目录加载中…</div>';
+      ensureFeature('explorer').then(render);
+    }
   }
 
   // ── Sidebar ──
@@ -783,4 +904,3 @@
       drawer.classList.remove('open');
     });
   });
-

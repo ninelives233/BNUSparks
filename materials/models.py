@@ -11,6 +11,12 @@ class UserProfile(models.Model):
         MODERATOR = "moderator", "版主"
         SUPER_ADMIN = "super_admin", "总管理员"
 
+    class EducationLevel(models.TextChoices):
+        UNDERGRADUATE = "本科", "本科"
+        MASTER = "硕士", "硕士"
+        DOCTOR = "博士", "博士"
+        OTHER = "其他", "其他"
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.USER)
     moderated_sections = models.ManyToManyField(
@@ -42,11 +48,22 @@ class UserProfile(models.Model):
     bio = models.TextField("个人简介", max_length=200, blank=True, default="",
         help_text="200字以内")
 
-    # 身份标签（学院 + 专业，v183）—— 存名称而非 FK，对课程树种子重建健壮；空 = 未设置/「其他」
+    # 身份标签（培养层次 + 学院 + 专业）—— 学院/专业存名称而非 FK，避免课程树重建影响；
+    # 空值只表示历史用户尚未补全，「其他」是可统计的真实选择。
+    identity_education = models.CharField(
+        "培养层次", max_length=10, choices=EducationLevel.choices, blank=True, default=""
+    )
     identity_college = models.CharField("身份学院", max_length=100, blank=True, default="")
     identity_major = models.CharField("身份专业", max_length=100, blank=True, default="")
-    show_college_public = models.BooleanField("公开资料显示学院", default=False)
-    show_major_public = models.BooleanField("公开资料显示专业", default=False)
+    show_education_public = models.BooleanField(
+        "公开资料显示培养层次", default=True, help_text="默认公开，用户可手动关闭"
+    )
+    show_college_public = models.BooleanField(
+        "公开资料显示学院", default=True, help_text="默认公开，用户可手动关闭"
+    )
+    show_major_public = models.BooleanField(
+        "公开资料显示专业", default=True, help_text="默认公开，用户可手动关闭"
+    )
     identity_updated_at = models.DateTimeField("身份最近修改时间", null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -392,18 +409,33 @@ class Favorite(models.Model):
 
 
 class DownloadRecord(models.Model):
-    """下载记录——用户每次下载留痕"""
+    """文件访问留痕——区分正式下载、预览与迁移前旧记录。"""
+
+    class ActivityType(models.TextChoices):
+        LEGACY = "legacy", "旧下载记录"
+        DOWNLOAD = "download", "下载"
+        PREVIEW = "preview", "预览"
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="download_records",
         verbose_name="下载用户",
     )
     material = models.ForeignKey(
-        Material, on_delete=models.CASCADE, verbose_name="关联资料",
+        Material, on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="关联资料",
+        help_text="资料删除后保留下载快照，material 置空",
     )
     course_code = models.CharField("课程代码", max_length=50, blank=True)
     course_name = models.CharField("课程名称", max_length=200, blank=True)
     material_title = models.CharField("资料标题", max_length=200, blank=True)
     file_name = models.CharField("文件名", max_length=255, blank=True)
+    activity_type = models.CharField(
+        "行为类型", max_length=12, choices=ActivityType.choices,
+        default=ActivityType.LEGACY,
+    )
+    request_id = models.CharField(
+        "行为请求编号", max_length=64, null=True, blank=True, unique=True,
+        help_text="同一短时下载令牌重复请求时用于幂等去重",
+    )
     created_at = models.DateTimeField("下载时间", auto_now_add=True)
 
     class Meta:
@@ -413,6 +445,21 @@ class DownloadRecord(models.Model):
 
     def __str__(self):
         return f"{self.user.username} → {self.material_title}"
+
+
+class DownloadQuotaReservation(models.Model):
+    """普通用户每日不同资料配额占位；唯一约束负责并发去重。"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    material = models.ForeignKey(Material, on_delete=models.CASCADE)
+    quota_date = models.DateField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "material", "quota_date"],
+                name="uniq_download_quota_user_material_date",
+            ),
+        ]
 
 
 class CourseCreationRequest(models.Model):
@@ -624,6 +671,26 @@ class Report(models.Model):
 # ═══════════════════════════════════════════════════════════════
 
 COURSE_TREE_CACHE_KEY = "api_course_tree_data"
+STATS_CACHE_VERSION_KEY = "api_stats_data_version"
+
+
+def get_stats_cache_key(limit):
+    """返回带版本号的统计缓存键，支持一次失效所有 limit 变体。"""
+    version = cache.get(STATS_CACHE_VERSION_KEY)
+    if version is None:
+        version = 1
+        cache.add(STATS_CACHE_VERSION_KEY, version, timeout=None)
+        version = cache.get(STATS_CACHE_VERSION_KEY) or version
+    return f"api_stats_data_{version}_{limit}"
+
+
+def invalidate_stats_cache():
+    """使所有首页统计缓存失效，不依赖 DatabaseCache 的 delete_pattern。"""
+    try:
+        cache.incr(STATS_CACHE_VERSION_KEY)
+    except ValueError:
+        # 首次写入前没有版本键；add 保证不会覆盖并发请求已写入的版本。
+        cache.add(STATS_CACHE_VERSION_KEY, 1, timeout=None)
 
 from django.core.cache import cache
 from django.db.models.signals import post_save, post_delete
@@ -662,7 +729,7 @@ def _invalidate_material_caches(sender, instance, **kwargs):
     cache.delete(COURSE_TREE_CACHE_KEY)
     # 首页统计（最近上传/下载榜/计数）也依赖 Material，删除/上传/审批后必须即时失效，
     # 否则被删除的文件最长残留 120s 仍显示在「最近上传排行榜」里。
-    cache.delete("api_stats_data")
+    invalidate_stats_cache()
     _bump_user_public_gen(getattr(instance, "uploader_id", None))
 
 
@@ -754,6 +821,12 @@ class QaAnswer(models.Model):
         verbose_name = "问答区回答"
         verbose_name_plural = "问答区回答"
         ordering = ["-is_pinned", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["question"], condition=Q(is_accepted=True),
+                name="uniq_qa_accepted_answer_per_question",
+            ),
+        ]
 
     def __str__(self):
         return f"回答 {self.id}"

@@ -20,6 +20,7 @@ CLAUDE.md
 # IDE / Editor
 .obsidian/
 .vscode/
+.codex/
 
 # History (archived design iterations, old Django attempts)
 history/
@@ -102,3 +103,8 @@ deploy/
 
 data/.zip_cache/
 data/.pdf_cache/
+
+# 人类可读的项目地图：作为维护事实源纳入版本控制；其他 docs 仍保持忽略
+!docs/
+docs/*
+!docs/PROJECT_MAP.md

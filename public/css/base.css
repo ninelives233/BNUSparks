@@ -7,6 +7,14 @@
     }
   }
 
+  .skip-link {
+    position: fixed; top: 8px; left: 8px; z-index: 20000;
+    padding: 9px 14px; border-radius: var(--radius-sm);
+    background: var(--ink); color: var(--raised); text-decoration: none;
+    transform: translateY(-150%); transition: transform var(--t-fast);
+  }
+  .skip-link:focus { transform: translateY(0); }
+
   /* ════════════════════════════════════════════════════════════
      HEADER — logo(左) + 搜索(中) + login(右)
      ════════════════════════════════════════════════════════════ */
@@ -754,6 +762,7 @@
     display: flex; align-items: center; justify-content: center;
     padding: var(--space-md);
     backdrop-filter: blur(4px);
+    overscroll-behavior: contain;
   }
   .modal-card {
     background: var(--raised); border-radius: var(--radius-lg);
@@ -765,6 +774,7 @@
   }
   .modal-card-wide { max-width: 520px; }
   .modal-card, .modal-card-wide { max-height: 85vh; overflow-y: auto; }
+  .modal-card, .modal-card-wide { overscroll-behavior: contain; }
   @keyframes modalIn {
     from { opacity: 0; transform: scale(0.95) translateY(10px); }
     to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -790,11 +800,12 @@
     font-weight: 500;
   }
   .label-required { color: var(--accent); margin-left: 2px; }
+  .mf-label-hint { color: var(--ink-faint); font-weight: 400; }
   .mf-pwd-wrap {
     position: relative; display: flex; align-items: center;
   }
   .mf-pwd-wrap .mf-pwd-input {
-    padding-right: 40px;
+    padding-right: 52px;
   }
   .mf-pwd-toggle {
     position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
@@ -814,11 +825,15 @@
   }
   .mf-input:focus { outline: none; border-color: var(--primary); }
   .mf-textarea { min-height: 70px; resize: vertical; }
-  /* ── v183 身份标签：学院+专业并排下拉 ── */
+  /* 身份标签：培养层次、学院、专业同组排列。 */
   .mf-ident-row {
-    display: flex; gap: 8px;
+    display: grid; grid-template-columns: minmax(84px, .75fr) minmax(110px, 1.2fr) minmax(96px, 1fr); gap: 8px;
   }
-  .mf-ident-row .mf-input { flex: 1; min-width: 0; }
+  .mf-ident-row .mf-input { min-width: 0; padding-inline: 9px; }
+  @media (max-width: 480px) {
+    .mf-ident-row { grid-template-columns: 1fr 1fr; }
+    .mf-ident-row .mf-input:first-child { grid-column: 1 / -1; }
+  }
 
   /* ── 邮箱后缀输入 ── */
   .mf-email-wrap {
@@ -951,6 +966,37 @@
   }
   .mf-success .ms-btn { background: var(--accent); }
   .mf-success .ms-btn:hover:not(:disabled) { background: var(--accent-hover); }
+
+  /* ── Register Verification Resend ─────────── */
+  .register-resend {
+    margin: var(--space-sm) 0;
+    text-align: center;
+  }
+  .register-resend-error {
+    padding: 8px 12px 2px;
+    border-left: 2px solid var(--accent);
+    background: var(--accent-light);
+  }
+  .register-resend-note {
+    margin: 0 0 8px;
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+  }
+  .ms-resend-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: auto; margin: 0; padding: 7px 14px;
+    border: 1px solid var(--primary); border-radius: var(--radius-sm);
+    background: transparent; color: var(--primary);
+    font: inherit; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; transition: background-color 0.15s, color 0.15s, opacity 0.15s;
+  }
+  .ms-resend-btn:hover:not(:disabled) { background: var(--primary); color: #fff; }
+  .ms-resend-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ms-resend-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .register-resend-status {
+    display: block; margin-top: 7px;
+    color: var(--ink-faint); font-size: 0.76rem; line-height: 1.5;
+  }
 
   /* ── External Access ──────────────────────── */
   .external-access {
@@ -1687,6 +1733,7 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-sm);
+    text-decoration: none;
   }
 
   .home-nav-card:hover {
@@ -1836,6 +1883,7 @@
     font-weight: 500;
     color: var(--ink-soft);
     background: var(--raised);
+    font-family: inherit;
     cursor: pointer;
     transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
   }
@@ -2063,8 +2111,3 @@
       z-index: 1;
     }
   }
-
-
-
-
-

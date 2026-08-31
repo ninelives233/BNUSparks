@@ -48,18 +48,13 @@
           sectionsRow.style.display = 'none';
         }
       }
-      // ── v183 身份标签：有身份才显示该行 ──
+      // 三项身份标签恒显示在个人资料中，历史用户未补全时明确占位。
       var identityRow = document.getElementById('profileIdentityRow');
       var identityEl = document.getElementById('profileIdentity');
       if (identityRow && identityEl) {
-        var iCol = data.identity_college || '';
-        var iMaj = data.identity_major || '';
-        if (iCol || iMaj) {
-          identityEl.textContent = iCol + (iCol && iMaj ? ' · ' : '') + iMaj;
-          identityRow.style.display = '';
-        } else {
-          identityRow.style.display = 'none';
-        }
+        var identityParts = [data.identity_education, data.identity_college, data.identity_major].filter(Boolean);
+        identityEl.textContent = identityParts.length ? identityParts.join(' · ') : '未设置';
+        identityRow.style.display = '';
       }
       // ── Iter 7: 用户数据 ──
       var statUploads = document.getElementById('statUploads');
@@ -75,11 +70,22 @@
       var bioEl = document.getElementById('pubBio');
       if (contactEmailEl) contactEmailEl.value = data.contact_email || '';
       if (contactWayEl) contactWayEl.value = data.contact_way || '';
-      // v183：公开资料身份开关恢复
+      // 公开资料身份开关恢复。
+      var tEdu = document.getElementById('toggleShowEducation');
       var tCol = document.getElementById('toggleShowCollege');
       var tMaj = document.getElementById('toggleShowMajor');
-      if (tCol) tCol.classList.toggle('ios-toggle-on', !!data.show_college_public);
-      if (tMaj) tMaj.classList.toggle('ios-toggle-on', !!data.show_major_public);
+      if (tEdu) {
+        tEdu.classList.toggle('ios-toggle-on', !!data.show_education_public);
+        tEdu.setAttribute('aria-pressed', String(!!data.show_education_public));
+      }
+      if (tCol) {
+        tCol.classList.toggle('ios-toggle-on', !!data.show_college_public);
+        tCol.setAttribute('aria-pressed', String(!!data.show_college_public));
+      }
+      if (tMaj) {
+        tMaj.classList.toggle('ios-toggle-on', !!data.show_major_public);
+        tMaj.setAttribute('aria-pressed', String(!!data.show_major_public));
+      }
       if (bioEl) {
         bioEl.value = data.bio || '';
         var countEl = document.getElementById('pubBioCount');
@@ -105,6 +111,9 @@
     lockScroll();
     var col = (currentUser && currentUser.identity_college) || '';
     var maj = (currentUser && currentUser.identity_major) || '';
+    var edu = (currentUser && currentUser.identity_education) || '';
+    var eduEl = document.getElementById('_idnEducation');
+    if (eduEl) eduEl.value = edu;
     populateIdentitySelects('_idnCollege', '_idnMajor', { college: col, major: maj });
   }
 
@@ -120,30 +129,55 @@
 
   async function saveIdentity() {
     var errEl = document.getElementById('identityError');
+    var education = (document.getElementById('_idnEducation') || { value: '' }).value || '';
     var college = (document.getElementById('_idnCollege') || { value: '' }).value || '';
     var major = (document.getElementById('_idnMajor') || { value: '' }).value || '';
     try {
+      if (!education || !college || !major) throw new Error('请选择培养层次、学院和专业');
       var data = await api('/api/auth/profile/', { method: 'PATCH', body: {
+        identity_education: education,
         identity_college: college,
         identity_major: major,
       }});
       // 即时刷新当前用户（供专业课置顶/搜索跳转）与资料卡
       if (currentUser) {
+        currentUser.identity_education = (data && data.identity_education) || '';
         currentUser.identity_college = (data && data.identity_college) || '';
         currentUser.identity_major = (data && data.identity_major) || '';
         currentUser.identity_can_edit = data && data.identity_can_edit;
       }
       closeIdentityEditor();
       loadProfile();
+      // v184：公开页 60s 前端缓存失效，让公开展示即时生效
+      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
     } catch (err) {
       if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
     }
   }
 
-  // ── v183 公开资料身份开关（本地翻转视觉，随「保存公开资料」一起提交） ──
-  function toggleIdentityPublic(kind) {
-    var el = document.getElementById(kind === 'college' ? 'toggleShowCollege' : 'toggleShowMajor');
-    if (el) el.classList.toggle('ios-toggle-on');
+  // 公开资料身份开关：点击即 PATCH 保存，刷新保持。
+  async function toggleIdentityPublic(kind) {
+    var ids = { education: 'toggleShowEducation', college: 'toggleShowCollege', major: 'toggleShowMajor' };
+    var fields = { education: 'show_education_public', college: 'show_college_public', major: 'show_major_public' };
+    var el = document.getElementById(ids[kind]);
+    if (!el) return;
+    // 乐观翻转视觉，失败时回滚
+    var next = !el.classList.contains('ios-toggle-on');
+    el.classList.toggle('ios-toggle-on', next);
+    el.setAttribute('aria-pressed', String(next));
+    var field = fields[kind];
+    try {
+      var body = {};
+      body[field] = next;
+      await api('/api/auth/profile/', { method: 'PATCH', body: body });
+      // 后端已存：公开页 60s 缓存即时失效
+      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
+      if (currentUser) currentUser[field] = next;
+    } catch (err) {
+      el.classList.toggle('ios-toggle-on', !next);
+      el.setAttribute('aria-pressed', String(!next));
+      alert('设置失败：' + (err.message || '网络错误'));
+    }
   }
 
   // ── 头像上传 ──
@@ -350,13 +384,14 @@
         return;
       }
       list.innerHTML = data.map(function(r) {
+        var deleted = !r.can_open;
         return _pcItem(
           _fileGlyph(r.file_name),
-          esc(r.material_title),
+          esc(r.material_title) + (deleted ? '<span class="trace-deleted-badge">资料已删除</span>' : ''),
           esc(r.course_name) + ' · ' + esc(r.course_code) + ' · ' + esc(r.created_at),
           '',
-          '<span class="pc-side-icon">' + _IC_DOWN + '</span>',
-          'navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')'
+          deleted ? '留痕' : '<span class="pc-side-icon">' + _IC_DOWN + '</span>',
+          deleted ? '' : 'navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')'
         );
       }).join('');
     }).catch(function(err) {
@@ -423,7 +458,7 @@
           '<span class="pc-glyph pc-glyph-star">★</span>',
           esc(r.title) + statusHtml, meta, '',
           '<span class="pc-side-icon">' + _IC_STAR + '</span>',
-          'qaOpenDetail(' + r.id + ')'
+          "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ");})"
         );
       }).join('');
     }).catch(function() { list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。'); });
@@ -650,7 +685,9 @@
     var bio = document.getElementById('pubBio').value.trim();
     var msgEl = document.getElementById('pubProfileMsg');
     if (bio.length > 200) { alert('个人简介不能超过 200 字'); return; }
-    // v183：公开资料身份开关随保存一起提交
+    // 三项公开身份开关随“保存公开资料”一起提交。
+    var showEducation = !!(document.getElementById('toggleShowEducation') || {}).classList &&
+      document.getElementById('toggleShowEducation').classList.contains('ios-toggle-on');
     var showCollege = !!(document.getElementById('toggleShowCollege') || {}).classList &&
       document.getElementById('toggleShowCollege').classList.contains('ios-toggle-on');
     var showMajor = !!(document.getElementById('toggleShowMajor') || {}).classList &&
@@ -660,10 +697,13 @@
         contact_email: contactEmail,
         contact_way: contactWay,
         bio: bio,
+        show_education_public: showEducation,
         show_college_public: showCollege,
         show_major_public: showMajor,
       }});
       if (msgEl) { msgEl.style.display = 'block'; setTimeout(function(){ msgEl.style.display = 'none'; }, 2000); }
+      // v184：公开页 60s 前端缓存失效，让公开展示即时生效
+      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
     } catch (err) { alert('保存失败：' + err.message); }
   }
 

@@ -1080,6 +1080,30 @@
 }
 .user-public-info .upi-ico svg { width: 14px; height: 14px; }
 
+/* v=189：总管理员管理模式下的用户下载追溯 */
+.user-public-admin-tabs { margin: 0 0 var(--space-md); }
+.user-public-admin-tabs .pc-seg { margin-left: auto; }
+.user-trace-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin: 0 0 10px; color: var(--ink);
+  font-size: 0.92rem; font-weight: 600;
+}
+.user-trace-head small { color: var(--ink-faint); font-size: 0.72rem; font-weight: 400; }
+.trace-deleted-badge {
+  display: inline-flex; margin-left: 7px; padding: 1px 6px;
+  color: var(--ink-faint); background: oklch(0.93 0.005 60);
+  border-radius: var(--radius-full); font-size: 0.66rem; font-weight: 500;
+}
+.user-trace-page { color: var(--ink-faint); font-size: 0.76rem; padding: 0 8px; }
+
+@media (max-width: 640px) {
+  .user-public-admin-tabs { align-items: stretch; }
+  .user-public-admin-tabs .pc-type-label { width: 100%; }
+  .user-public-admin-tabs .pc-seg { margin-left: 0; width: 100%; }
+  .user-public-admin-tabs .pc-seg-btn { flex: 1; justify-content: center; }
+  .user-trace-head { align-items: flex-start; flex-direction: column; gap: 2px; }
+}
+
 /* v=164：公开页文件列表与收藏/下载/上传统一为 pc-* 组件 */
 .user-files-head {
   font-size: 0.95rem;
@@ -1326,4 +1350,3 @@
   .pc-item-title { font-size: 0.92rem; }
   .mu-tab { font-size: 0.78rem; }
 }
-

@@ -107,3 +107,41 @@
 .admin-pending-card .pc-actions .admin-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 .admin-pending-card .pc-actions .admin-btn { gap: 6px; }
 
+/* ── 键盘焦点：覆盖各家族历史遗留的 outline:none，仅在 focus-visible 出现 ── */
+:where(a[href], button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 3px;
+}
+
+/*
+ * 文字输入保持静态外观：聚焦时只显示光标，不再添加描边、光晕或变色边框。
+ * 按钮、链接、选择器等非文字控件仍沿用上方的键盘焦点提示。
+ */
+:where(
+  input:not(:is(
+    [type="checkbox"], [type="radio"], [type="range"], [type="file"],
+    [type="color"], [type="button"], [type="submit"], [type="reset"],
+    [type="image"], [type="hidden"]
+  )),
+  textarea,
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"]
+):is(:focus, :focus-visible) {
+  outline: none !important;
+  outline-offset: 0 !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+/* 当前三类组合输入由外壳承载边界，也必须取消 focus-within 产生的额外框。 */
+:where(.search-box, .mf-email-wrap, .so-input-group):focus-within {
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+/* 关闭、显隐密码、开关等纯图标控件保持至少 44px 触控热区。 */
+:is(.modal-close, .search-overlay-close, .mf-pwd-toggle) {
+  min-width: 44px;
+  min-height: 44px;
+}
+.ios-toggle::before { content: ""; position: absolute; inset: -10px 0; }

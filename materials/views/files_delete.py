@@ -9,16 +9,15 @@ import json
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
-from django.db import transaction
 from django.db.models import Count
 
 from .utils import (
     _err, _ok, _get_or_create_profile,
     _check_moderator_access, _user_can_edit_material,
-    _purge_expired_trash, _stage_file_to_trash,
+    _perform_soft_delete, _purge_expired_trash, TrashStageError,
     _create_notification,
     require_login,
-    UserProfile, Material, Notification, DeletionRecord,
+    UserProfile, Material, Notification,
 )
 
 
@@ -87,53 +86,55 @@ def api_file_delete(request, file_id):
         body = {}
     delete_reason = body.get("reason", "")
 
-    # v=182：DB 关键操作原子提交（建记录→移文件→存路径→删行），任一步失败整体回滚，
-    # 杜绝「DeletionRecord 已建但 Material 行未删」的幽灵残留（此前的非原子间隙在通知段，
-    # 一旦通知抛异常即留下幽灵）。_stage_file_to_trash 内部吞掉文件缺失/移动失败异常。
-    with transaction.atomic():
-        dr = DeletionRecord.objects.create(
-            material_id=material.id,
-            title=material.title,
-            file_name=material.file_name,
-            file_size=material.file_size,
-            course_code=material.course.code if material.course else "",
-            course_name=material.course.name if material.course else "",
-            college_id=material.course.college_id if material.course and material.course.college else None,
-            uploader_name=material.uploader_name or (material.uploader.first_name if material.uploader else "匿名"),
-            deleted_by=request.user,
-            delete_reason=delete_reason,
-        )
-        # 软删除：物理文件移入暂存区（48h 内可恢复），记录暂存路径
-        trash_rel = _stage_file_to_trash(material)
-        if trash_rel:
-            dr.trash_path = trash_rel
-            dr.save(update_fields=["trash_path"])
-        material.delete()
+    # 删除前保存通知所需对象和文本；Material.delete() 后不能再依赖 ORM 关系查询。
+    course = material.course
+    uploader = material.uploader
+    snapshot = {
+        "title": material.title,
+        "course_code": course.code if course else "",
+        "course_name": course.name if course else "未知课程",
+        "uploader_name": material.uploader_name or request.user.username,
+    }
+    moderator_recipients = (
+        _scope_matched_moderators(material, request.user)
+        if not is_self_delete and course else []
+    )
+    self_delete_admins = (
+        _scope_matched_moderators(material, request.user, include_super_admin=True)
+        if is_self_delete else []
+    )
+
+    try:
+        _perform_soft_delete(material, request.user, delete_reason=delete_reason)
+    except TrashStageError:
+        return _err("文件暂存失败，资料未删除；请稍后重试", 500)
+    except Exception:
+        return _err("删除失败，资料与文件均已保留", 500)
 
     # 通知为 best-effort：material 行已删，不再带 material FK（删后 FK 悬空无意义），
     # 用快照的 course_code/course_name 落库；通知失败不回滚删除、不产生幽灵。
     try:
         # 非自删时通知辖区的版主/小版主（按资料所属学院匹配管辖范围）
-        if not is_self_delete and material.course:
-            for u in _scope_matched_moderators(material, request.user):
+        if not is_self_delete and course:
+            for u in moderator_recipients:
                 _create_notification(
                     recipient=u,
                     type=Notification.Type.FILE_DELETED,
                     title="辖区内的资料被删除",
-                    message=f"管理员{request.user.first_name or request.user.username}删除了你辖区内的资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
-                    course_code=material.course.code if material.course else "",
-                    course_name=material.course.name if material.course else "",
+                    message=f"管理员{request.user.first_name or request.user.username}删除了你辖区内的资料「{snapshot['title']}」（{snapshot['course_name']}）。",
+                    course_code=snapshot["course_code"],
+                    course_name=snapshot["course_name"],
                     triggered_by=request.user,
                 )
 
-        if not is_self_delete and delete_reason and material.uploader and material.uploader_id != request.user.id:
+        if not is_self_delete and delete_reason and uploader and uploader.id != request.user.id:
             _create_notification(
-                recipient=material.uploader,
+                recipient=uploader,
                 type=Notification.Type.FILE_DELETED,
                 title="你的资料被管理员删除",
-                message=f"管理员{request.user.first_name or request.user.username}删除了你的资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。\n删除理由：{delete_reason}\n你可以在此课程目录下重新上传。",
-                course_code=material.course.code if material.course else "",
-                course_name=material.course.name if material.course else "",
+                message=f"管理员{request.user.first_name or request.user.username}删除了你的资料「{snapshot['title']}」（{snapshot['course_name']}）。\n删除理由：{delete_reason}\n你可以在此课程目录下重新上传。",
+                course_code=snapshot["course_code"],
+                course_name=snapshot["course_name"],
                 triggered_by=request.user,
             )
 
@@ -142,18 +143,18 @@ def api_file_delete(request, file_id):
                 recipient=request.user,
                 type=Notification.Type.FILE_DELETED,
                 title="你删除了资料",
-                message=f"你已删除资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
-                course_code=material.course.code if material.course else "",
-                course_name=material.course.name if material.course else "",
+                message=f"你已删除资料「{snapshot['title']}」（{snapshot['course_name']}）。",
+                course_code=snapshot["course_code"],
+                course_name=snapshot["course_name"],
             )
-            for admin in _scope_matched_moderators(material, request.user, include_super_admin=True):
+            for admin in self_delete_admins:
                 _create_notification(
                     recipient=admin,
                     type=Notification.Type.FILE_DELETED,
                     title="用户自行删除资料",
-                    message=f"用户 {material.uploader_name or request.user.username} 删除了资料「{material.title}」（{material.course.name if material.course else '未知课程'}）。",
-                    course_code=material.course.code if material.course else "",
-                    course_name=material.course.name if material.course else "",
+                    message=f"用户 {snapshot['uploader_name']} 删除了资料「{snapshot['title']}」（{snapshot['course_name']}）。",
+                    course_code=snapshot["course_code"],
+                    course_name=snapshot["course_name"],
                     triggered_by=request.user,
                 )
     except Exception:

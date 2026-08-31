@@ -77,6 +77,19 @@ def _reason_label(code):
     return REPORT_REASON_LABELS.get(code, code)
 
 
+def _report_accessible_qs(user):
+    """返回当前管理员可见的举报对象集合。
+
+    总管理员拥有全局权限；其余管理员只能访问 ``candidates`` 明确分配给自己的
+    举报。所有读取、处理和历史接口必须共用这一入口，避免只保护列表、却能凭
+    自增 ID 越权处理对象。
+    """
+    qs = Report.objects.all()
+    if _get_or_create_profile(user).role == UserProfile.Role.SUPER_ADMIN:
+        return qs
+    return qs.filter(candidates=user).distinct()
+
+
 @csrf_exempt
 @require_login
 def api_file_report(request, file_id):
@@ -328,8 +341,7 @@ def api_report_pending(request):
     材料举报按 material_id 聚合、连带举报按 target_user_id 聚合。
     """
     user = request.user
-    qs = list(Report.objects.filter(
-        candidates__id=user.id,
+    qs = list(_report_accessible_qs(user).filter(
         status__in=[Report.Status.PENDING, Report.Status.ESCALATED],
     ).select_related("material", "material__course", "material__uploader",
                      "target_user", "reporter",
@@ -482,7 +494,8 @@ def api_report_handle(request, report_id):
     if request.method != "POST":
         return _err("仅支持 POST", 405)
 
-    report = get_object_or_404(Report, id=report_id)
+    # 对象级权限必须先于状态/请求体校验；越权统一返回 404，避免通过 ID 探测。
+    report = get_object_or_404(_report_accessible_qs(request.user), id=report_id)
     if report.status != Report.Status.PENDING:
         return _err("该举报已处理", 400)
 
@@ -518,13 +531,13 @@ def _handle_qa(request, report, is_true, actual_situation, is_malicious):
         pk = report.qa_question_pk or report.qa_question_id
         target = QaQuestion.objects.select_related("author").filter(id=pk).first()
         title = report.qa_question_title or (target.title if target else "内容")
-        group_rows = list(Report.objects.filter(
+        group_rows = list(_report_accessible_qs(request.user).filter(
             kind=Report.Kind.QUESTION, qa_question_pk=pk, status=Report.Status.PENDING))
     else:
         pk = report.qa_answer_pk or report.qa_answer_id
         target = QaAnswer.objects.select_related("author", "question").filter(id=pk).first()
         title = report.qa_question_title or (f"回答 · {target.question.title}" if target else "回答")
-        group_rows = list(Report.objects.filter(
+        group_rows = list(_report_accessible_qs(request.user).filter(
             kind=Report.Kind.ANSWER, qa_answer_pk=pk, status=Report.Status.PENDING))
 
     reporters = [r.reporter for r in group_rows if r.reporter]
@@ -610,7 +623,7 @@ def _handle_material(request, report, is_true, actual_situation, action, allow_r
         return _err("选择不属实时，必须填写实际情况", 400)
 
     # 聚合组（该 material_pk 的全部 pending 举报行，材料删除后 FK 置空仍可定位）
-    group_rows = list(Report.objects.filter(
+    group_rows = list(_report_accessible_qs(request.user).filter(
         kind=Report.Kind.MATERIAL, material_pk=pk, status=Report.Status.PENDING,
     ))
     reporters = [r.reporter for r in group_rows if r.reporter]
@@ -696,9 +709,14 @@ def _handle_user(request, report, is_true, actual_situation, is_malicious):
     """连带举报处理：属实=是 → 升级转发全部总管理（显式出现在其举报受理）；否 → 反馈举报人"""
     target_name = report.target_user_name or "匿名"
     cc, cn = report.course_code, report.course_name
-    group_rows = list(Report.objects.filter(
-        kind=Report.Kind.USER, target_user_id=report.target_user_id, status=Report.Status.PENDING,
-    ))
+    group_qs = _report_accessible_qs(request.user).filter(
+        kind=Report.Kind.USER, status=Report.Status.PENDING,
+    )
+    if report.target_user_id is None:
+        group_qs = group_qs.filter(id=report.id)
+    else:
+        group_qs = group_qs.filter(target_user_id=report.target_user_id)
+    group_rows = list(group_qs)
     reporters = [r.reporter for r in group_rows if r.reporter]
     is_malicious = bool(is_malicious)
 
@@ -756,7 +774,7 @@ def api_report_finish(request, report_id):
     """POST /api/moderation/reports/<id>/finish/ — 超管收尾 escalated 连带举报"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
-    report = get_object_or_404(Report, id=report_id)
+    report = get_object_or_404(_report_accessible_qs(request.user), id=report_id)
     if report.status != Report.Status.ESCALATED:
         return _err("该举报无需收尾", 400)
 
@@ -786,7 +804,9 @@ def api_report_history(request):
     """GET /api/moderation/reports/history/?page=&per_page= — 举报记录（全部状态，全量可见）"""
     page = _safe_int(request.GET.get("page"), 1, 1)
     per_page = _safe_int(request.GET.get("per_page"), 20, 1, 100)
-    qs = Report.objects.select_related("reporter", "handled_by").order_by("-created_at")
+    qs = _report_accessible_qs(request.user).select_related(
+        "reporter", "handled_by",
+    ).order_by("-created_at")
     total = qs.count()
     total_pages = (total + per_page - 1) // per_page if total else 1
     page = min(page, total_pages)

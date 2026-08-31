@@ -11,6 +11,10 @@ from django.conf import settings
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from .utils_upload import (
+    UploadTooLarge, _atomic_write_chunks, _atomic_write_text,
+    _remove_uploaded_file,
+)
 from .utils import (
     _err, _ok, _get_or_create_profile,
     _strip_exif, _check_auto_approve,
@@ -21,6 +25,30 @@ from .utils import (
     UserProfile, Course, Material, Notification, MaterialType,
     CourseCategory,
 )
+
+
+def _notify_pending_upload(material, uploader, title, context_category):
+    """上传已落库后的通知均为 best-effort，失败不能让客户端误以为上传失败而重试。"""
+    try:
+        for user in _review_candidates(material, context_category):
+            if user.id == uploader.id:
+                continue
+            _create_notification(
+                recipient=user,
+                type=Notification.Type.NEW_PENDING,
+                title="有新的待审核资料",
+                message=f"「{title}」正在等待审核——多人同时可见，先审先得。",
+                material=material,
+            )
+        _create_notification(
+            recipient=uploader,
+            type=Notification.Type.REPORT,
+            title="资料已提交，等待审核",
+            message=f"你的资料「{title}」已提交，审核通过后即可被其他同学下载。",
+            material=material,
+        )
+    except Exception:
+        pass
 
 
 @csrf_exempt
@@ -70,6 +98,15 @@ def api_file_upload(request):
         if node is not None and _node_contains_course(node, course):
             context_category = node
 
+    # 所有会失败的元数据校验必须先于磁盘写入，避免 400 响应留下孤儿文件。
+    mtid = None
+    if material_type_id and material_type_id.isdigit():
+        mtid = int(material_type_id)
+        if not MaterialType.objects.filter(id=mtid).exists():
+            return _err("资料类型不存在", 400)
+    elif material_type_id:
+        return _err("资料类型不存在", 400)
+
     from uuid import uuid4
     course_dir = _safe_dir_name(course.code)
     ext = Path(uploaded_file.name).suffix
@@ -78,14 +115,17 @@ def api_file_upload(request):
     clean_title = _sanitize_filename_part(title) or _sanitize_filename_part(Path(uploaded_file.name).stem) or "file"
     safe_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
     save_dir = Path(settings.MEDIA_ROOT) / course_dir
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    with open(save_dir / safe_name, "wb") as f:
-        for chunk in uploaded_file.chunks():
-            f.write(chunk)
-
-    _strip_exif(save_dir / safe_name)
-    file_size = (save_dir / safe_name).stat().st_size
+    final_path = save_dir / safe_name
+    try:
+        file_size = _atomic_write_chunks(uploaded_file, final_path)
+        _strip_exif(final_path)
+        file_size = final_path.stat().st_size
+    except UploadTooLarge as exc:
+        _remove_uploaded_file(final_path)
+        return _err(str(exc), 413)
+    except OSError:
+        _remove_uploaded_file(final_path)
+        return _err("文件保存失败，请稍后重试", 500)
 
     profile = _get_or_create_profile(request.user)
     is_auto_approved = profile.role in (
@@ -108,55 +148,35 @@ def api_file_upload(request):
 
     review_status = "approved" if is_auto_approved else "pending"
 
-    # 校验资料类型存在（防无效 id 触发 FK IntegrityError 500）
-    mtid = None
-    if material_type_id and material_type_id.isdigit():
-        mtid = int(material_type_id)
-        if not MaterialType.objects.filter(id=mtid).exists():
-            return _err("资料类型不存在", 400)
-
-    material = Material.objects.create(
-        course=course, title=title, description=description,
-        teacher=teacher,
-        material_type_id=mtid,
-        file_name=uploaded_file.name,
-        file_path=f"{course_dir}/{safe_name}",
-        file_size=file_size,
-        uploader=request.user,
-        uploader_name=request.user.first_name or request.user.username,
-        review_status=review_status,
-        is_approved=is_auto_approved,
-        reviewed_by=auto_approved_by,
-        reviewed_at=timezone.now() if auto_approved_by else None,
-    )
+    try:
+        material = Material.objects.create(
+            course=course, title=title, description=description,
+            teacher=teacher,
+            material_type_id=mtid,
+            file_name=uploaded_file.name,
+            file_path=f"{course_dir}/{safe_name}",
+            file_size=file_size,
+            uploader=request.user,
+            uploader_name=request.user.first_name or request.user.username,
+            review_status=review_status,
+            is_approved=is_auto_approved,
+            reviewed_by=auto_approved_by,
+            reviewed_at=timezone.now() if auto_approved_by else None,
+        )
+    except Exception:
+        _remove_uploaded_file(final_path)
+        return _err("资料保存失败，请稍后重试", 500)
 
     try:
         from git_storage import commit_file
-        commit_file(f"{course.code}/{safe_name}")
+        commit_file(f"{course_dir}/{safe_name}")
     except Exception:
         pass
 
     if review_status == "pending":
         # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），
         # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
-        for u in _review_candidates(material, context_category):
-            if u.id == request.user.id:
-                continue
-            _create_notification(
-                recipient=u,
-                type=Notification.Type.NEW_PENDING,
-                title="有新的待审核资料",
-                message=f"「{title}」正在等待审核——多人同时可见，先审先得。",
-                material=material,
-            )
-
-        _create_notification(
-            recipient=request.user,
-            type=Notification.Type.REPORT,
-            title="资料已提交，等待审核",
-            message=f"你的资料「{title}」已提交，审核通过后即可被其他同学下载。",
-            material=material,
-        )
+        _notify_pending_upload(material, request.user, title, context_category)
 
     return _ok({
         "id": material.id, "title": material.title,
@@ -225,15 +245,29 @@ def api_file_upload_text(request):
         if node is not None and _node_contains_course(node, course):
             context_category = node
 
+    # 先校验资料类型，再创建任何目录或文件。
+    mtid = None
+    if material_type_id and material_type_id.isdigit():
+        mtid = int(material_type_id)
+        if not MaterialType.objects.filter(id=mtid).exists():
+            return _err("资料类型不存在", 400)
+    elif material_type_id:
+        return _err("资料类型不存在", 400)
+
     from uuid import uuid4
     course_dir = _safe_dir_name(course.code)
     clean_title = _sanitize_filename_part(title) or "text"
     safe_name = f"text_{uuid4().hex[:12]}_{clean_title}.txt"
     save_dir = Path(settings.MEDIA_ROOT) / course_dir
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    (save_dir / safe_name).write_text(content, encoding="utf-8")
-    file_size = (save_dir / safe_name).stat().st_size
+    final_path = save_dir / safe_name
+    try:
+        file_size = _atomic_write_text(content, final_path)
+    except UploadTooLarge as exc:
+        _remove_uploaded_file(final_path)
+        return _err(str(exc), 413)
+    except OSError:
+        _remove_uploaded_file(final_path)
+        return _err("文件保存失败，请稍后重试", 500)
 
     profile = _get_or_create_profile(request.user)
     is_auto_approved = profile.role in (
@@ -256,55 +290,35 @@ def api_file_upload_text(request):
 
     review_status = "approved" if is_auto_approved else "pending"
 
-    # 校验资料类型存在（防无效 id 触发 FK IntegrityError 500）
-    mtid = None
-    if material_type_id and material_type_id.isdigit():
-        mtid = int(material_type_id)
-        if not MaterialType.objects.filter(id=mtid).exists():
-            return _err("资料类型不存在", 400)
-
-    material = Material.objects.create(
-        course=course, title=title, description=description,
-        teacher=teacher,
-        material_type_id=mtid,
-        file_name=safe_name,
-        file_path=f"{course_dir}/{safe_name}",
-        file_size=file_size,
-        uploader=request.user,
-        uploader_name=request.user.first_name or request.user.username,
-        review_status=review_status,
-        is_approved=is_auto_approved,
-        reviewed_by=auto_approved_by,
-        reviewed_at=timezone.now() if auto_approved_by else None,
-    )
+    try:
+        material = Material.objects.create(
+            course=course, title=title, description=description,
+            teacher=teacher,
+            material_type_id=mtid,
+            file_name=safe_name,
+            file_path=f"{course_dir}/{safe_name}",
+            file_size=file_size,
+            uploader=request.user,
+            uploader_name=request.user.first_name or request.user.username,
+            review_status=review_status,
+            is_approved=is_auto_approved,
+            reviewed_by=auto_approved_by,
+            reviewed_at=timezone.now() if auto_approved_by else None,
+        )
+    except Exception:
+        _remove_uploaded_file(final_path)
+        return _err("资料保存失败，请稍后重试", 500)
 
     try:
         from git_storage import commit_file
-        commit_file(f"{course.code}/{safe_name}")
+        commit_file(f"{course_dir}/{safe_name}")
     except Exception:
         pass
 
     if review_status == "pending":
         # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），
         # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
-        for u in _review_candidates(material, context_category):
-            if u.id == request.user.id:
-                continue
-            _create_notification(
-                recipient=u,
-                type=Notification.Type.NEW_PENDING,
-                title="有新的待审核资料",
-                message=f"「{title}」正在等待审核——多人同时可见，先审先得。",
-                material=material,
-            )
-
-        _create_notification(
-            recipient=request.user,
-            type=Notification.Type.REPORT,
-            title="资料已提交，等待审核",
-            message=f"你的资料「{title}」已提交，审核通过后即可被其他同学下载。",
-            material=material,
-        )
+        _notify_pending_upload(material, request.user, title, context_category)
 
     return _ok({
         "id": material.id, "title": material.title,

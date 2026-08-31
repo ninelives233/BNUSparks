@@ -105,6 +105,7 @@ function showQaGate() {
     '</div>';
   document.body.appendChild(overlay);
   lockScroll();
+  activateDialog(overlay);
   var inp = document.getElementById('qaGateSid');
   if (inp) {
     inp.focus();
@@ -136,7 +137,7 @@ async function submitQaGate() {
 
 function _removeQaOverlay(cls) {
   var el = document.querySelector('.' + cls);
-  if (el) { el.remove(); unlockScroll(); }
+  if (el) { deactivateDialog(el); el.remove(); unlockScroll(); }
 }
 
 // ── 列表 ──
@@ -421,7 +422,7 @@ function _qaDetailHtml(d) {
     solvedBadge +
     '<h3 class="qa-q-title">' + esc(d.title) + '</h3>' +
     (badges ? '<div class="qa-q-tags">' + badges + '</div>' : '') +
-    '<div class="qa-rich">' + d.content + '</div>' +
+    '<div class="qa-rich">' + qaSafeHtml(d.content) + '</div>' +
     '<div class="qa-q-meta">' + stats + '</div>' +
     '<div class="qa-q-foot">' +
       '<span class="qa-card-author">' + esc(d.author) + ' · ' + esc(d.created_at) + '</span>' +
@@ -495,7 +496,7 @@ function _qaAnswerHtml(a, idx, expanded, total, d) {
   return '<div class="qa-answer' + expanded + '" data-qa-answer>' +
     '<div class="qa-answer-head">' + pin + acceptedBadge + '<span class="qa-answer-author">' + esc(a.author) + '</span>' +
       '<span class="qa-answer-date">' + esc(a.created_at) + '</span>' + collapseBtn + '</div>' +
-    '<div class="qa-answer-body"><div class="qa-rich">' + a.content + '</div></div>' +
+    '<div class="qa-answer-body"><div class="qa-rich">' + qaSafeHtml(a.content) + '</div></div>' +
     '<div class="qa-answer-actions">' +
       '<button class="qa-like-btn ' + likeState + '" onclick="qaToggleAnswerLike(' + a.id + ', this)">' + likeIcon + '<span>赞</span><b class="qa-count">' + a.like_count + '</b></button>' +
       '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleAnswerFav(' + a.id + ', this)">' + favIcon + '<span>收藏</span><b class="qa-count">' + a.favorite_count + '</b></button>' +

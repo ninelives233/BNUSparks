@@ -33,6 +33,12 @@
   }
 
   function navToLast(code) {
+    if (!courseTree) {
+      // 首页排行榜/搜索结果可能在课程树尚未加载时点击，等树到达后再定位。
+      _pendingNavToLastCode = code;
+      loadCourseTree();
+      return;
+    }
     const path = findPathByCourseId(code);
     if (!path) return;
     expPath = path;
@@ -158,6 +164,7 @@
   let expPath = [];
   // 文件计数已嵌入课程树响应（fileCount），无需单独请求
   let courseTree = null;  // 从 API 动态加载
+  let _pendingNavToLastCode = null;
   let highlightFileId = null;  // 从排行榜/最近上传跳转时高亮目标文件
   var returnState = null;      // { view:'home'|'rankings'|'recentAll', scrollY } 供"返回"按钮使用
   // 我收藏的课程代码集合（不进课程树缓存，前端单独拉取）
@@ -183,9 +190,30 @@
   }
 
   // ── 从后端加载课程导航树 ──
-  async function loadCourseTree() {
+  var _courseTreePromise = null;
+
+  // 首屏与进入课程浏览器可能同时触发加载，避免同页发送两个 751KB 的树请求。
+  function loadCourseTree() {
+    if (_courseTreePromise) return _courseTreePromise;
+    var promise = _loadCourseTree();
+    _courseTreePromise = promise;
+    promise.then(function() {
+      if (_courseTreePromise === promise) _courseTreePromise = null;
+    }, function() {
+      if (_courseTreePromise === promise) _courseTreePromise = null;
+    });
+    return promise;
+  }
+
+  async function _loadCourseTree() {
     try {
       courseTree = await api('/api/courses/tree/');
+      if (typeof buildSameNameMap === 'function') buildSameNameMap();
+      if (_pendingNavToLastCode && typeof renderExplorer === 'function') {
+        var pendingCode = _pendingNavToLastCode;
+        _pendingNavToLastCode = null;
+        navToLast(pendingCode);
+      }
     } catch(e) {
       console.warn('课程树加载失败，使用备用空树', e);
       courseTree = {};
@@ -208,7 +236,24 @@
 
   // ── 我的课程收藏 ──
   // 登录后加载收藏课程代码集合；星星状态在本地 Set 维护，树缓存不变
-  async function loadCourseFavorites() {
+  var _courseFavoritesPromise = null;
+  var _courseFavoritesLoaded = false;
+
+  function loadCourseFavorites() {
+    if (_courseFavoritesLoaded) return Promise.resolve();
+    if (_courseFavoritesPromise) return _courseFavoritesPromise;
+    var promise = _loadCourseFavorites();
+    _courseFavoritesPromise = promise;
+    promise.then(function() {
+      _courseFavoritesLoaded = true;
+      if (_courseFavoritesPromise === promise) _courseFavoritesPromise = null;
+    }, function() {
+      if (_courseFavoritesPromise === promise) _courseFavoritesPromise = null;
+    });
+    return promise;
+  }
+
+  async function _loadCourseFavorites() {
     try {
       var d = await api('/api/user/course-favorites/');
       _favoritedCourses = new Set((d.items || []).map(i => i.course_code));
@@ -496,4 +541,3 @@
   }
 
   // ── Renderers ──
-
