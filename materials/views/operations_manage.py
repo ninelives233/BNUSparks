@@ -6,8 +6,10 @@ import json
 import re
 import shutil
 from pathlib import Path
+from uuid import uuid4
 
 from django.conf import settings
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -20,6 +22,18 @@ from .utils import (
     _safe_dir_name, require_login, require_role,
 )
 from .operations_helpers import _check_category_scope
+
+
+def _unique_merge_destination(directory, filename):
+    """合并课程时为同名文件生成独立路径，绝不复用已有文件。"""
+    candidate = directory / filename
+    if not candidate.exists():
+        return candidate
+    source = Path(filename)
+    while True:
+        candidate = directory / f"{source.stem}_{uuid4().hex[:8]}{source.suffix}"
+        if not candidate.exists():
+            return candidate
 
 
 @csrf_exempt
@@ -339,46 +353,72 @@ def api_folder_set_course(request, folder_id):
         if old_course.id == target.id:
             return _err("不能合并到自身")
 
-        # 1. 迁移文件归属
-        Material.objects.filter(course=old_course).update(course=target)
+        old_code = old_course.code
+        old_name = old_course.name
+        old_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(old_code)
+        new_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(target.code)
+        old_prefix = _safe_dir_name(old_code) + "/"
+        target_prefix = _safe_dir_name(target.code) + "/"
+        moved_files = []
+        created_new_dir = not new_dir.exists()
 
-        # 2. 迁移物理文件
-        old_dir = Path(settings.MEDIA_ROOT) / old_course.code
-        new_dir = Path(settings.MEDIA_ROOT) / target.code
-        if old_dir.exists() and old_dir != new_dir:
-            new_dir.mkdir(parents=True, exist_ok=True)
-            for f in old_dir.iterdir():
-                if f.is_file():
-                    dest = new_dir / f.name
-                    if not dest.exists():
-                        shutil.move(str(f), str(dest))
-            try:
-                old_dir.rmdir()
-            except OSError:
-                pass
+        try:
+            with transaction.atomic():
+                materials = list(Material.objects.select_for_update().filter(course=old_course))
+                if old_dir != new_dir:
+                    new_dir.mkdir(parents=True, exist_ok=True)
 
-        # 3. 更新 file_path 前缀：{旧code}/ → {target.code}/
-        # v=158：原来 `target.code + 后缀` 丢了斜杠（"TGT001test.pdf"），补回 "/"
-        old_prefix = old_course.code + "/"
-        for m in Material.objects.filter(course=target, file_path__startswith=old_prefix):
-            m.file_path = target.code + "/" + m.file_path[len(old_prefix):]
-            m.save(update_fields=["file_path"])
+                # 每条 Material 单独决定目标路径；同名时生成新文件名，防止两条记录
+                # 最终指向目标课程中同一个物理文件。
+                for material in materials:
+                    if old_dir != new_dir and material.file_path.startswith(old_prefix):
+                        source = Path(settings.MEDIA_ROOT) / material.file_path
+                        destination = _unique_merge_destination(new_dir, source.name)
+                        if source.is_file():
+                            shutil.move(str(source), str(destination))
+                            moved_files.append((destination, source))
+                        material.file_path = target_prefix + destination.name
+                    material.course = target
+                    material.save(update_fields=["course", "file_path"])
 
-        # 4. 更新其他 CourseCategory 节点引用
-        CourseCategory.objects.filter(course=old_course).exclude(id=cat.id).update(course=target)
+                # 目录中无 Material 记录的遗留文件也保留；冲突时同样改名。
+                if old_dir != new_dir and old_dir.is_dir():
+                    for source in list(old_dir.iterdir()):
+                        if source.is_file():
+                            destination = _unique_merge_destination(new_dir, source.name)
+                            shutil.move(str(source), str(destination))
+                            moved_files.append((destination, source))
+                    try:
+                        old_dir.rmdir()
+                    except OSError:
+                        pass
 
-        # 5. 当前节点也指向目标
-        cat.course = target
-        cat.save(update_fields=["course"])
+                CourseCategory.objects.filter(course=old_course).exclude(id=cat.id).update(course=target)
+                cat.course = target
+                cat.save(update_fields=["course"])
+                old_course.delete()
 
-        # 6. 删除旧 Course
-        old_course.delete()
+                FolderOperation.objects.create(
+                    user=request.user, action="set_course", folder_type="",
+                    category_id=cat.id, category_name=cat.name or f"#{cat.id}",
+                    reason=f"合并：将 {old_code}（{old_name}）合并到 {target.code}（{target.name}）",
+                )
+        except Exception:
+            # 数据库回滚不涵盖磁盘，失败时把所有已移动文件恢复到旧目录。
+            for destination, source in reversed(moved_files):
+                try:
+                    if destination.is_file():
+                        source.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.move(str(destination), str(source))
+                except OSError:
+                    pass
+            if created_new_dir:
+                try:
+                    new_dir.rmdir()
+                except OSError:
+                    pass
+            return _err("课程合并失败，文件与数据库均未更改", 500)
 
-        FolderOperation.objects.create(
-            user=request.user, action="set_course", folder_type="",
-            category_id=cat.id, category_name=cat.name or f"#{cat.id}",
-            reason=f"合并：将 {old_course.code}（{old_course.name}）合并到 {target.code}（{target.name}）",
-        )
         return _ok({
             "message": f"已合并到课程 {target.code}",
             "course_code": target.code,

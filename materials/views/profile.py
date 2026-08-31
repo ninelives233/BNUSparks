@@ -79,14 +79,19 @@ def _profile_payload(request, profile):
         "contact_email": profile.contact_email or "",
         "contact_way": profile.contact_way or "",
         "bio": profile.bio or "",
+        "identity_education": profile.identity_education or "",
         "identity_college": profile.identity_college or "",
         "identity_major": profile.identity_major or "",
+        "show_education_public": profile.show_education_public,
         "show_college_public": profile.show_college_public,
         "show_major_public": profile.show_major_public,
         "identity_can_edit": _identity_can_edit(profile),
         "sections_display": sections_display,
         "upload_count": Material.objects.filter(uploader=request.user).count(),
-        "download_count": DownloadRecord.objects.filter(user=request.user).count(),
+        "download_count": DownloadRecord.objects.filter(
+            user=request.user,
+            activity_type__in=(DownloadRecord.ActivityType.LEGACY, DownloadRecord.ActivityType.DOWNLOAD),
+        ).count(),
         "collection_count": Favorite.objects.filter(material__uploader=request.user).count(),
     }
 
@@ -120,23 +125,31 @@ def api_profile(request):
                 _bump_user_public_gen(request.user.id)
                 changed.append("nickname")
 
-        # 身份标签（学院/专业）：仅普通 user 每日限改 1 次，「其他」→ 空
+        # 身份标签必须成组完整提交；老用户可保持空，但主动编辑时需补齐三项。
+        identity_fields = ("identity_education", "identity_college", "identity_major")
         identity_dirty = False
-        for field in ("identity_college", "identity_major"):
-            if field in body and isinstance(body[field], str):
-                val = _normalize_identity(body[field])
-                if val != getattr(profile, field, ""):
-                    if not _identity_can_edit(profile):
-                        return _err("身份标签一天仅可更改一次，请明天再试", 400)
-                    setattr(profile, field, val)
-                    identity_dirty = True
-                    changed.append(field)
+        if any(field in body for field in identity_fields):
+            proposed = {field: getattr(profile, field, "") for field in identity_fields}
+            for field in identity_fields:
+                if field in body and isinstance(body[field], str):
+                    proposed[field] = _normalize_identity(body[field], 10 if field == "identity_education" else 100)
+            if not all(proposed.values()):
+                return _err("培养层次、学院和专业均为必选项", 400)
+            if proposed["identity_education"] not in UserProfile.EducationLevel.values:
+                return _err("培养层次选项无效", 400)
+            dirty_fields = [field for field in identity_fields if proposed[field] != getattr(profile, field, "")]
+            if dirty_fields and not _identity_can_edit(profile):
+                return _err("身份标签一天仅可更改一次，请明天再试", 400)
+            for field in dirty_fields:
+                setattr(profile, field, proposed[field])
+                identity_dirty = True
+                changed.append(field)
         if identity_dirty:
             profile.identity_updated_at = timezone.now()
             changed.append("identity_updated_at")
 
         # 公开资料开关（布尔，不限次；兼容 JSON 布尔与字符串态）
-        for field in ("show_college_public", "show_major_public"):
+        for field in ("show_education_public", "show_college_public", "show_major_public"):
             if field in body:
                 raw = body.get(field)
                 val = raw.strip().lower() in ("true", "1", "yes", "on") if isinstance(raw, str) else bool(raw)
@@ -156,6 +169,12 @@ def api_profile(request):
             profile_fields = [f for f in changed if f != "nickname"]
             if profile_fields:
                 profile.save(update_fields=profile_fields)
+            # v184：身份/公开开关变化 → 公开页缓存代际 +1，即时生效（否则 60s 内返回旧资料）
+            if any(f in changed for f in (
+                "identity_education", "identity_college", "identity_major",
+                "show_education_public", "show_college_public", "show_major_public",
+            )):
+                _bump_user_public_gen(request.user.id)
         # 返回完整资料，前端可直接用 data.nickname 等字段即时刷新，无需 reload
         payload = _profile_payload(request, profile)
         payload["message"] = "已更新" if changed else "无变化"
@@ -256,11 +275,15 @@ def api_my_uploads(request):
 @require_login
 def api_my_downloads(request):
     """GET /api/user/downloads/ — 我的下载记录"""
-    qs = DownloadRecord.objects.filter(user=request.user).order_by("-created_at")
+    qs = DownloadRecord.objects.filter(
+        user=request.user,
+        activity_type__in=(DownloadRecord.ActivityType.LEGACY, DownloadRecord.ActivityType.DOWNLOAD),
+    ).order_by("-created_at")
 
     return _ok([{
         "id": r.id,
         "material_id": r.material_id,
+        "can_open": r.material_id is not None,
         "material_title": r.material_title,
         "file_name": r.file_name,
         "course_code": r.course_code,
@@ -389,7 +412,10 @@ def api_user_public(request, uid):
             "created_at": m.created_at.strftime("%Y-%m-%d") if m.created_at else "",
         })
 
-    # 身份标签（v183）：跟随用户各自的公开开关，未开启或不展示则空串
+    # 身份标签：跟随用户各自的公开开关，未开启或未填写则为空。
+    identity_education = profile.identity_education if (
+        profile.identity_education and profile.show_education_public
+    ) else ""
     identity_college = profile.identity_college if (
         profile.identity_college and profile.show_college_public
     ) else ""
@@ -404,6 +430,7 @@ def api_user_public(request, uid):
             "bio": profile.bio or "",
             "contact_email": contact_email,
             "contact_way": profile.contact_way or "",
+            "education": identity_education,
             "college": identity_college,
             "major": identity_major,
             "upload_count": upload_count,

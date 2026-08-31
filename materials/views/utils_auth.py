@@ -5,7 +5,9 @@ BNU Sparks · 木铎星火 — 认证辅助（JWT 编解码、下载令牌、装
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
+import secrets
 import time
 from functools import wraps
 
@@ -132,6 +134,70 @@ def _verify_download_token(token, expected_file_id, session_key):
         return None
 
 
+def _request_client_ip(request):
+    """取得可信客户端 IP；仅本机反代可提供 X-Real-IP。"""
+    remote = request.META.get("REMOTE_ADDR") or "unknown"
+    if remote in getattr(settings, "TRUSTED_PROXY_IPS", set()):
+        candidate = (request.META.get("HTTP_X_REAL_IP") or "").strip()
+        if candidate:
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
+    return remote
+
+
+def _portable_ip_fingerprint(request):
+    """令牌只保存 IP 的不可逆摘要，不把地址写进 URL。"""
+    value = _request_client_ip(request)
+    digest = hmac.new(
+        settings.SECRET_KEY.encode(), f"download-ip:{value}".encode(), hashlib.sha256,
+    ).hexdigest()
+    return digest[:20]
+
+
+def _generate_portable_download_token(file_id, user_id, request, ttl=90):
+    """为已审核资料生成可跨浏览器移交的短时令牌。
+
+    令牌不依赖 session cookie，因此微信 WebView 移交系统浏览器后仍可使用；
+    同时绑定客户端 IP、90 秒有效期与随机行为编号，兼顾可用性与链接转发风险。
+    """
+    request_id = secrets.token_urlsafe(16)
+    payload = ":".join((
+        str(file_id), str(user_id), _portable_ip_fingerprint(request),
+        str(int(time.time()) + ttl), request_id,
+    ))
+    sig = hmac.new(
+        settings.SECRET_KEY.encode(), f"portable:{payload}".encode(), hashlib.sha256,
+    ).hexdigest()[:24]
+    encoded = base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).rstrip(b"=").decode()
+    return f"p.{encoded}"
+
+
+def _verify_portable_download_token(token, expected_file_id, request):
+    """验证可移交令牌，成功返回 ``(user_id, request_id)``。"""
+    if not token or not token.startswith("p."):
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token[2:] + "==").decode()
+        data, sig = raw.rsplit(":", 1)
+        expected = hmac.new(
+            settings.SECRET_KEY.encode(), f"portable:{data}".encode(), hashlib.sha256,
+        ).hexdigest()[:24]
+        if not hmac.compare_digest(expected, sig):
+            return None
+        file_id, user_id, ip_fingerprint, exp, request_id = data.split(":")
+        if int(exp) < time.time() or int(file_id) != expected_file_id:
+            return None
+        if not hmac.compare_digest(ip_fingerprint, _portable_ip_fingerprint(request)):
+            return None
+        if not request_id or len(request_id) > 64:
+            return None
+        return int(user_id), request_id
+    except Exception:
+        return None
+
+
 # ═══════════════════════════════════════════════════════════════
 # 装饰器 & 基础响应
 # ═══════════════════════════════════════════════════════════════
@@ -156,9 +222,9 @@ def _get_or_create_profile(user):
 
 
 def _normalize_identity(value, max_len=100):
-    """身份字段归一化：去空白、「其他」与空 → 空串，超长截断（v183）"""
+    """身份字段归一化：去空白并截断；「其他」是可统计的真实选项。"""
     val = (value or "").strip()
-    if not val or val == "其他":
+    if not val:
         return ""
     return val[:max_len]
 
@@ -195,5 +261,4 @@ def _ok(data=None, status=200):
 
 def _err(msg, status=400):
     return JsonResponse({"ok": False, "error": msg}, status=status)
-
 

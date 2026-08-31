@@ -20,9 +20,11 @@ from .utils_security import (
     _sanitize_filename_part, _strip_exif,
 )
 from .utils_auth import (
-    _err, _generate_download_token, _get_or_create_profile, _get_user,
+    _err, _generate_download_token, _generate_portable_download_token,
+    _get_or_create_profile, _get_user,
     _identity_can_edit, _jwt_decode, _jwt_encode, _normalize_identity, _ok,
-    _verify_download_token, require_login, require_role,
+    _request_client_ip, _verify_download_token, _verify_portable_download_token,
+    require_login, require_role,
 )
 from .utils_course_tree import (
     _build_tree_node, _clear_category_preload, _college_node_of,
@@ -32,8 +34,8 @@ from .utils_course_tree import (
     _node_contains_course, _node_under, _thread_local, _unique_college_names,
 )
 from .utils_trash import (
-    TRASH_RETENTION, _perform_soft_delete, _purge_expired_trash,
-    _stage_file_to_trash, _trash_dir,
+    TRASH_RETENTION, TrashStageError, _perform_soft_delete, _purge_expired_trash,
+    _restore_staged_file, _stage_file_to_trash, _trash_dir,
 )
 from .utils_quota import (
     DAILY_DOWNLOAD_LIMIT, DAILY_REPORT_LIMIT, ENFORCE_UPLOAD_SCOPE,

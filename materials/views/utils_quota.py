@@ -4,9 +4,10 @@ BNU Sparks · 木铎星火 — 每日配额辅助（下载/举报限额）
 
 from datetime import date
 
+from django.db import transaction
 from django.db.models import F
 
-from ..models import DownloadRecord, UserProfile
+from ..models import DownloadQuotaReservation, DownloadRecord, UserProfile
 
 from .utils_auth import _get_or_create_profile
 
@@ -39,30 +40,49 @@ def _check_download_quota(user, material=None):
         return True, -1, ""
 
     today = date.today()
-    if profile.last_download_date != today:
-        UserProfile.objects.filter(user=user).update(
+    with transaction.atomic():
+        # 跨天重置用条件 UPDATE，两个并发请求中只有第一个能把旧日期改成今天。
+        UserProfile.objects.filter(pk=profile.pk).exclude(last_download_date=today).update(
             daily_download_count=0,
             last_download_date=today,
         )
-        profile.refresh_from_db()
 
-    # 同一天同一文件只计一次数：今天已下载过 → 不重复扣配额，直接放行
-    if material is not None and DownloadRecord.objects.filter(
-        user=user, material_id=material.id, created_at__date=today
-    ).exists():
-        remaining = DAILY_DOWNLOAD_LIMIT - profile.daily_download_count
-        return True, remaining, ""
+        reservation = None
+        created = False
+        if material is not None:
+            # 上线当天兼容迁移前已经写入的 DownloadRecord：补占位但不重复扣数。
+            already_downloaded = DownloadRecord.objects.filter(
+                user=user, material_id=material.id, created_at__date=today,
+                activity_type__in=(
+                    DownloadRecord.ActivityType.LEGACY,
+                    DownloadRecord.ActivityType.DOWNLOAD,
+                ),
+            ).exists()
+            reservation, created = DownloadQuotaReservation.objects.get_or_create(
+                user=user, material=material, quota_date=today,
+            )
+            if not created or already_downloaded:
+                count = UserProfile.objects.filter(pk=profile.pk).values_list(
+                    "daily_download_count", flat=True
+                ).first() or 0
+                return True, max(0, DAILY_DOWNLOAD_LIMIT - count), ""
 
-    if profile.daily_download_count >= DAILY_DOWNLOAD_LIMIT:
-        return False, 0, f"今日下载次数已达上限（{DAILY_DOWNLOAD_LIMIT} 次）"
+        # 计数与上限判断合并成一个条件 UPDATE；即便 SQLite 的
+        # select_for_update 无效，也不会出现两个请求同时越过第 15 次。
+        updated = UserProfile.objects.filter(
+            pk=profile.pk,
+            last_download_date=today,
+            daily_download_count__lt=DAILY_DOWNLOAD_LIMIT,
+        ).update(daily_download_count=F("daily_download_count") + 1)
+        if not updated:
+            if created and reservation is not None:
+                reservation.delete()
+            return False, 0, f"今日下载次数已达上限（{DAILY_DOWNLOAD_LIMIT} 次）"
 
-    UserProfile.objects.filter(user=user).update(
-        daily_download_count=F('daily_download_count') + 1,
-        last_download_date=today,
-    )
-    profile.refresh_from_db()
-    remaining = DAILY_DOWNLOAD_LIMIT - profile.daily_download_count
-    return True, remaining, ""
+        count = UserProfile.objects.filter(pk=profile.pk).values_list(
+            "daily_download_count", flat=True
+        ).first() or 0
+        return True, max(0, DAILY_DOWNLOAD_LIMIT - count), ""
 
 
 def _check_report_quota(user):
@@ -94,5 +114,3 @@ def _check_report_quota(user):
     profile.refresh_from_db()
     remaining = DAILY_REPORT_LIMIT - profile.daily_report_count
     return True, remaining, ""
-
-

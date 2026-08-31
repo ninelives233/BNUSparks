@@ -8,6 +8,49 @@
 
 var _qaEditorTarget = null;   // 当前正在编辑的 contenteditable（插图用）
 
+// 服务端白名单之外再加一层浏览器侧防御：历史脏数据或接口回归也不能直接进入 innerHTML。
+function qaSafeHtml(raw) {
+  var template = document.createElement('template');
+  template.innerHTML = raw || '';
+  var allowed = {
+    p: [], br: [], strong: [], em: [], u: [], s: [], ul: [], ol: [], li: [], h2: [], h3: [],
+    img: ['src', 'alt'], a: ['href', 'title', 'rel', 'target']
+  };
+  var active = { script: true, style: true, iframe: true, object: true, embed: true, svg: true, math: true };
+
+  Array.from(template.content.querySelectorAll('*')).forEach(function(el) {
+    var tag = el.tagName.toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(allowed, tag)) {
+      if (active[tag]) el.remove();
+      else el.replaceWith.apply(el, Array.from(el.childNodes));
+      return;
+    }
+    Array.from(el.attributes).forEach(function(attr) {
+      var name = attr.name.toLowerCase();
+      if (name.indexOf('on') === 0 || allowed[tag].indexOf(name) < 0) el.removeAttribute(attr.name);
+    });
+    ['src', 'href'].forEach(function(name) {
+      if (!el.hasAttribute(name)) return;
+      var value = (el.getAttribute(name) || '').trim();
+      var compact = value.replace(/[\u0000-\u0020\u007f]+/g, '').toLowerCase();
+      var safe = false;
+      if (tag === 'img' && name === 'src') {
+        safe = (value.indexOf('/media/') === 0 && value.indexOf('//') !== 0) ||
+          compact.indexOf('https://') === 0 || compact.indexOf('http://') === 0;
+      } else if (tag === 'a' && name === 'href') {
+        safe = value.indexOf('#') === 0 || (value.indexOf('/') === 0 && value.indexOf('//') !== 0) ||
+          compact.indexOf('https://') === 0 || compact.indexOf('http://') === 0 || compact.indexOf('mailto:') === 0;
+      }
+      if (!safe) el.removeAttribute(name);
+    });
+    if (tag === 'a' && el.hasAttribute('target')) {
+      el.setAttribute('target', '_blank');
+      el.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+  return template.innerHTML;
+}
+
 // 可见字数（等价后端 _strip_html：去标签 + 反转义），用于前端实时统计
 function qaEditorVisibleLen(html) {
   var div = document.createElement('div');
@@ -63,7 +106,7 @@ function buildQaEditor(container, initialHtml, opts) {
         '<button type="button" class="qe-btn" data-cmd="removeFormat" title="清除格式">⌫</button>' +
       '</div>' +
       '<div class="qa-editor-content" contenteditable="true" data-placeholder="' + placeholder + '">' +
-        (initialHtml || '') +
+        qaSafeHtml(initialHtml || '') +
       '</div>' +
       countHtml +
     '</div>';
@@ -114,7 +157,7 @@ function openQaImageModal(editable) {
   overlay.className = 'modal-overlay qe-img-overlay';
   overlay.innerHTML =
     '<div class="modal-card qe-img-card">' +
-      '<button class="modal-close" onclick="this.closest(\'.qe-img-overlay\').remove();unlockScroll()">✕</button>' +
+      '<button type="button" class="modal-close" aria-label="关闭插图窗口" onclick="_removeOverlay(this.closest(\'.qe-img-overlay\'))">✕</button>' +
       '<h3 class="modal-title">插入图片</h3>' +
       '<p class="qa-gate-desc">支持上传 JPG/PNG/WebP/GIF，或粘贴图片链接。</p>' +
       '<label class="qe-img-file-label"><span>选择图片文件</span><input type="file" id="qeImgFile" accept="image/*" class="qe-img-file"></label>' +
@@ -124,6 +167,7 @@ function openQaImageModal(editable) {
     '</div>';
   document.body.appendChild(overlay);
   lockScroll();
+  _pushModalHistory(overlay);
   var urlInput = document.getElementById('qeImgUrl');
   if (urlInput) urlInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitQaImageInsert(); });
 }

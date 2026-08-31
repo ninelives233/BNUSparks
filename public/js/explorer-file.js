@@ -308,6 +308,11 @@
   var _fdPrevSidebar = null; // 保存进入文件详情前的侧边栏状态
 
   function showFileDetail(file) {
+    // 文件详情可从搜索、通知或管理追溯页直接打开；这些入口可能尚未加载 explorer 核心。
+    if (typeof expPath === 'undefined' && typeof ensureFeature === 'function') {
+      ensureFeature('explorer').then(function() { showFileDetail(file); });
+      return;
+    }
     // 保存当前侧边栏状态，保持高亮不丢失
     var al = document.querySelector('.side-nav a.active');
     _fdPrevSidebar = al ? al.getAttribute('data-view') : null;
@@ -800,4 +805,3 @@
     });
   }
   // ── 文件预览 ──
-

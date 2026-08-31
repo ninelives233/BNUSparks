@@ -175,21 +175,52 @@ window.addEventListener('popstate', async function(e) {
 });
 
 // ── 启动 ──
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   // 关闭浏览器原生滚动恢复，滚动位置完全由 JS 显式控制，
   // 避免其与视图切换的平滑滚动竞争导致刷新后页面自动下滑
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-  // 并行触发所有独立请求（串行 800ms → 并行 ~200ms）
-  const treePromise = loadCourseTree();
-  const authPromise = checkAuth().then(() => {
-    loadNotifCount();
-    if (typeof loadCourseFavorites === 'function') loadCourseFavorites();
-    if (typeof isMgmtActive === 'function') document.body.classList.toggle('mgmt-active', isMgmtActive());
-  });
-  const statsPromise = loadStats();
 
-  // 树加载后构建同名映射
-  treePromise.then(() => buildSameNameMap());
+  // 先确定要恢复的视图。公共页面不再等待认证、统计或课程树。
+  var saved = null;
+  var route = parseRoute(location.pathname);
+  if (route) {
+    // 保留动态路由的全部参数（尤其 qaCompose 的 type/action/qid/aid）。
+    saved = Object.assign({ _bnusparks: true }, route);
+  } else {
+    try { saved = JSON.parse(sessionStorage.getItem('bnusparks_view')); } catch(e) {}
+  }
+  var initialView = saved && saved._bnusparks ? saved.view : 'home';
+  var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose'];
+  var needsAuth = authViews.indexOf(initialView) !== -1;
+
+  var viewFeaturePromise = Promise.resolve();
+  if (initialView === 'explorer' || initialView === 'newCourse' || initialView === 'fileDetail') {
+    viewFeaturePromise = ensureFeature('explorer');
+  } else if (initialView === 'qa' || initialView === 'qaCompose') {
+    viewFeaturePromise = ensureFeature('qa');
+  } else if (initialView === 'admin') {
+    viewFeaturePromise = ensureFeature('admin');
+  }
+
+  // 课程树只在首次视图确实需要时加载；进入 explorer 时 renderExplorer 会兜底按需加载。
+  const treePromise = initialView === 'explorer'
+    ? viewFeaturePromise.then(() => loadCourseTree()).then(() => buildSameNameMap())
+    : viewFeaturePromise;
+  const authPromise = checkAuth().then(() => {
+    if (currentUser) loadNotifCount();
+    if (typeof isMgmtActive === 'function') document.body.classList.toggle('mgmt-active', isMgmtActive());
+    // 课程树先到时可能以访客状态渲染；认证完成后补一次权限/身份相关渲染。
+    if (initialView === 'explorer') {
+      if (currentUser && typeof loadCourseFavorites === 'function') {
+        loadCourseFavorites().then(function() {
+          var loadedExplorer = document.getElementById('explorerView');
+          if (loadedExplorer && loadedExplorer.classList.contains('active')) renderExplorer();
+        });
+      }
+      var explorer = document.getElementById('explorerView');
+      if (explorer && explorer.classList.contains('active')) renderExplorer();
+    }
+  });
 
   // Admin 侧栏链接基于 token 存储立即显示，不等待 auth API
   var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -230,73 +261,67 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupSearch();
 
-  // 等待关键数据就绪后再恢复视图
-  await Promise.all([treePromise, authPromise, statsPromise]).catch(function(){});
-
-  // 恢复刷新前的视图：URL 路由优先（可分享深链直达），sessionStorage 兜底（旧逻辑）
-  var saved = null;
-  var route = parseRoute(location.pathname);
-  if (route) {
-    saved = { _bnusparks: true, view: route.view };
-    if (route.expPath && route.expPath.length) saved.expPath = route.expPath;
-    if (route.userId) saved.userId = route.userId;
-    if (route.fileId) saved.fileId = route.fileId;
-  } else {
-    try { saved = JSON.parse(sessionStorage.getItem('bnusparks_view')); } catch(e) {}
-  }
-  if (saved && saved._bnusparks) {
-    _suppressingPushState = true;
-    // 兜底恢复时顺带把地址栏写成对应路径，让 URL 与视图一致
-    history.replaceState(saved, '', routeToPath(saved.view, saved) || '');
-    switch (saved.view) {
-      case 'home': showHome(saved.scrollY); break;
-      case 'explorer':
-        expPath = saved.expPath || ['专业课'];
-        renderExplorer();
-        switchView('explorer', true);
-        updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
-        if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
-        break;
-      // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
-      // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
-      case 'rankings': showTopDownloaded(); break;
-      case 'qa': showQa(); break;
-      case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
-      case 'leaderboard': showLeaderboard(); break;
-      case 'recentAll': showRecentAll(); break;
-      case 'profile': showProfile(); break;
-      case 'notif': showNotifFull(); break;
-      case 'admin': showAdminPanel(); break;
-      case 'about': showAbout(saved.aboutSection || 'introduction'); break;
-      case 'tutorial': showTutorial(); break;
-      case 'announcements': showAnnouncements(); break;
-      case 'broad': showBroad(); break;
-      case 'myuploads': showMyUploadsPage(); break;
-      case 'mydownloads': showMyDownloadsPage(); break;
-      case 'myfavorites': showMyFavoritesPage(); break;
-      case 'fileDetail':
-        // 尝试从文件缓存恢复，否则从 API 获取
-        if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
-          showFileDetail(window._fileLookup[saved.fileId]);
-        } else if (saved.fileId) {
-          showFileDetail({ id: saved.fileId, title: '' });
-        } else {
-          showHome();
-        }
-        break;
-      case 'userPublic': showUserPublic(saved.userId); break;
-      case 'newCourse': renderNewCourseView(); break;
-      default: showHome();
+  function renderInitialView() {
+    // 恢复刷新前的视图：URL 路由优先（可分享深链直达），sessionStorage 兜底（旧逻辑）
+    if (saved && saved._bnusparks) {
+      _suppressingPushState = true;
+      // 兜底恢复时顺带把地址栏写成对应路径，让 URL 与视图一致
+      history.replaceState(saved, '', routeToPath(saved.view, saved) || '');
+      switch (saved.view) {
+        case 'home': showHome(saved.scrollY); break;
+        case 'explorer':
+          expPath = saved.expPath || ['专业课'];
+          renderExplorer();
+          switchView('explorer', true);
+          updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
+          if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
+          break;
+        // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
+        // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
+        case 'rankings': showTopDownloaded(); break;
+        case 'qa': showQa(); break;
+        case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
+        case 'leaderboard': showLeaderboard(); break;
+        case 'recentAll': showRecentAll(); break;
+        case 'profile': showProfile(); break;
+        case 'notif': showNotifFull(); break;
+        case 'admin': showAdminPanel(); break;
+        case 'about': showAbout(saved.aboutSection || 'introduction'); break;
+        case 'tutorial': showTutorial(); break;
+        case 'announcements': showAnnouncements(); break;
+        case 'broad': showBroad(); break;
+        case 'myuploads': showMyUploadsPage(); break;
+        case 'mydownloads': showMyDownloadsPage(); break;
+        case 'myfavorites': showMyFavoritesPage(); break;
+        case 'fileDetail':
+          // 尝试从文件缓存恢复，否则从 API 获取
+          if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
+            showFileDetail(window._fileLookup[saved.fileId]);
+          } else if (saved.fileId) {
+            showFileDetail({ id: saved.fileId, title: '' });
+          } else {
+            showHome();
+          }
+          break;
+        case 'userPublic': showUserPublic(saved.userId); break;
+        case 'newCourse': renderNewCourseView(); break;
+        default: showHome();
+      }
+      _suppressingPushState = false;
+      return;
     }
-    _suppressingPushState = false;
-    return;
+    // 未知路径深链：既无路由也无保存视图 → 地址栏对齐根路径再显示首页
+    if (location.pathname !== '/' && !/^\/(verify-email|reset-password)\//.test(location.pathname)) {
+      history.replaceState(null, '', '/');
+    }
+    // 默认首页
+    showHome();
   }
-  // 未知路径深链：既无路由也无保存视图 → 地址栏对齐根路径再显示首页
-  if (location.pathname !== '/' && !/^\/(verify-email|reset-password)\//.test(location.pathname)) {
-    history.replaceState(null, '', '/');
-  }
-  // 默认首页
-  showHome();
+
+  // 只有课程树或受保护视图需要等待；首页/静态页在此之前即可交互。
+  Promise.all([treePromise, needsAuth ? authPromise : Promise.resolve()])
+    .then(renderInitialView)
+    .catch(function() { renderInitialView(); });
 
   // 每 20 秒刷新通知徽章 + 切回页面/聚焦时立即刷新（v=148 红点同步）
   setInterval(function() {

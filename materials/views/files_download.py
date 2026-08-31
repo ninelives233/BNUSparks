@@ -21,6 +21,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.http import FileResponse, HttpResponse
 from django.conf import settings
+from django.db import IntegrityError, transaction
 from django.db.models import F
 
 # 良性循环引用：files 为薄 facade，本模块经它读取可被测试 mock 的
@@ -29,7 +30,8 @@ from django.db.models import F
 from . import files as _facade
 from .utils import (
     _err, _ok, _get_user,
-    _generate_download_token, _verify_download_token,
+    _generate_download_token, _generate_portable_download_token,
+    _verify_download_token, _verify_portable_download_token,
     _check_download_quota, _check_moderator_access,
     require_login,
     Material, DownloadRecord,
@@ -40,10 +42,8 @@ from .utils import (
 def api_download_token(request, file_id):
     """GET /api/files/<id>/download-token/ — 生成短时下载令牌
 
-    v=167 安全加固：
-      1. 签发前做下载授权校验——未批准资料仅上传者/辖区管理员可取令牌，
-         普通第三方拿不到未批准文件的下载令牌；
-      2. 令牌绑定签发时的会话键（session_key）——转发到其他浏览器即失效。
+    已审核资料签发 90 秒、IP 绑定的可移交令牌，解决微信 WebView 把下载
+    交给系统浏览器后 session cookie 丢失的问题；待审核资料仍使用会话绑定令牌。
     """
     if request.method != "GET":
         return _err("仅支持 GET", 405)
@@ -57,12 +57,16 @@ def api_download_token(request, file_id):
                 _check_moderator_access(request.user, material)
         except Exception:
             return _err("该资料未通过审核，暂不可下载", 403)
-    # 确保存在会话：写入 session 让浏览器拿到 sessionid cookie，下载端才能比对会话键
+    if material.review_status == "approved":
+        token = _generate_portable_download_token(file_id, request.user.id, request)
+        return _ok({"token": token, "handoff": True})
+
+    # 非公开资料仍必须由同一浏览器会话消费令牌，不能跨浏览器移交。
     request.session.set_expiry(120)
     request.session["dt"] = 1
     request.session.save()
     token = _generate_download_token(file_id, request.user.id, request.session.session_key)
-    return _ok({"token": token})
+    return _ok({"token": token, "handoff": False})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -98,7 +102,15 @@ def _serve_file_response(request, abs_path, *, display_filename, inline=False, p
     preview_cache=True：文件在 MEDIA_ROOT 上级（data/.pdf_cache/），走 /protected-preview/。
     防越界：abs_path 必须 resolve 后仍位于对应根目录内，否则 400。
     """
-    abs_path = Path(abs_path)
+    root = Path(settings.MEDIA_ROOT).parent if preview_cache else Path(settings.MEDIA_ROOT)
+    try:
+        # 必须在选择 X-Accel / FileResponse 之前统一校验。resolve() 同时折叠 ``..``
+        # 并解析符号链接，防止开发模式或 X-Accel 关闭时绕过生产分支的路径边界。
+        abs_path = Path(abs_path).resolve()
+        rel = abs_path.relative_to(root.resolve()).as_posix()
+    except (OSError, RuntimeError, ValueError):
+        return _err("非法文件路径", 400)
+
     disk_name = abs_path.name
     ctype = mimetypes.guess_type(disk_name)[0] or "application/octet-stream"
     # 内联预览只允许 PDF/图片；可执行/活动内容一律降级为下载式 MIME
@@ -106,12 +118,7 @@ def _serve_file_response(request, abs_path, *, display_filename, inline=False, p
         ctype = "application/octet-stream"
 
     if getattr(settings, "USE_X_ACCEL", False):
-        root = Path(settings.MEDIA_ROOT).parent if preview_cache else Path(settings.MEDIA_ROOT)
         prefix = "/protected-preview/" if preview_cache else "/protected/"
-        try:
-            rel = abs_path.resolve().relative_to(root.resolve()).as_posix()
-        except ValueError:
-            return _err("非法文件路径", 400)  # 越界（含 .. 逃逸）即拒绝
         resp = HttpResponse()
         # 百分号编码 rel：含中文/全角字符的文件名若原样写入响应头，gunicorn(WSGI)
         # 会按 RFC 2047 编码成 `=?utf-8?q?...?=`，nginx 无法解析该路径 → 内部 404
@@ -133,19 +140,37 @@ def _serve_file_response(request, abs_path, *, display_filename, inline=False, p
     return resp
 
 
-def _increment_download(user, material, file_id):
-    """下载计数（F() 原子递增）+ 下载留痕，同步执行（X-Accel 前完成）。"""
-    Material.objects.filter(id=file_id).update(download_count=F('download_count') + 1)
+def _record_file_activity(user, material, file_id, activity_type, request_id=None):
+    """幂等写入访问流水；仅正式下载增加资料下载量。
+
+    系统浏览器可能重放微信移交的同一 URL。``request_id`` 的唯一约束保证
+    同一令牌只产生一条流水、一次正式下载计数。
+    """
     try:
-        DownloadRecord.objects.create(
-            user=user, material=material,
-            course_code=material.course.code if material.course_id else "",
-            course_name=material.course.name if material.course_id else "",
-            material_title=material.title,
-            file_name=material.file_name,
-        )
+        with transaction.atomic():
+            DownloadRecord.objects.create(
+                user=user, material=material,
+                course_code=material.course.code if material.course_id else "",
+                course_name=material.course.name if material.course_id else "",
+                material_title=material.title,
+                file_name=material.file_name,
+                activity_type=activity_type,
+                request_id=request_id,
+            )
+            if activity_type == DownloadRecord.ActivityType.DOWNLOAD:
+                Material.objects.filter(id=file_id).update(download_count=F("download_count") + 1)
+    except IntegrityError:
+        return False
     except Exception:
-        pass
+        return False
+    return True
+
+
+def _increment_download(user, material, file_id):
+    """旧 facade 兼容出口：无行为编号的正式下载留痕。"""
+    return _record_file_activity(
+        user, material, file_id, DownloadRecord.ActivityType.DOWNLOAD,
+    )
 
 
 def api_file_download(request, file_id):
@@ -157,13 +182,21 @@ def api_file_download(request, file_id):
         return _err("文件不存在", 404)
 
     user = _get_user(request)
-    if user is None:
-        dtoken = request.GET.get("dtoken")
-        if dtoken:
-            # v=167：令牌绑定签发会话，会话键不匹配（转发/无 cookie）即验证失败
+    activity_request_id = None
+    dtoken = request.GET.get("dtoken")
+    if dtoken:
+        portable = _verify_portable_download_token(dtoken, file_id, request)
+        if portable:
+            uid, activity_request_id = portable
+            if user is None:
+                user = User.objects.filter(id=uid, is_active=True).first()
+            elif user.id != uid:
+                return _err("下载令牌与当前用户不匹配", 403)
+        elif user is None:
+            # 待审核资料的旧式令牌仍绑定签发会话。
             uid = _verify_download_token(dtoken, file_id, request.session.session_key)
             if uid:
-                user = User.objects.filter(id=uid).first()
+                user = User.objects.filter(id=uid, is_active=True).first()
     if user is None:
         return _err("请先登录后再下载", 401)
 
@@ -190,6 +223,10 @@ def api_file_download(request, file_id):
                 n = max(1, min(int(max_pages), 50))
                 cache_path = _facade._pdf_preview_cache_path(material.id, file_path, n)
                 if cache_path and cache_path.exists():
+                    _record_file_activity(
+                        user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
+                        activity_request_id,
+                    )
                     return _serve_file_response(request, cache_path,
                                                 display_filename=display, inline=True, preview_cache=True)
                 reader = PdfReader(file_path)
@@ -207,18 +244,25 @@ def api_file_download(request, file_id):
                         with open(tmp, 'wb') as f:
                             f.write(buf.getvalue())
                         os.replace(tmp, cache_path)
+                        _record_file_activity(
+                            user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
+                            activity_request_id,
+                        )
                         return _serve_file_response(request, cache_path,
                                                     display_filename=display, inline=True, preview_cache=True)
                     except OSError:
                         pass  # 缓存写入失败 → 降级为完整文件预览（计入配额）
             except Exception:
                 pass  # 解析失败 → 降级为完整文件预览（计入配额）
-        # 完整文件预览（图片/PPT/文本/切页失败降级）→ 与下载同权：扣配额、计数，
-        # 堵住原先 preview=1 绕过每日下载限额的洞
+        # 完整文件预览（图片/PPT/文本/切页失败降级）仍占当天不同文件配额，
+        # 但只记为“预览”，不再膨胀正式下载量。
         allowed, remaining, msg = _check_download_quota(user, material)
         if not allowed:
             return _err(msg, 429)
-        _increment_download(user, material, file_id)
+        _record_file_activity(
+            user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
+            activity_request_id,
+        )
         return _serve_file_response(request, file_path,
                                     display_filename=display, inline=True, preview_cache=False)
 
@@ -226,6 +270,9 @@ def api_file_download(request, file_id):
     allowed, remaining, msg = _check_download_quota(user, material)
     if not allowed:
         return _err(msg, 429)
-    _increment_download(user, material, file_id)
+    _record_file_activity(
+        user, material, file_id, DownloadRecord.ActivityType.DOWNLOAD,
+        activity_request_id,
+    )
     return _serve_file_response(request, file_path,
                                 display_filename=display, inline=False, preview_cache=False)

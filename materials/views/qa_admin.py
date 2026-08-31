@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from PIL import Image as PILImage
@@ -14,6 +15,7 @@ from PIL import Image as PILImage
 from ..models import (
     Notification,
     QaAnswer,
+    QaConfig,
     QaDeleteRequest,
     QaEditHistory,
     QaQuestion,
@@ -51,6 +53,32 @@ def _pinned_count():
     return QaQuestion.objects.filter(status=QaQuestion.Status.PUBLISHED, is_pinned=True).count()
 
 
+def _lock_qa_pin_gate():
+    """串行化“统计置顶数 → 写入置顶”的临界区。
+
+    PostgreSQL 会锁定单例配置行；SQLite 的 no-op UPDATE 会先取得数据库写锁。
+    因而多个 Gunicorn worker 不能同时看到“还剩最后一个名额”后都写入。
+    """
+    cfg, _ = QaConfig.objects.get_or_create(pk=1)
+    QaConfig.objects.filter(pk=cfg.pk).update(user_open=F("user_open"))
+
+
+def _set_question_pin_state(question_id, pin):
+    """原子设置问题置顶状态，返回 (是否允许, 是否改变, pinned_at)。"""
+    with transaction.atomic():
+        _lock_qa_pin_gate()
+        current = QaQuestion.objects.only("is_pinned", "pinned_at").get(id=question_id)
+        if current.is_pinned == pin:
+            return True, False, current.pinned_at
+        if pin and _pinned_count() >= _QA_PIN_LIMIT:
+            return False, False, current.pinned_at
+        pinned_at = timezone.now() if pin else None
+        QaQuestion.objects.filter(id=question_id).update(
+            is_pinned=pin, pinned_at=pinned_at,
+        )
+        return True, True, pinned_at
+
+
 @csrf_exempt
 @require_qa_manager
 def api_qa_admin_question_create(request):
@@ -76,16 +104,20 @@ def api_qa_admin_question_create(request):
     if not t1 or not t2:
         return _err("请选择分类标签", 400)
 
-    pinned_at = None
     if is_pinned:
-        if _pinned_count() >= _QA_PIN_LIMIT:
-            return _err("置顶已满，请先取消其他置顶", 400)
-        pinned_at = timezone.now()
-
-    q = QaQuestion.objects.create(
-        title=title, content=_sanitize_html(content), author=request.user,
-        tag_l1=t1, tag_l2=t2, is_pinned=is_pinned, pinned_at=pinned_at,
-    )
+        with transaction.atomic():
+            _lock_qa_pin_gate()
+            if _pinned_count() >= _QA_PIN_LIMIT:
+                return _err("置顶已满，请先取消其他置顶", 400)
+            q = QaQuestion.objects.create(
+                title=title, content=_sanitize_html(content), author=request.user,
+                tag_l1=t1, tag_l2=t2, is_pinned=True, pinned_at=timezone.now(),
+            )
+    else:
+        q = QaQuestion.objects.create(
+            title=title, content=_sanitize_html(content), author=request.user,
+            tag_l1=t1, tag_l2=t2, is_pinned=False, pinned_at=None,
+        )
     return _ok({"id": q.id})
 
 
@@ -141,15 +173,12 @@ def api_qa_admin_question_update(request, qid):
             changed.append("tag_l2")
     if "is_pinned" in data:
         pin = bool(data["is_pinned"])
-        if pin and not q.is_pinned:
-            if _pinned_count() >= _QA_PIN_LIMIT:
-                return _err("置顶已满，请先取消其他置顶", 400)
-            q.is_pinned = True
-            q.pinned_at = timezone.now()
-            changed += ["is_pinned", "pinned_at"]
-        elif not pin and q.is_pinned:
-            q.is_pinned = False
-            q.pinned_at = None
+        allowed, pin_changed, pinned_at = _set_question_pin_state(q.id, pin)
+        if not allowed:
+            return _err("置顶已满，请先取消其他置顶", 400)
+        q.is_pinned = pin
+        q.pinned_at = pinned_at
+        if pin_changed:
             changed += ["is_pinned", "pinned_at"]
 
     if not changed:

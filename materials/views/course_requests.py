@@ -22,9 +22,10 @@ from .utils import (
     _find_existing_course, _find_leaf_under_parent,
 )
 from .operations import _can_create_under
+from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
 from ..models import (
     Course, CourseCategory, CourseCreationRequest, UserProfile, Material,
-    Notification, FolderOperation,
+    MaterialType, Notification, FolderOperation,
 )
 
 
@@ -384,49 +385,65 @@ def api_course_request_upload_file(request, request_id):
     clean_title = _sanitize_filename_part(title) or _sanitize_filename_part(Path(uploaded_file.name).stem) or "file"
     safe_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
 
+    # 元数据先校验，避免无效 FK 在物理文件写完后才返回 500/400。
+    mtid = None
+    if material_type_id and material_type_id.isdigit():
+        mtid = int(material_type_id)
+        if not MaterialType.objects.filter(id=mtid).exists():
+            return _err("资料类型不存在", 400)
+    elif material_type_id:
+        return _err("资料类型不存在", 400)
+
     if is_auto_upload:
         # 已自动建课：随附文件直接归位到新课程文件夹（course 已绑定，进入正常审核队列）
         course, _, _ = _resolve_course_or_err(
             req.course_code, req.course_name, req.course_type,
             req.college if req.course_type == CourseCreationRequest.Type.MAJOR else None,
         )
-        save_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(course.code)
-        save_dir.mkdir(parents=True, exist_ok=True)
+        course_dir = _safe_dir_name(course.code)
+        save_dir = Path(settings.MEDIA_ROOT) / course_dir
         material_course = course
-        rel_path = f"{course.code}/{safe_name}"
+        rel_path = f"{course_dir}/{safe_name}"
         commit_rel = rel_path
     else:
         save_dir = Path(settings.MEDIA_ROOT) / "requests" / f"req_{req.id}"
-        save_dir.mkdir(parents=True, exist_ok=True)
         material_course = None
         rel_path = f"requests/req_{req.id}/{safe_name}"
         commit_rel = rel_path
 
-    with open(save_dir / safe_name, "wb") as f:
-        for chunk in uploaded_file.chunks():
-            f.write(chunk)
-    _strip_exif(save_dir / safe_name)
-    file_size = (save_dir / safe_name).stat().st_size
+    final_path = save_dir / safe_name
+    try:
+        file_size = _atomic_write_chunks(uploaded_file, final_path)
+        _strip_exif(final_path)
+        file_size = final_path.stat().st_size
+    except UploadTooLarge as exc:
+        _remove_uploaded_file(final_path)
+        return _err(str(exc), 413)
+    except OSError:
+        _remove_uploaded_file(final_path)
+        return _err("文件保存失败，请稍后重试", 500)
 
-    material = Material.objects.create(
-        course=material_course,
-        creation_request=req,
-        title=title,
-        description=description,
-        teacher=teacher,
-        material_type_id=(
-            int(material_type_id) if material_type_id and material_type_id.isdigit() else None
-        ),
-        file_name=uploaded_file.name,
-        file_path=rel_path,
-        file_size=file_size,
-        file_type=Path(uploaded_file.name).suffix.lstrip(".").lower() or "other",
-        uploader=req.user,
-        uploader_name=req.user.first_name or req.user.username,
-        review_status="pending",
-        is_approved=False,
-        assigned_moderator=req.assigned_moderator,
-    )
+    try:
+        material = Material.objects.create(
+            course=material_course,
+            creation_request=req,
+            title=title,
+            description=description,
+            teacher=teacher,
+            material_type_id=mtid,
+            file_name=uploaded_file.name,
+            file_path=rel_path,
+            file_size=file_size,
+            file_type=Path(uploaded_file.name).suffix.lstrip(".").lower() or "other",
+            uploader=req.user,
+            uploader_name=req.user.first_name or req.user.username,
+            review_status="pending",
+            is_approved=False,
+            assigned_moderator=req.assigned_moderator,
+        )
+    except Exception:
+        _remove_uploaded_file(final_path)
+        return _err("资料保存失败，请稍后重试", 500)
 
     try:
         from git_storage import commit_file
@@ -434,13 +451,16 @@ def api_course_request_upload_file(request, request_id):
     except Exception:
         pass
 
-    _create_notification(
-        recipient=req.user,
-        type=Notification.Type.REPORT,
-        title="资料已提交，等待审核",
-        message=f"随新建课程申请上传的资料「{title}」已提交，审核通过后即可被下载。",
-        course_code=req.course_code, course_name=req.course_name,
-    )
+    try:
+        _create_notification(
+            recipient=req.user,
+            type=Notification.Type.REPORT,
+            title="资料已提交，等待审核",
+            message=f"随新建课程申请上传的资料「{title}」已提交，审核通过后即可被下载。",
+            course_code=req.course_code, course_name=req.course_name,
+        )
+    except Exception:
+        pass
     return _ok({"id": material.id, "title": material.title, "file_size": file_size})
 
 
@@ -573,16 +593,16 @@ def _approve_request(req, reviewer):
     返回 (new_cat, None) 成功 / (None, _err响应) 失败，便于调用方拿到新目录跳转。
     v=165：课程已存在时复用为「壳」；目标位置已有同课程叶子时不再重复创建节点。
     """
+    parent = req.general_category if req.course_type == CourseCreationRequest.Type.GENERAL else req.target_category
+    if parent is None:
+        return None, _err("目标位置缺失，无法创建课程文件夹")
+
     course, err, created = _resolve_course_or_err(
         req.course_code, req.course_name, req.course_type,
         req.college if req.course_type == CourseCreationRequest.Type.MAJOR else None,
     )
     if err:
         return None, _err(err)
-
-    parent = req.general_category if req.course_type == CourseCreationRequest.Type.GENERAL else req.target_category
-    if parent is None:
-        return None, _err("目标位置缺失，无法创建课程文件夹")
 
     linked = not created
     existing_leaf = _find_leaf_under_parent(parent, course)
@@ -614,52 +634,82 @@ def _approve_request(req, reviewer):
     # 随附材料全部归位到 {course.code}/，赋 course → 进入正常文件审核队列。
     # 归位 ALL 而非仅 pending：若版主在批准申请前先单独批准了随附文件，
     # 该文件若留在 NULL-course 会变成「已通过却无处可下载」的孤魂文件。
-    for m in req.materials.all():
+    moved_files = []
+    course_dir = _safe_dir_name(course.code)
+    new_dir = Path(settings.MEDIA_ROOT) / course_dir
+
+    def _restore_moves():
+        for moved_path, original_path in reversed(moved_files):
+            try:
+                if moved_path.is_file():
+                    original_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(moved_path), str(original_path))
+            except OSError:
+                pass
         try:
-            old = Path(settings.MEDIA_ROOT) / m.file_path
-            if old.exists():
-                ext = Path(m.file_name).suffix
-                clean_title = _sanitize_filename_part(m.title) or "file"
-                new_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
-                new_dir = Path(settings.MEDIA_ROOT) / _safe_dir_name(course.code)
-                new_dir.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(old), str(new_dir / new_name))
-                m.file_path = f"{course.code}/{new_name}"
-                try:
-                    from git_storage import commit_file
-                    commit_file(f"{course.code}/{new_name}")
-                except Exception:
-                    pass
+            new_dir.rmdir()
+        except OSError:
+            pass
+
+    try:
+        for m in req.materials.select_for_update():
+            old_path = Path(settings.MEDIA_ROOT) / m.file_path
+            if not old_path.is_file():
+                raise FileNotFoundError(f"随附资料文件缺失：{m.file_path}")
+            ext = Path(m.file_name).suffix
+            clean_title = _sanitize_filename_part(m.title) or "file"
+            new_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
+            new_dir.mkdir(parents=True, exist_ok=True)
+            new_path = new_dir / new_name
+            shutil.move(str(old_path), str(new_path))
+            moved_files.append((new_path, old_path))
+
+            m.file_path = f"{course_dir}/{new_name}"
             m.course = course
             m.save(update_fields=["course", "file_path"])
-        except Exception:
-            m.course = course
-            m.save(update_fields=["course"])
 
-    req.status = CourseCreationRequest.Status.APPROVED
-    req.reviewed_by = reviewer
-    req.reviewed_at = timezone.now()
-    req.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+            # Git 镜像只在数据库事务真正提交后执行，避免回滚后提交幽灵路径。
+            rel_path = m.file_path
+            def _commit(rel=rel_path):
+                try:
+                    from git_storage import commit_file
+                    commit_file(rel)
+                except Exception:
+                    pass
+            transaction.on_commit(_commit)
+    except Exception:
+        # 数据库事务不会回滚 shutil.move；逆序恢复已移动文件，保证“全成或全不成”。
+        _restore_moves()
+        raise
 
-    if linked:
-        _create_notification(
-            recipient=req.user,
-            type=Notification.Type.OPERATION,
-            title="新建课程申请已通过（已链接既有课程）",
-            message=(
-                f"你的申请「{req.course_name}」已通过。该课程已存在（{req.course_code}），"
-                "已链接到既有课程目录，未新建独立文件夹；你随附的资料已归入该课程。"
-            ),
-            course_code=req.course_code, course_name=req.course_name,
-        )
-    else:
-        _create_notification(
-            recipient=req.user,
-            type=Notification.Type.OPERATION,
-            title="新建课程申请已通过",
-            message=f"你的申请「{req.course_name}」已通过，课程文件夹已创建。",
-            course_code=req.course_code, course_name=req.course_name,
-        )
+    try:
+        req.status = CourseCreationRequest.Status.APPROVED
+        req.reviewed_by = reviewer
+        req.reviewed_at = timezone.now()
+        req.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+
+        if linked:
+            _create_notification(
+                recipient=req.user,
+                type=Notification.Type.OPERATION,
+                title="新建课程申请已通过（已链接既有课程）",
+                message=(
+                    f"你的申请「{req.course_name}」已通过。该课程已存在（{req.course_code}），"
+                    "已链接到既有课程目录，未新建独立文件夹；你随附的资料已归入该课程。"
+                ),
+                course_code=req.course_code, course_name=req.course_name,
+            )
+        else:
+            _create_notification(
+                recipient=req.user,
+                type=Notification.Type.OPERATION,
+                title="新建课程申请已通过",
+                message=f"你的申请「{req.course_name}」已通过，课程文件夹已创建。",
+                course_code=req.course_code, course_name=req.course_name,
+            )
+    except Exception:
+        _restore_moves()
+        raise
     return new_cat, None
 
 
@@ -677,8 +727,13 @@ def api_moderation_course_request_approve(request, request_id):
     if req.status == CourseCreationRequest.Status.APPROVED:
         return _err("该申请已通过")
 
-    with transaction.atomic():
-        _cat, err = _approve_request(req, request.user)
+    try:
+        with transaction.atomic():
+            _cat, err = _approve_request(req, request.user)
+            if err is not None:
+                transaction.set_rollback(True)
+    except Exception:
+        return _err("随附资料迁移失败，申请未批准；请检查文件后重试", 500)
     if err is not None:
         return err
     return _ok({"id": req.id, "status": req.status})

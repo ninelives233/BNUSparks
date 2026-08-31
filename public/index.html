@@ -4,28 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/tokens.css?v=183">
-<link rel="stylesheet" href="/static/css/base.css?v=183">
-<link rel="stylesheet" href="/static/css/admin.css?v=183">
-<link rel="stylesheet" href="/static/css/user.css?v=183">
-<link rel="stylesheet" href="/static/css/files.css?v=183">
-<link rel="stylesheet" href="/static/css/course.css?v=183">
-<link rel="stylesheet" href="/static/css/announcement.css?v=183">
-<link rel="stylesheet" href="/static/css/qa.css?v=183">
-<link rel="stylesheet" href="/static/css/components.css?v=183">
+<link rel="stylesheet" href="/static/css/tokens.css?v=186">
+<link rel="stylesheet" href="/static/css/base.css?v=191">
+<link rel="stylesheet" href="/static/css/user.css?v=189">
+<link rel="stylesheet" href="/static/css/files.css?v=195">
+<link rel="stylesheet" href="/static/css/announcement.css?v=186">
+<link rel="stylesheet" href="/static/css/components.css?v=193">
 </head>
 <body>
+
+<a class="skip-link" href="#mainContent">跳到主要内容</a>
 
 <!-- ═══ Header ═══ -->
 <header class="site-header" id="siteHeader">
   <div class="header-inner">
-    <a href="javascript:void(0)" class="header-logo-area"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
-    <button class="menu-toggle" id="menuOpen" aria-label="菜单">☰</button>
+    <a href="/" class="header-logo-area" onclick="event.preventDefault();showHome()"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
+    <button type="button" class="menu-toggle" id="menuOpen" aria-label="打开菜单">☰</button>
     <div class="search-hero-wrap">
       <!-- Chrome 自动填充欺骗 -->
       <input type="text" style="display:none" aria-hidden="true" tabindex="-1">
       <input type="password" style="display:none" aria-hidden="true" tabindex="-1">
-      <div class="search-box"><input type="text" placeholder="搜索课程、资料、课程代码…" autocomplete="off"><button aria-label="搜索">→</button></div>
+      <div class="search-box"><input type="text" aria-label="搜索课程、资料或课程代码" placeholder="搜索课程、资料、课程代码…" autocomplete="off"><button type="button" aria-label="搜索">→</button></div>
     </div>
     <div class="header-login" id="headerLogin"></div>
   </div>
@@ -33,7 +32,7 @@
 
 <!-- ═══ Mobile Drawer ═══ -->
 <div class="mobile-drawer" id="mobileDrawer">
-  <button class="close-btn" id="menuClose" aria-label="关闭">✕</button>
+  <button type="button" class="close-btn" id="menuClose" aria-label="关闭菜单">✕</button>
   <div class="drawer-brand">
     <span class="db-mark">✦</span>
     <span class="db-name">木铎星火</span>
@@ -60,11 +59,11 @@
   <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon gi" style="width:3px;height:16px;background:currentColor;border-radius:2px;opacity:0.5"></span>关于</a>
 </nav>
 
-<div class="main-content">
+<main class="main-content" id="mainContent" tabindex="-1">
 
 <div class="view-section active" id="homeView">
 
-<main>
+<div>
   <!-- ═══ Hero ═══ -->
   <section class="hero">
     <div class="hero-deco">
@@ -96,33 +95,33 @@
         <a href="mailto:bnusparks@163.com" class="hf-email">bnusparks@163.com</a>
       </p>
       <p class="hero-footer" style="margin-top:4px">
-        <a href="javascript:void(0)" onclick="showSupportMessage()" style="color:var(--primary);font-weight:500;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.15s;cursor:pointer">提供物质支持</a>
+        <a href="#support" onclick="event.preventDefault();showSupportMessage()" style="color:var(--primary);font-weight:500;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.15s;cursor:pointer">提供物质支持</a>
       </p>
     </div>
   </section>
 
-</main>
+</div>
 
   <!-- ═══ Home Nav Cards ═══ -->
   <hr class="home-divider">
   <section class="home-nav-cards">
     <div class="container">
       <div class="home-nav-grid">
-        <div class="home-nav-card" onclick="showTutorial()">
+        <a href="/tutorial" class="home-nav-card" onclick="event.preventDefault();showTutorial()">
           <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M8 8h3M8 11h3"/></svg></div>
           <div class="hnc-title">使用教程</div>
           <div class="hnc-desc">快速上手</div>
-        </div>
-        <div class="home-nav-card" onclick="showAnnouncements()">
+        </a>
+        <a href="/announcements" class="home-nav-card" onclick="event.preventDefault();showAnnouncements()">
           <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
           <div class="hnc-title">公告</div>
           <div class="hnc-desc">最新消息</div>
-        </div>
-        <div class="home-nav-card" onclick="showBroad()">
+        </a>
+        <a href="/broad" class="home-nav-card" onclick="event.preventDefault();showBroad()">
           <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M22 10l-10-5-10 5 10 5 10-5z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
           <div class="hnc-title">关于大类招生</div>
           <div class="hnc-desc">了解政策</div>
-        </div>
+        </a>
       </div>
     </div>
   </section>
@@ -185,11 +184,11 @@
         <p class="about-subtitle">BNU Sparks · 为爱发电的校内资源共享平台</p>
       </div>
       <div class="about-content" id="aboutContent">
-        <div class="about-tabs">
-          <a class="about-tab active" onclick="showAbout('introduction')">平台介绍</a>
-          <a class="about-tab" onclick="showAbout('help')">使用帮助</a>
-          <a class="about-tab" onclick="showAbout('contact')">联系我们</a>
-          <a class="about-tab" onclick="showAbout('privacy')">隐私政策</a>
+        <div class="about-tabs" role="tablist" aria-label="关于页面栏目">
+          <button type="button" role="tab" aria-selected="true" class="about-tab active" onclick="showAbout('introduction')">平台介绍</button>
+          <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('help')">使用帮助</button>
+          <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('contact')">联系我们</button>
+          <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('privacy')">隐私政策</button>
         </div>
         <div id="aboutSectionContent"></div>
       </div>
@@ -202,7 +201,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">使用教程</span>
       </div>
@@ -220,7 +219,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current" style="flex:1">公告</span>
         <button class="announcement-create-btn" id="createAnnouncementBtn" style="display:none" onclick="showAnnouncementEditor()">📝 发布公告</button>
@@ -239,7 +238,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">关于大类招生</span>
       </div>
@@ -257,7 +256,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">下载排行榜</span>
       </div>
@@ -275,7 +274,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">问答区</span>
       </div>
@@ -286,7 +285,7 @@
         </div>
         <div class="qa-head-actions">
           <button class="qa-filter-btn" id="qaFilterBtn" onclick="toggleQaFilter()">筛选</button>
-          <button class="qa-ask-btn" id="qaAskBtn" onclick="qaAskClick()">我要提问</button>
+          <button class="qa-ask-btn" id="qaAskBtn" onclick="ensureFeature('qa').then(function(){qaAskClick();})">我要提问</button>
         </div>
       </div>
       <div id="qaToolbar"></div>
@@ -300,9 +299,9 @@
   <div class="about-page">
     <div class="container qa-compose-container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
-        <a onclick="showQa()">问答区</a>
+        <a href="/qa" onclick="event.preventDefault();showQa()">问答区</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current" id="qaComposeTitle">发布问题</span>
       </div>
@@ -316,7 +315,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">用户排行榜</span>
       </div>
@@ -341,7 +340,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">用户主页</span>
       </div>
@@ -355,7 +354,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">最近上传</span>
       </div>
@@ -405,7 +404,7 @@
   <div class="about-page">
     <div class="container">
       <div class="breadcrumb">
-        <a onclick="showHome()">首页</a>
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
         <span class="bc-current">个人资料</span>
       </div>
@@ -452,7 +451,7 @@
             <span class="profile-label">管辖板块</span>
             <span class="profile-value" id="profileSections">-</span>
           </div>
-          <div class="profile-row" id="profileIdentityRow" style="display:none">
+          <div class="profile-row" id="profileIdentityRow">
             <span class="profile-label">身份标签</span>
             <span class="profile-value" id="profileIdentity">-</span>
             <button class="profile-edit-btn" onclick="editIdentity()">✎ 编辑</button>
@@ -507,10 +506,17 @@
           <div class="profile-edit-dialog">
             <h3>编辑身份标签</h3>
             <div class="mf-ident-row" style="margin-bottom:10px">
-              <select id="_idnCollege" class="mf-input" onchange="onIdentityCollegeChange()"></select>
-              <select id="_idnMajor" class="mf-input"></select>
+              <select id="_idnEducation" class="mf-input" aria-label="培养层次" required>
+                <option value="">培养层次</option>
+                <option value="本科">本科</option>
+                <option value="硕士">硕士</option>
+                <option value="博士">博士</option>
+                <option value="其他">其他</option>
+              </select>
+              <select id="_idnCollege" class="mf-input" aria-label="学院" required onchange="onIdentityCollegeChange()"></select>
+              <select id="_idnMajor" class="mf-input" aria-label="专业" required></select>
             </div>
-            <p class="mf-email-hint" style="margin-top:0">普通用户每天仅可更改一次身份标签。设置为「其他」将清除身份。</p>
+            <p class="mf-email-hint" style="margin-top:0">三项均为必选；「其他」也是有效标签。普通用户每天仅可更改一次。</p>
             <div class="pe-actions">
               <button class="mf-btn" onclick="saveIdentity()">保存</button>
               <button class="mf-btn mf-btn-secondary" onclick="closeIdentityEditor()">取消</button>
@@ -523,25 +529,29 @@
       <!-- 公开资料卡片 -->
       <div class="profile-public-card">
         <div class="ppc-title">公开资料</div>
-        <p class="ppc-hint">这是你对其他用户除头像和昵称之外，处于可见状态的个人信息。不填写则隐藏。您上传的文件列表也在展示范围内。</p>
+        <p class="ppc-hint">身份标签默认公开显示，可分别隐藏培养层次、学院或专业。您上传的文件列表也在展示范围内。</p>
+        <div class="dm-toggle-row">
+          <span class="dm-toggle-label">在公开资料中显示培养层次</span>
+          <button type="button" class="ios-toggle" id="toggleShowEducation" aria-label="在公开资料中显示培养层次" aria-pressed="false" onclick="toggleIdentityPublic('education')"><span class="ios-toggle-knob"></span></button>
+        </div>
         <div class="dm-toggle-row">
           <span class="dm-toggle-label">在公开资料中显示学院</span>
-          <span class="ios-toggle" id="toggleShowCollege" onclick="toggleIdentityPublic('college')"><span class="ios-toggle-knob"></span></span>
+          <button type="button" class="ios-toggle" id="toggleShowCollege" aria-label="在公开资料中显示学院" aria-pressed="false" onclick="toggleIdentityPublic('college')"><span class="ios-toggle-knob"></span></button>
         </div>
         <div class="dm-toggle-row">
           <span class="dm-toggle-label">在公开资料中显示专业</span>
-          <span class="ios-toggle" id="toggleShowMajor" onclick="toggleIdentityPublic('major')"><span class="ios-toggle-knob"></span></span>
+          <button type="button" class="ios-toggle" id="toggleShowMajor" aria-label="在公开资料中显示专业" aria-pressed="false" onclick="toggleIdentityPublic('major')"><span class="ios-toggle-knob"></span></button>
         </div>
         <div class="ppc-field">
-          <label>联系邮箱</label>
+          <label for="pubContactEmail">联系邮箱</label>
           <input type="email" id="pubContactEmail" placeholder="不填写则视为不可见">
         </div>
         <div class="ppc-field">
-          <label>联系方式</label>
+          <label for="pubContactWay">联系方式</label>
           <input type="text" id="pubContactWay" placeholder="不填写则视为不可见">
         </div>
         <div class="ppc-field">
-          <label>个人简介（200字以内）</label>
+          <label for="pubBio">个人简介（200字以内）</label>
           <textarea id="pubBio" maxlength="200" placeholder="介绍你自己…"></textarea>
           <div class="ppc-char-count"><span id="pubBioCount">0</span>/200</div>
         </div>
@@ -556,7 +566,7 @@
 <div class="view-section" id="notifView">
   <div class="container" style="padding-top: var(--space-lg)">
     <div class="breadcrumb" style="margin-bottom: var(--space-sm)">
-      <a onclick="showHome()">首页</a>
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
       <span class="bc-sep"> / </span>
       <span class="bc-current">通知中心</span>
     </div>
@@ -572,14 +582,14 @@
 <div class="view-section" id="adminView">
   <div class="admin-panel">
     <div class="admin-tabs">
-      <button class="admin-tab active" data-tab="overview">📊 概览</button>
-      <button class="admin-tab" data-tab="pending">⏳ 待审核</button>
-      <button class="admin-tab" data-tab="history">📋 审核历史</button>
-      <button class="admin-tab" data-tab="deletions">🗑️ 删除记录</button>
-      <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none">👥 用户管理</button>
-      <button class="admin-tab" data-tab="operations" style="display:none">📋 操作记录</button>
-      <button class="admin-tab" data-tab="report-history" style="display:none">📄 举报记录</button>
-      <button class="admin-tab" data-tab="qa-records" id="adminQaTab" style="display:none">💬 论坛记录</button>
+      <button class="admin-tab active" data-tab="overview"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V10"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg></span>概览</button>
+      <button class="admin-tab" data-tab="pending"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span>待审核</button>
+      <button class="admin-tab" data-tab="history"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h5M8 16h4"/></svg></span>审核历史</button>
+      <button class="admin-tab" data-tab="deletions"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></span>删除记录</button>
+      <button class="admin-tab" data-tab="operations" style="display:none"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span>操作记录</button>
+      <button class="admin-tab" data-tab="report-history" style="display:none"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l3 3v15H7z"/><path d="M14 3v4h4M10 12h4M10 16h4"/></svg></span>举报记录</button>
+      <button class="admin-tab" data-tab="qa-records" id="adminQaTab" style="display:none"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6.5a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H11l-4 3v-3.3a3 3 0 0 1-2-2.7z"/><path d="M9 8.5h6M9 11.5h4"/></svg></span>论坛记录</button>
+      <button class="admin-tab" data-tab="users" id="adminUsersTab" style="display:none"><span class="admin-tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.8M16 13.5a5.5 5.5 0 0 1 4.5 5.5"/></svg></span>用户管理</button>
     </div>
     <div id="adminContent"></div>
   </div>
@@ -692,18 +702,18 @@
           </div>
         </div>
         <div class="mf-group">
-          <label>课程类型</label>
+          <label for="ncGeneralCategory">课程类型</label>
           <select id="ncGeneralCategory" class="mf-input" onchange="onGeneralCategoryChange()">
             <option value="">请选择课程类型…</option>
           </select>
           <div class="mf-hint nc-math-hint" id="ncMathHint" style="display:none">「数学类」是为了方便非数学专业的同学备考高数的快捷分类，建议确定该课程满足「是大量非数学专业的必修课」之后再放入此分类，方便后续管理。</div>
         </div>
         <div class="mf-group">
-          <label>课程名称</label>
+          <label for="ncGeneralName">课程名称</label>
           <input type="text" id="ncGeneralName" class="mf-input" placeholder="如：学术英语写作">
         </div>
         <div class="mf-group">
-          <label>课程代码</label>
+          <label for="ncGeneralCode">课程代码</label>
           <input type="text" id="ncGeneralCode" class="mf-input" placeholder="如：GEN02201" oninput="scheduleCourseCheck('G')">
           <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
           <div id="ncGCodeHint" class="nc-code-hint" style="display:none"></div>
@@ -723,31 +733,31 @@
           </div>
           <div id="ncGModeFile">
             <div class="mf-group">
-              <label>文件</label>
+              <label for="ncGFile">文件</label>
               <input type="file" id="ncGFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg">
               <div class="mf-hint">支持多选文件 · 单个文件大小不超过 50MB</div>
             </div>
           </div>
           <div id="ncGModeText" style="display:none">
             <div class="mf-group">
-              <label>内容</label>
+              <label for="ncGText">内容</label>
               <textarea id="ncGText" class="mf-input mf-textarea mf-textarea-lg" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等（将保存为 .txt 文件）"></textarea>
             </div>
           </div>
           <div class="mf-group">
-            <label>资料标题</label>
+            <label for="ncGTitle">资料标题</label>
             <input type="text" id="ncGTitle" class="mf-input" placeholder="留空则自动使用文件名">
           </div>
           <div class="mf-group">
-            <label>资料类型</label>
+            <label for="ncGMaterialType">资料类型</label>
             <select id="ncGMaterialType" class="mf-input"><option value="">请选择类型…</option></select>
           </div>
           <div class="mf-group">
-            <label>任课教师</label>
+            <label for="ncGTeacher">任课教师</label>
             <input type="text" id="ncGTeacher" class="mf-input" placeholder="如：张老师">
           </div>
           <div class="mf-group">
-            <label>描述（选填）</label>
+            <label for="ncGDesc">描述（选填）</label>
             <textarea id="ncGDesc" class="mf-input mf-textarea" placeholder="简述资料内容..."></textarea>
           </div>
         </div>
@@ -758,7 +768,7 @@
       <!-- ── 专业课面板 ── -->
       <div id="ncMajorPane" class="nc-pane" style="display:none">
         <div class="mf-group">
-          <label>创建方式</label>
+          <label for="ncMajorMode">创建方式</label>
           <select id="ncMajorMode" class="mf-input" onchange="onMajorModeChange()">
             <option value="course">新建专业课</option>
             <option value="college">新建学院 / 专业</option>
@@ -775,31 +785,31 @@
             </div>
           </div>
           <div class="mf-group">
-            <label>学院</label>
+            <label for="ncMCollegeSearch">学院</label>
             <div class="nc-combo">
               <input type="text" id="ncMCollegeSearch" class="mf-input" placeholder="输入学院名称搜索…" onfocus="onCollegeFocus()" oninput="onCollegeSearchInput()">
               <div class="nc-combo-list" id="ncMCollegeOptions" style="display:none"></div>
             </div>
           </div>
           <div class="mf-group">
-            <label>专业</label>
+            <label for="ncMMajor">专业</label>
             <select id="ncMMajor" class="mf-input" onchange="onMajorChange()">
               <option value="">请先选择学院</option>
             </select>
           </div>
           <div class="mf-group">
-            <label>层级</label>
+            <label for="ncMLevelBtn">层级</label>
             <div class="nc-level-row">
               <button type="button" class="nc-level-btn" onclick="_openLevelPicker()" id="ncMLevelBtn" disabled>🗂 选择层级</button>
               <span class="nc-level-path" id="ncMTargetPath"></span>
             </div>
           </div>
           <div class="mf-group">
-            <label>课程名称</label>
+            <label for="ncMName">课程名称</label>
             <input type="text" id="ncMName" class="mf-input" placeholder="如：理论力学">
           </div>
           <div class="mf-group">
-            <label>课程代码</label>
+            <label for="ncMCode">课程代码</label>
             <input type="text" id="ncMCode" class="mf-input" placeholder="如：PHY11451" oninput="scheduleCourseCheck('M')">
             <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
             <div id="ncMCodeHint" class="nc-code-hint" style="display:none"></div>
@@ -819,31 +829,31 @@
             </div>
             <div id="ncMModeFile">
               <div class="mf-group">
-                <label>文件</label>
+                <label for="ncMFile">文件</label>
                 <input type="file" id="ncMFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg">
                 <div class="mf-hint">支持多选文件 · 单个文件大小不超过 50MB</div>
               </div>
             </div>
             <div id="ncMModeText" style="display:none">
               <div class="mf-group">
-                <label>内容</label>
+                <label for="ncMText">内容</label>
                 <textarea id="ncMText" class="mf-input mf-textarea mf-textarea-lg" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等（将保存为 .txt 文件）"></textarea>
               </div>
             </div>
             <div class="mf-group">
-              <label>资料标题</label>
+              <label for="ncMTitle">资料标题</label>
               <input type="text" id="ncMTitle" class="mf-input" placeholder="留空则自动使用文件名">
             </div>
             <div class="mf-group">
-              <label>资料类型</label>
+              <label for="ncMMaterialType">资料类型</label>
               <select id="ncMMaterialType" class="mf-input"><option value="">请选择类型…</option></select>
             </div>
             <div class="mf-group">
-              <label>任课教师</label>
+              <label for="ncMTeacher">任课教师</label>
               <input type="text" id="ncMTeacher" class="mf-input" placeholder="如：张老师">
             </div>
             <div class="mf-group">
-              <label>描述（选填）</label>
+              <label for="ncMDesc">描述（选填）</label>
               <textarea id="ncMDesc" class="mf-input mf-textarea" placeholder="简述资料内容..."></textarea>
             </div>
           </div>
@@ -895,10 +905,10 @@
       </div>
       <div class="footer-col">
         <h4>关于</h4>
-        <a href="javascript:void(0)" onclick="showAbout('introduction')">平台介绍</a>
-        <a href="javascript:void(0)" onclick="showAbout('help')">使用帮助</a>
+        <a href="/about" onclick="event.preventDefault();showAbout('introduction')">平台介绍</a>
+        <a href="/about" onclick="event.preventDefault();showAbout('help')">使用帮助</a>
         <a href="mailto:bnusparks@163.com">联系我们</a>
-        <a href="javascript:void(0)" onclick="showAbout('privacy')">隐私政策</a>
+        <a href="/about" onclick="event.preventDefault();showAbout('privacy')">隐私政策</a>
       </div>
     </div>
     <div class="footer-bottom">
@@ -914,24 +924,24 @@
   </div>
 </footer>
 
-</div><!-- /.main-content -->
+</main><!-- /.main-content -->
 </div><!-- /.page-layout -->
 
 <!-- ═══ Login Modal ═══ -->
-<div class="modal-overlay" id="loginModal" style="display:none">
+<div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle" style="display:none">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeAuthModal()">✕</button>
-    <h2 class="modal-title">登录</h2>
+    <button type="button" class="modal-close" aria-label="关闭登录窗口" onclick="closeAuthModal()">✕</button>
+    <h2 class="modal-title" id="loginModalTitle">登录</h2>
     <form id="loginForm" onsubmit="return handleLogin(event)">
       <div class="mf-group">
-        <label>学号</label>
+        <label for="loginSid">学号</label>
         <div class="mf-email-wrap">
           <input type="text" id="loginSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
           <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
         </div>
       </div>
       <div class="mf-group">
-        <label>密码</label>
+        <label for="loginPassword">密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="loginPassword" class="mf-input mf-pwd-input" required placeholder="输入密码" autocomplete="current-password">
           <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('loginPassword',this)" aria-label="显示密码">👁️</button>
@@ -941,18 +951,18 @@
       <button type="submit" class="mf-btn">登录</button>
       <p class="mf-switch">还没有账号？<a href="#" onclick="showRegister();return false">注册</a> · <a href="#" onclick="showForgotPassword();return false">忘记密码？</a></p>
     </form>
-    <div id="loginError" class="mf-error"></div>
+    <div id="loginError" class="mf-error" role="alert" aria-live="assertive"></div>
   </div>
 </div>
 
 <!-- ═══ Register Modal ═══ -->
-<div class="modal-overlay" id="registerModal" style="display:none">
+<div class="modal-overlay" id="registerModal" role="dialog" aria-modal="true" aria-labelledby="registerModalTitle" style="display:none">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeAuthModal()">✕</button>
-    <h2 class="modal-title">注册</h2>
+    <button type="button" class="modal-close" aria-label="关闭注册窗口" onclick="closeAuthModal()">✕</button>
+    <h2 class="modal-title" id="registerModalTitle">注册</h2>
     <form id="registerForm" onsubmit="return handleRegister(event)">
       <div class="mf-group">
-        <label>北师大邮箱</label>
+        <label for="regSid">北师大邮箱</label>
         <div class="mf-email-wrap">
           <input type="text" id="regSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
           <select id="regEmailSuffix" class="mf-email-suffix-select" aria-label="邮箱后缀">
@@ -963,25 +973,32 @@
         <p class="mf-email-hint">新生可能暂时无法使用师大邮箱，建议关注即将推出的新生专区，无需登录也可浏览。可联系微信：Rsun1949进行人工核验，直接发放账号。</p>
       </div>
       <div class="mf-group">
-        <label>昵称</label>
+        <label for="regNickname">昵称</label>
         <input type="text" id="regNickname" class="mf-input" required placeholder="如：木铎新生">
       </div>
       <div class="mf-group">
-        <label>身份标签（选填，用于专业课置顶与搜索定位，可在个人中心修改）</label>
+        <label>身份标签 <span class="label-required">必填</span><span class="mf-label-hint">（关于大类招生详见首页。）</span></label>
         <div class="mf-ident-row">
-          <select id="regCollege" class="mf-input" onchange="onRegCollegeChange()"></select>
-          <select id="regMajor" class="mf-input"></select>
+          <select id="regEducation" class="mf-input" aria-label="培养层次" required>
+            <option value="">培养层次</option>
+            <option value="本科">本科</option>
+            <option value="硕士">硕士</option>
+            <option value="博士">博士</option>
+            <option value="其他">其他</option>
+          </select>
+          <select id="regCollege" class="mf-input" aria-label="学院" required onchange="onRegCollegeChange()"></select>
+          <select id="regMajor" class="mf-input" aria-label="专业" required></select>
         </div>
       </div>
       <div class="mf-group">
-        <label>密码（至少 8 位）</label>
+        <label for="regPassword">密码（至少 8 位）</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="regPassword" class="mf-input mf-pwd-input" required minlength="8" placeholder="设置你的登录密码" autocomplete="new-password">
           <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPassword',this)" aria-label="显示密码">👁️</button>
         </div>
       </div>
       <div class="mf-group">
-        <label>确认密码</label>
+        <label for="regPasswordConfirm">确认密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="regPasswordConfirm" class="mf-input mf-pwd-input" required placeholder="再次输入密码" autocomplete="new-password">
           <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPasswordConfirm',this)" aria-label="显示密码">👁️</button>
@@ -990,13 +1007,22 @@
       <button type="submit" class="mf-btn">注册</button>
       <p class="mf-switch">已有账号？<a href="#" onclick="showLogin();return false">登录</a></p>
     </form>
-    <div id="registerError" class="mf-error" style="display:none"></div>
+    <div id="registerError" class="mf-error" role="alert" aria-live="assertive" style="display:none"></div>
+    <div id="registerResendAction" class="register-resend register-resend-error" style="display:none">
+      <p class="register-resend-note">验证邮件可能已过期或未收到？</p>
+      <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
+      <span class="register-resend-status" role="status" aria-live="polite"></span>
+    </div>
     <div id="registerSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
       <p class="ms-title">注册成功！</p>
       <p class="ms-desc">验证邮件已发送到你的校园邮箱，请点击邮件中的链接完成注册。</p>
-      <p class="ms-secure-hint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">可能需要检查垃圾邮件箱。验证通过后即可使用你设置的密码登录。</p>
-      <button class="mf-btn ms-btn" onclick="closeAuthModal()">知道了</button>
+      <p class="ms-secure-hint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">可能需要检查垃圾邮件箱。链接过期或未收到邮件？可以重新发送一封，请使用最新邮件中的链接。</p>
+      <div class="register-resend">
+        <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
+        <span class="register-resend-status" role="status" aria-live="polite"></span>
+      </div>
+      <button type="button" class="mf-btn ms-btn" onclick="closeAuthModal()">知道了</button>
     </div>
     <div class="external-access">
       <a href="mailto:bnusparks@163.com?subject=校外人员访问申请" class="external-access-btn" onclick="return confirm('考虑到潜在的知识产权风险，此入口的可用性会受到较大局限，我们可能将不再受理以“获取资料”为目的的访问申请。');">校外人员访问申请 →</a>
@@ -1005,13 +1031,13 @@
 </div>
 
 <!-- ═══ Forgot Password Modal ═══ -->
-<div class="modal-overlay" id="forgotPwdModal" style="display:none">
+<div class="modal-overlay" id="forgotPwdModal" role="dialog" aria-modal="true" aria-labelledby="forgotPwdModalTitle" style="display:none">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeForgotPwdModal()">✕</button>
-    <h2 class="modal-title">忘记密码</h2>
+    <button type="button" class="modal-close" aria-label="关闭忘记密码窗口" onclick="closeForgotPwdModal()">✕</button>
+    <h2 class="modal-title" id="forgotPwdModalTitle">忘记密码</h2>
     <form id="forgotPwdForm" onsubmit="return handleForgotPassword(event)">
       <div class="mf-group">
-        <label>学号</label>
+        <label for="forgotSid">学号</label>
         <div class="mf-email-wrap">
           <input type="text" id="forgotSid" class="mf-input mf-email-prefix" required placeholder="请输入学号">
           <select id="forgotSuffix" class="mf-email-suffix-select" aria-label="邮箱后缀">
@@ -1023,31 +1049,31 @@
       <button type="submit" class="mf-btn">发送重置链接</button>
       <p class="mf-switch"><a href="#" onclick="closeForgotPwdModal();showLoginModal();return false">返回登录</a></p>
     </form>
-    <div id="forgotPwdError" class="mf-error" style="display:none"></div>
+    <div id="forgotPwdError" class="mf-error" role="alert" aria-live="assertive" style="display:none"></div>
     <div id="forgotPwdSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
       <p class="ms-title">邮件已发送</p>
       <p class="ms-desc" id="forgotPwdMsg">如果该学号已注册，重置链接已发送到你的邮箱，请查收。</p>
-      <button class="mf-btn ms-btn" onclick="closeForgotPwdModal()">知道了</button>
+      <button type="button" class="mf-btn ms-btn" onclick="closeForgotPwdModal()">知道了</button>
     </div>
   </div>
 </div>
 
 <!-- ═══ Reset Password Modal ═══ -->
-<div class="modal-overlay" id="resetPwdModal" style="display:none">
+<div class="modal-overlay" id="resetPwdModal" role="dialog" aria-modal="true" aria-labelledby="resetPwdModalTitle" style="display:none">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeResetPwdModal()">✕</button>
-    <h2 class="modal-title">重置密码</h2>
+    <button type="button" class="modal-close" aria-label="关闭重置密码窗口" onclick="closeResetPwdModal()">✕</button>
+    <h2 class="modal-title" id="resetPwdModalTitle">重置密码</h2>
     <form id="resetPwdForm" onsubmit="return handleResetPassword(event)">
       <div class="mf-group">
-        <label>新密码</label>
+        <label for="resetNewPwd">新密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="resetNewPwd" class="mf-input mf-pwd-input" required minlength="8" placeholder="至少 8 位">
           <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetNewPwd',this)" aria-label="显示密码">👁️</button>
         </div>
       </div>
       <div class="mf-group">
-        <label>确认新密码</label>
+        <label for="resetConfirmPwd">确认新密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="resetConfirmPwd" class="mf-input mf-pwd-input" required minlength="8" placeholder="再次输入新密码">
           <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetConfirmPwd',this)" aria-label="显示密码">👁️</button>
@@ -1056,34 +1082,34 @@
       <button type="submit" class="mf-btn">重置密码</button>
       <p class="mf-switch"><a href="#" onclick="closeResetPwdModal();showLoginModal();return false">返回登录</a></p>
     </form>
-    <div id="resetPwdError" class="mf-error" style="display:none"></div>
+    <div id="resetPwdError" class="mf-error" role="alert" aria-live="assertive" style="display:none"></div>
     <div id="resetPwdSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
       <p class="ms-title">密码已重置</p>
       <p class="ms-desc">你的密码已重置成功，请使用新密码登录。</p>
-      <button class="mf-btn ms-btn" onclick="closeResetPwdModal();showLoginModal()">去登录</button>
+      <button type="button" class="mf-btn ms-btn" onclick="closeResetPwdModal();showLoginModal()">去登录</button>
     </div>
   </div>
 </div>
 
 <!-- ═══ Upload Modal ═══ -->
-<div class="modal-overlay" id="uploadModal" style="display:none">
+<div class="modal-overlay" id="uploadModal" role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle" style="display:none">
   <div class="modal-card modal-card-wide">
-    <button class="modal-close" onclick="closeUploadModal()">✕</button>
-    <h2 class="modal-title">上传资料</h2>
+    <button type="button" class="modal-close" aria-label="关闭上传窗口" onclick="closeUploadModal()">✕</button>
+    <h2 class="modal-title" id="uploadModalTitle">上传资料</h2>
     <div class="upload-mode-tabs">
-      <button class="um-tab um-tab-active" data-mode="file" onclick="switchUploadMode('file')">📁 上传文件</button>
-      <button class="um-tab" data-mode="text" onclick="switchUploadMode('text')">✏️ 文字录入</button>
+      <button type="button" class="um-tab um-tab-active" data-mode="file" onclick="switchUploadMode('file')">📁 上传文件</button>
+      <button type="button" class="um-tab" data-mode="text" onclick="switchUploadMode('text')">✏️ 文字录入</button>
     </div>
     <form id="uploadForm" onsubmit="return handleUpload(event)">
       <div class="mf-group">
-        <label>课程</label>
+        <label for="uploadCourse">课程</label>
         <input type="text" id="uploadCourse" class="mf-input" readonly placeholder="选择课程后自动填充">
       </div>
       <!-- 文件上传模式 -->
       <div id="uploadModeFile" class="upload-mode-pane">
         <div class="mf-group">
-          <label>文件</label>
+          <label for="uploadFile">文件</label>
           <input type="file" id="uploadFile" class="mf-input" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.7z,.jpg,.png,.jpeg" onchange="autoFillUploadTitle()">
           <div class="mf-hint">支持多选文件 · 单个文件大小不超过 50MB</div>
         </div>
@@ -1091,33 +1117,33 @@
       <!-- 文字录入模式 -->
       <div id="uploadModeText" class="upload-mode-pane" style="display:none">
         <div class="mf-group">
-          <label>内容</label>
+          <label for="uploadTextContent">内容</label>
           <textarea id="uploadTextContent" class="mf-input mf-textarea mf-textarea-lg" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等"></textarea>
           <div class="mf-hint">录入的文字将保存为 .txt 文件，若字数较多建议生成文档后上传</div>
         </div>
       </div>
       <div class="mf-group">
-        <label>资料标题</label>
+        <label for="uploadTitle">资料标题</label>
         <input type="text" id="uploadTitle" class="mf-input" placeholder="留空则自动使用文件名">
       </div>
       <div class="mf-group">
-        <label>类型 <span class="label-required">*</span></label>
+        <label for="uploadMaterialType">类型 <span class="label-required">*</span></label>
         <select id="uploadMaterialType" class="mf-input" required>
           <option value="">请选择类型…</option>
         </select>
       </div>
       <div class="mf-group">
-        <label>任课教师</label>
+        <label for="uploadTeacher">任课教师</label>
         <input type="text" id="uploadTeacher" class="mf-input" required placeholder="如：张老师">
       </div>
       <div class="mf-group">
-        <label>描述（选填）</label>
+        <label for="uploadDesc">描述（选填）</label>
         <textarea id="uploadDesc" class="mf-input mf-textarea" placeholder="简述资料内容..."></textarea>
       </div>
       <button type="submit" class="mf-btn">开始上传</button>
     </form>
-    <div id="uploadError" class="mf-error"></div>
-    <div id="uploadProgress" class="mf-progress" style="display:none">
+    <div id="uploadError" class="mf-error" role="alert" aria-live="assertive"></div>
+    <div id="uploadProgress" class="mf-progress" role="status" aria-live="polite" style="display:none">
       <div class="mf-progress-bar"><div class="mf-progress-fill" id="uploadProgressFill"></div></div>
       <span id="uploadProgressText">上传中...</span>
     </div>
@@ -1125,27 +1151,17 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=183" defer></script>
-<script src="/static/js/auth.js?v=183" defer></script>
-<script src="/static/js/profile.js?v=183" defer></script>
-<script src="/static/js/notifications.js?v=183" defer></script>
-<script src="/static/js/admin-core.js?v=183" defer></script>
-<script src="/static/js/admin-pending.js?v=183" defer></script>
-<script src="/static/js/admin-records.js?v=183" defer></script>
-<script src="/static/js/admin-users.js?v=183" defer></script>
-<script src="/static/js/views.js?v=183" defer></script>
-<script src="/static/js/explorer-core.js?v=183" defer></script>
-<script src="/static/js/explorer-upload.js?v=183" defer></script>
-<script src="/static/js/explorer-mgmt.js?v=183" defer></script>
-<script src="/static/js/explorer-render.js?v=183" defer></script>
-<script src="/static/js/explorer-file.js?v=183" defer></script>
-<script src="/static/js/explorer-preview.js?v=183" defer></script>
-<script src="/static/js/newcourse.js?v=183" defer></script>
-<script src="/static/js/qa.js?v=183" defer></script>
-<script src="/static/js/qa-editor.js?v=183" defer></script>
-<script src="/static/js/qa-admin.js?v=183" defer></script>
-<script src="/static/js/qa-compose.js?v=183" defer></script>
-<script src="/static/js/app.js?v=183" defer></script>
+<script src="/static/js/utils.js?v=195" defer></script>
+<script src="/static/js/auth.js?v=195" defer></script>
+<script src="/static/js/profile.js?v=195" defer></script>
+<script src="/static/js/notifications.js?v=186" defer></script>
+<script src="/static/js/admin-core.js?v=195" defer></script>
+<script src="/static/js/views.js?v=195" defer></script>
+<script src="/static/js/explorer-core.js?v=195" defer></script>
+<script src="/static/js/explorer-file.js?v=186" defer></script>
+<script src="/static/js/explorer-preview.js?v=186" defer></script>
+<script src="/static/js/feature-loader.js?v=195" defer></script>
+<script src="/static/js/app.js?v=195" defer></script>
 
 </body>
 </html>

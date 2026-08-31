@@ -8,6 +8,7 @@ from . import views
 urlpatterns = [
     # 认证
     path("auth/register/", views.api_register, name="api_register"),
+    path("auth/resend-verification/", views.api_resend_verification, name="api_resend_verification"),
     path("auth/login/", views.api_login, name="api_login"),
     path("auth/me/", views.api_me, name="api_me"),
     path("auth/change-password/", views.api_change_password, name="api_change_password"),
@@ -142,6 +143,8 @@ urlpatterns = [
 
     # 用户管理（Iter 3 — 仅 super_admin）
     path("admin/users/", views.api_admin_users, name="api_admin_users"),
+    path("admin/monitoring/", views.api_admin_monitoring, name="api_admin_monitoring"),
+    path("admin/users/<int:uid>/downloads/", views.api_admin_user_downloads, name="api_admin_user_downloads"),
     path("admin/users/<int:uid>/role/", views.api_admin_set_role, name="api_admin_set_role"),
     path("admin/sections/", views.api_admin_sections, name="api_admin_sections"),
     path("admin/users/<int:uid>/auto-approve/", views.api_admin_auto_approve_toggle, name="api_admin_auto_approve_toggle"),

@@ -5,8 +5,9 @@ BNU Sparks · 木铎星火 — 问答区共享辅助（HTML 净化 / 版主判�
 import json
 import re
 from functools import wraps
-from html import unescape
+from html import escape, unescape
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 from django.db.models import F, Q
 
@@ -43,49 +44,80 @@ class _QaSanitizer(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.out = []
 
+    @staticmethod
+    def _safe_url(tag, attr, value):
+        value = (value or "").strip()
+        # 协议名中的换行、制表符和控制字符会被浏览器忽略；校验时也必须消除，
+        # 才能拦住 java\nscript: / data: 等混淆写法。
+        compact = re.sub(r"[\x00-\x20\x7f]+", "", unescape(value)).lower()
+        if attr == "src" and tag == "img":
+            if value.startswith("/media/") and not value.startswith("//"):
+                return value
+            try:
+                return value if urlsplit(compact).scheme in {"http", "https"} else None
+            except ValueError:
+                return None
+        if attr == "href" and tag == "a":
+            if value.startswith("#") or (value.startswith("/") and not value.startswith("//")):
+                return value
+            try:
+                return value if urlsplit(compact).scheme in {"http", "https", "mailto"} else None
+            except ValueError:
+                return None
+        return value
+
     def _attrs(self, tag, attrs):
         out = []
+        seen = set()
         for k, v in attrs:
             kl = k.lower()
-            if kl.startswith("on"):
-                continue
-            if kl == "href" and v.strip().lower().startswith("javascript:"):
+            if kl.startswith("on") or kl in seen:
                 continue
             if tag == "img":
                 if kl == "src":
-                    sv = v.strip()
-                    # v175：补 https://（此前 https 外链图被剥，bug）
-                    if not (sv.startswith("/media/") or sv.startswith("http://") or sv.startswith("https://")):
+                    v = self._safe_url(tag, kl, v)
+                    if v is None:
                         continue
                 if kl not in _QA_ATTRS["img"]:
                     continue
-                out.append((k, v))
+                out.append((kl, v or ""))
+                seen.add(kl)
             elif tag == "a" and kl in _QA_ATTRS["a"]:
-                if kl == "target":
+                if kl == "href":
+                    v = self._safe_url(tag, kl, v)
+                    if v is None:
+                        continue
+                elif kl == "target":
                     v = "_blank"
                 elif kl == "rel":
                     v = "noopener noreferrer"
-                out.append((k, v))
-        return "".join(f' {k}="{v}"' for k, v in out)
+                out.append((kl, v or ""))
+                seen.add(kl)
+        if tag == "a" and "target" in seen and "rel" not in seen:
+            out.append(("rel", "noopener noreferrer"))
+        return "".join(f' {escape(k, quote=True)}="{escape(v, quote=True)}"' for k, v in out)
 
     def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
         if tag == "br":
             self.out.append("<br>")
         elif tag in _QA_ALLOWED_TAGS:
             self.out.append(f"<{tag}{self._attrs(tag, attrs)}>")
 
     def handle_startendtag(self, tag, attrs):
+        tag = tag.lower()
         if tag == "img":
             self.out.append(f"<img{self._attrs(tag, attrs)}>")
         else:
             self.handle_starttag(tag, attrs)
 
     def handle_endtag(self, tag):
+        tag = tag.lower()
         if tag in _QA_ALLOWED_TAGS and tag != "br":
             self.out.append(f"</{tag}>")
 
     def handle_data(self, data):
-        self.out.append(data)
+        self.out.append(escape(data, quote=False))
 
     def handle_comment(self, data):
         pass

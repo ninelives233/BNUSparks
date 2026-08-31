@@ -14,7 +14,7 @@ from django.db.models import Q, Count
 
 from .utils import (
     _err, _ok, _get_or_create_profile, _safe_int,
-    require_login, require_role, UserProfile, CourseCategory, College,
+    require_login, require_role, UserProfile, CourseCategory, College, DownloadRecord,
 )
 
 
@@ -38,7 +38,19 @@ def api_admin_users(request):
         'profile__managed_majors', 'profile__moderated_sections'
     ).annotate(
         material_count=Count('uploads', distinct=True),
-        download_count=Count('download_records', distinct=True),
+        download_count=Count(
+            'download_records',
+            filter=Q(download_records__activity_type__in=(
+                DownloadRecord.ActivityType.LEGACY,
+                DownloadRecord.ActivityType.DOWNLOAD,
+            )),
+            distinct=True,
+        ),
+        preview_count=Count(
+            'download_records',
+            filter=Q(download_records__activity_type=DownloadRecord.ActivityType.PREVIEW),
+            distinct=True,
+        ),
     ).order_by("-date_joined")
     search = request.GET.get("search", "").strip()
     if search:
@@ -77,8 +89,13 @@ def api_admin_users(request):
             "avatar_url": p.avatar.url if p and p.avatar else "",
             "role": p.role if p else UserProfile.Role.USER,
             "date_joined": u.date_joined.strftime("%Y-%m-%d"),
+            # 与访问流水使用同一组字段，方便名单在昵称下直接展示身份副行。
+            "education": p.identity_education if p else "",
+            "college": p.identity_college if p else "",
+            "major": p.identity_major if p else "",
             "material_count": u.material_count,
             "download_count": u.download_count,
+            "preview_count": u.preview_count,
             "auto_approve": p.auto_approve if p else False,
             "can_auto_approve": p.can_auto_approve if p else False,
             "can_moderate_general": p.can_moderate_general if p else False,

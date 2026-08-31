@@ -6,7 +6,7 @@ BNU Sparks · 木铎星火 — views 包
 
 # 认证
 from .auth import (
-    api_register, api_verify_email, api_login, api_me,
+    api_register, api_resend_verification, api_verify_email, api_login, api_me,
     api_change_password, api_forgot_password, api_reset_password,
 )
 
@@ -80,6 +80,7 @@ from .admin import (
     api_admin_users, api_admin_set_role,
     api_admin_sections, api_admin_auto_approve_toggle,
 )
+from .admin_monitoring import api_admin_monitoring, api_admin_user_downloads
 
 # 公告
 from .announcements import api_announcements, api_announcement_delete

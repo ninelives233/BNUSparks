@@ -11,7 +11,7 @@ api_qa_question_detail）按 request.method 调用，或新增 path 独立映射
 - 采纳 = 提问者本人（开放时）+ 问答区版主/超管。
 """
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
@@ -162,14 +162,22 @@ def _record_delete_request(target_type, target_id, requester, reason, auto_appro
             status=QaDeleteRequest.Status.PENDING).exists()
         if dup:
             return None, False
-    row = QaDeleteRequest.objects.create(
-        target_type=target_type, target_id=target_id,
-        requester=requester, reason=reason,
-        status=QaDeleteRequest.Status.APPROVED if auto_approved else QaDeleteRequest.Status.PENDING,
-        auto_approved=auto_approved,
-        handled_by=requester if auto_approved else None,
-        handled_at=timezone.now() if auto_approved else None,
-    )
+    try:
+        row = QaDeleteRequest.objects.create(
+            target_type=target_type, target_id=target_id,
+            requester=requester, reason=reason,
+            status=QaDeleteRequest.Status.APPROVED if auto_approved else QaDeleteRequest.Status.PENDING,
+            auto_approved=auto_approved,
+            handled_by=requester if auto_approved else None,
+            handled_at=timezone.now() if auto_approved else None,
+        )
+    except IntegrityError:
+        # 部分唯一约束赢得并发竞争；调用方按“已提交”返回，不泄漏 500。
+        row = QaDeleteRequest.objects.filter(
+            requester=requester, target_type=target_type, target_id=target_id,
+            status=QaDeleteRequest.Status.PENDING,
+        ).first()
+        return row, False
     return row, True
 
 
@@ -402,21 +410,31 @@ def api_qa_answer_accept(request, aid):
     if is_asker and not is_manager and not _qa_user_open():
         return _err("该功能暂未开放", 403)
 
-    with transaction.atomic():
-        if a.is_accepted:
-            # 重复点同一采纳 → 取消
-            QaAnswer.objects.filter(id=a.id).update(is_accepted=False)
-            accepted = False
-        else:
-            # 清同问题其他采纳，再置本条
-            QaAnswer.objects.filter(question=q, is_accepted=True).update(is_accepted=False)
-            QaAnswer.objects.filter(id=a.id).update(is_accepted=True)
-            accepted = True
-            if a.author_id != user.id:
-                _create_notification(
-                    recipient=a.author, type=Notification.Type.OPERATION,
-                    title="你的回答被采纳为最佳回答",
-                    message=f"你的回答被采纳为「{q.title}」的最佳回答。",
-                    triggered_by=user,
-                )
+    try:
+        with transaction.atomic():
+            # 必须在事务内重读，不能依据进入事务前的 a.is_accepted 做状态切换。
+            current = QaAnswer.objects.select_for_update().select_related(
+                "question", "author",
+            ).get(id=a.id)
+            q = current.question
+            if current.is_accepted:
+                # 重复点同一采纳 → 取消
+                QaAnswer.objects.filter(id=current.id, is_accepted=True).update(is_accepted=False)
+                accepted = False
+            else:
+                # 清同问题其他采纳，再置本条；数据库条件唯一约束是最终并发兜底。
+                QaAnswer.objects.filter(
+                    question_id=q.id, is_accepted=True,
+                ).exclude(id=current.id).update(is_accepted=False)
+                QaAnswer.objects.filter(id=current.id, is_accepted=False).update(is_accepted=True)
+                accepted = True
+                if current.author_id != user.id:
+                    _create_notification(
+                        recipient=current.author, type=Notification.Type.OPERATION,
+                        title="你的回答被采纳为最佳回答",
+                        message=f"你的回答被采纳为「{q.title}」的最佳回答。",
+                        triggered_by=user,
+                    )
+    except IntegrityError:
+        return _err("最佳回答状态已变化，请重试", 409)
     return _ok({"accepted": accepted})

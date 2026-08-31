@@ -201,17 +201,24 @@ def api_qa_question_favorite(request, qid):
     q = QaQuestion.objects.filter(id=qid, status=QaQuestion.Status.PUBLISHED).first()
     if not q:
         return _err("内容不存在", 404)
-    fav = QaFavorite.objects.filter(user=request.user, question=q, answer__isnull=True).first()
-    if fav:
-        fav.delete()
+    fav_qs = QaFavorite.objects.filter(
+        user=request.user, question=q, answer__isnull=True,
+    )
+    deleted, _ = fav_qs.delete()
+    if deleted:
         QaQuestion.objects.filter(id=q.id, favorite_count__gt=0).update(
             favorite_count=F("favorite_count") - 1)
         _qa_bump_heat(q, -3)  # v183：取消收藏 -3 热度
         favorited = False
     else:
-        QaFavorite.objects.create(user=request.user, question=q, answer=None)
-        QaQuestion.objects.filter(id=q.id).update(favorite_count=F("favorite_count") + 1)
-        _qa_bump_heat(q, 3)  # v183：收藏 +3 热度
+        try:
+            QaFavorite.objects.create(user=request.user, question=q, answer=None)
+        except IntegrityError:
+            # 并发请求已创建：唯一约束保证一条，计数不能重复增加。
+            pass
+        else:
+            QaQuestion.objects.filter(id=q.id).update(favorite_count=F("favorite_count") + 1)
+            _qa_bump_heat(q, 3)  # v183：收藏 +3 热度
         favorited = True
     q.refresh_from_db(fields=["favorite_count"])
     return _ok({"favorited": favorited, "favorite_count": q.favorite_count})
@@ -219,8 +226,10 @@ def api_qa_question_favorite(request, qid):
 
 def _ensure_question_fav(user, question):
     """收藏回答时同步建立问题级收藏（我的收藏合并显示）"""
-    if not QaFavorite.objects.filter(user=user, question=question, answer__isnull=True).exists():
-        QaFavorite.objects.create(user=user, question=question, answer=None)
+    _, created = QaFavorite.objects.get_or_create(
+        user=user, question=question, answer=None,
+    )
+    if created:
         QaQuestion.objects.filter(id=question.id).update(favorite_count=F("favorite_count") + 1)
 
 
@@ -234,12 +243,15 @@ def api_qa_answer_favorite(request, aid):
         id=aid, status=QaAnswer.Status.PUBLISHED).first()
     if not a:
         return _err("内容不存在", 404)
-    fav = QaFavorite.objects.filter(user=request.user, answer=a).first()
-    if fav:
+    fav_qs = QaFavorite.objects.filter(user=request.user, answer=a)
+    deleted, _ = fav_qs.delete()
+    if deleted:
         # 取消回答收藏不撤销问题级收藏（问题仍在我的收藏）
-        fav.delete()
         return _ok({"favorited": False, "favorite_count": QaFavorite.objects.filter(answer=a).count()})
-    QaFavorite.objects.create(user=request.user, question=a.question, answer=a)
+    try:
+        QaFavorite.objects.create(user=request.user, question=a.question, answer=a)
+    except IntegrityError:
+        pass  # 并发请求已创建，视为已收藏。
     _ensure_question_fav(request.user, a.question)
     return _ok({"favorited": True, "favorite_count": QaFavorite.objects.filter(answer=a).count()})
 
@@ -254,9 +266,9 @@ def api_qa_answer_like(request, aid):
         id=aid, status=QaAnswer.Status.PUBLISHED).first()
     if not a:
         return _err("内容不存在", 404)
-    like = QaAnswerLike.objects.filter(user=request.user, answer=a).first()
-    if like:
-        like.delete()
+    like_qs = QaAnswerLike.objects.filter(user=request.user, answer=a)
+    deleted, _ = like_qs.delete()
+    if deleted:
         QaAnswer.objects.filter(id=a.id, like_count__gt=0).update(
             like_count=F("like_count") - 1)
         _qa_bump_heat(a.question, -2)  # v183：取消点赞 -2 热度
