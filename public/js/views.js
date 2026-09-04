@@ -752,6 +752,28 @@
     });
   }
 
+  // 从搜索浮层切换到新建课程时，不能调用 _removeOverlay：它会 history.back()，
+  // 而懒加载完成后的 showNewCourse() 又会 pushState，二者竞态会把新建课程页切回首页。
+  function openNewCourseFromSearch(button) {
+    var overlay = button && button.closest('.search-overlay');
+    if (overlay) {
+      var returnState = overlay._bnusparksReturnState;
+      overlay.remove();
+      unlockScroll();
+      if (typeof deactivateDialog === 'function') deactivateDialog(overlay);
+      // 当前仍停在浮层 history entry，直接替换回进入浮层前的页面，避免异步 popstate。
+      if (history.state && history.state._modal) {
+        var restored = returnState && returnState._bnusparks
+          ? returnState
+          : { _bnusparks: true, view: 'home', scrollY: 0 };
+        var restoredUrl = typeof routeToPath === 'function'
+          ? routeToPath(restored.view, restored) : null;
+        history.replaceState(restored, '', restoredUrl || location.pathname);
+      }
+    }
+    openNewCourse();
+  }
+
   function openCourseSearchUpload() {
     if (!currentUser) { showLoginModal(); return; }
     var overlay = document.createElement('div');
@@ -770,7 +792,7 @@
         '</div>' +
         '<div class="so-new-course">' +
           '<div class="so-new-hint">没有要找的学院/专业/课程？点击↓</div>' +
-          '<button class="so-new-btn" onclick="_removeOverlay(this.closest(\'.search-overlay\'));openNewCourse()">新建课程</button>' +
+          '<button class="so-new-btn" onclick="openNewCourseFromSearch(this)">新建课程</button>' +
         '</div>' +
         '<div class="search-overlay-results" id="courseSearchResults">' +
           '<div class="so-hint">' +
@@ -780,6 +802,8 @@
       '</div>';
     document.body.appendChild(overlay);
     lockScroll();
+    // 记录浮层打开前的 SPA 状态，导航到新建课程时就地恢复，不再异步回退。
+    overlay._bnusparksReturnState = history.state;
     _pushModalHistory(overlay);
     document.getElementById('courseSearchInput').focus();
 
