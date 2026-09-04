@@ -489,10 +489,6 @@
     });
   }
 
-  function _removeOverlay(el) {
-    if (el) { el.remove(); unlockScroll(); _popModalHistory(); }
-  }
-
   function showRejectDialog(id) {
     // 移除已有弹窗
     var old = document.querySelector('.admin-reject-overlay');
@@ -672,4 +668,3 @@
       content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';
     });
   }
-
