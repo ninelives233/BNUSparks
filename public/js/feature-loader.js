@@ -1,6 +1,6 @@
 /* BNU Sparks · feature-loader.js —— 按视图懒加载非核心前端模块 */
 (function() {
-  var VERSION = '198';
+  var VERSION = '199';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -39,7 +39,7 @@
   function loadStyle(name) {
     if (loadedStyles[name]) return Promise.resolve();
     if (stylePromises[name]) return stylePromises[name];
-    stylePromises[name] = new Promise(function(resolve) {
+    stylePromises[name] = new Promise(function(resolve, reject) {
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = '/static/css/' + name + '?v=' + VERSION;
@@ -50,7 +50,8 @@
       };
       link.onerror = function() {
         delete stylePromises[name];
-        resolve();
+        console.warn('样式加载失败：' + name);
+        reject(new Error('样式加载失败：' + name));
       };
       document.head.appendChild(link);
     });
@@ -83,7 +84,7 @@
     if (featurePromises[feature]) return featurePromises[feature];
     var styles = (featureStyles[feature] || []).map(loadStyle);
     var scripts = featureScripts[feature] || [];
-    featurePromises[feature] = Promise.all(styles).then(function() {
+    var featurePromise = Promise.all(styles).then(function() {
       return scripts.reduce(function(chain, name) {
         return chain.then(function() { return loadScript(name); });
       }, Promise.resolve());
@@ -91,7 +92,13 @@
       window._bnusparksFeatureReady = window._bnusparksFeatureReady || {};
       window._bnusparksFeatureReady[feature] = true;
     });
-    return featurePromises[feature];
+    var retryablePromise = featurePromise.catch(function(err) {
+      // 失败只影响本次加载；下一次进入页面/视图可以重新尝试失败的资源。
+      if (featurePromises[feature] === retryablePromise) delete featurePromises[feature];
+      throw err;
+    });
+    featurePromises[feature] = retryablePromise;
+    return retryablePromise;
   }
 
   window.ensureFeature = loadFeature;

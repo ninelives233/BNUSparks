@@ -371,12 +371,13 @@
     closeNotifDrawer();
     if (!courseCode) { showHome(); return; }
     var type = courseCode.startsWith('GEN') ? '通识课' : '专业课';
-    showExplorer(type);
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        navToLast(courseCode);
-        setTimeout(function() { showUploadModal(courseCode, courseName); }, 200);
-      });
+    showExplorer(type).then(function(ready) {
+      if (!ready || typeof showUploadModal !== 'function') {
+        alert('上传模块加载失败，请刷新重试。');
+        return;
+      }
+      navToLast(courseCode);
+      showUploadModal(courseCode, courseName);
     });
   }
 

@@ -203,7 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 课程树只在首次视图确实需要时加载；进入 explorer 时 renderExplorer 会兜底按需加载。
-  const treePromise = initialView === 'explorer'
+  const needsCourseTree = initialView === 'explorer' || initialView === 'newCourse';
+  const treePromise = needsCourseTree
     ? viewFeaturePromise.then(() => loadCourseTree()).then(() => buildSameNameMap())
     : viewFeaturePromise;
   const authPromise = checkAuth().then(() => {

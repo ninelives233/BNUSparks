@@ -310,7 +310,9 @@
   function showFileDetail(file) {
     // 文件详情可从搜索、通知或管理追溯页直接打开；这些入口可能尚未加载 explorer 核心。
     if (typeof expPath === 'undefined' && typeof ensureFeature === 'function') {
-      ensureFeature('explorer').then(function() { showFileDetail(file); });
+      ensureFeature('explorer').then(function() { showFileDetail(file); }).catch(function() {
+        alert('课程模块加载失败，请刷新重试。');
+      });
       return;
     }
     // 保存当前侧边栏状态，保持高亮不丢失

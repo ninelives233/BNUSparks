@@ -425,22 +425,6 @@
         });
       }
 
-      function getPageNumbers(current, total) {
-        const pages = [];
-        if (total <= 5) {
-          for (let i = 1; i <= total; i++) pages.push(i);
-          return pages;
-        }
-        pages.push(1);
-        if (current - 1 > 2) pages.push('…');
-        var start = Math.max(2, current - 1);
-        var end = Math.min(total - 1, current + 1);
-        for (let i = start; i <= end; i++) pages.push(i);
-        if (current + 1 < total - 1) pages.push('…');
-        pages.push(total);
-        return pages;
-      }
-
       function showJumpPopup(event, total) {
         var existing = document.querySelector('.fp-jump-popup');
         if (existing) existing.remove();
