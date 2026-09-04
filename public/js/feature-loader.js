@@ -1,8 +1,10 @@
 /* BNU Sparks · feature-loader.js —— 按视图懒加载非核心前端模块 */
 (function() {
-  var VERSION = '195';
+  var VERSION = '197';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
+  var scriptPromises = Object.create(null);
+  var stylePromises = Object.create(null);
   var featurePromises = Object.create(null);
 
   var featureScripts = {
@@ -36,27 +38,45 @@
 
   function loadStyle(name) {
     if (loadedStyles[name]) return Promise.resolve();
-    return new Promise(function(resolve) {
+    if (stylePromises[name]) return stylePromises[name];
+    stylePromises[name] = new Promise(function(resolve) {
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = '/static/css/' + name + '?v=' + VERSION;
-      link.onload = function() { loadedStyles[name] = true; resolve(); };
-      link.onerror = function() { resolve(); };
+      link.onload = function() {
+        loadedStyles[name] = true;
+        delete stylePromises[name];
+        resolve();
+      };
+      link.onerror = function() {
+        delete stylePromises[name];
+        resolve();
+      };
       document.head.appendChild(link);
     });
+    return stylePromises[name];
   }
 
   function loadScript(name) {
     var src = '/static/js/' + name + '?v=' + VERSION;
     if (loadedScripts[src]) return Promise.resolve();
-    return new Promise(function(resolve, reject) {
+    if (scriptPromises[src]) return scriptPromises[src];
+    scriptPromises[src] = new Promise(function(resolve, reject) {
       var script = document.createElement('script');
       script.src = src;
       script.async = false;
-      script.onload = function() { loadedScripts[src] = true; resolve(); };
-      script.onerror = function() { reject(new Error('模块加载失败：' + name)); };
+      script.onload = function() {
+        loadedScripts[src] = true;
+        delete scriptPromises[src];
+        resolve();
+      };
+      script.onerror = function() {
+        delete scriptPromises[src];
+        reject(new Error('模块加载失败：' + name));
+      };
       document.head.appendChild(script);
     });
+    return scriptPromises[src];
   }
 
   function loadFeature(feature) {

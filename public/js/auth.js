@@ -82,8 +82,20 @@
     document.getElementById('loginModal').style.display = 'none';
     var modal = document.getElementById('registerModal');
     modal.style.display = 'flex';
+    document.getElementById('registerResendAction').style.display = 'block';
     activateDialog(modal);
     populateIdentitySelects('regCollege', 'regMajor', {});
+  }
+  function showVerificationResend(message) {
+    showRegister();
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('registerSuccess').style.display = 'none';
+    document.getElementById('registerError').style.display = 'none';
+    document.querySelectorAll('.register-resend-status').forEach(function(status) {
+      status.textContent = message || '填写上方学号并选择邮箱后缀，然后重新发送验证邮件。';
+    });
+    var sidInput = document.getElementById('regSid');
+    if (sidInput) setTimeout(function() { sidInput.focus(); }, 80);
   }
   function showLogin() {
     document.getElementById('registerModal').style.display = 'none';
@@ -362,8 +374,15 @@
   async function resendVerificationEmail() {
     var statuses = document.querySelectorAll('.register-resend-status');
     var buttons = document.querySelectorAll('.register-resend-btn');
+    var sidInput = document.getElementById('regSid');
+    var sid = sidInput ? sidInput.value.trim() : '';
+    if (sid) {
+      var suffixEl = document.getElementById('regEmailSuffix');
+      var suffix = suffixEl ? suffixEl.value : '@mail.bnu.edu.cn';
+      _pendingVerificationEmail = sid.indexOf('@') === -1 ? sid + suffix : sid.toLowerCase();
+    }
     if (!_pendingVerificationEmail) {
-      statuses.forEach(function(status) { status.textContent = '请先提交注册信息。'; });
+      statuses.forEach(function(status) { status.textContent = '请先填写上方学号并选择邮箱后缀。'; });
       return;
     }
     buttons.forEach(function(btn) { btn.disabled = true; });
@@ -387,7 +406,7 @@
       var sid = document.getElementById('regSid').value.trim();
       if (!sid) throw new Error('请输入学号');
       var suffix = document.getElementById('regEmailSuffix') ? document.getElementById('regEmailSuffix').value : '@mail.bnu.edu.cn';
-      var email = sid + suffix;
+      var email = sid.indexOf('@') === -1 ? sid + suffix : sid.toLowerCase();
       _pendingVerificationEmail = email;
       var password = document.getElementById('regPassword').value;
       var passwordConfirm = document.getElementById('regPasswordConfirm').value;
@@ -418,7 +437,7 @@
       success.style.display = 'none';
       var resendAction = document.getElementById('registerResendAction');
       var canResend = (err.message || '').indexOf('未验证') !== -1;
-      resendAction.style.display = canResend ? 'block' : 'none';
+      resendAction.style.display = 'block';
       if (!canResend) _clearVerificationResendState();
     }
     return false;
