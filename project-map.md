@@ -11,7 +11,7 @@
 - `materials/tests/`：33 个 Python 文件，7173 行，436 个 `test_*` 方法
 - `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1167 行
-- `public/js/`：22 个文件，10991 行（按视图懒加载 explorer/QA/admin 模块）
+- `public/js/`：22 个文件，11067 行（按视图懒加载 explorer/QA/admin 模块）
 - `public/css/`：9 个文件，7192 行（共享控件归入静态 components/files/user，页面专属样式再懒加载）
 
 ## 按任务定位

@@ -44,7 +44,7 @@
 | `materials/tests/` | 33 个 Python 文件，7173 行，436 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
 | `materials/management/commands/` | 8 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
 | `public/index.html` | 1167 行 | 页面骨架、表单、弹窗和核心/懒加载脚本入口都在这里 |
-| `public/js/` | 22 个文件，10991 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
+| `public/js/` | 22 个文件，11067 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
 | `public/css/` | 9 个文件，7192 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
 | `data/` | SQLite、媒体文件、课程映射等运行数据 | 不提交、不用清理脚本替代备份 |
 
@@ -160,19 +160,19 @@ utils → auth → profile → notifications → admin-core → views → explor
 
 | 文件/组 | 负责什么 | 什么时候改 |
 |---|---|---|
-| `public/js/utils.js` | `api`、token 清理、HTML/JS 转义、路由解析、下载、弹窗滚动/焦点、跨模块浮层清理 | 公共 API、令牌、路由、dialog 或跨页工具变化 |
+| `public/js/utils.js` | `api`、token 清理、HTML/JS 转义、文件徽章/分页、文件删除、路由解析、下载、弹窗滚动/焦点、跨模块浮层清理 | 公共 API、令牌、路由、文件公共工具、dialog 或跨页工具变化 |
 | `public/js/auth.js` | 注册、登录、验证、改密、找回、token 持久化 | 认证前端变化 |
 | `public/js/views.js` | 普通视图、公告、排行、搜索、公开用户页及管理模式下载追溯、`pushViewState` | 页面导航和公共视图变化 |
 | `public/js/profile.js` | 个人中心、公开资料、上传/下载/收藏页 | 用户模块变化 |
 | `public/js/notifications.js` | 通知抽屉、通知中心、管理/平民模式 | 通知和用户菜单变化 |
 | `public/js/admin-*.js` | 管理概览、待审、记录、用户；`admin-users.js` 含趋势/三项身份/访问流水筛选/运行状态/用户名单 | 后台 tab、用户监测和管理动作变化 |
 | `public/js/explorer-*.js` | 课程树、上传、文件列表、管理、预览 | 课程浏览与文件操作变化 |
-| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin 脚本和对应 CSS，并复用脚本/CSS 加载 Promise | 首屏资源、模块依赖顺序或懒加载入口变化 |
+| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin 脚本和对应 CSS，并复用脚本/CSS 加载 Promise；失败资源可重试 | 首屏资源、模块依赖顺序、错误恢复或懒加载入口变化 |
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
 | `public/css/tokens.css` | OKLCH 色彩、字体、间距、动效变量 | 设计系统变化 |
-| `public/css/base.css` | 全局布局、表单、弹窗、移动基础 | 基础 UI 变化 |
+| `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、移动基础 | 基础 UI 变化 |
 | `public/css/admin.css` | 审核/管理后台 | 管理 UI 变化 |
 | `public/css/user.css` | 个人中心、用户页、通知抽屉及我的上传操作 | 用户 UI 变化 |
 | `public/css/files.css` | 文件列表、详情、预览、举报、上传下载和管理模式文件控件 | 文件 UI 变化 |

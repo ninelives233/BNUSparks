@@ -1244,6 +1244,24 @@
   .so-empty-icon { font-size: 1.5rem; margin-bottom: var(--space-xs); }
   .so-empty-text { font-size: 0.85rem; color: var(--ink-faint); }
 
+  /* ── 首页上传弹窗：新建课程入口（静态 views.js 使用） ── */
+  .so-new-course {
+    margin-top: var(--space-md);
+    text-align: center;
+    border-top: 1px dashed var(--border);
+    padding-top: var(--space-md);
+  }
+  .so-new-hint { font-size: 0.74rem; color: var(--ink-faint); margin-bottom: 8px; }
+  .so-new-btn {
+    display: inline-block; border: none; cursor: pointer;
+    background: var(--primary); color: #fff;
+    padding: 9px 26px; border-radius: var(--radius-full);
+    font: inherit; font-weight: 600; font-size: 0.9rem;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .so-new-btn:hover { background: var(--primary-dark); }
+  .so-new-btn:active { transform: scale(0.98); }
+
   /* ═══════════════════════════════════════════
      Same-name sidebar inside file listing
      ═══════════════════════════════════════════ */

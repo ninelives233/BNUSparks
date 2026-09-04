@@ -1,4 +1,4 @@
-/* BNU Sparks · admin-pending.js —— 待审核+审核历史：renderAdminPending/_userPill/quickApprove/deleteFileConfirm/renderAdminHistory 等。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
+  /* BNU Sparks · admin-pending.js —— 待审核+审核历史：renderAdminPending/_userPill/quickApprove/renderAdminHistory 等。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
 
   // ── 待审核 ──
   var _pendingIncludeSub = false;
@@ -527,35 +527,6 @@
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert('操作失败：' + err.message);
-    });
-  }
-
-  // ── 文件删除 ──
-  function deleteFileConfirm(fileId, btn) {
-    if (!confirm('确认删除此文件？此操作将在48小时内可撤销。')) return;
-    var overlay = btn && btn.closest('.file-info-overlay');
-    api('/api/files/' + fileId + '/delete/', { method: 'DELETE' }).then(function() {
-      if (overlay) overlay.remove();
-      // 删除成功后：清公开页前端缓存 + 刷新课程树（fileCount 即时更新）
-      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
-      if (typeof refreshCourseTree === 'function') refreshCourseTree();
-      // 删除成功后刷新当前课程的文件列表
-      var tbody = document.getElementById('fileTableBody');
-      if (tbody) {
-        var row = tbody.querySelector('tr[data-file-id="' + fileId + '"]');
-        if (row) row.remove();
-        // 更新文件计数
-        var fc = document.getElementById('fileCount');
-        if (fc) { var fm = fc.textContent.match(/(\d+)/); if (fm) { fc.textContent = (parseInt(fm[1]) - 1) + ' 个文件'; } }
-        // 如果表为空，显示空提示
-        if (!tbody.querySelector('tr[data-file-id]')) {
-          tbody.innerHTML = '<tr><td colspan="7" class="admin-empty admin-empty--sm">暂无资料</td></tr>';
-          var pag = document.getElementById('filePagination');
-          if (pag) pag.style.display = 'none';
-        }
-      }
-    }).catch(function(err) {
-      alert('删除失败：' + err.message);
     });
   }
 

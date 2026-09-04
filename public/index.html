@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
 <link rel="stylesheet" href="/static/css/tokens.css?v=186">
-<link rel="stylesheet" href="/static/css/base.css?v=191">
+<link rel="stylesheet" href="/static/css/base.css?v=199">
 <link rel="stylesheet" href="/static/css/user.css?v=197">
 <link rel="stylesheet" href="/static/css/files.css?v=197">
 <link rel="stylesheet" href="/static/css/announcement.css?v=186">
@@ -285,7 +285,7 @@
         </div>
         <div class="qa-head-actions">
           <button class="qa-filter-btn" id="qaFilterBtn" onclick="toggleQaFilter()">筛选</button>
-          <button class="qa-ask-btn" id="qaAskBtn" onclick="ensureFeature('qa').then(function(){qaAskClick();})">我要提问</button>
+          <button class="qa-ask-btn" id="qaAskBtn" onclick="ensureFeature('qa').then(function(){qaAskClick();}).catch(function(){alert('问答模块加载失败，请刷新重试。')})">我要提问</button>
         </div>
       </div>
       <div id="qaToolbar"></div>
@@ -1151,17 +1151,17 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=198" defer></script>
+<script src="/static/js/utils.js?v=199" defer></script>
 <script src="/static/js/auth.js?v=196" defer></script>
-<script src="/static/js/profile.js?v=195" defer></script>
-<script src="/static/js/notifications.js?v=186" defer></script>
+<script src="/static/js/profile.js?v=199" defer></script>
+<script src="/static/js/notifications.js?v=199" defer></script>
 <script src="/static/js/admin-core.js?v=195" defer></script>
-<script src="/static/js/views.js?v=195" defer></script>
+<script src="/static/js/views.js?v=199" defer></script>
 <script src="/static/js/explorer-core.js?v=195" defer></script>
 <script src="/static/js/explorer-file.js?v=186" defer></script>
 <script src="/static/js/explorer-preview.js?v=186" defer></script>
-<script src="/static/js/feature-loader.js?v=198" defer></script>
-<script src="/static/js/app.js?v=196" defer></script>
+<script src="/static/js/feature-loader.js?v=199" defer></script>
+<script src="/static/js/app.js?v=199" defer></script>
 
 </body>
 </html>

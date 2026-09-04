@@ -458,7 +458,7 @@
           '<span class="pc-glyph pc-glyph-star">★</span>',
           esc(r.title) + statusHtml, meta, '',
           '<span class="pc-side-icon">' + _IC_STAR + '</span>',
-          "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ");})"
+          "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ");}).catch(function(){alert('问答模块加载失败，请刷新重试。')})"
         );
       }).join('');
     }).catch(function() { list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。'); });
@@ -581,13 +581,12 @@
   // ── 驳回重新上传 ──
   let _reuploadOldId = null;
 
-  function showReUploadDialog(materialId, courseCode, courseName, title, reviewNotes, teacher) {
-    if (!currentUser) { showLoginModal(); return; }
-    _reuploadOldId = materialId;
+  function _openReUploadDialog(materialId, courseCode, courseName, title, reviewNotes, teacher) {
     showUploadModal(courseCode, courseName);
+    // showUploadModal 会重置普通上传状态，旧记录必须在其之后写入。
+    _reuploadOldId = materialId;
     document.getElementById('uploadTitle').value = title;
     if (teacher) document.getElementById('uploadTeacher').value = teacher;
-    // 显示上次驳回原因提示
     var notesEl = document.getElementById('reuploadInfo');
     if (!notesEl) {
       notesEl = document.createElement('div');
@@ -597,6 +596,24 @@
     }
     notesEl.innerHTML = '📌 上次驳回原因：' + esc(reviewNotes) + '<br><small>修改后重新提交，将重新进入审核流程。旧驳回记录将自动删除。</small>';
     notesEl.style.display = 'block';
+  }
+
+  function showReUploadDialog(materialId, courseCode, courseName, title, reviewNotes, teacher) {
+    if (!currentUser) { showLoginModal(); return; }
+    if (typeof showUploadModal === 'function') {
+      _openReUploadDialog(materialId, courseCode, courseName, title, reviewNotes, teacher);
+      return;
+    }
+    if (typeof ensureFeature !== 'function') {
+      alert('上传模块加载失败，请刷新重试。');
+      return;
+    }
+    ensureFeature('explorer').then(function() {
+      if (typeof showUploadModal !== 'function') throw new Error('上传模块未就绪');
+      _openReUploadDialog(materialId, courseCode, courseName, title, reviewNotes, teacher);
+    }).catch(function() {
+      alert('上传模块加载失败，请刷新重试。');
+    });
   }
 
   function editNickname() {

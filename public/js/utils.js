@@ -97,6 +97,38 @@
     return (bytes/1024/1024).toFixed(1) + ' MB';
   }
 
+  // 跨页面共享：文件扩展名徽章不能依赖 explorer 管理模块。
+  function extBadge(fileName) {
+    if (!fileName) return '';
+    const ext = fileName.split('.').pop().toLowerCase();
+    const label = {pdf:'PDF', ppt:'PPT', pptx:'PPT', doc:'DOC', docx:'DOC', xls:'XLS', xlsx:'XLS',
+                   jpg:'IMG', jpeg:'IMG', png:'IMG', gif:'IMG', webp:'IMG', md:'MD', txt:'TXT',
+                   zip:'ZIP', rar:'RAR', py:'PY', js:'JS', html:'HTML', css:'CSS'}[ext] || ext.toUpperCase().slice(0,4);
+    var safeLabel = typeof esc === 'function'
+      ? esc(label)
+      : String(label).replace(/[&<>"'`]/g, function(ch) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[ch];
+        });
+    return '<span class="ext-badge">' + safeLabel + '</span>';
+  }
+
+  // 文件列表和问答区共用分页按钮；必须在静态 utils 中提供。
+  function getPageNumbers(current, total) {
+    const pages = [];
+    if (total <= 5) {
+      for (let i = 1; i <= total; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (current - 1 > 2) pages.push('…');
+    var start = Math.max(2, current - 1);
+    var end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current + 1 < total - 1) pages.push('…');
+    pages.push(total);
+    return pages;
+  }
+
   // ── 弹窗滚动锁定 ──
   let _scrollPos = 0;
   let _scrollLockCount = 0;
@@ -200,6 +232,34 @@
     if (history.state && history.state._modal) {
       history.back();
     }
+  }
+
+  // 跨页面共享：课程浏览器和管理后台都能生成删除按钮，不能放在 admin-pending。
+  function deleteFileConfirm(fileId, btn) {
+    if (!confirm('确认删除此文件？此操作将在48小时内可撤销。')) return;
+    var overlay = btn && btn.closest('.file-info-overlay');
+    api('/api/files/' + fileId + '/delete/', { method: 'DELETE' }).then(function() {
+      if (overlay) overlay.remove();
+      if (typeof clearUserPublicCache === 'function') clearUserPublicCache();
+      if (typeof refreshCourseTree === 'function') refreshCourseTree();
+      var tbody = document.getElementById('fileTableBody');
+      if (tbody) {
+        var row = tbody.querySelector('tr[data-file-id="' + fileId + '"]');
+        if (row) row.remove();
+        var fc = document.getElementById('fileCount');
+        if (fc) {
+          var fm = fc.textContent.match(/(\d+)/);
+          if (fm) fc.textContent = (parseInt(fm[1]) - 1) + ' 个文件';
+        }
+        if (!tbody.querySelector('tr[data-file-id]')) {
+          tbody.innerHTML = '<tr><td colspan="7" class="admin-empty admin-empty--sm">暂无资料</td></tr>';
+          var pag = document.getElementById('filePagination');
+          if (pag) pag.style.display = 'none';
+        }
+      }
+    }).catch(function(err) {
+      alert('删除失败：' + err.message);
+    });
   }
 
   // 跨页面/懒加载模块共用的浮层清理；必须由首屏 utils 提供，不能放在 admin 模块。
@@ -515,7 +575,17 @@
       // 问答区视图内：搜索框自动切为帖子搜索（未登录经 2026 门控也可搜）
       if (typeof isQaViewActive === 'function' && isQaViewActive()) {
         const qaQ = input.value.trim();
-        if (qaQ && typeof qaSearch === 'function') qaSearch(qaQ);
+        if (!qaQ) return;
+        if (typeof qaSearch === 'function') {
+          qaSearch(qaQ);
+        } else if (typeof ensureFeature === 'function') {
+          ensureFeature('qa').then(function() {
+            var qaView = document.getElementById('qaView');
+            if (qaView && qaView.classList.contains('active') && typeof qaSearch === 'function') qaSearch(qaQ);
+          }).catch(function() {
+            alert('问答模块加载失败，请刷新重试。');
+          });
+        }
         return;
       }
       // v=164：未登录回车提交在此拦截（点击搜索框/按钮已由 app.js capture 拦截器兜底）

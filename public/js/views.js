@@ -12,6 +12,8 @@
       ready.then(function() { return loadCourseTree(); }).then(function() {
         var explorer = document.getElementById('explorerView');
         if (explorer && explorer.classList.contains('active')) renderExplorer();
+      }).catch(function() {
+        if (loading) loading.innerHTML = '<div class="empty-state compact">课程模块加载失败，请刷新重试。</div>';
       });
       return;
     }
@@ -356,6 +358,8 @@
       ensureFeature('qa').then(function() {
         var qaView = document.getElementById('qaView');
         if (qaView && qaView.classList.contains('active')) renderQaView();
+      }).catch(function() {
+        if (content) content.innerHTML = '<div class="empty-state compact">问答模块加载失败，请刷新重试。</div>';
       });
     }
   }
@@ -730,6 +734,24 @@
      Iter 7: 首页上传按钮 + 物质支持
      ═══════════════════════════════════════════════════════════ */
 
+  // 首页可以在 explorer 尚未加载时打开上传弹窗；新建课程入口需要等待完整 feature。
+  function openNewCourse() {
+    var ready = Promise.resolve();
+    if (typeof showNewCourse !== 'function' && typeof ensureFeature === 'function') {
+      ready = ensureFeature('explorer');
+    }
+    ready.then(function() {
+      if (typeof loadCourseTree === 'function' && (typeof courseTree === 'undefined' || !courseTree)) {
+        return loadCourseTree();
+      }
+    }).then(function() {
+      if (typeof showNewCourse !== 'function') throw new Error('新建课程模块未就绪');
+      showNewCourse();
+    }).catch(function() {
+      alert('新建课程模块加载失败，请刷新重试。');
+    });
+  }
+
   function openCourseSearchUpload() {
     if (!currentUser) { showLoginModal(); return; }
     var overlay = document.createElement('div');
@@ -748,7 +770,7 @@
         '</div>' +
         '<div class="so-new-course">' +
           '<div class="so-new-hint">没有要找的学院/专业/课程？点击↓</div>' +
-          '<button class="so-new-btn" onclick="_removeOverlay(this.closest(\'.search-overlay\'));showNewCourse()">新建课程</button>' +
+          '<button class="so-new-btn" onclick="_removeOverlay(this.closest(\'.search-overlay\'));openNewCourse()">新建课程</button>' +
         '</div>' +
         '<div class="search-overlay-results" id="courseSearchResults">' +
           '<div class="so-hint">' +
@@ -863,13 +885,24 @@
         });
       }
     };
-    if (typeof loadCourseTree === 'function') {
-      render();
-    } else if (typeof ensureFeature === 'function') {
-      var content = document.getElementById('explorerContent');
-      if (content) content.innerHTML = '<div class="empty-state compact">课程目录加载中…</div>';
-      ensureFeature('explorer').then(render);
+    var content = document.getElementById('explorerContent');
+    if (content) content.innerHTML = '<div class="empty-state compact">课程目录加载中…</div>';
+    var ready = Promise.resolve();
+    if (typeof ensureFeature === 'function' &&
+        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady.explorer)) {
+      ready = ensureFeature('explorer');
     }
+    return ready.then(function() {
+      if (typeof loadCourseTree === 'function' && (typeof courseTree === 'undefined' || !courseTree)) {
+        return loadCourseTree();
+      }
+    }).then(function() {
+      render();
+      return true;
+    }).catch(function() {
+      if (content) content.innerHTML = '<div class="empty-state compact">课程模块加载失败，请刷新重试。</div>';
+      return false;
+    });
   }
 
   // ── Sidebar ──

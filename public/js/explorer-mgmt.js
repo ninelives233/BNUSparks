@@ -1,13 +1,4 @@
 /* BNU Sparks · explorer-mgmt.js —— 管理模式。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
-  function extBadge(fileName) {
-    if (!fileName) return '';
-    const ext = fileName.split('.').pop().toLowerCase();
-    const label = {pdf:'PDF', ppt:'PPT', pptx:'PPT', doc:'DOC', docx:'DOC', xls:'XLS', xlsx:'XLS',
-                   jpg:'IMG', jpeg:'IMG', png:'IMG', gif:'IMG', webp:'IMG', md:'MD', txt:'TXT',
-                   zip:'ZIP', rar:'RAR', py:'PY', js:'JS', html:'HTML', css:'CSS'}[ext] || ext.toUpperCase().slice(0,4);
-    return '<span class="ext-badge">' + esc(label) + '</span>';
-  }
-
   // ═══════════════════════════════════════════════════════════
   // 管理模式：三点菜单 + 操作弹窗
   // ═══════════════════════════════════════════════════════════
@@ -340,4 +331,3 @@
       _showScopeError('创建失败', err);
     });
   }
-
