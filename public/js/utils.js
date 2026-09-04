@@ -202,6 +202,12 @@
     }
   }
 
+  // 跨页面/懒加载模块共用的浮层清理；必须由首屏 utils 提供，不能放在 admin 模块。
+  function _removeOverlay(el) {
+    if (el) { el.remove(); unlockScroll(); _popModalHistory(); }
+  }
+  window._removeOverlay = _removeOverlay;
+
   // ── SPA 干净 URL 路由（v=171）：每个视图对应一个可分享/可刷新/可返回的路径 ──
   // 静态视图名 → 路径；explorer/userPublic/fileDetail 是动态路径，在 routeToPath 里单独处理；
   // drawer 是叠在当前视图上的浮层，不占 URL。

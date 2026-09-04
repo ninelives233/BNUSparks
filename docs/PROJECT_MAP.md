@@ -44,7 +44,7 @@
 | `materials/tests/` | 33 个 Python 文件，7173 行，436 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
 | `materials/management/commands/` | 8 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
 | `public/index.html` | 1167 行 | 页面骨架、表单、弹窗和核心/懒加载脚本入口都在这里 |
-| `public/js/` | 22 个文件，10990 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
+| `public/js/` | 22 个文件，10991 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
 | `public/css/` | 9 个文件，7192 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
 | `data/` | SQLite、媒体文件、课程映射等运行数据 | 不提交、不用清理脚本替代备份 |
 
@@ -160,7 +160,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 
 | 文件/组 | 负责什么 | 什么时候改 |
 |---|---|---|
-| `public/js/utils.js` | `api`、token 清理、HTML/JS 转义、路由解析、下载、弹窗滚动/焦点 | 公共 API、令牌、路由、dialog 或跨页工具变化 |
+| `public/js/utils.js` | `api`、token 清理、HTML/JS 转义、路由解析、下载、弹窗滚动/焦点、跨模块浮层清理 | 公共 API、令牌、路由、dialog 或跨页工具变化 |
 | `public/js/auth.js` | 注册、登录、验证、改密、找回、token 持久化 | 认证前端变化 |
 | `public/js/views.js` | 普通视图、公告、排行、搜索、公开用户页及管理模式下载追溯、`pushViewState` | 页面导航和公共视图变化 |
 | `public/js/profile.js` | 个人中心、公开资料、上传/下载/收藏页 | 用户模块变化 |
