@@ -1343,6 +1343,44 @@
   box-shadow: var(--shadow-xs);
 }
 
+/* ── 我的上传：驳回记录操作 ────────────────────────────────── */
+.reupload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.reupload-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.delete-rejected-btn {
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+}
+.delete-rejected-btn:hover { background: oklch(0.88 0.08 20); }
+.hc-item-actions { margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; }
+.reupload-info {
+  background: oklch(0.95 0.05 80 / 0.5);
+  border: 1px solid oklch(0.9 0.08 80 / 0.3);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+.reupload-info small { color: var(--ink-faint); font-size: 0.75rem; }
+
 /* 窄屏收紧 */
 @media (max-width: 640px) {
   .pc-item { padding: 12px; gap: 10px; }

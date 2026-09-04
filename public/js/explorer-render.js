@@ -306,7 +306,7 @@
           }
           var dlLink = currentUser
             ? (f.can_download !== false
-                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a><a href="javascript:void(0)" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</a>'
+                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a><button type="button" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</button>'
                 : '<span class="dl-link dl-disabled" title="审核通过后可下载">⏳ 待审核</span>')
             : '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a>';
           var isChecked = !!_selectedIds[f.id];
@@ -507,4 +507,3 @@
   }
 
   // ── 文件简介模态框 ──
-

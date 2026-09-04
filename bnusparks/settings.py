@@ -155,3 +155,8 @@ EMAIL_PORT = 465
 EMAIL_USE_SSL = True
 EMAIL_HOST_USER = 'bnusparks@163.com'
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASSWORD') or _env_vars.get('EMAIL_PASSWORD', '')
+# SMTP 请求最长等待 10 秒，避免邮件服务异常时耗尽 Web 工作进程。
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', 10))
+# 验证邮件和密码重置邮件均明确承诺 30 分钟有效。
+EMAIL_VERIFICATION_TIMEOUT = int(os.environ.get('EMAIL_VERIFICATION_TIMEOUT', 30 * 60))
+PASSWORD_RESET_TIMEOUT = int(os.environ.get('PASSWORD_RESET_TIMEOUT', 30 * 60))

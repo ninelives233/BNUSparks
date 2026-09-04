@@ -251,9 +251,17 @@ document.addEventListener('DOMContentLoaded', () => {
           })
           .catch(function(err) {
             history.replaceState(null, '', '/');
-            alert('验证失败：' + err.message + '\n请重新注册或联系管理员。');
             showHome();
             updateAuthUI();
+            var verifyMessage = err.message || '验证失败';
+            if (/已完成验证|直接登录/.test(verifyMessage)) {
+              alert(verifyMessage);
+              showLoginModal();
+            } else if (/过期|无效/.test(verifyMessage) && typeof showVerificationResend === 'function') {
+              showVerificationResend(verifyMessage + '。填写学号后可直接重新发送，无需重填其他注册信息。');
+            } else {
+              alert('验证失败：' + verifyMessage + '\n请稍后重试或联系管理员。');
+            }
           });
       }
     })();

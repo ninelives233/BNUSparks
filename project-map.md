@@ -3,16 +3,16 @@
 这是项目地图的薄索引。面向维护者的完整、可阅读版本在
 [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md)。
 
-## 当前基线（2026-08-31）
+## 当前基线（2026-09-04）
 
 - `materials/models.py`：1012 行，27 个 Django 模型（另有 `CourseType` 枚举）
 - `materials/urls.py`：151 行，117 个 `path()` 路由
-- `materials/views/`：37 个 Python 文件，10470 行
-- `materials/tests/`：33 个 Python 文件，6980 行，424 个 `test_*` 方法
-- `materials/management/commands/`：7 个可执行管理命令
+- `materials/views/`：37 个 Python 文件，10632 行
+- `materials/tests/`：33 个 Python 文件，7173 行，436 个 `test_*` 方法
+- `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1167 行
-- `public/js/`：22 个文件，10944 行（按视图懒加载 explorer/QA/admin 模块）
-- `public/css/`：9 个文件，7328 行
+- `public/js/`：22 个文件，10990 行（按视图懒加载 explorer/QA/admin 模块）
+- `public/css/`：9 个文件，7192 行（共享控件归入静态 components/files/user，页面专属样式再懒加载）
 
 ## 按任务定位
 
@@ -30,5 +30,6 @@
 - 设计系统与页面样式：`public/css/tokens.css` 及其余 CSS 模块
 - 回归测试：`materials/tests/`
 - 发布与运维：`deploy.sh`（固定 host key、停服后备份应用/SQLite/Nginx、校验重载 Nginx、失败回滚）、`scripts/`、`bnusparks/settings_prod.py`
+- 新专业课程树种子：`scripts/seed_new5.py`（从 `tmp_seed_pdfs/新建5` 转录并幂等写入八个已有学院的专业树）
 
 完整地图、调用链、权限边界和“什么时候改哪里”见 [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md)。

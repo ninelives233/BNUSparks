@@ -2,6 +2,221 @@
    文件列表布局优化 — 扩展内容区
    ═══════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════
+   文件预览 — 文件列表动作与预览层
+   预览属于公开课程浏览器，不能依赖仅后台懒加载的 admin.css。
+   ═══════════════════════════════════════════ */
+
+.file-table .pv-link {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 0.72rem; font-weight: 600;
+  color: oklch(0.48 0.10 165); text-decoration: none;
+  background: transparent; border: 1.5px solid oklch(0.48 0.10 165);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+  font-family: inherit;
+  line-height: inherit;
+}
+.file-table .pv-link:hover {
+  background: oklch(0.48 0.10 165); color: #fff;
+}
+.file-table.multi-select .pv-link { display: none; }
+
+.dl-normal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.preview-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: oklch(0 0 0 / 0.88);
+  display: flex; flex-direction: column;
+  padding: var(--space-md);
+  backdrop-filter: blur(8px);
+  animation: modalIn 0.2s ease-out;
+}
+
+.preview-header {
+  display: flex; align-items: center; gap: var(--space-sm);
+  color: #fff; padding: 0 var(--space-sm) var(--space-sm);
+  flex-shrink: 0;
+}
+.preview-header .pv-badge { flex-shrink: 0; }
+.preview-header .pv-title {
+  flex: 1; font-size: 0.85rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0.85;
+}
+.preview-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: auto; min-height: 0;
+}
+.preview-close {
+  position: absolute; top: 16px; right: 16px; z-index: 10;
+  width: 36px; height: 36px; border: none;
+  background: oklch(1 0 0 / 0.12); color: #fff;
+  font-size: 1.1rem; border-radius: 50%;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.preview-close:hover { background: oklch(1 0 0 / 0.3); }
+
+.pv-dl-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 18px; border-radius: 6px;
+  font-size: 0.82rem; font-weight: 600;
+  background: var(--primary); color: #fff;
+  border: none; cursor: pointer; text-decoration: none;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+.pv-dl-btn:hover { background: var(--primary-dark); }
+.pv-dl-btn-hdr { margin-left: auto; font-size: 0.78rem; padding: 5px 14px; }
+.pv-viewer { border-radius: var(--radius-md); }
+
+.pv-text-wrap { width: 100%; max-width: 900px; max-height: 100%; margin: 0 auto; overflow: auto; }
+.pv-text {
+  background: oklch(0.2 0.01 250); color: oklch(0.85 0.005 250);
+  padding: var(--space-md); border-radius: var(--radius-md);
+  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
+  font-size: 0.75rem; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-all; overflow-x: auto;
+}
+.pv-text-code { color: oklch(0.83 0.04 150); }
+
+.pv-unsupported { text-align: center; color: oklch(0.7 0.01 0); }
+.pv-unsupported-icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.5; }
+.pv-unsupported-text { font-size: 1.1rem; font-weight: 500; margin-bottom: 4px; }
+.pv-unsupported-sub { font-size: 0.82rem; opacity: 0.5; margin-bottom: var(--space-lg); }
+
+.pv-zip-loading { text-align: center; padding: var(--space-lg); color: var(--ink-faint, #999); font-size: 0.85rem; }
+.pv-zip-header {
+  padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--border-light, #e8e8e8);
+  display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap;
+}
+.pv-zip-filename { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.pv-zip-stats { font-size: 0.75rem; color: var(--ink-faint, #999); margin-left: auto; white-space: nowrap; }
+.pv-zip-trunc { font-size: 0.7rem; color: oklch(0.52 0.13 45); background: oklch(0.52 0.13 45 / 0.12); padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pv-zip-tree {
+  padding: var(--space-xs) var(--space-xs) var(--space-xs) 0; overflow: auto; max-height: 50vh;
+  font-size: 0.78rem; font-family: "SF Mono", "Fira Code", Consolas, monospace; line-height: 1.9;
+}
+.pv-zip-dir { white-space: nowrap; }
+.pv-zip-dir > summary {
+  list-style: none; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px;
+  padding: 1px var(--space-sm); border-radius: var(--radius-sm); color: var(--ink, #333); transition: background 0.12s;
+}
+.pv-zip-dir > summary::-webkit-details-marker { display: none; }
+.pv-zip-dir > summary:hover { background: oklch(0.93 0.02 250 / 0.5); }
+.pzd-arrow { display: inline-block; flex: none; width: 0.8em; color: var(--ink-faint, #aaa); font-size: 0.72em; transition: transform 0.15s ease; }
+.pv-zip-dir[open] > summary .pzd-arrow { transform: rotate(90deg); }
+.pzd-icon { flex: none; }
+.pzd-name { font-weight: 600; color: oklch(0.42 0.06 250); }
+.pzd-meta { font-size: 0.68em; color: var(--ink-faint, #aaa); margin-left: 8px; font-weight: 400; }
+.pzd-children { margin-left: 1.1em; padding-left: 0.5em; border-left: 1px dashed var(--border-light, #e8e8e8); }
+.pv-zip-file { display: flex; align-items: center; gap: 4px; white-space: nowrap; padding: 1px var(--space-sm); border-radius: var(--radius-sm); transition: background 0.12s; }
+.pv-zip-file:hover { background: oklch(0.95 0.01 250 / 0.6); }
+.pzf-icon { flex: none; opacity: 0.75; }
+.pv-zip-fname { color: var(--ink, #333); overflow: hidden; text-overflow: ellipsis; }
+.pv-zip-fsize { font-size: 0.7rem; color: var(--ink-faint, #aaa); margin-left: auto; padding-right: var(--space-md); flex: none; font-variant-numeric: tabular-nums; }
+.pv-zip-empty { padding: var(--space-lg); text-align: center; color: var(--ink-faint, #999); font-size: 0.85rem; }
+.pv-zip-footer { padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border-light, #e8e8e8); text-align: center; }
+
+.fi-preview-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 22px; border-radius: var(--radius-sm);
+  font-size: 0.85rem; font-weight: 600; background: transparent;
+  color: oklch(0.48 0.10 165); border: 1.5px solid oklch(0.48 0.10 165);
+  cursor: pointer; text-decoration: none; margin-bottom: 8px;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
+  font-family: inherit;
+}
+.fi-preview-btn:hover { background: oklch(0.48 0.10 165); color: #fff; }
+.fi-actions {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin-top: var(--space-md); padding-top: var(--space-lg); border-top: 1px solid var(--border-light);
+}
+.fi-actions .fi-preview-btn { margin-bottom: 0; }
+.fi-actions .fi-download-btn { margin-top: 0; }
+
+/* ── 管理模式文件控件 ───────────────────────────────────────── */
+.mgmt-new-btn {
+  margin-left: auto;
+  background: var(--accent, #c97d2d);
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mgmt-new-btn:hover { opacity: 0.85; }
+.mgmt-pen {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.mgmt-pen:hover { opacity: 1; }
+.mgmt-pen-sm { font-size: 0.7rem; vertical-align: middle; }
+.mgmt-pin { font-size: 0.78rem; }
+.file-pin-badge {
+  display: inline-block;
+  color: var(--star-dark);
+  background: var(--star-light);
+  border: 1px solid var(--star-border);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.file-pinned td { background: oklch(0.985 0.012 70); }
+.file-pinned:hover td { background: oklch(0.975 0.02 70); }
+.file-pinned .ft-name { box-shadow: inset 3px 0 0 var(--star); }
+.file-pinned .fn-text { color: var(--star-dark); }
+.file-pinned .mgmt-pin { opacity: 1; }
+
+/* ── 文件详情内联编辑 ──────────────────────────────────────── */
+.fi-row-desc .fi-value { white-space: pre-wrap; word-break: break-word; }
+.fi-edit-input {
+  width: 90%;
+  padding: 4px 6px;
+  border: 1px solid var(--accent, #c97d2d);
+  border-radius: 4px;
+  font-size: inherit;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.fi-pen {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  vertical-align: middle;
+}
+.fi-pen:hover { opacity: 1; }
+
+/* 批量操作和新建按钮的窄屏布局属于课程资料页。 */
+@media (max-width: 640px) {
+  .batch-dl-bar { flex-wrap: wrap; gap: 8px; }
+  .batch-dl-bar .admin-btn-sm { font-size: 0.72rem; padding: 5px 10px; }
+  .mgmt-new-btn { font-size: 0.7rem; padding: 3px 8px; }
+}
+
 .explorer-view .container {
   max-width: none;
   padding: 0 32px;
@@ -629,4 +844,3 @@
   width: 60px;
   text-align: center;
 }
-

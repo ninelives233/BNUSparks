@@ -6,10 +6,10 @@
 <title>BNUSparks · 资料共享</title>
 <link rel="stylesheet" href="/static/css/tokens.css?v=186">
 <link rel="stylesheet" href="/static/css/base.css?v=191">
-<link rel="stylesheet" href="/static/css/user.css?v=189">
-<link rel="stylesheet" href="/static/css/files.css?v=195">
+<link rel="stylesheet" href="/static/css/user.css?v=197">
+<link rel="stylesheet" href="/static/css/files.css?v=197">
 <link rel="stylesheet" href="/static/css/announcement.css?v=186">
-<link rel="stylesheet" href="/static/css/components.css?v=193">
+<link rel="stylesheet" href="/static/css/components.css?v=197">
 </head>
 <body>
 
@@ -971,6 +971,11 @@
           </select>
         </div>
         <p class="mf-email-hint">新生可能暂时无法使用师大邮箱，建议关注即将推出的新生专区，无需登录也可浏览。可联系微信：Rsun1949进行人工核验，直接发放账号。</p>
+        <div id="registerResendAction" class="register-resend register-resend-error" style="display:block">
+          <p class="register-resend-note">已注册但未验证？填写学号并选择邮箱后缀即可重新发送，无需重填其他信息。</p>
+          <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
+          <span class="register-resend-status" role="status" aria-live="polite"></span>
+        </div>
       </div>
       <div class="mf-group">
         <label for="regNickname">昵称</label>
@@ -1008,11 +1013,6 @@
       <p class="mf-switch">已有账号？<a href="#" onclick="showLogin();return false">登录</a></p>
     </form>
     <div id="registerError" class="mf-error" role="alert" aria-live="assertive" style="display:none"></div>
-    <div id="registerResendAction" class="register-resend register-resend-error" style="display:none">
-      <p class="register-resend-note">验证邮件可能已过期或未收到？</p>
-      <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
-      <span class="register-resend-status" role="status" aria-live="polite"></span>
-    </div>
     <div id="registerSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
       <p class="ms-title">注册成功！</p>
@@ -1152,7 +1152,7 @@
 
 <!-- ═══ Scripts ═══ -->
 <script src="/static/js/utils.js?v=195" defer></script>
-<script src="/static/js/auth.js?v=195" defer></script>
+<script src="/static/js/auth.js?v=196" defer></script>
 <script src="/static/js/profile.js?v=195" defer></script>
 <script src="/static/js/notifications.js?v=186" defer></script>
 <script src="/static/js/admin-core.js?v=195" defer></script>
@@ -1160,8 +1160,8 @@
 <script src="/static/js/explorer-core.js?v=195" defer></script>
 <script src="/static/js/explorer-file.js?v=186" defer></script>
 <script src="/static/js/explorer-preview.js?v=186" defer></script>
-<script src="/static/js/feature-loader.js?v=195" defer></script>
-<script src="/static/js/app.js?v=195" defer></script>
+<script src="/static/js/feature-loader.js?v=197" defer></script>
+<script src="/static/js/app.js?v=196" defer></script>
 
 </body>
 </html>

@@ -2,7 +2,7 @@
 
 > 给人看的维护地图，不是 API 文档的替代品。需要精确路由或字段时，以代码为准。
 >
-> 基线日期：2026-08-31。行号来自当前工作树；修改代码后只更新本图中受影响的数字和入口。
+> 基线日期：2026-09-04。行号来自当前工作树；修改代码后只更新本图中受影响的数字和入口。
 
 ## 1. 先看这张总图
 
@@ -40,12 +40,12 @@
 |---|---:|---|
 | `materials/models.py` | 1012 行，27 个 Django 模型；另有 `CourseType` 枚举 | `class` 总数不要直接当模型数 |
 | `materials/urls.py` | 151 行，117 个 `path()` 路由 | 新增 API 先改路由，再补测试和前端调用 |
-| `materials/views/` | 37 个 Python 文件，10470 行 | facade 与子模块一起看，勿把薄 facade 当业务实现 |
-| `materials/tests/` | 33 个 Python 文件，6980 行，424 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
-| `materials/management/commands/` | 7 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
+| `materials/views/` | 37 个 Python 文件，10632 行 | facade 与子模块一起看，勿把薄 facade 当业务实现 |
+| `materials/tests/` | 33 个 Python 文件，7173 行，436 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
+| `materials/management/commands/` | 8 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
 | `public/index.html` | 1167 行 | 页面骨架、表单、弹窗和核心/懒加载脚本入口都在这里 |
-| `public/js/` | 22 个文件，10944 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
-| `public/css/` | 9 个文件，7328 行 | `tokens.css` 先加载，`components.css` 最后覆盖 |
+| `public/js/` | 22 个文件，10990 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
+| `public/css/` | 9 个文件，7192 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
 | `data/` | SQLite、媒体文件、课程映射等运行数据 | 不提交、不用清理脚本替代备份 |
 
 ## 3. 入口、配置与部署
@@ -61,6 +61,7 @@
 | `deploy.sh` | 严格校验 SSH host key；停服冻结 SQLite 后用 Python 标准库备份代码/数据库与 Nginx 配置，再同步、校验并重载 Nginx、迁移、验证；失败自动回滚 | 发布流程变化；首次使用先可信核对服务器指纹；不依赖服务器安装 sqlite3 CLI |
 | `scripts/deploy_verify.sh` | 部署后在线检查 | 修改检查路径或线上验证行为 |
 | `scripts/security-audit.sh` | 生产安全审计命令 | 修改检查项；禁止输出密钥/`.env` 内容 |
+| `scripts/seed_new5.py` | 按既有课程树规范写入 `tmp_seed_pdfs/新建5` 的八个新增专业；同码课程全局复用，原文同码冲突保留目录名称 | 新增/修订培养方案或课程树导入规则 |
 
 ## 4. 数据模型地图
 
@@ -166,19 +167,19 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/js/notifications.js` | 通知抽屉、通知中心、管理/平民模式 | 通知和用户菜单变化 |
 | `public/js/admin-*.js` | 管理概览、待审、记录、用户；`admin-users.js` 含趋势/三项身份/访问流水筛选/运行状态/用户名单 | 后台 tab、用户监测和管理动作变化 |
 | `public/js/explorer-*.js` | 课程树、上传、文件列表、管理、预览 | 课程浏览与文件操作变化 |
-| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin 脚本和对应 CSS，并复用加载 Promise | 首屏资源、模块依赖顺序或懒加载入口变化 |
+| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin 脚本和对应 CSS，并复用脚本/CSS 加载 Promise | 首屏资源、模块依赖顺序或懒加载入口变化 |
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
 | `public/css/tokens.css` | OKLCH 色彩、字体、间距、动效变量 | 设计系统变化 |
 | `public/css/base.css` | 全局布局、表单、弹窗、移动基础 | 基础 UI 变化 |
 | `public/css/admin.css` | 审核/管理后台 | 管理 UI 变化 |
-| `public/css/user.css` | 个人中心、用户页、通知抽屉 | 用户 UI 变化 |
-| `public/css/files.css` | 文件列表、详情、举报、上传下载 | 文件 UI 变化 |
+| `public/css/user.css` | 个人中心、用户页、通知抽屉及我的上传操作 | 用户 UI 变化 |
+| `public/css/files.css` | 文件列表、详情、预览、举报、上传下载和管理模式文件控件 | 文件 UI 变化 |
 | `public/css/course.css` | 课程树和课程页面 | 课程浏览 UI 变化 |
 | `public/css/announcement.css` | 公告 UI | 公告页面变化 |
 | `public/css/qa.css` | 问答与编辑器 UI | 问答 UI 变化 |
-| `public/css/components.css` | 跨页面覆盖组件、全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |
+| `public/css/components.css` | 跨页面按钮、弹窗基座、分段控件、开关、空态/加载态及全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |
 
 跨文件契约：顶层函数和全局变量被大量内联 `onclick` 与其他模块调用；改名/删除前必须 `rg` 全仓库。SPA 深链当前覆盖静态页、explorer、用户、文件、问答编辑，但问答编辑参数需要重点回归。
 
@@ -192,7 +193,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | 审核/课程 | `test_review_*.py`、`test_course_*.py`、`test_auto_approve.py` | 追加批量审核保护、迁移失败、同名合并 |
 | 问答/举报 | `test_qa.py`、`test_reports.py`、`test_audit_fixes.py` | 净化器、候选人越权（含目标删除后）、历史作用域、删除申请与最佳回答并发一致性 |
 | 用户监测/追溯 | `test_admin_monitoring.py` | 总管理员权限、趋势桶、三项身份聚合、预览/下载筛选、资料删除后留痕和运行状态 |
-| 管理命令 | `materials/management/commands/` | 数据标注/清理任务必须先 dry-run；失败重试、备份恢复要单测/演练 |
+| 管理命令 | `materials/management/commands/` | 数据标注/清理任务必须先 dry-run；`handle_bounced_registration` 默认预览且仅允许确认删除未激活退信账号 |
 | 部署 | `deploy.sh`、`deploy.sh.template`、`scripts/deploy_verify.sh` | 发布前必须有备份、失败即停、回滚和固定 host key |
 
 ## 9. 维护者最先检查的风险入口
@@ -206,4 +207,4 @@ utils → auth → profile → notifications → admin-core → views → explor
 - 并发状态：`utils_quota.py`、`favorites.py`、`qa_public.py`、`qa_admin.py`、`qa_user.py`。唯一约束、条件更新或锁才是最终保证，前置查询只用于友好提示。
 - 前端模板：所有 `innerHTML`、内联事件和用户内容必须明确区分纯文本与已净化 HTML。
 
-最后更新时间：2026-08-31。若目录、路由、模型或模块拆分改变，先更新本文件和根目录 `project-map.md`，再更新 AGENTS/README 中的摘要数字。
+最后更新时间：2026-09-04。若目录、路由、模型或模块拆分改变，先更新本文件和根目录 `project-map.md`，再更新 AGENTS/README 中的摘要数字。

@@ -33,83 +33,6 @@
     cursor: pointer;
   }
 
-  /* ── 审核类型分段控制器（v=145）── */
-  .pc-type-bar {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    margin-bottom: 16px;
-    background: var(--surface);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-md);
-  }
-  .pc-type-label {
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: var(--ink-faint);
-    white-space: nowrap;
-  }
-  .pc-seg {
-    display: inline-flex;
-    background: oklch(0.93 0.005 60);
-    border-radius: var(--radius-sm);
-    padding: 3px;
-    gap: 2px;
-  }
-  .pc-seg-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--ink-soft);
-    font-size: 0.82rem;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-  .pc-seg-btn:hover {
-    background: oklch(0.9 0.005 60);
-    color: var(--ink);
-  }
-  .pc-seg-btn.active {
-    background: var(--raised);
-    color: var(--ink);
-    font-weight: 600;
-    box-shadow: 0 1px 3px oklch(0.3 0.01 60 / 0.12);
-  }
-  .pc-seg-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--ink-faint);
-    background: oklch(0.9 0.005 60);
-  }
-  .pc-seg-btn.active .pc-seg-count {
-    color: var(--accent);
-    background: oklch(0.93 0.05 60);
-  }
-  .pc-seg-right {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-  }
-  @media (max-width: 640px) {
-    .pc-seg-right { margin-left: 0; }
-  }
 /* ═══════════════════════════════════════════════════════════════
    Iter 3 — 管理后台
    ═══════════════════════════════════════════════════════════════ */
@@ -259,65 +182,12 @@
   gap: 8px;
   margin-top: 4px;
 }
-.admin-btn {
-  padding: 6px 18px;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  transition: opacity .2s;
-}
-.admin-btn:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-.admin-btn:hover {
-  opacity: 0.85;
-}
-.admin-btn-approve {
-  background: var(--success-light);
-  color: var(--success);
-}
-.admin-btn-reject {
-  background: var(--danger-light);
-  color: var(--danger);
-}
-.admin-btn-primary {
-  background: var(--primary);
-  color: #fff;
-}
-.admin-btn-secondary {
-  background: oklch(0.88 0.02 250 / 0.5);
-  color: var(--text);
-}
 .admin-pending-card .pc-own {
   font-size: 0.82rem;
   color: var(--text-muted);
   font-style: italic;
 }
 
-/* ── 驳回弹窗 ── */
-.admin-reject-overlay {
-  position: fixed;
-  inset: 0;
-  background: oklch(0 0 0 / 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  backdrop-filter: blur(2px);
-}
-.admin-reject-dialog {
-  background: oklch(1 0 0 / 0.95);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  width: min(92vw, 480px);
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-xl);
-}
 .section-link {
   color: var(--accent);
   text-decoration: underline;
@@ -328,40 +198,6 @@
   color: var(--primary);
   text-decoration-style: solid;
 }
-.admin-reject-dialog h3 {
-  margin: 0 0 12px;
-  font-size: 1.05rem;
-  color: var(--text);
-}
-.admin-reject-dialog textarea {
-  width: 100%;
-  min-height: 90px;
-  padding: 10px 12px;
-  border: 1px solid oklch(0.82 0.02 250 / 0.4);
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-family: inherit;
-  resize: vertical;
-  box-sizing: border-box;
-  background: oklch(1 0 0 / 0.5);
-}
-.admin-reject-dialog textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-.admin-reject-dialog .ar-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-.admin-reject-dialog .ar-error {
-  color: oklch(0.5 0.15 25);
-  font-size: 0.82rem;
-  margin-top: 8px;
-  display: none;
-}
-
 /* ── 表格（审核历史 & 用户管理） ── */
 .admin-table-wrap {
   overflow-x: auto;
@@ -534,21 +370,6 @@
 .admin-user-identity {
   display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--ink-faint); font-size: 0.69rem; font-weight: 400; line-height: 1.3;
-}
-
-/* ── 空状态 ── */
-.admin-empty {
-  text-align: center;
-  padding: 48px 20px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-/* ── loading ── */
-.admin-loading {
-  text-align: center;
-  padding: 32px;
-  color: var(--text-muted);
 }
 
 /* ══ v=172 管理后台视觉统一（除「待审核」外板块：概览/审核历史/删除记录/用户管理/操作记录） ══ */
@@ -771,35 +592,7 @@
 /* ── admin-role-select 宽度适应新角色名 ── */
 .admin-role-select { max-width: 120px; font-size: 0.78rem; }
 
-/* ── 驳回重新上传按钮 ── */
-.reupload-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-top: 6px; padding: 4px 12px; font-size: 0.78rem;
-  background: var(--accent); color: white; border: none;
-  border-radius: var(--radius); cursor: pointer;
-  transition: background 0.15s, transform 0.15s;
-}
-.reupload-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
-.delete-rejected-btn { background: var(--danger-light); color: var(--danger); border: 1px solid var(--danger-border); cursor: pointer; font-size: 0.75rem; padding: 4px 10px; border-radius: var(--radius-md); transition: background 0.15s; }
-.delete-rejected-btn:hover { background: oklch(0.88 0.08 20); }
-.hc-item-actions { margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; }
-
-.reupload-info {
-  background: oklch(0.95 0.05 80 / 0.5); border: 1px solid oklch(0.9 0.08 80 / 0.3);
-  border-radius: var(--radius); padding: 8px 12px; margin-bottom: 12px;
-  font-size: 0.82rem; color: var(--ink); line-height: 1.5;
-}
-.reupload-info small { color: var(--ink-faint); font-size: 0.75rem; }
-
 /* ── 审核异议重设计 ── */
-.admin-btn-sm {
-  padding: 2px 8px; font-size: 0.75rem;
-  background: var(--primary-surface); color: var(--primary);
-  border: 1px solid var(--border-light); border-radius: var(--radius-sm);
-  cursor: pointer; transition: background 0.15s;
-}
-.admin-btn-sm:hover { background: var(--primary); color: white; }
-
 .pc-section-label {
   font-size: 0.85rem; font-weight: 600; color: var(--ink);
   padding: 12px 0 4px; margin-top: 4px;
@@ -1091,21 +884,6 @@
     font-size: 0.72rem;
     white-space: nowrap;
   }
-  .admin-reject-dialog {
-    width: calc(100vw - 32px);
-    min-width: 0;
-    max-width: none;
-    padding: 20px;
-    margin: 0 16px;
-    max-height: 85vh;
-  }
-  .admin-reject-dialog .ar-actions {
-    flex-direction: column;
-  }
-  .admin-reject-dialog .ar-actions .admin-btn {
-    width: 100%;
-    text-align: center;
-  }
   .admin-auto-toggle {
     flex-direction: column !important;
     align-items: flex-start !important;
@@ -1173,22 +951,6 @@
   }
   .sub-tag {
     font-size: 0.7rem;
-  }
-
-  /* ── 批量操作工具栏移动端 ── */
-  .batch-dl-bar {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .batch-dl-bar .admin-btn-sm {
-    font-size: 0.72rem;
-    padding: 5px 10px;
-  }
-
-  /* ── 管理模式新建按钮移动端 ── */
-  .mgmt-new-btn {
-    font-size: 0.7rem;
-    padding: 3px 8px;
   }
 
   /* ── 管理表格（删除记录/操作记录）横向滚动 ── */
@@ -1393,369 +1155,11 @@
 
 /* ═══ Iter 6 — 管理模式 / 文件编辑 / 操作记录 ═══ */
 
-/* iOS 开关 */
-.ios-toggle {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-  background: var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.3s;
-  flex-shrink: 0;
-  padding: 0;
-  border: 0;
-}
-.ios-toggle-on { background: var(--success); }
-.ios-toggle-knob {
-  position: absolute;
-  top: 2px; left: 2px;
-  width: 20px; height: 20px;
-  background: var(--raised);
-  border-radius: 50%;
-  box-shadow: var(--shadow-xs);
-  transition: transform 0.3s;
-}
-.ios-toggle-on .ios-toggle-knob { transform: translateX(20px); }
-
-/* 抽屉开关行 */
-.dm-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  cursor: default;
-}
-.dm-toggle-label {
-  font-size: 0.85rem;
-  display: inline-flex; align-items: center; gap: 8px;
-}
-.dm-toggle-label .dm-ico svg { width: 16px; height: 16px; }
-
-/* 管理模式 — 新建按钮 */
-.mgmt-new-btn {
-  margin-left: auto;
-  background: var(--accent, #c97d2d);
-  color: #fff;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.mgmt-new-btn:hover { opacity: 0.85; }
-
-/* 管理模式 — 文件列表铅笔图标 */
-.mgmt-pen {
-  display: inline-block;
-  margin-left: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-.mgmt-pen:hover { opacity: 1; }
-.mgmt-pen-sm { font-size: 0.7rem; vertical-align: middle; }
-
-/* 文件置顶（v177）：星琥珀系徽章 + 暖色行高亮（对齐 QA 置顶区语言） */
-.mgmt-pin { font-size: 0.78rem; }
-.file-pin-badge {
-  display: inline-block;
-  color: var(--star-dark); background: var(--star-light);
-  border: 1px solid var(--star-border);
-  border-radius: 999px; padding: 0 6px;
-  font-size: 0.7rem; line-height: 1.5;
-  margin-left: 6px; vertical-align: middle;
-  white-space: nowrap;
-}
-.file-pinned td { background: oklch(0.985 0.012 70); }
-.file-pinned:hover td { background: oklch(0.975 0.02 70); }
-.file-pinned .ft-name { box-shadow: inset 3px 0 0 var(--star); }
-.file-pinned .fn-text { color: var(--star-dark); }
-.file-pinned .mgmt-pin { opacity: 1; }
-
-/* 我的上传页面 tabs */
-.mu-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.mu-tab {
-  padding: 6px 14px;
-  border: 1px solid var(--border-light, #ddd);
-  border-radius: 20px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.82rem;
-  color: var(--text-muted, #666);
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
-}
-.mu-tab.active {
-  background: var(--primary-surface);
-  color: var(--primary-dark);
-  border-color: var(--primary-light);
-}
-.mu-tab:hover:not(.active) { border-color: var(--accent, #c97d2d); }
-
-/* 文件详情 — 简介行 */
-.fi-row-desc .fi-value {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* 文件详情 — 内联编辑输入框 */
-.fi-edit-input {
-  width: 90%;
-  padding: 4px 6px;
-  border: 1px solid var(--accent, #c97d2d);
-  border-radius: 4px;
-  font-size: inherit;
-  font-family: inherit;
-  box-sizing: border-box;
-}
-.fi-pen {
-  display: inline-block;
-  margin-left: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-  vertical-align: middle;
-}
-.fi-pen:hover { opacity: 1; }
-
 /* 审核面板 — 详情按钮 */
 .pc-btn-detail {
   background: var(--surface-alt, #f0f0f0);
   border-color: transparent;
 }
-
-/* ═══════════════════════════════════════════
-   文件预览 — 表格行按钮
-   ═══════════════════════════════════════════ */
-
-.file-table .pv-link {
-  display: inline-flex; align-items: center;
-  padding: 4px 10px; border-radius: 6px;
-  font-size: 0.72rem; font-weight: 600;
-  color: oklch(0.48 0.10 165); text-decoration: none;
-  border: 1.5px solid oklch(0.48 0.10 165);
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.file-table .pv-link:hover {
-  background: oklch(0.48 0.10 165); color: #fff;
-}
-/* 多选模式隐藏预览 */
-.file-table.multi-select .pv-link {
-  display: none;
-}
-
-/* 下载+预览按钮同行排列 */
-.dl-normal {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-/* ═══════════════════════════════════════════
-   文件预览 — 预览模态框
-   ═══════════════════════════════════════════ */
-
-.preview-overlay {
-  position: fixed; inset: 0; z-index: 9999;
-  background: oklch(0 0 0 / 0.88);
-  display: flex; flex-direction: column;
-  padding: var(--space-md);
-  backdrop-filter: blur(8px);
-  animation: modalIn 0.2s ease-out;
-}
-
-.preview-header {
-  display: flex; align-items: center; gap: var(--space-sm);
-  color: #fff; padding: 0 var(--space-sm) var(--space-sm);
-  flex-shrink: 0;
-}
-.preview-header .pv-badge {
-  flex-shrink: 0;
-}
-.preview-header .pv-title {
-  flex: 1; font-size: 0.85rem; font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  opacity: 0.85;
-}
-
-.preview-body {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  overflow: auto; min-height: 0;
-}
-
-.preview-close {
-  position: absolute; top: 16px; right: 16px; z-index: 10;
-  width: 36px; height: 36px; border: none;
-  background: oklch(1 0 0 / 0.12); color: #fff;
-  font-size: 1.1rem; border-radius: 50%;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s;
-}
-.preview-close:hover { background: oklch(1 0 0 / 0.3); }
-
-/* 预览下载按钮 */
-.pv-dl-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 18px; border-radius: 6px;
-  font-size: 0.82rem; font-weight: 600;
-  background: var(--primary); color: #fff;
-  border: none; cursor: pointer; text-decoration: none;
-  transition: background 0.15s;
-  font-family: inherit;
-}
-.pv-dl-btn:hover { background: var(--primary-dark); }
-.pv-dl-btn-hdr {
-  margin-left: auto;
-  font-size: 0.78rem;
-  padding: 5px 14px;
-}
-
-/* 预览内嵌渲染区 */
-.pv-viewer { border-radius: var(--radius-md); }
-
-/* 文本预览 */
-.pv-text-wrap {
-  width: 100%; max-width: 900px; max-height: 100%;
-  margin: 0 auto; overflow: auto;
-}
-.pv-text {
-  background: oklch(0.2 0.01 250); color: oklch(0.85 0.005 250);
-  padding: var(--space-md); border-radius: var(--radius-md);
-  font-family: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
-  font-size: 0.75rem; line-height: 1.6;
-  white-space: pre-wrap; word-break: break-all;
-  overflow-x: auto;
-}
-.pv-text-code {
-  color: oklch(0.83 0.04 150);
-}
-
-/* 不支持的格式 */
-.pv-unsupported {
-  text-align: center; color: oklch(0.7 0.01 0);
-}
-.pv-unsupported-icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.5; }
-.pv-unsupported-text { font-size: 1.1rem; font-weight: 500; margin-bottom: 4px; }
-.pv-unsupported-sub { font-size: 0.82rem; opacity: 0.5; margin-bottom: var(--space-lg); }
-
-/* ZIP 文件结构树预览（可折叠目录树） */
-.pv-zip-loading {
-  text-align: center; padding: var(--space-lg);
-  color: var(--ink-faint, #999); font-size: 0.85rem;
-}
-.pv-zip-header {
-  padding: var(--space-sm) var(--space-md);
-  border-bottom: 1px solid var(--border-light, #e8e8e8);
-  display: flex; align-items: center; gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-.pv-zip-filename {
-  font-weight: 600; font-size: 0.85rem; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; max-width: 45%;
-}
-.pv-zip-stats {
-  font-size: 0.75rem; color: var(--ink-faint, #999);
-  margin-left: auto; white-space: nowrap;
-}
-.pv-zip-trunc {
-  font-size: 0.7rem; color: oklch(0.52 0.13 45);
-  background: oklch(0.52 0.13 45 / 0.12);
-  padding: 1px 8px; border-radius: 999px; white-space: nowrap;
-}
-.pv-zip-tree {
-  padding: var(--space-xs) var(--space-xs) var(--space-xs) 0;
-  overflow: auto; max-height: 50vh;
-  font-size: 0.78rem; font-family: "SF Mono", "Fira Code", Consolas, monospace;
-  line-height: 1.9;
-}
-.pv-zip-dir { white-space: nowrap; }
-.pv-zip-dir > summary {
-  list-style: none; cursor: pointer; user-select: none;
-  display: flex; align-items: center; gap: 4px;
-  padding: 1px var(--space-sm); border-radius: var(--radius-sm);
-  color: var(--ink, #333);
-  transition: background 0.12s;
-}
-.pv-zip-dir > summary::-webkit-details-marker { display: none; }
-.pv-zip-dir > summary:hover { background: oklch(0.93 0.02 250 / 0.5); }
-.pzd-arrow {
-  display: inline-block; flex: none; width: 0.8em;
-  color: var(--ink-faint, #aaa); font-size: 0.72em;
-  transition: transform 0.15s ease;
-}
-.pv-zip-dir[open] > summary .pzd-arrow { transform: rotate(90deg); }
-.pzd-icon { flex: none; }
-.pzd-name { font-weight: 600; color: oklch(0.42 0.06 250); }
-.pzd-meta {
-  font-size: 0.68em; color: var(--ink-faint, #aaa);
-  margin-left: 8px; font-weight: 400;
-}
-.pzd-children {
-  margin-left: 1.1em; padding-left: 0.5em;
-  border-left: 1px dashed var(--border-light, #e8e8e8);
-}
-.pv-zip-file {
-  display: flex; align-items: center; gap: 4px;
-  white-space: nowrap; padding: 1px var(--space-sm);
-  border-radius: var(--radius-sm);
-  transition: background 0.12s;
-}
-.pv-zip-file:hover { background: oklch(0.95 0.01 250 / 0.6); }
-.pzf-icon { flex: none; opacity: 0.75; }
-.pv-zip-fname { color: var(--ink, #333); overflow: hidden; text-overflow: ellipsis; }
-.pv-zip-fsize {
-  font-size: 0.7rem; color: var(--ink-faint, #aaa);
-  margin-left: auto; padding-right: var(--space-md); flex: none;
-  font-variant-numeric: tabular-nums;
-}
-.pv-zip-empty {
-  padding: var(--space-lg); text-align: center;
-  color: var(--ink-faint, #999); font-size: 0.85rem;
-}
-.pv-zip-footer {
-  padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid var(--border-light, #e8e8e8);
-  text-align: center;
-}
-
-/* 文件详情弹窗预览按钮 */
-.fi-preview-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 22px; border-radius: var(--radius-sm);
-  font-size: 0.85rem; font-weight: 600;
-  background: transparent; color: oklch(0.48 0.10 165);
-  border: 1.5px solid oklch(0.48 0.10 165);
-  cursor: pointer; text-decoration: none; margin-bottom: 8px;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.15s;
-  font-family: inherit;
-}
-.fi-preview-btn:hover {
-  background: oklch(0.48 0.10 165); color: #fff;
-}
-
-/* ── 按钮组均匀纵向布局 ── */
-.fi-actions {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 12px;
-  margin-top: var(--space-md);
-  padding-top: var(--space-lg);
-  border-top: 1px solid var(--border-light);
-}
-.fi-actions .fi-preview-btn { margin-bottom: 0; }
-.fi-actions .fi-download-btn { margin-top: 0; }
 
 /* ═══════════════════════════════════════════════════════════════
    v=181 管理后台记录类 tab：美化版表格
