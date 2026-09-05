@@ -907,9 +907,9 @@
   .um-tab:not(:last-child) { border-right: 1px solid var(--border-light); }
   .um-tab:hover { background: var(--bg-alt); color: var(--ink); }
   .um-tab-active {
-    background: var(--primary-surface); color: var(--primary-dark); font-weight: 600;
+    background: var(--primary); color: #fff; font-weight: 600;
   }
-  .um-tab-active:hover { background: var(--primary-surface); color: var(--primary-dark); }
+  .um-tab-active:hover { background: var(--primary-dark); color: #fff; }
 
   .upload-mode-pane { margin-bottom: var(--space-sm); }
 

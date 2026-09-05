@@ -176,7 +176,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/css/admin.css` | 审核/管理后台 | 管理 UI 变化 |
 | `public/css/user.css` | 个人中心、用户页、通知抽屉及我的上传操作 | 用户 UI 变化 |
 | `public/css/files.css` | 文件列表、详情、预览、举报、上传下载和管理模式文件控件 | 文件 UI 变化 |
-| `public/css/course.css` | 课程树和课程页面 | 课程浏览 UI 变化 |
+| `public/css/course.css` | 课程树、课程页面及新建课程控件 | 课程浏览或新建课程 UI 变化 |
 | `public/css/announcement.css` | 公告 UI | 公告页面变化 |
 | `public/css/qa.css` | 问答与编辑器 UI | 问答 UI 变化 |
 | `public/css/components.css` | 跨页面按钮、弹窗基座、分段控件、开关、空态/加载态及全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |

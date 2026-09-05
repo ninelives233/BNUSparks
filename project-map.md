@@ -12,7 +12,7 @@
 - `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1167 行
 - `public/js/`：22 个文件，11091 行（按视图懒加载 explorer/QA/admin 模块）
-- `public/css/`：9 个文件，7192 行（共享控件归入静态 components/files/user，页面专属样式再懒加载）
+- `public/css/`：9 个文件，7192 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css）
 
 ## 按任务定位
 
