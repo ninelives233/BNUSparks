@@ -171,7 +171,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
-| `public/css/tokens.css` | OKLCH 色彩（书院墨蓝/琥珀）、字体、间距、动效变量 | 设计系统变化 |
+| `public/css/tokens.css` | OKLCH 色彩（青靛墨蓝/琥珀）、字体、间距、动效变量 | 设计系统变化 |
 | `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、移动基础 | 基础 UI 变化 |
 | `public/css/admin.css` | 审核/管理后台 | 管理 UI 变化 |
 | `public/css/user.css` | 个人中心、用户页、通知抽屉及我的上传操作 | 用户 UI 变化 |
