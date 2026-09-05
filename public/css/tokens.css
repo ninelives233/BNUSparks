@@ -29,14 +29,14 @@
      ═════════════════════════════════════════════════════════════ */
 
   :root {
-    /* ── 品牌色相（v=202：书院墨蓝）── */
-    --brand-hue: 245;
+    /* ── 品牌色相（v=203：青靛墨蓝）── */
+    --brand-hue: 250;
 
-    /* 主色：从高亮蓝调整为低饱和墨蓝，浅层统一为雾灰蓝，降低廉价的塑料感。 */
-    --primary: oklch(0.41 0.065 245);
-    --primary-dark: oklch(0.31 0.075 245);
-    --primary-light: oklch(0.86 0.028 245);
-    --primary-surface: oklch(0.94 0.015 245);
+    /* 主色：恢复蓝色的存在感，深色稳重、浅色有层次，避免灰蓝化。 */
+    --primary: oklch(0.43 0.12 250);
+    --primary-dark: oklch(0.32 0.13 250);
+    --primary-light: oklch(0.86 0.065 250);
+    --primary-surface: oklch(0.93 0.04 250);
 
     --accent: oklch(0.52 0.13 45);
     --accent-hover: oklch(0.45 0.15 45);
