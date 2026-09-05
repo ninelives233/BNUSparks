@@ -29,14 +29,14 @@
      ═════════════════════════════════════════════════════════════ */
 
   :root {
-    /* ── 品牌色相（v=160 新增，供派生 oklch 引用）── */
-    --brand-hue: 250;
+    /* ── 品牌色相（v=202：书院墨蓝）── */
+    --brand-hue: 245;
 
-    /* 主色 v=160 降饱和（原 0.09 → 0.06，保持 hue=250/明度；回退=改回原值注释） */
-    --primary: oklch(0.40 0.09 250);            /* 原 0.09 饱和蓝（用户否决降饱和，还原活力） */
-    --primary-dark: oklch(0.32 0.11 250);       /* 原 0.32 0.11 250 */
-    --primary-light: oklch(0.88 0.04 250);      /* 原 0.88 0.04 250 */
-    --primary-surface: oklch(0.94 0.025 250);   /* 原 0.94 0.025 250 */
+    /* 主色：从高亮蓝调整为低饱和墨蓝，浅层统一为雾灰蓝，降低廉价的塑料感。 */
+    --primary: oklch(0.41 0.065 245);
+    --primary-dark: oklch(0.31 0.075 245);
+    --primary-light: oklch(0.86 0.028 245);
+    --primary-surface: oklch(0.94 0.015 245);
 
     --accent: oklch(0.52 0.13 45);
     --accent-hover: oklch(0.45 0.15 45);
@@ -153,4 +153,3 @@
   }
   button:active:not(:disabled) { transform: translateY(0.5px); }
   a:active { opacity: 0.85; }
-
