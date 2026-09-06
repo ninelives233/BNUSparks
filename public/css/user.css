@@ -1127,7 +1127,7 @@
   align-items: center;
   gap: 10px;
   padding: 14px 48px;
-  background: var(--primary);
+  background: var(--home-upload);
   color: #fff;
   border: none;
   border-radius: var(--radius-full);
@@ -1140,7 +1140,7 @@
 }
 
 .home-upload-btn:hover {
-  background: var(--primary-dark);
+  background: var(--home-upload-hover);
   transform: translateY(-1px);
 }
 
