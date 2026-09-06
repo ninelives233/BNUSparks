@@ -38,6 +38,10 @@
     --primary-light: oklch(0.86 0.065 250);
     --primary-surface: oklch(0.93 0.04 250);
 
+    /* 首页上传入口保留历史蓝色：避免全局主色调色时改变品牌 CTA 的熟悉观感。 */
+    --home-upload: oklch(0.40 0.09 250);
+    --home-upload-hover: oklch(0.32 0.11 250);
+
     --accent: oklch(0.52 0.13 45);
     --accent-hover: oklch(0.45 0.15 45);
     --accent-light: oklch(0.90 0.06 50);
