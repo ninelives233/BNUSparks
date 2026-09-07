@@ -2,7 +2,8 @@
    我的课表 · timetable.css
    方向：「纸墨 × 中国色」—— 站点纸白墨蓝学术底 + 传统色课程卡片。
    4 套配色方案（.tt-sch-*）× 资料丰度冷暖对比（.tt-rich-0/1/2：
-   无资料=冷色、有资料=暖色、越多越深越浓），课程卡颜色全部由
+   无资料=冷色（8 冷色轮转）、有资料=暖色（8 暖色轮转）、
+   越多越深越浓），课程卡颜色全部由
    oklch(L C H) 从色相变量实时计算。
    签名元素：今日列头琥珀「今」签 + 角格宋体大数码周次。
    依赖 tokens.css 全局变量；仅作用于 #timetableView。
@@ -24,9 +25,16 @@
   --tt-l: 0.91;  --tt-c: 0.06;      /* 有资料（1-9 份） */
   --tt-il: 0.40; --tt-ic: 0.09;
   --tt-bl: 0.80; --tt-bc: 0.07;
-  /* 冷色（无资料）：默认绀青，方案可配不同冷色相 */
-  --tt-h0: 245;
+  /* 冷色（无资料）：8 个传统冷色按课程哈希轮转，同档也有差异 */
   --tt-l0: 0.90; --tt-c0: 0.05; --tt-ic0: 0.07; --tt-bl0: 0.82; --tt-bc0: 0.055;
+  --ttp1-h0: 230;  /* 绀青 */
+  --ttp2-h0: 200;  /* 青碧 */
+  --ttp3-h0: 170;  /* 松绿 */
+  --ttp4-h0: 250;  /* 群青 */
+  --ttp5-h0: 260;  /* 靛 */
+  --ttp6-h0: 215;  /* 黛蓝 */
+  --ttp7-h0: 185;  /* 青绿 */
+  --ttp8-h0: 280;  /* 紫棠 */
   --tt-l2: 0.835; --tt-c2: 0.105;
 
   --tt-today: var(--accent);
@@ -44,17 +52,14 @@
 .tt-sch-nuan {
   --ttp1-h: 355; --ttp2-h: 20;  --ttp3-h: 40;  --ttp4-h: 5;
   --ttp5-h: 50;  --ttp6-h: 350; --ttp7-h: 30;  --ttp8-h: 60;
-  --tt-h0: 205;
 }
 .tt-sch-qing {
   --ttp1-h: 55;  --ttp2-h: 75;  --ttp3-h: 95;  --ttp4-h: 40;
   --ttp5-h: 65;  --ttp6-h: 85;  --ttp7-h: 108; --ttp8-h: 35;
-  --tt-h0: 262;
 }
 .tt-sch-zi {
   --ttp1-h: 0;   --ttp2-h: 18;  --ttp3-h: 340; --ttp4-h: 8;
   --ttp5-h: 28;  --ttp6-h: 350; --ttp7-h: 22;  --ttp8-h: 45;
-  --tt-h0: 215;
 }
 
 /* ── 顶部：标题 + 操作 ─────────────────────────────── */
@@ -194,7 +199,15 @@
 .tt-card.is-pending { cursor: help; }
 /* 资料丰度：冷色（无）→ 暖色（有）→ 更深更浓（丰富）；
    两条都用 .tt-card 前缀提高优先级，确保冷色相覆盖 .ttpN 的暖色相 */
-.tt-card.tt-rich-0 { --th: var(--tt-h0); --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
+.tt-card.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
+.ttp1.tt-rich-0 { --th: var(--ttp1-h0); }
+.ttp2.tt-rich-0 { --th: var(--ttp2-h0); }
+.ttp3.tt-rich-0 { --th: var(--ttp3-h0); }
+.ttp4.tt-rich-0 { --th: var(--ttp4-h0); }
+.ttp5.tt-rich-0 { --th: var(--ttp5-h0); }
+.ttp6.tt-rich-0 { --th: var(--ttp6-h0); }
+.ttp7.tt-rich-0 { --th: var(--ttp7-h0); }
+.ttp8.tt-rich-0 { --th: var(--ttp8-h0); }
 .tt-card.tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
 
 .tt-card-name {
@@ -228,7 +241,7 @@
 .tt-legend i { width: 11px; height: 11px; border-radius: 3px; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(var(--tt-l) var(--tt-c) var(--th)); }
 .tt-legend .lg1 { --tt-l: 0.91; --tt-c: 0.06; }
 .tt-legend .lg2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
-.tt-legend .lg0 { --th: var(--tt-h0); --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
+.tt-legend .lg0 { --th: 230; --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
 
 /* ── 空状态（导入引导） ─────────────────────────────── */
 .tt-empty {
