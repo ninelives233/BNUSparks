@@ -25,6 +25,10 @@ function ttStoreKey() {
 function ttSchemeKey() {
   return 'bnusparks_timetable_scheme_u' + (currentUser && currentUser.id ? currentUser.id : 'anon');
 }
+// 视图偏好（课表网格 / 课程列表）同样按账号本地记忆，不随云端同步（设备级 UI 偏好）
+function ttViewKey() {
+  return 'bnusparks_timetable_view_u' + (currentUser && currentUser.id ? currentUser.id : 'anon');
+}
 
 // 配色方案（默认「暖秋」即 CSS 基础变量；均为暖色系衍生，仅色相倾向不同）
 var TT_SCHEMES = [
@@ -44,7 +48,7 @@ var TT_DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', 
 // 12 节 → 网格行号（1=表头，2-5=上午1-4节，6=午休，7-10=下午5-8节，11=傍晚，12-15=晚上9-12节）
 var TT_ROW_OF_PERIOD = [2, 3, 4, 5, 7, 8, 9, 10, 12, 13, 14, 15];
 
-var ttState = { data: null, week: 1, maxWeek: 20, start: '', scheme: 'zhongguo', links: {} };
+var ttState = { data: null, week: 1, maxWeek: 20, start: '', scheme: 'zhongguo', view: 'grid', links: {} };
 
 // ── 解析：字节 → 文本（教务文件是 GBK；UTF-8 优先探测） ──
 function ttDecodeBuffer(buffer) {
@@ -315,6 +319,7 @@ function ttInitShell() {
       '<div class="tt-title">我的课表<small id="ttSubTitle"></small></div>' +
       '<div class="tt-actions">' +
         '<button type="button" class="tt-btn" id="ttSchemeBtn" aria-haspopup="true" aria-expanded="false">配色</button>' +
+        '<button type="button" class="tt-btn" id="ttViewBtn" aria-pressed="false">列表视图</button>' +
         '<button type="button" class="tt-btn" id="ttReimportBtn">重新导入</button>' +
       '</div>' +
     '</div>' +
@@ -325,6 +330,7 @@ function ttInitShell() {
     e.stopPropagation();
     ttToggleSchemePop();
   });
+  document.getElementById('ttViewBtn').addEventListener('click', ttToggleView);
   document.getElementById('ttReimportBtn').addEventListener('click', function () {
     document.getElementById('ttFileInput').click();
   });
@@ -351,13 +357,16 @@ function ttLoadUserData() {
       localStorage.removeItem('bnusparks_timetable_scheme');
     }
   } catch (e) { ttState.scheme = 'zhongguo'; }
+  try { ttState.view = localStorage.getItem(ttViewKey()) === 'list' ? 'list' : 'grid'; }
+  catch (e) { ttState.view = 'grid'; }
   ttApplyScheme();
+  ttApplyViewMode();
   ttRenderAll();
   // 课程树未就绪时延迟解析链接，到达后刷新一次（树有内存单例缓存）
   if (ttState.data && !courseTree && typeof loadCourseTree === 'function') {
     loadCourseTree().then(function () {
       ttResolveCourseLinks();
-      if (document.getElementById('ttGrid')) ttPaintGrid();
+      ttRepaintCurrent();
     }).catch(function () {});
   }
   // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
@@ -369,6 +378,26 @@ function ttApplyScheme() {
   if (!shell) return;
   TT_SCHEMES.forEach(function (s) { shell.classList.remove('tt-sch-' + s.id); });
   if (ttState.scheme && ttState.scheme !== 'zhongguo') shell.classList.add('tt-sch-' + ttState.scheme);
+}
+
+// ── 视图切换：课表网格 ⇄ 课程列表 ──
+// 按钮文案 = 点击后将去的视图；shell 上的模式类供移动端满屏布局区分网格/列表
+function ttApplyViewMode() {
+  var shell = document.getElementById('ttShell');
+  var btn = document.getElementById('ttViewBtn');
+  if (shell) shell.classList.toggle('tt-mode-list', ttState.view === 'list');
+  if (btn) {
+    var toList = ttState.view !== 'list';
+    btn.textContent = toList ? '列表视图' : '课表视图';
+    btn.setAttribute('aria-pressed', toList ? 'false' : 'true');
+  }
+}
+
+function ttToggleView() {
+  ttState.view = ttState.view === 'list' ? 'grid' : 'list';
+  try { localStorage.setItem(ttViewKey(), ttState.view); } catch (e) {}
+  ttApplyViewMode();
+  ttRenderAll();
 }
 
 function ttToggleSchemePop() {
@@ -410,7 +439,8 @@ function ttRenderAll() {
     ttRenderEmpty(body);
     return;
   }
-  ttRenderGrid(body);
+  if (ttState.view === 'list') ttRenderList(body);
+  else ttRenderGrid(body);
 }
 
 // ── 空状态：导入引导 ──
@@ -739,12 +769,12 @@ function ttApplyImport(parsed, requests) {
       if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
       Promise.resolve(loadCourseTree()).catch(function () {}).then(function () {
         ttResolveCourseLinks();
-        if (document.getElementById('ttGrid')) ttPaintGrid();
+        ttRepaintCurrent();
         ttToastImportResult(direct, sent, failed);
       });
     } else {
       ttResolveCourseLinks();
-      if (document.getElementById('ttGrid')) ttPaintGrid();
+      ttRepaintCurrent();
       ttToastImportResult(direct, sent, failed);
     }
   });
@@ -856,6 +886,17 @@ function ttStepWeek(d) {
   ttPaintGrid();
 }
 
+// 课程树异步就绪后重绘当前视图（链接状态可能已变化）
+function ttRepaintCurrent() {
+  if (!ttState.data) return;
+  if (ttState.view === 'list') {
+    var body = document.getElementById('ttBody');
+    if (body && document.getElementById('ttList')) ttRenderList(body);
+  } else if (document.getElementById('ttGrid')) {
+    ttPaintGrid();
+  }
+}
+
 // 资料丰度档位：null/未知 → 标准；0 → 无资料；1-9 → 有资料；10+ → 资料丰富
 function ttRichClass(fileCount) {
   if (fileCount === null || fileCount === undefined) return '';
@@ -871,6 +912,13 @@ function ttPaintGrid() {
 
   ttResolveCourseLinks();
 
+  // 学期内没有周末课 → 收掉周六/周日空列（移动端行宽更充裕，桌面同理）
+  var hasWeekend = ttState.data.courses.some(function (c) {
+    return c.meetings.some(function (mt) { return mt.day >= 6; });
+  });
+  grid.classList.toggle('tt-w5', !hasWeekend);
+  var dayCount = hasWeekend ? 7 : 5;
+
   var startMonday = ttParseDate(ttState.start);
   var todayMonday = ttMondayOf(new Date());
   var isCurrentWeek = todayMonday.getTime() === startMonday.getTime() + (week - 1) * 7 * 86400000;
@@ -882,7 +930,7 @@ function ttPaintGrid() {
   html += '<div class="tt-corner"><b>' + week + '</b><span>周</span></div>';
 
   // 星期表头
-  for (var d = 1; d <= 7; d++) {
+  for (var d = 1; d <= dayCount; d++) {
     var dayDate = new Date(startMonday.getTime() + (week - 1) * 7 * 86400000 + (d - 1) * 86400000);
     var isToday = isCurrentWeek && todayWd === d;
     html += '<div class="tt-day' + (isToday ? ' is-today' : '') + '">' +
@@ -981,6 +1029,92 @@ function ttPaintGrid() {
   grid.classList.remove('swap');
   void grid.offsetWidth;
   grid.classList.add('swap');
+}
+
+// ── 列表视图：整学期课程一览（网格的姊妹视图：网格扫一眼，列表查细节） ──
+// 单段排课时间：周三[5-7]节 1-16周(单) · 教室
+function ttFmtMeeting(mt) {
+  var wk = mt.ws === mt.we ? String(mt.ws) + '周'
+    : mt.ws + '-' + mt.we + '周' + (mt.parity === 1 ? '(单)' : mt.parity === 2 ? '(双)' : '');
+  var sec = mt.ps === mt.pe ? String(mt.ps) : mt.ps + '-' + mt.pe;
+  return TT_DAY_NAMES[mt.day - 1] + '[' + sec + ']节 ' + wk + (mt.room ? ' · ' + mt.room : '');
+}
+
+// 资料状态签：与课表卡同一冷暖语言（无=冷、有=暖、丰富=更深）
+function ttStatusTag(link) {
+  if (!link || link.state === 'missing') return '<span class="tt-tag tt-tag-cold">未建目录</span>';
+  if (link.state === 'pending') return '<span class="tt-tag tt-tag-cold">申请审核中</span>';
+  var n = link.fileCount;
+  if (n === null || n === undefined) return '<span class="tt-tag">已有目录</span>';
+  if (n >= 10) return '<span class="tt-tag tt-tag-warm2">资料丰富</span>';
+  if (n >= 1) return '<span class="tt-tag tt-tag-warm">' + n + ' 份资料</span>';
+  return '<span class="tt-tag tt-tag-cold">暂无资料</span>';
+}
+
+function ttRenderList(body) {
+  var data = ttState.data;
+  ttResolveCourseLinks();
+  var sub = document.getElementById('ttSubTitle');
+  if (sub) {
+    sub.textContent = (data.meta && data.meta.semester) || '';
+    sub.style.display = sub.textContent ? '' : 'none';
+  }
+
+  // 按第一次上课时间（星期 → 节次）排序；未排课的排在最后
+  var rows = data.courses.map(function (c) {
+    var first = null;
+    c.meetings.forEach(function (mt) {
+      if (!first || mt.day < first.day || (mt.day === first.day && mt.ps < first.ps)) first = mt;
+    });
+    return { c: c, first: first };
+  }).sort(function (a, b) {
+    var da = a.first ? a.first.day : 99, db = b.first ? b.first.day : 99;
+    var pa = a.first ? a.first.ps : 99, pb = b.first ? b.first.ps : 99;
+    return (da - db) || (pa - pb);
+  });
+
+  var html = '<ul class="tt-list" id="ttList">';
+  rows.forEach(function (r, idx) {
+    var c = r.c;
+    var tone = ttCourseTone(c.name);
+    var link = c.code ? ttState.links[c.code] : null;
+    var linkClass = link && link.state === 'linked' ? ' is-link' : '';
+    var pendClass = link && link.state === 'pending' ? ' is-pending' : '';
+    var rich = link && link.state === 'linked' ? ttRichClass(link.fileCount) : ' tt-rich-0';
+    var meta = [];
+    if (c.teachers.length) meta.push(esc(c.teachers.join('、')));
+    if (c.credits) meta.push(c.credits + ' 学分');
+    var sched = c.meetings.map(ttFmtMeeting).join('；');
+    var tip = c.name + (sched ? ' · ' + sched : ' · 未排课');
+    if (link && link.state === 'linked') tip += ' · 点击查看课程资料';
+    else if (link && link.state === 'pending') tip += ' · 新课程申请审核中，批准后可跳转';
+    html += '<li class="tt-lrow ttp' + tone + rich + linkClass + pendClass + '" data-code="' + esc(c.code || '') + '"' +
+      ' title="' + esc(tip) + '" style="--li:' + idx + '">' +
+        '<div class="tt-lhead">' +
+          '<span class="nm">' + esc(c.name) + '</span>' +
+          ttStatusTag(link) +
+        '</div>' +
+        (meta.length ? '<div class="tt-lmeta">' + meta.join(' · ') + '</div>' : '') +
+        '<div class="tt-lsched">' + (sched ? esc(sched) : '未排课') + '</div>' +
+      '</li>';
+  });
+  html += '</ul>' +
+    '<div class="tt-foot" id="ttFoot"><span>共 ' + data.courses.length + ' 门课程</span>' +
+      '<span class="tt-legend"><i class="lg2"></i> 资料丰富 <i class="lg1"></i> 有资料 <i class="lg0"></i> 暂无资料</span></div>';
+  body.innerHTML = html;
+
+  // 行点击（事件委托）：与网格卡一致的跳转 / 状态提示
+  var list = document.getElementById('ttList');
+  list.onclick = function (e) {
+    var row = e.target.closest('.tt-lrow');
+    if (!row) return;
+    var code = row.getAttribute('data-code');
+    if (code) ttOpenCourse(code);
+  };
+
+  list.classList.remove('swap');
+  void list.offsetWidth;
+  list.classList.add('swap');
 }
 
 // ── 使用教程弹层（图文步骤，链接可点；图片仅在本弹层打开时加载） ──
