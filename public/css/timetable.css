@@ -79,6 +79,10 @@
 }
 .tt-btn:hover { background: var(--tt-gutter); }
 .tt-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-btn.is-active { background: var(--primary-surface); border-color: var(--primary); color: var(--primary-dark); font-weight: 600; }
+.tt-btn.danger { color: var(--danger); border-color: oklch(from var(--danger) l c h / 0.4); }
+.tt-btn.danger:hover { background: oklch(from var(--danger) l c h / 0.08); }
+.tt-btn.danger.armed { background: var(--danger); border-color: var(--danger); color: white; }
 .tt-btn.is-ghost { border-color: transparent; background: transparent; color: var(--ink-faint); }
 .tt-btn.is-ghost:hover { color: var(--ink); background: var(--tt-gutter); }
 
@@ -286,6 +290,78 @@
 .tt-lrow.is-pending { cursor: help; }
 .tt-list.swap .tt-lrow { animation: ttPop 0.18s ease-out both; animation-delay: calc(var(--li) * 16ms); }
 
+/* ── 编辑模式（编辑态网格 + 课程编辑弹层） ─────────────
+   课表本质是课程列表：编辑只做「让列表保持准确」这件事，
+   视觉完全继承现有语言，唯一的签名是空格子上的淡墨「＋」。 */
+.tt-editing .tt-card { cursor: pointer; }
+.tt-editing .tt-lrow { cursor: pointer; }
+.tt-editing .tt-slot {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 0; min-height: 0; cursor: pointer;
+}
+.tt-editing .tt-slot span {
+  opacity: 0.3; color: var(--ink-faint);
+  font-size: var(--fs-sm); line-height: 1; pointer-events: none;
+}
+.tt-editing .tt-slot:hover { background: oklch(from var(--primary) l c h / 0.05); }
+.tt-editing .tt-slot:hover span { opacity: 0.85; color: var(--primary); }
+
+/* 课程编辑弹层表单 */
+.tt-modal.tt-edit { width: min(640px, 100%); }
+.tt-fld { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tt-fld.tt-fld-top { align-items: flex-end; margin-bottom: 4px; }
+.tt-fld > span { flex: none; width: 64px; font-size: var(--fs-xs); color: var(--ink-soft); }
+.tt-fld > span i { color: var(--danger); font-style: normal; margin-left: 1px; }
+.tt-fld input {
+  flex: 1; min-width: 0; appearance: none;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  font-family: var(--sans); font-size: var(--fs-sm); padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.tt-fld input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-edit-link { margin: -2px 0 10px 72px; font-size: var(--fs-xs); color: var(--ink-faint); line-height: 1.9; }
+.tt-edit-hint { display: inline; }
+.tt-edit-link .loc { display: inline-flex; flex-wrap: wrap; gap: 6px; vertical-align: middle; }
+.tt-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.tt-swatch {
+  appearance: none; border: 1px solid var(--border-light); background: var(--surface);
+  border-radius: var(--radius-full); font-size: var(--fs-2xs); color: var(--ink-soft);
+  padding: 3px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--sans);
+}
+.tt-swatch i {
+  width: 12px; height: 12px; border-radius: 4px;
+  background: oklch(0.86 0.07 var(--h)); border: 1px solid oklch(0.8 0.05 var(--h) / 0.6);
+}
+.tt-swatch:hover { border-color: var(--border); color: var(--ink); }
+.tt-swatch.is-active { border-color: var(--primary); color: var(--primary-dark); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
+.tt-segs { border-top: 1px dashed var(--border-light); }
+.tt-seg {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-light);
+}
+.tt-seg .tt-sel, .tt-seg .tt-num, .tt-seg .tt-room {
+  appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  font-family: var(--sans); font-size: var(--fs-xs); padding: 4px 6px; border-radius: var(--radius-sm);
+}
+.tt-seg .tt-sel:focus-visible, .tt-seg .tt-num:focus-visible, .tt-seg .tt-room:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-seg .tt-sel-n { width: 52px; }
+.tt-seg .tt-num { width: 54px; }
+.tt-seg .tt-room { flex: 1; min-width: 88px; }
+.tt-seg-l { font-size: var(--fs-xs); color: var(--ink-faint); }
+.tt-seg-empty { padding: 10px 0; font-size: var(--fs-xs); color: var(--ink-faint); border-bottom: 1px solid var(--border-light); }
+.tt-chip {
+  appearance: none; border: 1px dashed var(--border); background: var(--surface); color: var(--ink-soft);
+  font-family: var(--sans); font-size: var(--fs-2xs); padding: 3px 8px; border-radius: var(--radius-full); cursor: pointer;
+}
+.tt-chip:hover { color: var(--primary-dark); border-color: var(--primary); }
+.tt-ico {
+  appearance: none; border: none; background: none; color: var(--ink-faint);
+  cursor: pointer; font-size: var(--fs-sm); padding: 2px 5px; border-radius: var(--radius-xs);
+}
+.tt-ico:hover { color: var(--ink); background: var(--tt-gutter); }
+.tt-add-seg { margin-top: 10px; width: 100%; border-style: dashed; }
+.tt-modal footer .tt-foot-left { margin-right: auto; display: inline-flex; gap: 6px; }
+
 /* ── 空状态（导入引导） ─────────────────────────────── */
 .tt-empty {
   border: 1px dashed var(--border); border-radius: var(--radius-lg);
@@ -393,10 +469,15 @@
 
   .tt-grid {
     height: 100%; min-width: 0;
-    grid-template-columns: 30px repeat(7, 1fr);
+    grid-template-columns: 30px repeat(7, minmax(0, 1fr));
     grid-template-rows: 56fr repeat(4, 75fr) 16fr repeat(4, 75fr) 16fr repeat(4, 75fr);
   }
-  .tt-grid.tt-w5 { grid-template-columns: 30px repeat(5, 1fr); }
+  /* .tt-w5 的桌面 min-width:544px 优先级高于 .tt-grid，必须在移动端显式清零；
+     否则 overflow:hidden 会把工作日网格裁成前 3 列左右（Edge 等浏览器尤明显）。 */
+  .tt-grid.tt-w5 {
+    grid-template-columns: 30px repeat(5, minmax(0, 1fr));
+    min-width: 0;
+  }
 
   /* 字号随可视高度缩放（1cqh = .tt-scroll 高度的 1%） */
   .tt-card { padding: 3px 5px; border-radius: 7px; }
@@ -410,6 +491,11 @@
   .tt-day.is-today .dj { display: none; } /* 今日列已有淡染，不再放「今」签 */
   .tt-corner b { font-size: clamp(12px, 3cqh, 18px); }
   .tt-corner span { display: none; }
+
+  /* 编辑弹层：表单控件在窄屏下保持可点面积 */
+  .tt-fld > span { width: 58px; }
+  .tt-edit-link { margin-left: 66px; }
+  .tt-seg .tt-room { min-width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

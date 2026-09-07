@@ -11,8 +11,8 @@
 - `materials/tests/`：34 个 Python 文件，7262 行，444 个 `test_*` 方法
 - `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1231 行
-- `public/js/`：23 个文件，12309 行（按视图懒加载 explorer/QA/admin/timetable 模块）
-- `public/css/`：10 个文件，7635 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
+- `public/js/`：23 个文件，15027 行（按视图懒加载 explorer/QA/admin/timetable 模块）
+- `public/css/`：10 个文件，7721 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
 
 ## 按任务定位
 
@@ -28,7 +28,7 @@
 - 总管理员用户监测与访问追溯：`materials/views/admin_monitoring.py`、`public/js/admin-users.js`、`public/js/views.js`
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
 - 前端入口、启动时序与懒加载契约：`public/index.html`、`public/js/feature-loader.js`、`public/js/utils.js`、`public/js/app.js`
-- 我的课表（教务 xls 导入 + 课程代码链回资料目录/自动建课申请 + 「切换视图」网格⇄列表 + 移动端满屏适配，管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`
+- 我的课表（教务 xls 导入 + 课程代码链回资料目录/自动建课申请 + 「切换视图」网格⇄列表 + 「编辑模式」课程编辑/手动建课/从本周移除/颜色覆盖 + 移动端满屏适配（含 5 日网格 min-width 清零），管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`、设计草案 `docs/课表编辑功能草案.md`
 - 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀，首页上传入口保留历史蓝）及其余 CSS 模块
 - 回归测试：`materials/tests/`
 - 发布与运维：`deploy.sh`（固定 host key、停服后备份应用/SQLite/Nginx、校验重载 Nginx、失败回滚；tar 列表含 public/js、public/css、index.html、tt_tutorial 教程图）、`scripts/`、`bnusparks/settings_prod.py`
