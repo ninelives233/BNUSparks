@@ -421,7 +421,9 @@ function ttCourseNameByCode(code) {
 
 // ── 确认弹窗（汇总 + 课程清单 + 未建课位置选择） ──
 function ttShowConfirmModal(parsed) {
-  // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入
+  // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入。
+  // 先清 api() 内存缓存（树 TTL 10 分钟），保证已建课判定是新鲜的
+  if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
   var ready = (typeof loadCourseTree === 'function') ? Promise.resolve(loadCourseTree()).catch(function () {}) : Promise.resolve();
   ready.then(function () { ttRenderConfirmModal(parsed); });
 }
@@ -572,32 +574,47 @@ function ttApplyImport(parsed, requests) {
   ttCloseModal();
   ttRenderAll();
   if (!requests.length) return;
-  var direct = 0, sent = 0, failed = 0;
+  var direct = 0, sent = 0, failed = 0, treeDirty = false;
   var jobs = requests.map(function (r) {
     return api('/api/courses/request/', { method: 'POST', body: r.body })
       .then(function (res) {
-        if (res && res.auto_approved) { direct++; return; }
+        if (res && res.auto_approved) { direct++; treeDirty = true; return; }
         sent++;
         parsed.pendingCodes[r.code] = true;
       })
-      .catch(function () { failed++; parsed.pendingCodes[r.code] = true; });
+      .catch(function (err) {
+        // 「已在目标位置」= 缓存过期导致的重复申请，课程其实已建好
+        if (err && err.message && err.message.indexOf('已在') >= 0) { direct++; treeDirty = true; return; }
+        failed++;
+        parsed.pendingCodes[r.code] = true;
+      });
   });
   Promise.all(jobs).then(function () {
     ttSaveStore(parsed);
-    // 有直接建课时后端已清树缓存，重拉课程树让新课立即可点
-    var refresh = (direct > 0 && typeof loadCourseTree === 'function')
-      ? Promise.resolve(loadCourseTree()).catch(function () {})
-      : Promise.resolve();
-    refresh.then(function () {
+    if (treeDirty && typeof loadCourseTree === 'function') {
+      // 后端建课已清服务端树缓存；前端 api() 内存缓存（树 TTL 10 分钟）
+      // 必须手动清除，否则重拉的仍是旧树，直建课程不会立即变为可跳转
+      if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+      Promise.resolve(loadCourseTree()).catch(function () {}).then(function () {
+        ttResolveCourseLinks();
+        if (document.getElementById('ttGrid')) ttPaintGrid();
+        ttToastImportResult(direct, sent, failed);
+      });
+    } else {
       ttResolveCourseLinks();
       if (document.getElementById('ttGrid')) ttPaintGrid();
-      var parts = [];
-      if (direct) parts.push(direct + ' 门在辖区内已直接建课');
-      if (sent) parts.push(sent + ' 门申请已送审');
-      if (failed) parts.push(failed + ' 门提交失败');
-      ttToast(parts.join('；') + '，批准后点击课程即可跳转');
-    });
+      ttToastImportResult(direct, sent, failed);
+    }
   });
+}
+
+function ttToastImportResult(direct, sent, failed) {
+  var parts = [];
+  if (direct) parts.push(direct + ' 门在辖区内已直接建课');
+  if (sent) parts.push(sent + ' 门申请已送审');
+  if (failed) parts.push(failed + ' 门提交失败');
+  var tail = sent ? '，批准后点击课程即可跳转' : (direct ? '，点击课程即可查看资料' : '');
+  ttToast(parts.join('；') + tail);
 }
 
 // ── 课程卡点击：跳转 / 状态提示 ──
