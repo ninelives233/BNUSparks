@@ -21,12 +21,12 @@
 var TT_STORE_KEY = 'bnusparks_timetable_v1';
 var TT_SCHEME_KEY = 'bnusparks_timetable_scheme';
 
-// 配色方案（默认「水墨青花」即 CSS 基础变量；其余方案覆盖 8 个色相）
+// 配色方案（默认「暖秋」即 CSS 基础变量；均为暖色系衍生，仅色相倾向不同）
 var TT_SCHEMES = [
-  { id: 'zhongguo', name: '水墨青花' },
-  { id: 'nuan',     name: '暖秋' },
-  { id: 'qing',     name: '青瓷' },
-  { id: 'zi',       name: '紫霞' }
+  { id: 'zhongguo', name: '暖秋' },
+  { id: 'nuan',     name: '海棠' },
+  { id: 'qing',     name: '蜜茶' },
+  { id: 'zi',       name: '绛纱' }
 ];
 
 // BNU 标准作息（12 节）
@@ -294,7 +294,7 @@ function ttToggleSchemePop() {
   pop.id = 'ttSchemePop';
   pop.className = 'tt-scheme-pop';
   pop.innerHTML = TT_SCHEMES.map(function (s) {
-    var hueShift = { zhongguo: [315, 155, 68, 250], nuan: [350, 40, 70, 15], qing: [175, 150, 125, 210], zi: [290, 320, 265, 340] }[s.id] || [315, 155, 68, 250];
+    var hueShift = { zhongguo: [28, 48, 68, 15], nuan: [355, 20, 40, 5], qing: [55, 75, 95, 40], zi: [0, 18, 340, 8] }[s.id] || [28, 48, 68, 15];
     var dots = hueShift.map(function (h) {
       return '<i style="background:oklch(0.86 0.07 ' + h + ')"></i>';
     }).join('');
@@ -379,13 +379,69 @@ function ttShowImportError(msg) {
 }
 
 // ── 课程目录匹配：code → { state: linked|pending|missing, path?, fileCount? } ──
+
+// 区段课程代码匹配：目录节点 courseId 形如「GEN09001-GEN09008」（或 GEN09001-008）
+function ttInRange(rangeId, code) {
+  var m = String(rangeId || '').match(/^([A-Za-z]+)(\d+)\s*-\s*([A-Za-z]*)(\d+)$/);
+  if (!m) return false;
+  if (m[3] && m[3] !== m[1]) return false;
+  var a = parseInt(m[2], 10);
+  var bRaw = m[4];
+  var b = (bRaw.length <= m[2].length)
+    ? parseInt(m[2].slice(0, m[2].length - bRaw.length) + bRaw, 10)
+    : parseInt(bRaw, 10);
+  var cm = code.match(/^([A-Za-z]+)(\d+)$/);
+  if (!cm || cm[1] !== m[1]) return false;
+  var n = parseInt(cm[2], 10);
+  return n >= a && n <= b;
+}
+
+// 课表专用目录查找：精确代码 → 区段代码 → 「形势与政策」系列名称特例
+// （凡课名以「形势与政策」开头，不论代码尾号，统一指向同名目录）。
+// 多个匹配时与搜索一致：本人专业 → 本人学院 → 默认首条。
+function ttFindPathByCode(code, courseName) {
+  if (!courseTree) return null;
+  var matches = [];
+  function walk(nodes, path) {
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var hit = (n.courseId === code) ||
+        (n.courseId && String(n.courseId).indexOf('-') >= 0 && ttInRange(n.courseId, code));
+      // 特例：形势与政策系列 → 同名目录（仅认叶子条目，不误挂到同名分类）
+      if (!hit && courseName && courseName.indexOf('形势与政策') === 0 &&
+          /GEN09/.test(code) && n.name && n.name.indexOf('形势与政策') === 0 && !n.children) {
+        hit = true;
+      }
+      if (hit) matches.push(path.concat(n.name));
+      if (n.children) walk(n.children, path.concat(n.name));
+    }
+  }
+  Object.keys(courseTree).forEach(function (key) {
+    if (courseTree[key] && courseTree[key].children) walk(courseTree[key].children, [key]);
+  });
+  if (!matches.length) return null;
+  var idMaj = currentUser && currentUser.identity_major;
+  var idCol = currentUser && currentUser.identity_college;
+  if (idMaj || idCol) {
+    for (var m = 0; m < matches.length; m++) {
+      var p = matches[m];
+      if (p[0] === '专业课' && idMaj && p.length >= 4 && p[2] === idMaj) return p;
+    }
+    for (var n2 = 0; n2 < matches.length; n2++) {
+      var q = matches[n2];
+      if (q[0] === '专业课' && idCol && q.length >= 3 && q[1] === idCol) return q;
+    }
+  }
+  return matches[0];
+}
+
 function ttResolveCourseLinks() {
   var map = {};
   ttState.links = map;
-  if (!ttState.data || !courseTree || typeof findPathByCourseId !== 'function') return map;
+  if (!ttState.data || !courseTree) return map;
   ttState.data.courses.forEach(function (c) {
     if (!c.code || map[c.code]) return;
-    var path = findPathByCourseId(c.code);
+    var path = ttFindPathByCode(c.code, c.name);
     if (path) {
       var node = ttNodeByPath(path);
       map[c.code] = {
@@ -434,12 +490,11 @@ function ttRenderConfirmModal(parsed) {
   var existing = ttModalOverlay();
   var credits = meta.credits || courses.reduce(function (a, c) { return a + (parseFloat(c.credits) || 0); }, 0).toFixed(2);
 
-  // 按代码去重判断建课状态
+  // 按代码去重判断建课状态（含区段目录与形势与政策特例）
   var statusByCode = {};
   courses.forEach(function (c) {
     if (!c.code || statusByCode[c.code]) return;
-    var linked = !!(courseTree && typeof findPathByCourseId === 'function' && findPathByCourseId(c.code));
-    statusByCode[c.code] = linked ? 'linked' : 'missing';
+    statusByCode[c.code] = ttFindPathByCode(c.code, c.name) ? 'linked' : 'missing';
   });
   var missing = courses.filter(function (c) { return c.code && statusByCode[c.code] === 'missing'; });
   var genCount = missing.filter(function (c) { return /^GEN/i.test(c.code); }).length;
@@ -622,8 +677,16 @@ function ttOpenCourse(code) {
   var info = ttState.links[code];
   if (!info) return;
   if (info.state === 'linked') {
-    if (typeof showExplorer === 'function' && typeof navToLast === 'function') {
-      // 与搜索结果一致：按身份标签优先从对应课程树入口进入
+    if (typeof showExplorer !== 'function') return;
+    // 优先用课表自己的解析结果（支持区段目录/形势与政策特例，
+    // navToLast 只认精确代码会停在板块根）；身份优先级已在解析时应用
+    if (info.path && info.path.length >= 2) {
+      expPath = info.path;
+      pushViewState('explorer', { expPath: [...expPath] });
+      switchView('explorer');
+      renderExplorer();
+      updateSidebar(info.path[0] === '通识课' ? '通识课' : '专业课');
+    } else if (typeof navToLast === 'function') {
       showExplorer(info.type === '通识课' ? '通识课' : '专业课');
       navToLast(code);
     }

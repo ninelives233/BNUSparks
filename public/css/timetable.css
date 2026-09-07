@@ -9,24 +9,23 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .tt-shell {
-  /* 色相：8 个传统色（按方案覆盖 H，卡片色实时计算） */
-  --ttp1-h: 315;  /* 藕荷 */
-  --ttp2-h: 155;  /* 苍绿 */
-  --ttp3-h: 68;   /* 赭石 */
-  --ttp4-h: 250;  /* 绀青 */
-  --ttp5-h: 105;  /* 秋香 */
-  --ttp6-h: 35;   /* 檀 */
-  --ttp7-h: 205;  /* 青碧 */
-  --ttp8-h: 300;  /* 紫棠 */
+  /* 色相：8 个暖色（按方案覆盖 H，卡片色实时计算） */
+  --ttp1-h: 28;   /* 柿 */
+  --ttp2-h: 48;   /* 缃 */
+  --ttp3-h: 68;   /* 秋香 */
+  --ttp4-h: 98;   /* 官青 */
+  --ttp5-h: 15;   /* 檀 */
+  --ttp6-h: 40;   /* 杏 */
+  --ttp7-h: 85;   /* 苍绿 */
+  --ttp8-h: 335;  /* 海棠 */
 
-  /* 卡片色阶（方案可整体覆盖）：
-     bg = oklch(--tt-l --tt-c H) · ink = oklch(--tt-il --tt-ic H) */
-  --tt-l: 0.925; --tt-c: 0.042;
-  --tt-il: 0.42; --tt-ic: 0.085;
-  --tt-bl: 0.83; --tt-bc: 0.055;
-  /* 资料丰度：无资料（近灰） / 资料⩾10（更沉更饱和） */
-  --tt-l0: 0.945; --tt-c0: 0.014; --tt-ic0: 0.03;
-  --tt-l2: 0.87;  --tt-c2: 0.082;
+  /* 资料丰度基准（所有配色方案均由此衍生）：
+     无资料 = 灰黑（几乎无彩） · 有资料 = 暖色 · 越多越深越浓 */
+  --tt-l: 0.91;  --tt-c: 0.06;      /* 有资料（1-9 份） */
+  --tt-il: 0.40; --tt-ic: 0.09;
+  --tt-bl: 0.80; --tt-bc: 0.07;
+  --tt-l0: 0.905; --tt-c0: 0.008; --tt-ic0: 0.015; --tt-bl0: 0.84; --tt-bc0: 0.012;
+  --tt-l2: 0.835; --tt-c2: 0.105;
 
   --tt-today: var(--accent);
   --tt-panel: var(--raised);
@@ -39,18 +38,18 @@
   --tt-gutter: oklch(0.965 0.008 70);
 }
 
-/* ── 配色方案 ───────────────────────────────────────── */
+/* ── 配色方案（暖色系衍生：仅调整 8 个色相的倾向） ── */
 .tt-sch-nuan {
-  --ttp1-h: 350; --ttp2-h: 40;  --ttp3-h: 70;  --ttp4-h: 15;
-  --ttp5-h: 95;  --ttp6-h: 55;  --ttp7-h: 110; --ttp8-h: 330;
+  --ttp1-h: 355; --ttp2-h: 20;  --ttp3-h: 40;  --ttp4-h: 5;
+  --ttp5-h: 50;  --ttp6-h: 350; --ttp7-h: 30;  --ttp8-h: 60;
 }
 .tt-sch-qing {
-  --ttp1-h: 175; --ttp2-h: 150; --ttp3-h: 125; --ttp4-h: 210;
-  --ttp5-h: 90;  --ttp6-h: 230; --ttp7-h: 165; --ttp8-h: 195;
+  --ttp1-h: 55;  --ttp2-h: 75;  --ttp3-h: 95;  --ttp4-h: 40;
+  --ttp5-h: 65;  --ttp6-h: 85;  --ttp7-h: 108; --ttp8-h: 35;
 }
 .tt-sch-zi {
-  --ttp1-h: 290; --ttp2-h: 320; --ttp3-h: 265; --ttp4-h: 340;
-  --ttp5-h: 305; --ttp6-h: 255; --ttp7-h: 335; --ttp8-h: 280;
+  --ttp1-h: 0;   --ttp2-h: 18;  --ttp3-h: 340; --ttp4-h: 8;
+  --ttp5-h: 28;  --ttp6-h: 350; --ttp7-h: 22;  --ttp8-h: 45;
 }
 
 /* ── 顶部：标题 + 操作 ─────────────────────────────── */
@@ -183,13 +182,13 @@
   box-shadow: 0 1px 2px oklch(0.4 0.02 60 / 0.10);
   transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
-.tt-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-/* 有目录的课程可点击跳转 */
-a.tt-card, .tt-card.is-link { cursor: pointer; }
-a.tt-card:hover .tt-card-name, .tt-card.is-link:hover .tt-card-name { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.tt-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+/* 有目录的课程可点击跳转：hover 浮起示意，不用下划线 */
+.tt-card.is-link { cursor: pointer; }
+.tt-card.is-link:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
 .tt-card.is-pending { cursor: help; }
-/* 资料丰度双色系 */
-.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); }
+/* 资料丰度：灰黑（无）→ 暖色（有）→ 更深更浓（丰富）；灰系连描边一起去色 */
+.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
 .tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
 
 .tt-card-name {
@@ -219,11 +218,11 @@ a.tt-card:hover .tt-card-name, .tt-card.is-link:hover .tt-card-name { text-decor
 
 /* ── 底部统计 / 图例 ────────────────────────────────── */
 .tt-foot { margin-top: var(--space-xs); display: flex; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--tt-time); }
-.tt-legend { display: inline-flex; align-items: center; gap: 6px; --th: 250; }
+.tt-legend { display: inline-flex; align-items: center; gap: 6px; --th: 45; }
 .tt-legend i { width: 11px; height: 11px; border-radius: 3px; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(var(--tt-l) var(--tt-c) var(--th)); }
-.tt-legend .lg1 { --tt-l: 0.925; --tt-c: 0.042; }
+.tt-legend .lg1 { --tt-l: 0.91; --tt-c: 0.06; }
 .tt-legend .lg2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
-.tt-legend .lg0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
+.tt-legend .lg0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); border-color: oklch(0.84 0.012 70); }
 
 /* ── 空状态（导入引导） ─────────────────────────────── */
 .tt-empty {
