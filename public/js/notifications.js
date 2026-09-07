@@ -182,7 +182,7 @@
     var exp = document.getElementById('explorerView');
     if (exp && exp.style.display !== 'none') renderExplorer();
     // 平民模式：显示侧边栏管理入口
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
+    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
       link.style.display = (currentUser && currentUser.role !== 'user') ? '' : 'none';
     });
     // 文件详情页/弹窗即时反馈
@@ -203,7 +203,7 @@
     document.body.classList.toggle('mgmt-active', isMgmtActive());
     renderDrawerMenu();
     // 平民模式：隐藏侧边栏管理入口
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
+    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
       link.style.display = (_civilianMode || !currentUser || currentUser.role === 'user') ? 'none' : '';
     });
     // 文件详情页/弹窗即时反馈

@@ -929,6 +929,19 @@
     });
   }
 
+  // 我的课表：timetable.js 为懒加载模块，这里统一做「确保加载 → 进入视图」
+  function ttNavTimetable() {
+    if (typeof showTimetable === 'function') { showTimetable(); return; }
+    if (typeof ensureFeature === 'function') {
+      ensureFeature('timetable').then(function () {
+        if (typeof showTimetable === 'function') showTimetable();
+        else showHome();
+      }).catch(function () { showHome(); });
+    } else {
+      showHome();
+    }
+  }
+
   // ── Sidebar ──
   document.querySelectorAll('.side-nav a').forEach(a => {
     a.addEventListener('click', (e) => {
@@ -942,6 +955,7 @@
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
       else if (view === 'leaderboard') showLeaderboard();
+      else if (view === 'timetable') ttNavTimetable();
     });
   });
 
@@ -958,6 +972,7 @@
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
       else if (view === 'leaderboard') showLeaderboard();
+      else if (view === 'timetable') ttNavTimetable();
       drawer.classList.remove('open');
     });
   });

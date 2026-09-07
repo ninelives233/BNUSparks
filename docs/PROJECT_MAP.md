@@ -2,7 +2,7 @@
 
 > 给人看的维护地图，不是 API 文档的替代品。需要精确路由或字段时，以代码为准。
 >
-> 基线日期：2026-09-04。行号来自当前工作树；修改代码后只更新本图中受影响的数字和入口。
+> 基线日期：2026-09-07。行号来自当前工作树；修改代码后只更新本图中受影响的数字和入口。
 
 ## 1. 先看这张总图
 
@@ -43,9 +43,9 @@
 | `materials/views/` | 37 个 Python 文件，10632 行 | facade 与子模块一起看，勿把薄 facade 当业务实现 |
 | `materials/tests/` | 33 个 Python 文件，7173 行，436 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
 | `materials/management/commands/` | 8 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
-| `public/index.html` | 1167 行 | 页面骨架、表单、弹窗和核心/懒加载脚本入口都在这里 |
-| `public/js/` | 22 个文件，11091 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
-| `public/css/` | 9 个文件，7192 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
+| `public/index.html` | 1219 行 | 页面骨架、表单、弹窗、课程/学院/首页入口及侧边栏 SVG 符号表和核心/懒加载脚本入口都在这里 |
+| `public/js/` | 22 个文件，11093 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
+| `public/css/` | 9 个文件，7217 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
 | `data/` | SQLite、媒体文件、课程映射等运行数据 | 不提交、不用清理脚本替代备份 |
 
 ## 3. 入口、配置与部署
@@ -62,6 +62,7 @@
 | `scripts/deploy_verify.sh` | 部署后在线检查 | 修改检查路径或线上验证行为 |
 | `scripts/security-audit.sh` | 生产安全审计命令 | 修改检查项；禁止输出密钥/`.env` 内容 |
 | `scripts/seed_new5.py` | 按既有课程树规范写入 `tmp_seed_pdfs/新建5` 的八个新增专业；同码课程全局复用，原文同码冲突保留目录名称 | 新增/修订培养方案或课程树导入规则 |
+| `docs/GITHUB_REPO_AGENT_GUIDE.md` | 面向其他 Agent 的 GitHub 仓库创建、认证、提交推送、已有仓库接入和安全排错指南 | 需要让其他项目 Agent 创建 GitHub 仓库或上传项目文件时 |
 
 ## 4. 数据模型地图
 
@@ -156,6 +157,7 @@ utils → auth → profile → notifications → admin-core → views → explor
   explorer → explorer-upload → explorer-mgmt → explorer-render → newcourse
   qa → qa → qa-editor → qa-compose
   admin → qa → qa-editor → qa-compose → admin-pending → admin-records → admin-users → qa-admin
+  timetable → timetable
 ```
 
 | 文件/组 | 负责什么 | 什么时候改 |
@@ -166,22 +168,46 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/js/profile.js` | 个人中心、公开资料、上传/下载/收藏页 | 用户模块变化 |
 | `public/js/notifications.js` | 通知抽屉、通知中心、管理/平民模式 | 通知和用户菜单变化 |
 | `public/js/admin-*.js` | 管理概览、待审、记录、用户；`admin-users.js` 含趋势/三项身份/访问流水筛选/运行状态/用户名单 | 后台 tab、用户监测和管理动作变化 |
-| `public/js/explorer-*.js` | 课程树、上传、文件列表、管理、预览 | 课程浏览与文件操作变化 |
-| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin 脚本和对应 CSS，并复用脚本/CSS 加载 Promise；失败资源可重试 | 首屏资源、模块依赖顺序、错误恢复或懒加载入口变化 |
+| `public/js/explorer-*.js` | 课程树、课程/学院卡片 SVG 名称映射、上传、文件列表、管理、预览 | 课程浏览、卡片图标与文件操作变化 |
+| `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin/timetable 脚本和对应 CSS，并复用脚本/CSS 加载 Promise；失败资源可重试 | 首屏资源、模块依赖顺序、错误恢复或懒加载入口变化 |
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
+| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`，不落后端），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1`），浅/墨双主题 | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI 变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
-| `public/css/tokens.css` | OKLCH 色彩（青靛墨蓝/琥珀）、字体、间距、动效变量 | 设计系统变化 |
-| `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、移动基础 | 基础 UI 变化 |
+| `public/css/tokens.css` | OKLCH 色彩（青靛墨蓝/琥珀）、首页上传入口专用色、字体、间距、动效变量 | 设计系统变化 |
+| `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、首页入口/课程卡片图标底框、侧边栏图标和移动基础 | 基础 UI 或首页入口/卡片/侧栏图标变化 |
 | `public/css/admin.css` | 审核/管理后台 | 管理 UI 变化 |
 | `public/css/user.css` | 个人中心、用户页、通知抽屉及我的上传操作 | 用户 UI 变化 |
 | `public/css/files.css` | 文件列表、详情、预览、举报、上传下载和管理模式文件控件 | 文件 UI 变化 |
 | `public/css/course.css` | 课程树、课程页面及新建课程控件 | 课程浏览或新建课程 UI 变化 |
 | `public/css/announcement.css` | 公告 UI | 公告页面变化 |
 | `public/css/qa.css` | 问答与编辑器 UI | 问答 UI 变化 |
+| `public/css/timetable.css` | 我的课表（「纸墨 × 中国色」卡片、浅/墨双主题域 `.tt-shell.ink`、周网格与导入确认弹窗） | 课表 UI 变化 |
 | `public/css/components.css` | 跨页面按钮、弹窗基座、分段控件、开关、空态/加载态及全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |
 
 跨文件契约：顶层函数和全局变量被大量内联 `onclick` 与其他模块调用；改名/删除前必须 `rg` 全仓库。SPA 深链当前覆盖静态页、explorer、用户、文件、问答编辑，但问答编辑参数需要重点回归。
+
+### 独立设计审查与样稿（2026-09-06）
+
+以下文件不属于生产 CSS/JS 加载链；仅用于设计评审。原有图标优化可独立继续。
+
+| 文件 | 当前行数 | 职责 |
+|---|---:|---|
+| `docs/design-review-2026-09-06/REVIEW.md` | 205 | 全站视觉/动效/交互审查、源码定位、三个方向取舍与迁移验收 |
+| `docs/design-review-2026-09-06/brand-spec.md` | 28 | 识别元素、三套 OKLCH token、字体/布局/动效约定 |
+| `docs/design-review-2026-09-06/01-library.html` | 94 | 静读资料馆：搜索优先、学术排版、四个代表页面与弹窗 |
+| `docs/design-review-2026-09-06/02-workbench.html` | 118 | 课程工作台：持久目录、资料列表、桌面并排预览与手机弹窗 |
+| `docs/design-review-2026-09-06/03-circulation.html` | 97 | 校园传阅：品牌/搜索并排、课程书架与代表页面 |
+
+同目录三个 `*-desktop.jpg` 为浏览器渲染截图。HTML 可直接本地打开，无外部依赖或 API 请求。
+
+### 个性化学习空间样板（2026-09-07）
+
+| 文件 | 当前行数 | 职责 |
+|---|---:|---|
+| `docs/personal-home-prototype/index.html` | 68 | 独立静态个性化首页、课程管理、示例课表核对、搜索收藏、移动导航；不接入生产资源 |
+| `docs/personal-home-prototype/v2.html` | 80 | 第二版：无右侧身份及继续查看，资料更新首页、课程列表与固定管理、统一添加入口 |
+| `docs/personal-home-prototype/brand-spec.md` | 42 | 设计规则、体验路径、示例范围与验证记录 |
 
 ## 8. 测试与运维定位
 
@@ -207,4 +233,4 @@ utils → auth → profile → notifications → admin-core → views → explor
 - 并发状态：`utils_quota.py`、`favorites.py`、`qa_public.py`、`qa_admin.py`、`qa_user.py`。唯一约束、条件更新或锁才是最终保证，前置查询只用于友好提示。
 - 前端模板：所有 `innerHTML`、内联事件和用户内容必须明确区分纯文本与已净化 HTML。
 
-最后更新时间：2026-09-04。若目录、路由、模型或模块拆分改变，先更新本文件和根目录 `project-map.md`，再更新 AGENTS/README 中的摘要数字。
+最后更新时间：2026-09-07。若目录、路由、模型或模块拆分改变，先更新本文件和根目录 `project-map.md`，再更新 AGENTS/README 中的摘要数字。

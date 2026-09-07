@@ -3,16 +3,16 @@
 这是项目地图的薄索引。面向维护者的完整、可阅读版本在
 [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md)。
 
-## 当前基线（2026-09-04）
+## 当前基线（2026-09-07）
 
 - `materials/models.py`：1012 行，27 个 Django 模型（另有 `CourseType` 枚举）
 - `materials/urls.py`：151 行，117 个 `path()` 路由
 - `materials/views/`：37 个 Python 文件，10632 行
 - `materials/tests/`：33 个 Python 文件，7173 行，436 个 `test_*` 方法
 - `materials/management/commands/`：8 个可执行管理命令
-- `public/index.html`：1167 行
-- `public/js/`：22 个文件，11091 行（按视图懒加载 explorer/QA/admin 模块）
-- `public/css/`：9 个文件，7192 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css）
+- `public/index.html`：1231 行
+- `public/js/`：23 个文件，11718 行（按视图懒加载 explorer/QA/admin/timetable 模块）
+- `public/css/`：10 个文件，7481 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
 
 ## 按任务定位
 
@@ -27,9 +27,15 @@
 - 总管理员用户监测与访问追溯：`materials/views/admin_monitoring.py`、`public/js/admin-users.js`、`public/js/views.js`
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
 - 前端入口、启动时序与懒加载契约：`public/index.html`、`public/js/feature-loader.js`、`public/js/utils.js`、`public/js/app.js`
-- 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀）及其余 CSS 模块
+- 我的课表（教务 xls 导入，管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`
+- 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀，首页上传入口保留历史蓝）及其余 CSS 模块
 - 回归测试：`materials/tests/`
 - 发布与运维：`deploy.sh`（固定 host key、停服后备份应用/SQLite/Nginx、校验重载 Nginx、失败回滚）、`scripts/`、`bnusparks/settings_prod.py`
+- GitHub 仓库创建与推送：`docs/GITHUB_REPO_AGENT_GUIDE.md`（Agent 的授权边界、`gh` 认证、新仓库创建、已有仓库接入、推送验证和安全排错）
 - 新专业课程树种子：`scripts/seed_new5.py`（从 `tmp_seed_pdfs/新建5` 转录并幂等写入八个已有学院的专业树）
+
+- 全站设计审查与三套独立静态方案：`docs/design-review-2026-09-06/REVIEW.md`（审查、取舍、迁移规则），同目录 `01-library.html` / `02-workbench.html` / `03-circulation.html`（不接入生产资源）
+
+- 个性化学习空间静态样板：`docs/personal-home-prototype/index.html`（首页、我的课程、导入核对、课程目录与移动布局），第二版见同目录 `v2.html`（课程更新首页与课程列表）；说明见 `brand-spec.md`。
 
 完整地图、调用链、权限边界和“什么时候改哪里”见 [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md)。

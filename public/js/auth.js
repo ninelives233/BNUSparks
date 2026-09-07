@@ -22,9 +22,9 @@
           '<span class="login-icon gi gi-login"></span><span class="login-text">登录</span>' +
         '</a>';
     }
-    // 侧边栏管理后台入口显示/隐藏（平民模式隐藏一切）
+    // 侧边栏管理后台/我的课表入口显示/隐藏（平民模式隐藏一切）
     var showAdmin = currentUser && currentUser.role !== 'user' && !_civilianMode;
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
+    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
       link.style.display = showAdmin ? '' : 'none';
     });
   }
@@ -199,7 +199,12 @@
         body: { username: sid, password: document.getElementById('loginPassword').value, remember: remember } });
       _persistToken(data.token, remember, data.user && data.user.id);
       currentUser = data.user;
+      var resumeQa = !!window._qaLoginPending;
+      window._qaLoginPending = false;
       closeAuthModal(); updateAuthUI();
+      if (resumeQa && typeof isQaViewActive === 'function' && isQaViewActive() && typeof renderQaView === 'function') {
+        renderQaView();
+      }
     } catch (err) { el.textContent = err.message; el.style.display = 'block'; }
     return false;
   }
@@ -445,7 +450,6 @@
 
   function logout() {
     clearAuthToken();
-    sessionStorage.removeItem('bnusparks_qa_guest'); // 问答区 2026 门控标记
     currentUser = null;
     location.reload();
   }

@@ -160,6 +160,53 @@
     'clapper': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5a1.5 1.5 0 0 1 1.5-1.5H18a1.5 1.5 0 0 1 1.5 1.5V11H4.5z"/><path d="M4.5 11h15v6.5A1.5 1.5 0 0 1 18 19H6a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M6.5 9.5 5 11"/><path d="M9.5 9.5 8 11"/><path d="M12.5 9.5 11 11"/><path d="M15.5 9.5 14 11"/><path d="M8.5 14.5h5"/></svg>',
   };
 
+  // 已确认的顶层通识分类与学院图标；下级课程卡片继续使用后端 iconClass。
+  const CARD_ICON_SYMBOLS = {
+    '思想政治理论类': 'ci-ideology',
+    '体育与健康类': 'ci-sports',
+    '军事理论与军事技能': 'ci-military',
+    '大学外语类': 'ci-language',
+    '教师素养类': 'ci-teaching',
+    '家国情怀与价值理想': 'ci-values',
+    '艺术鉴赏与审美体验': 'ci-art',
+    '数理基础与科学素养': 'ci-science',
+    '社会发展与公民责任': 'ci-society',
+    '经典研读与文化传承': 'ci-classics',
+    '国际视野与文明对话': 'ci-international',
+    '数学类': 'ci-math',
+    '实用文件': 'ci-practical',
+    '经济与工商管理学院': 'college-economics',
+    '法学院': 'college-law',
+    '文学院': 'college-literature',
+    '社会学院': 'college-sociology',
+    '心理学部': 'college-psychology',
+    '历史学院': 'college-history',
+    '人工智能学院': 'college-ai',
+    '物理与天文学院': 'college-physics',
+    '化学学院': 'college-chemistry',
+    '生命科学学院': 'college-life',
+    '政府管理学院': 'college-government',
+    '数学科学学院': 'college-math',
+    '统计学院': 'college-statistics',
+    '地理科学学部': 'college-geography',
+    '教育学部': 'college-education',
+    '环境学院': 'college-environment',
+    '外国语言文学学院': 'college-languages',
+    '新闻传播学院': 'college-journalism',
+    '哲学学院': 'college-philosophy',
+    '马克思主义学院': 'college-marxism',
+    '艺术与传媒学院': 'college-media',
+    '体育与运动学院': 'college-athletics',
+  };
+
+  function cardIconHtml(item) {
+    const symbolId = CARD_ICON_SYMBOLS[item.name];
+    if (symbolId) {
+      return '<svg class="course-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#' + symbolId + '"></use></svg>';
+    }
+    return CARD_ICONS[item.iconClass] || CARD_ICONS.folder;
+  }
+
   // ── State ──
   let expPath = [];
   // 文件计数已嵌入课程树响应（fileCount），无需单独请求

@@ -276,7 +276,7 @@
     recentAll: '/recent', leaderboard: '/leaderboard', profile: '/profile',
     myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
     admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa',
-    qaCompose: '/qa/compose' };
+    qaCompose: '/qa/compose', timetable: '/timetable' };
 
   // state = { view, expPath, userId, fileId, ... } → 路径字符串；返回 null 表示保持当前 URL
   function routeToPath(view, state) {
@@ -572,8 +572,9 @@
     const btn = document.querySelector('.search-box button');
     if (!input) return;
     function go() {
-      // 问答区视图内：搜索框自动切为帖子搜索（未登录经 2026 门控也可搜）
+      // 问答区视图内：搜索框自动切为帖子搜索（未登录时统一唤起登录弹窗）
       if (typeof isQaViewActive === 'function' && isQaViewActive()) {
+        if (!currentUser) { showLoginModal(); return; }
         const qaQ = input.value.trim();
         if (!qaQ) return;
         if (typeof qaSearch === 'function') {
