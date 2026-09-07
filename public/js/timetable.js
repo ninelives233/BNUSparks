@@ -283,6 +283,9 @@ function ttSyncPull() {
       ttComputeWeek();
       ttApplyScheme();
       ttRenderAll();
+      // 关键：ttLoadUserData 里检查 data 时云端还没回来（本地为 null）会跳过
+      // 树预载，这里补上，否则链接永远解析不了（全部误显「未建目录」且点击无效）
+      ttEnsureCourseTree();
     } else {
       // 本地较新 → 推云端
       ttSyncUpload();
@@ -310,7 +313,11 @@ function ttInitShell() {
   if (shell.dataset.ready) {
     // 同一页面内切换账号（登出再登录）：按新账号重载数据与配色
     if (ttState.uid !== (currentUser ? currentUser.id : null)) ttLoadUserData();
-    else { ttMigrateLegacyStore(); ttRenderAll(); }
+    else {
+      ttMigrateLegacyStore();
+      ttRenderAll();
+      if (ttState.data) ttEnsureCourseTree(); // 上次树加载失败时借重开视图重试
+    }
     return;
   }
   shell.dataset.ready = '1';
@@ -362,12 +369,13 @@ function ttLoadUserData() {
   ttApplyScheme();
   ttApplyViewMode();
   ttRenderAll();
-  // 课程树未就绪时延迟解析链接，到达后刷新一次（树有内存单例缓存）
-  if (ttState.data && !courseTree && typeof loadCourseTree === 'function') {
-    loadCourseTree().then(function () {
-      ttResolveCourseLinks();
-      ttRepaintCurrent();
-    }).catch(function () {});
+  if (ttState.data) {
+    // 课程树未就绪时加载并解析链接（树有内存单例缓存，失败后重开视图会重试）
+    ttEnsureCourseTree();
+    // 预热课程浏览器懒加载脚本：点课程卡直达资料列表时无需现场下载
+    if (typeof ensureFeature === 'function') {
+      ensureFeature('explorer').catch(function () {});
+    }
   }
   // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
   ttSyncPull();
@@ -495,6 +503,28 @@ function ttShowImportError(msg) {
 
 // ── 课程目录匹配：code → { state: linked|pending|missing, path?, fileCount? } ──
 
+// 课程树是否就绪（树加载失败时 _loadCourseTree 会置空对象 {}，同样视为未就绪）
+function ttTreeReady() {
+  return !!(courseTree && Object.keys(courseTree).length);
+}
+
+// 确保课程树就绪后解析链接并重绘当前视图。
+// 自愈入口：云端拉取课表后 / 树加载失败后 / 用户点击时树尚未就绪，
+// 都会走到这里重新拉树（loadCourseTree 失败会清掉内部缓存 Promise，可重试）
+function ttEnsureCourseTree() {
+  if (ttTreeReady()) {
+    ttResolveCourseLinks();
+    ttRepaintCurrent();
+    return Promise.resolve();
+  }
+  if (typeof loadCourseTree !== 'function') return Promise.resolve();
+  ttState._treeTryAt = Date.now();
+  return loadCourseTree().then(function () {
+    ttResolveCourseLinks();
+    ttRepaintCurrent();
+  }).catch(function () {});
+}
+
 // 区段课程代码匹配：目录节点 courseId 形如「GEN09001-GEN09008」（或 GEN09001-008）
 function ttInRange(rangeId, code) {
   var m = String(rangeId || '').match(/^([A-Za-z]+)(\d+)\s*-\s*([A-Za-z]*)(\d+)$/);
@@ -553,7 +583,8 @@ function ttFindPathByCode(code, courseName) {
 function ttResolveCourseLinks() {
   var map = {};
   ttState.links = map;
-  if (!ttState.data || !courseTree) return map;
+  // 树未就绪（含加载失败置 {}）时保持链接表为空：UI 显示「加载中」而非误报「未建目录」
+  if (!ttState.data || !ttTreeReady()) return map;
   ttState.data.courses.forEach(function (c) {
     if (!c.code || map[c.code]) return;
     var path = ttFindPathByCode(c.code, c.name);
@@ -792,20 +823,37 @@ function ttToastImportResult(direct, sent, failed) {
 // ── 课程卡点击：跳转 / 状态提示 ──
 function ttOpenCourse(code) {
   var info = ttState.links[code];
+  // 树未就绪（如刚从云端拉取、或树加载失败）时链接还没解析：
+  // 先加载课程树再重试一次；5 秒内不重复尝试，避免加载失败时死循环
+  if ((!info || info.state !== 'linked') && !ttTreeReady() &&
+      typeof loadCourseTree === 'function' &&
+      (!ttState._treeTryAt || Date.now() - ttState._treeTryAt > 5000)) {
+    ttEnsureCourseTree().then(function () { ttOpenCourse(code); }).catch(function () {});
+    return;
+  }
   if (!info) return;
   if (info.state === 'linked') {
     if (typeof showExplorer !== 'function') return;
-    // 优先用课表自己的解析结果（支持区段目录/形势与政策特例，
-    // navToLast 只认精确代码会停在板块根）；身份优先级已在解析时应用
-    if (info.path && info.path.length >= 2) {
-      expPath = info.path;
-      pushViewState('explorer', { expPath: [...expPath] });
-      switchView('explorer');
-      renderExplorer();
-      updateSidebar(info.path[0] === '通识课' ? '通识课' : '专业课');
-    } else if (typeof navToLast === 'function') {
-      showExplorer(info.type === '通识课' ? '通识课' : '专业课');
-      navToLast(code);
+    var go = function () {
+      // 优先用课表自己的解析结果（支持区段目录/形势与政策特例，
+      // navToLast 只认精确代码会停在板块根）；身份优先级已在解析时应用
+      if (info.path && info.path.length >= 2) {
+        expPath = info.path;
+        pushViewState('explorer', { expPath: [...expPath] });
+        switchView('explorer');
+        renderExplorer();
+        updateSidebar(info.path[0] === '通识课' ? 'general' : 'major');
+      } else if (typeof navToLast === 'function') {
+        showExplorer(info.type === '通识课' ? '通识课' : '专业课');
+        navToLast(code);
+      }
+    };
+    // explorer-render 等是懒加载模块：就绪后再渲染，避免落进
+    // renderExplorer 的「课程目录加载中…」二次异步路径（首跳特别慢的根因）
+    if (typeof ensureFeature === 'function') {
+      ensureFeature('explorer').then(go, go);
+    } else {
+      go();
     }
   } else if (info.state === 'pending') {
     ttToast('「' + ttCourseNameByCode(code) + '」的新课程申请审核中，批准后即可跳转');
@@ -1041,7 +1089,9 @@ function ttFmtMeeting(mt) {
 }
 
 // 资料状态签：与课表卡同一冷暖语言（无=冷、有=暖、丰富=更深）
+// 树未就绪时不能断言「未建目录」，先显示加载中（树到达后 ttEnsureCourseTree 会重绘）
 function ttStatusTag(link) {
+  if (!ttTreeReady()) return '<span class="tt-tag">目录加载中…</span>';
   if (!link || link.state === 'missing') return '<span class="tt-tag tt-tag-cold">未建目录</span>';
   if (link.state === 'pending') return '<span class="tt-tag tt-tag-cold">申请审核中</span>';
   var n = link.fileCount;
