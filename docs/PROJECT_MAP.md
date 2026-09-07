@@ -172,7 +172,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin/timetable 脚本和对应 CSS，并复用脚本/CSS 加载 Promise；失败资源可重试 | 首屏资源、模块依赖顺序、错误恢复或懒加载入口变化 |
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
-| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`，不落后端），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1`）；4 套配色方案 × 资料丰度三档色阶；按课程代码链接课程树（`ttResolveCourseLinks`：已建课点击 `showExplorer`+`navToLast` 按身份入口跳转，未建课确认时选位置自动 POST `/api/courses/request/` 记入 `pendingCodes`，批准前不可跳转） | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI/配色/课程链接跳转变化 |
+| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1_u<uid>` 按账号分储）；4 套配色方案 × 资料丰度冷暖对比三档；按课程代码链接课程树（`ttFindPathByCode`：精确/区段代码/形势与政策特例，身份入口优先，点击直达课程目录）；跨设备同步 `ttSyncPull`/`ttSyncUpload`（按 importedAt 取较新，接口 `/api/user/timetable/`）；未建课确认时选位置自动 POST `/api/courses/request/` 记入 `pendingCodes`，批准前不可跳转 | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI/配色/同步/课程链接跳转变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
 | `public/css/tokens.css` | OKLCH 色彩（青靛墨蓝/琥珀）、首页上传入口专用色、字体、间距、动效变量 | 设计系统变化 |
 | `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、首页入口/课程卡片图标底框、侧边栏图标和移动基础 | 基础 UI 或首页入口/卡片/侧栏图标变化 |

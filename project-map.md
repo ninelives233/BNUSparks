@@ -5,10 +5,10 @@
 
 ## 当前基线（2026-09-07）
 
-- `materials/models.py`：1012 行，27 个 Django 模型（另有 `CourseType` 枚举）
-- `materials/urls.py`：151 行，117 个 `path()` 路由
-- `materials/views/`：37 个 Python 文件，10632 行
-- `materials/tests/`：33 个 Python 文件，7173 行，436 个 `test_*` 方法
+- `materials/models.py`：1030 行，28 个 Django 模型（另有 `CourseType` 枚举）
+- `materials/urls.py`：152 行，118 个 `path()` 路由
+- `materials/views/`：38 个 Python 文件，10755 行
+- `materials/tests/`：34 个 Python 文件，7261 行，443 个 `test_*` 方法
 - `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1231 行
 - `public/js/`：23 个文件，11718 行（按视图懒加载 explorer/QA/admin/timetable 模块）
@@ -23,6 +23,7 @@
 - 课程树/课程申请/审核：`courses.py`、`course_requests.py`、`moderation.py`
 - 文件管理：`operations_*.py`
 - 问答/举报/公告/通知/收藏：`qa*.py`、`reports.py`、`announcements.py`、`notifications.py`、`favorites.py`
+- 我的课表跨设备同步：`materials/views/user_timetable.py`（GET/PUT/DELETE `/api/user/timetable/`，模型 `UserTimetable`）
 - 文件访问分类、跨浏览器下载令牌、配额与统一路径边界：`materials/views/files_download.py`、`utils_auth.py`、`utils_quota.py`
 - 总管理员用户监测与访问追溯：`materials/views/admin_monitoring.py`、`public/js/admin-users.js`、`public/js/views.js`
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
