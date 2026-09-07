@@ -1,21 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════
    我的课表 · timetable.css
    方向：「纸墨 × 中国色」—— 站点纸白墨蓝学术底 + 传统色课程卡片。
-   浅色 = 淡彩底深墨字；墨色 = 沉彩底暖白字（.ink 主题域）。
+   4 套配色方案（.tt-sch-*）× 资料丰度双色系（.tt-rich-0/1/2：
+   无资料=近灰、有资料=标准、资料丰富=更沉），课程卡颜色全部由
+   oklch(L C H) 从色相变量实时计算。
    签名元素：今日列头琥珀「今」签 + 角格宋体大数码周次。
    依赖 tokens.css 全局变量；仅作用于 #timetableView。
    ═══════════════════════════════════════════════════════════════ */
 
 .tt-shell {
-  /* 中国色卡 · 浅色主题（淡彩底 / 深墨字 / 描边） */
-  --ttp1-bg: oklch(0.925 0.038 315); --ttp1-ink: oklch(0.42 0.085 315); --ttp1-ln: oklch(0.83 0.055 315); /* 藕荷 */
-  --ttp2-bg: oklch(0.905 0.048 155); --ttp2-ink: oklch(0.38 0.08 155);  --ttp2-ln: oklch(0.80 0.06 155);  /* 苍绿 */
-  --ttp3-bg: oklch(0.925 0.042 80);  --ttp3-ink: oklch(0.40 0.075 62);  --ttp3-ln: oklch(0.83 0.055 75);  /* 赭石 */
-  --ttp4-bg: oklch(0.90 0.048 250);  --ttp4-ink: oklch(0.38 0.10 250);  --ttp4-ln: oklch(0.80 0.06 250);  /* 绀青 */
-  --ttp5-bg: oklch(0.915 0.05 105);  --ttp5-ink: oklch(0.40 0.08 105);  --ttp5-ln: oklch(0.81 0.06 105);  /* 秋香 */
-  --ttp6-bg: oklch(0.925 0.038 35);  --ttp6-ink: oklch(0.43 0.10 30);   --ttp6-ln: oklch(0.83 0.05 35);   /* 檀 */
-  --ttp7-bg: oklch(0.90 0.042 200);  --ttp7-ink: oklch(0.38 0.08 210);  --ttp7-ln: oklch(0.80 0.05 205);  /* 青碧 */
-  --ttp8-bg: oklch(0.915 0.042 300); --ttp8-ink: oklch(0.38 0.09 300);  --ttp8-ln: oklch(0.81 0.055 300); /* 紫棠 */
+  /* 色相：8 个传统色（按方案覆盖 H，卡片色实时计算） */
+  --ttp1-h: 315;  /* 藕荷 */
+  --ttp2-h: 155;  /* 苍绿 */
+  --ttp3-h: 68;   /* 赭石 */
+  --ttp4-h: 250;  /* 绀青 */
+  --ttp5-h: 105;  /* 秋香 */
+  --ttp6-h: 35;   /* 檀 */
+  --ttp7-h: 205;  /* 青碧 */
+  --ttp8-h: 300;  /* 紫棠 */
+
+  /* 卡片色阶（方案可整体覆盖）：
+     bg = oklch(--tt-l --tt-c H) · ink = oklch(--tt-il --tt-ic H) */
+  --tt-l: 0.925; --tt-c: 0.042;
+  --tt-il: 0.42; --tt-ic: 0.085;
+  --tt-bl: 0.83; --tt-bc: 0.055;
+  /* 资料丰度：无资料（近灰） / 资料⩾10（更沉更饱和） */
+  --tt-l0: 0.945; --tt-c0: 0.014; --tt-ic0: 0.03;
+  --tt-l2: 0.87;  --tt-c2: 0.082;
 
   --tt-today: var(--accent);
   --tt-panel: var(--raised);
@@ -28,40 +39,28 @@
   --tt-gutter: oklch(0.965 0.008 70);
 }
 
-.tt-shell.ink {
-  /* 墨色主题：整块深底（含标题/周次条），对齐参考应用的墨色模式 */
-  background: oklch(0.235 0.018 260);
-  border-radius: var(--radius-lg);
-  padding: var(--space-md);
-  --tt-panel: oklch(0.235 0.018 260);
-  --tt-line: oklch(0.32 0.02 260);
-  --tt-line-soft: oklch(0.29 0.018 260);
-  --tt-head: oklch(0.92 0.012 80);
-  --tt-head-soft: oklch(0.58 0.02 80);
-  --tt-time: oklch(0.55 0.02 80);
-  --tt-gridline: oklch(0.30 0.02 260);
-  --tt-gutter: oklch(0.265 0.02 260);
-  --tt-today: oklch(0.72 0.11 55);
-  color: oklch(0.90 0.012 80);
-
-  --ttp1-bg: oklch(0.50 0.055 315); --ttp1-ink: oklch(0.95 0.015 315); --ttp1-ln: oklch(0.58 0.05 315);
-  --ttp2-bg: oklch(0.47 0.055 155); --ttp2-ink: oklch(0.95 0.015 155); --ttp2-ln: oklch(0.55 0.05 155);
-  --ttp3-bg: oklch(0.50 0.055 68);  --ttp3-ink: oklch(0.95 0.015 80);  --ttp3-ln: oklch(0.58 0.05 70);
-  --ttp4-bg: oklch(0.46 0.06 255);  --ttp4-ink: oklch(0.94 0.015 250); --ttp4-ln: oklch(0.55 0.055 255);
-  --ttp5-bg: oklch(0.49 0.055 110); --ttp5-ink: oklch(0.95 0.015 105); --ttp5-ln: oklch(0.57 0.05 110);
-  --ttp6-bg: oklch(0.50 0.055 35);  --ttp6-ink: oklch(0.95 0.015 40);  --ttp6-ln: oklch(0.58 0.05 35);
-  --ttp7-bg: oklch(0.47 0.05 205);  --ttp7-ink: oklch(0.94 0.015 205); --ttp7-ln: oklch(0.55 0.05 205);
-  --ttp8-bg: oklch(0.49 0.06 300);  --ttp8-ink: oklch(0.95 0.015 300); --ttp8-ln: oklch(0.57 0.055 300);
+/* ── 配色方案 ───────────────────────────────────────── */
+.tt-sch-nuan {
+  --ttp1-h: 350; --ttp2-h: 40;  --ttp3-h: 70;  --ttp4-h: 15;
+  --ttp5-h: 95;  --ttp6-h: 55;  --ttp7-h: 110; --ttp8-h: 330;
+}
+.tt-sch-qing {
+  --ttp1-h: 175; --ttp2-h: 150; --ttp3-h: 125; --ttp4-h: 210;
+  --ttp5-h: 90;  --ttp6-h: 230; --ttp7-h: 165; --ttp8-h: 195;
+}
+.tt-sch-zi {
+  --ttp1-h: 290; --ttp2-h: 320; --ttp3-h: 265; --ttp4-h: 340;
+  --ttp5-h: 305; --ttp6-h: 255; --ttp7-h: 335; --ttp8-h: 280;
 }
 
 /* ── 顶部：标题 + 操作 ─────────────────────────────── */
 .tt-top {
   display: flex; align-items: flex-end; justify-content: space-between;
-  gap: var(--space-sm); margin-bottom: var(--space-sm); flex-wrap: wrap;
+  gap: var(--space-sm); margin: var(--space-lg) 0 var(--space-md); flex-wrap: wrap;
 }
 .tt-title { font-family: var(--serif); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0.04em; line-height: 1.2; }
 .tt-title small { font-family: var(--sans); font-size: var(--fs-xs); font-weight: 400; color: var(--tt-head-soft); letter-spacing: 0.02em; display: block; margin-top: 4px; }
-.tt-actions { display: flex; gap: var(--space-xs); align-items: center; }
+.tt-actions { display: flex; gap: var(--space-xs); align-items: center; position: relative; }
 
 .tt-btn {
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel);
@@ -73,6 +72,25 @@
 .tt-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-btn.is-ghost { border-color: transparent; background: transparent; color: var(--ink-faint); }
 .tt-btn.is-ghost:hover { color: var(--ink); background: var(--tt-gutter); }
+
+/* 配色选择弹层 */
+.tt-scheme-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+  background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); padding: 6px; min-width: 168px;
+  animation: ttPop 0.14s ease-out both;
+}
+.tt-sch-opt {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  appearance: none; border: none; background: none; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  font-family: var(--sans); font-size: var(--fs-sm); color: var(--ink); text-align: left;
+}
+.tt-sch-opt:hover { background: var(--surface); }
+.tt-sch-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-sch-opt.is-active { background: var(--primary-surface); color: var(--primary-dark); font-weight: 600; }
+.tt-sch-dots { display: flex; gap: 3px; flex: none; }
+.tt-sch-dots i { width: 12px; height: 12px; border-radius: 4px; border: 1px solid oklch(0.85 0.03 60 / 0.6); }
 
 /* ── 周次选择条 ─────────────────────────────────────── */
 .tt-weekbar {
@@ -100,7 +118,6 @@
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel); color: inherit;
   color-scheme: light; font-family: var(--sans); font-size: var(--fs-xs); padding: 4px 8px; border-radius: var(--radius-sm);
 }
-.tt-shell.ink .tt-start-edit input { color-scheme: dark; }
 .tt-start-edit input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ── 课表网格 ───────────────────────────────────────── */
@@ -114,7 +131,6 @@
 
 .tt-corner {
   grid-column: 1; grid-row: 1;
-  position: sticky; left: 0; z-index: 3;
   background: var(--tt-gutter); border-right: 1px solid var(--tt-gridline); border-bottom: 1px solid var(--tt-gridline);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
 }
@@ -122,7 +138,6 @@
 .tt-corner span { font-size: var(--fs-2xs); color: var(--tt-time); letter-spacing: 0.2em; margin-top: 3px; }
 
 .tt-day {
-  position: sticky; top: var(--header-height); z-index: 2;
   border-bottom: 1px solid var(--tt-gridline); border-left: 1px solid var(--tt-line-soft);
   background: var(--tt-panel);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -139,7 +154,6 @@
 .tt-day.is-today .d { color: var(--tt-today); }
 
 .tt-time {
-  position: sticky; left: 0; z-index: 1;
   background: var(--tt-gutter); border-right: 1px solid var(--tt-gridline); border-top: 1px solid var(--tt-line-soft);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
 }
@@ -150,28 +164,34 @@
   grid-column: 1 / -1;
   border-top: 1px solid var(--tt-line-soft);
   background: var(--tt-gutter);
-  display: flex; align-items: center; justify-content: center;
 }
-.tt-break i { font-style: normal; font-size: 10px; letter-spacing: 0.4em; color: var(--tt-time); opacity: 0.7; padding-left: 0.4em; }
 
 /* 今日列淡染 */
 .tt-cell.is-today-col { background: oklch(from var(--tt-today) l c h / 0.045); }
-.tt-shell.ink .tt-cell.is-today-col { background: oklch(from var(--tt-today) l c h / 0.08); }
 
-/* ── 课程卡 ─────────────────────────────────────────── */
+/* ── 课程卡（颜色由色相 + 丰度实时计算） ────────────── */
 .tt-cell { padding: 3px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
 .tt-card {
   flex: 1; min-height: 0; min-width: 0;
   display: flex; flex-direction: column; padding: 7px 9px;
-  border-radius: 10px; border: 1px solid var(--ttc-ln);
-  background: var(--ttc-bg); color: var(--ttc-ink);
-  overflow: hidden; cursor: default;
+  border-radius: 10px;
+  border: 1px solid oklch(var(--tt-bl) var(--tt-bc) var(--th));
+  background: oklch(var(--tt-l) var(--tt-c) var(--th));
+  color: oklch(var(--tt-il) var(--tt-ic) var(--th));
+  overflow: hidden;
   box-shadow: 0 1px 2px oklch(0.4 0.02 60 / 0.10);
   transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
 .tt-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-.tt-card[data-tip]:hover { cursor: help; }
+/* 有目录的课程可点击跳转 */
+a.tt-card, .tt-card.is-link { cursor: pointer; }
+a.tt-card:hover .tt-card-name, .tt-card.is-link:hover .tt-card-name { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.tt-card.is-pending { cursor: help; }
+/* 资料丰度双色系 */
+.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); }
+.tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
+
 .tt-card-name {
   font-family: var(--serif); font-weight: 700; font-size: var(--fs-sm);
   line-height: 1.4; letter-spacing: 0.03em;
@@ -181,14 +201,14 @@
 .tt-card-meta .r { display: block; }
 .tt-card-meta .t { display: block; }
 
-.ttp1 { --ttc-bg: var(--ttp1-bg); --ttc-ink: var(--ttp1-ink); --ttc-ln: var(--ttp1-ln); }
-.ttp2 { --ttc-bg: var(--ttp2-bg); --ttc-ink: var(--ttp2-ink); --ttc-ln: var(--ttp2-ln); }
-.ttp3 { --ttc-bg: var(--ttp3-bg); --ttc-ink: var(--ttp3-ink); --ttc-ln: var(--ttp3-ln); }
-.ttp4 { --ttc-bg: var(--ttp4-bg); --ttc-ink: var(--ttp4-ink); --ttc-ln: var(--ttp4-ln); }
-.ttp5 { --ttc-bg: var(--ttp5-bg); --ttc-ink: var(--ttp5-ink); --ttc-ln: var(--ttp5-ln); }
-.ttp6 { --ttc-bg: var(--ttp6-bg); --ttc-ink: var(--ttp6-ink); --ttc-ln: var(--ttp6-ln); }
-.ttp7 { --ttc-bg: var(--ttp7-bg); --ttc-ink: var(--ttp7-ink); --ttc-ln: var(--ttp7-ln); }
-.ttp8 { --ttc-bg: var(--ttp8-bg); --ttc-ink: var(--ttp8-ink); --ttc-ln: var(--ttp8-ln); }
+.ttp1 { --th: var(--ttp1-h); }
+.ttp2 { --th: var(--ttp2-h); }
+.ttp3 { --th: var(--ttp3-h); }
+.ttp4 { --th: var(--ttp4-h); }
+.ttp5 { --th: var(--ttp5-h); }
+.ttp6 { --th: var(--ttp6-h); }
+.ttp7 { --th: var(--ttp7-h); }
+.ttp8 { --th: var(--ttp8-h); }
 
 /* 周次切换 / 首次渲染的入场动效 */
 @keyframes ttPop {
@@ -197,11 +217,13 @@
 }
 .tt-grid.swap .tt-card { animation: ttPop 0.16s ease-out both; }
 
-/* ── 底部统计 / 未排课提示 ──────────────────────────── */
+/* ── 底部统计 / 图例 ────────────────────────────────── */
 .tt-foot { margin-top: var(--space-xs); display: flex; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--tt-time); }
-.tt-unplaced { margin-top: var(--space-sm); border: 1px dashed var(--tt-line); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); font-size: var(--fs-xs); color: var(--tt-time); }
-.tt-unplaced b { display: block; margin-bottom: 4px; color: var(--tt-head); }
-.tt-unplaced .u-item { margin-right: 14px; white-space: nowrap; display: inline-block; }
+.tt-legend { display: inline-flex; align-items: center; gap: 6px; --th: 250; }
+.tt-legend i { width: 11px; height: 11px; border-radius: 3px; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(var(--tt-l) var(--tt-c) var(--th)); }
+.tt-legend .lg1 { --tt-l: 0.925; --tt-c: 0.042; }
+.tt-legend .lg2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
+.tt-legend .lg0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
 
 /* ── 空状态（导入引导） ─────────────────────────────── */
 .tt-empty {
@@ -220,9 +242,6 @@
 }
 .tt-btn.primary:hover { background: var(--primary-dark); }
 .tt-btn.primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.tt-shell.ink .tt-empty { background: var(--tt-panel); border-color: var(--tt-line); color: oklch(0.90 0.012 80); }
-.tt-shell.ink .tt-empty p, .tt-shell.ink .tt-empty .step { color: var(--tt-time); }
-.tt-shell.ink .tt-empty h2 { color: var(--tt-head); }
 .tt-error { margin-top: var(--space-sm); color: var(--danger); font-size: var(--fs-sm); min-height: 1.4em; }
 
 /* ── 导入确认弹窗 ───────────────────────────────────── */
@@ -242,11 +261,19 @@
 .tt-modal .tt-mbody { padding: var(--space-sm) var(--space-md); overflow-y: auto; }
 .tt-msummary { display: flex; gap: var(--space-md); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--ink-soft); margin-bottom: var(--space-sm); }
 .tt-msummary b { color: var(--ink); font-weight: 600; }
+.tt-privacy-note { font-size: var(--fs-xs); color: var(--ink-faint); background: var(--surface); border: 1px dashed var(--border-light); border-radius: var(--radius-sm); padding: 6px 10px; margin-bottom: var(--space-sm); }
 .tt-mlist { border-top: 1px solid var(--border-light); }
-.tt-mrow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-light); font-size: var(--fs-xs); }
-.tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--ttc-bg); border: 1px solid var(--ttc-ln); flex: none; align-self: center; }
+.tt-mrow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-light); font-size: var(--fs-xs); flex-wrap: wrap; }
+.tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(0.925 0.042 var(--th)); }
 .tt-mrow .nm { font-weight: 600; font-family: var(--serif); font-size: var(--fs-sm); letter-spacing: 0.02em; }
 .tt-mrow .tm { color: var(--ink-faint); margin-left: auto; text-align: right; }
+.tt-mrow .loc { flex-basis: 100%; display: flex; gap: 6px; align-items: center; color: var(--ink-faint); }
+.tt-loc-sel {
+  appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  font-family: var(--sans); font-size: var(--fs-xs); padding: 4px 6px; border-radius: var(--radius-sm); max-width: 46%;
+}
+.tt-loc-sel:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-ok-tag { color: var(--success); white-space: nowrap; }
 .tt-modal footer { display: flex; justify-content: flex-end; gap: var(--space-xs); padding: var(--space-sm) var(--space-md) var(--space-md); }
 
 /* ── 使用教程弹层 ───────────────────────────────────── */
@@ -266,6 +293,16 @@
 }
 .tt-tut-note { margin-top: 4px; font-size: var(--fs-xs); color: var(--ink-faint); border-top: 1px dashed var(--border-light); padding-top: var(--space-sm); }
 
+/* ── 轻提示 ─────────────────────────────────────────── */
+.tt-toast {
+  position: fixed; left: 50%; bottom: 36px; transform: translate(-50%, 12px);
+  z-index: 400; background: oklch(0.25 0.02 55 / 0.92); color: oklch(0.96 0.01 80);
+  font-size: var(--fs-sm); padding: 10px 18px; border-radius: var(--radius-full);
+  box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease; max-width: 86vw;
+}
+.tt-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
 /* ── 移动端 ─────────────────────────────────────────── */
 @media (max-width: 700px) {
   .tt-top { align-items: flex-start; }
@@ -277,5 +314,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tt-card, .tt-card:hover, .tt-modal { animation: none; transition: none; transform: none; }
+  .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop { animation: none; transition: none; transform: none; }
 }
