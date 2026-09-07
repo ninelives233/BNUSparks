@@ -27,7 +27,7 @@
 - 总管理员用户监测与访问追溯：`materials/views/admin_monitoring.py`、`public/js/admin-users.js`、`public/js/views.js`
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
 - 前端入口、启动时序与懒加载契约：`public/index.html`、`public/js/feature-loader.js`、`public/js/utils.js`、`public/js/app.js`
-- 我的课表（教务 xls 导入，管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`
+- 我的课表（教务 xls 导入 + 课程代码链回资料目录/自动建课申请，管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`
 - 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀，首页上传入口保留历史蓝）及其余 CSS 模块
 - 回归测试：`materials/tests/`
 - 发布与运维：`deploy.sh`（固定 host key、停服后备份应用/SQLite/Nginx、校验重载 Nginx、失败回滚；tar 列表含 public/js、public/css、index.html、tt_tutorial 教程图）、`scripts/`、`bnusparks/settings_prod.py`
