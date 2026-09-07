@@ -100,6 +100,7 @@
 | 待审、通过、驳回、重分配、历史、统计 | `views/moderation.py`、`utils_moderation.py` | 审核范围、并发幂等、自动审核变化 |
 | 新课程申请及随附资料迁移 | `views/course_requests.py` | 课程创建、审批、物理文件迁移变化 |
 | 个人资料、公开主页、排行、上传/下载历史 | `views/profile.py` | 用户公开信息和统计变化 |
+| 我的课表跨设备同步（GET/PUT/DELETE `/api/user/timetable/`，`@csrf_exempt`+JWT，200KB 上限） | `views/user_timetable.py`、模型 `UserTimetable`（迁移 0034）、测试 `test_user_timetable.py`（含 `enforce_csrf_checks` 回归护栏） | 同步格式/上限变化；**新建写接口必须带 `@csrf_exempt`（JWT 无 cookie），漏掉会被 CSRF 中间件 403 且本地测试发现不了** |
 | 收藏 | `views/favorites.py`、`qa_public.py` | 资料/课程/问答收藏、分页、计数及唯一键并发冲突变化 |
 | 公告 | `views/announcements.py` | 管理员发布、纯文本约束、公告列表变化 |
 | 通知 | `views/notifications.py` | 未读、已读、删除、跳转数据变化 |
@@ -172,7 +173,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin/timetable 脚本和对应 CSS，并复用脚本/CSS 加载 Promise；失败资源可重试 | 首屏资源、模块依赖顺序、错误恢复或懒加载入口变化 |
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
-| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1_u<uid>` 按账号分储）；4 套配色方案 × 资料丰度冷暖对比三档；按课程代码链接课程树（`ttFindPathByCode`：精确/区段代码/形势与政策特例，身份入口优先，点击直达课程目录）；跨设备同步 `ttSyncPull`/`ttSyncUpload`（按 importedAt 取较新，接口 `/api/user/timetable/`）；未建课确认时选位置自动 POST `/api/courses/request/` 记入 `pendingCodes`，批准前不可跳转 | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI/配色/同步/课程链接跳转变化 |
+| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部，1196 行）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1_u<uid>` 按账号分储）；4 套配色方案 × 资料丰度冷暖对比三档；按课程代码链接课程树（`ttFindPathByCode`：精确/区段代码/形势与政策特例，身份入口优先，点击直达课程目录）；跨设备同步 `ttSyncPull`/`ttSyncUpload`（按 importedAt 取较新，接口 `/api/user/timetable/`）；未建课确认时选位置自动 POST `/api/courses/request/` 记入 `pendingCodes`，批准前不可跳转；「切换视图」`ttToggleView` 周网格 ⇄ 课程列表（`ttRenderList`+`ttStatusTag`，偏好 `bnusparks_timetable_view_u<uid>`）；移动端网格满屏适配（`tt-w5` 无周末课自动收列，cqh 字体缩放） | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI/配色/同步/视图切换/课程链接跳转变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
 | `public/css/tokens.css` | OKLCH 色彩（青靛墨蓝/琥珀）、首页上传入口专用色、字体、间距、动效变量 | 设计系统变化 |
 | `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、首页入口/课程卡片图标底框、侧边栏图标和移动基础 | 基础 UI 或首页入口/卡片/侧栏图标变化 |
@@ -182,7 +183,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/css/course.css` | 课程树、课程页面及新建课程控件 | 课程浏览或新建课程 UI 变化 |
 | `public/css/announcement.css` | 公告 UI | 公告页面变化 |
 | `public/css/qa.css` | 问答与编辑器 UI | 问答 UI 变化 |
-| `public/css/timetable.css` | 我的课表（「纸墨 × 中国色」卡片、4 套配色 `.tt-sch-*` + 资料丰度 `.tt-rich-*` 色阶、周网格与导入/教程弹窗） | 课表 UI 或配色方案变化 |
+| `public/css/timetable.css` | 我的课表（「纸墨 × 中国色」卡片、4 套配色 `.tt-sch-*` + 资料丰度 `.tt-rich-*` 色阶、周网格与导入/教程弹窗、列表视图 `.tt-list/.tt-lrow/.tt-tag`、移动端满屏 `:not(.tt-mode-list)` flex 链 `#ttBody→.tt-scroll` + 容器查询 cqh 字体） | 课表 UI、配色方案或移动端适配变化 |
 | `public/css/components.css` | 跨页面按钮、弹窗基座、分段控件、开关、空态/加载态及全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |
 
 跨文件契约：顶层函数和全局变量被大量内联 `onclick` 与其他模块调用；改名/删除前必须 `rg` 全仓库。SPA 深链当前覆盖静态页、explorer、用户、文件、问答编辑，但问答编辑参数需要重点回归。

@@ -137,6 +137,8 @@
   grid-template-rows: 68px repeat(4, 74px) 16px repeat(4, 74px) 16px repeat(4, 74px);
   min-width: 800px;
 }
+/* 学期内无周末课 → 收掉周六/周日空列，工作日行更宽 */
+.tt-grid.tt-w5 { grid-template-columns: 64px repeat(5, minmax(96px, 1fr)); min-width: 544px; }
 
 .tt-corner {
   grid-column: 1; grid-row: 1;
@@ -243,6 +245,47 @@
 .tt-legend .lg2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
 .tt-legend .lg0 { --th: 230; --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
 
+/* ── 列表视图：整学期课程一览 ─────────────────────────
+   网格扫一眼，列表查细节：纸面行 + 左缘课程色条（色即身份），
+   资料状态签延续冷暖语言。左缘色条是网格课程卡颜色的延伸。 */
+.tt-list {
+  list-style: none; margin: 0; padding: 0; max-width: 760px;
+  border: 1px solid var(--tt-line); border-radius: var(--radius-md);
+  background: var(--tt-panel); overflow: hidden;
+}
+.tt-lrow {
+  position: relative; padding: 11px 16px 11px 20px;
+  border-bottom: 1px solid var(--tt-line-soft);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.tt-lrow:last-child { border-bottom: none; }
+.tt-lrow::before {
+  content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: oklch(0.78 0.075 var(--th));
+}
+.tt-lhead { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.tt-lrow .nm {
+  font-family: var(--serif); font-weight: 700; font-size: var(--fs-md);
+  letter-spacing: 0.03em; min-width: 0;
+}
+.tt-tag {
+  margin-left: auto; flex: none; font-size: var(--fs-2xs); line-height: 1;
+  padding: 4px 9px; border-radius: var(--radius-full); letter-spacing: 0.05em;
+  border: 1px solid oklch(var(--tt-bl) var(--tt-bc) var(--th));
+  background: oklch(var(--tt-l) var(--tt-c) var(--th));
+  color: oklch(var(--tt-il) var(--tt-ic) var(--th));
+}
+.tt-lrow.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
+.tt-lrow.tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
+.tt-lmeta { font-size: var(--fs-xs); color: var(--ink-soft); }
+.tt-lsched { font-size: var(--fs-xs); color: var(--ink-faint); font-variant-numeric: tabular-nums; line-height: 1.6; }
+.tt-lrow.is-link { cursor: pointer; }
+.tt-lrow.is-link:hover { background: var(--tt-gutter); }
+.tt-lrow.is-link:hover::before { top: 7px; bottom: 7px; background: oklch(0.68 0.1 var(--th)); }
+.tt-lrow.is-pending { cursor: help; }
+.tt-list.swap .tt-lrow { animation: ttPop 0.18s ease-out both; animation-delay: calc(var(--li) * 16ms); }
+
 /* ── 空状态（导入引导） ─────────────────────────────── */
 .tt-empty {
   border: 1px dashed var(--border); border-radius: var(--radius-lg);
@@ -325,12 +368,51 @@
 @media (max-width: 700px) {
   .tt-top { align-items: flex-start; }
   .tt-title { font-size: var(--fs-xl); }
-  .tt-start-edit { margin-left: 0; }
-  .tt-grid { grid-template-columns: 52px repeat(7, minmax(84px, 1fr)); min-width: 700px; }
-  .tt-grid { grid-template-rows: 60px repeat(4, 66px) 14px repeat(4, 66px) 14px repeat(4, 66px); }
+  /* 「第一周周一」标签文字隐藏，仅留日期输入，周次条可单行放下 */
+  .tt-start-edit { margin-left: auto; font-size: 0; gap: 0; }
+
+  /* 网格视图满屏：一屏内完整看完一周课表，不做垂直滚动；
+     列表视图保持常规文档流 */
+  #ttShell.tt-shell:not(.tt-mode-list) {
+    display: flex; flex-direction: column;
+    height: calc(100vh - var(--header-height) - var(--space-md));
+    height: calc(100dvh - var(--header-height) - var(--space-md));
+  }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-top { margin: var(--space-sm) 0; flex-wrap: nowrap; }
+  /* 高度经 #ttBody 一层层传给 .tt-scroll（后者是 container，高度不能来自内容） */
+  #ttShell.tt-shell:not(.tt-mode-list) #ttBody {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+  }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-scroll {
+    flex: 1; min-height: 0; overflow: hidden;
+    container-type: size; /* 供 cqh 字体随可视高度缩放 */
+  }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-foot { flex: none; margin-top: 6px; }
+  /* 满屏模式下收紧视图底部留白，整页无需滚动 */
+  #timetableView .about-page { padding-bottom: var(--space-md); }
+
+  .tt-grid {
+    height: 100%; min-width: 0;
+    grid-template-columns: 30px repeat(7, 1fr);
+    grid-template-rows: 56fr repeat(4, 75fr) 16fr repeat(4, 75fr) 16fr repeat(4, 75fr);
+  }
+  .tt-grid.tt-w5 { grid-template-columns: 30px repeat(5, 1fr); }
+
+  /* 字号随可视高度缩放（1cqh = .tt-scroll 高度的 1%） */
+  .tt-card { padding: 3px 5px; border-radius: 7px; }
+  .tt-card-name { font-size: clamp(8.5px, 2.1cqh, 11px); line-height: 1.25; -webkit-line-clamp: 3; }
+  .tt-card-meta { display: none; } /* 细节移步列表视图 */
+  .tt-time b { font-size: clamp(10px, 2.4cqh, 14px); }
+  .tt-time span { display: none; }
+  .tt-day { padding: 2px; gap: 0; }
   .tt-day .dt { display: none; }
+  .tt-day .d { font-size: clamp(10px, 2.6cqh, 14px); }
+  .tt-day.is-today .dj { display: none; } /* 今日列已有淡染，不再放「今」签 */
+  .tt-corner b { font-size: clamp(12px, 3cqh, 18px); }
+  .tt-corner span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop { animation: none; transition: none; transform: none; }
+  .tt-grid.swap .tt-card, .tt-list.swap .tt-lrow { animation: none; }
 }

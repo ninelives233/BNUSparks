@@ -7,12 +7,12 @@
 
 - `materials/models.py`：1030 行，28 个 Django 模型（另有 `CourseType` 枚举）
 - `materials/urls.py`：152 行，118 个 `path()` 路由
-- `materials/views/`：38 个 Python 文件，10755 行
-- `materials/tests/`：34 个 Python 文件，7261 行，443 个 `test_*` 方法
+- `materials/views/`：38 个 Python 文件，10689 行
+- `materials/tests/`：34 个 Python 文件，7262 行，444 个 `test_*` 方法
 - `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1231 行
-- `public/js/`：23 个文件，11718 行（按视图懒加载 explorer/QA/admin/timetable 模块）
-- `public/css/`：10 个文件，7481 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
+- `public/js/`：23 个文件，12309 行（按视图懒加载 explorer/QA/admin/timetable 模块）
+- `public/css/`：10 个文件，7635 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
 
 ## 按任务定位
 
@@ -23,12 +23,12 @@
 - 课程树/课程申请/审核：`courses.py`、`course_requests.py`、`moderation.py`
 - 文件管理：`operations_*.py`
 - 问答/举报/公告/通知/收藏：`qa*.py`、`reports.py`、`announcements.py`、`notifications.py`、`favorites.py`
-- 我的课表跨设备同步：`materials/views/user_timetable.py`（GET/PUT/DELETE `/api/user/timetable/`，模型 `UserTimetable`）
+- 我的课表跨设备同步：`materials/views/user_timetable.py`（GET/PUT/DELETE `/api/user/timetable/`，模型 `UserTimetable`；**写接口必须 `@csrf_exempt`，漏掉浏览器 PUT 会被 CSRF 403 且 Django 测试默认测不出来**）
 - 文件访问分类、跨浏览器下载令牌、配额与统一路径边界：`materials/views/files_download.py`、`utils_auth.py`、`utils_quota.py`
 - 总管理员用户监测与访问追溯：`materials/views/admin_monitoring.py`、`public/js/admin-users.js`、`public/js/views.js`
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
 - 前端入口、启动时序与懒加载契约：`public/index.html`、`public/js/feature-loader.js`、`public/js/utils.js`、`public/js/app.js`
-- 我的课表（教务 xls 导入 + 课程代码链回资料目录/自动建课申请，管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`
+- 我的课表（教务 xls 导入 + 课程代码链回资料目录/自动建课申请 + 「切换视图」网格⇄列表 + 移动端满屏适配，管理员专属入口在侧边栏最底部）：`public/js/timetable.js`、`public/css/timetable.css`
 - 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀，首页上传入口保留历史蓝）及其余 CSS 模块
 - 回归测试：`materials/tests/`
 - 发布与运维：`deploy.sh`（固定 host key、停服后备份应用/SQLite/Nginx、校验重载 Nginx、失败回滚；tar 列表含 public/js、public/css、index.html、tt_tutorial 教程图）、`scripts/`、`bnusparks/settings_prod.py`

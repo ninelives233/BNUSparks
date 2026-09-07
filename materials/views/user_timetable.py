@@ -20,6 +20,10 @@ from ..models import UserTimetable
 _MAX_BYTES = 200 * 1024
 
 
+# csrf_exempt 必须作用于最终视图对象（放最外层）：JWT Bearer 认证不依赖
+# cookie，CSRF 防护不适用，与 auth/files 等写接口同一模式；漏掉会令浏览器
+# PUT 被 CsrfViewMiddleware 以 403 拒绝
+@csrf_exempt
 @require_login
 def api_user_timetable(request):
     if request.method == "GET":
