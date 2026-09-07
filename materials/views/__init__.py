@@ -47,6 +47,9 @@ from .favorites import (
     api_course_favorite_toggle, api_my_course_favorites,
 )
 
+# 我的课表（跨设备同步）
+from .user_timetable import api_user_timetable
+
 # 审核
 from .moderation import (
     api_moderation_pending, api_moderation_batch_approve,

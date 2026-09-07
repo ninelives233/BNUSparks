@@ -64,6 +64,7 @@ urlpatterns = [
     path("auth/avatar/", views.api_avatar_upload, name="api_avatar_upload"),
     path("user/uploads/", views.api_my_uploads, name="api_my_uploads"),
     path("user/downloads/", views.api_my_downloads, name="api_my_downloads"),
+    path("user/timetable/", views.api_user_timetable, name="api_user_timetable"),
     path("user/rankings/", views.api_user_rankings, name="api_user_rankings"),
     path("user/public/<int:uid>/", views.api_user_public, name="api_user_public"),
 

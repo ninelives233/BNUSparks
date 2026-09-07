@@ -243,6 +243,49 @@ function ttSaveStore(data) {
   try { localStorage.setItem(ttStoreKey(), JSON.stringify(data)); } catch (e) {}
 }
 
+// ── 云端同步：课表数据（解析结果，不含文件）随账号跨设备 ──
+// 冲突规则：本地与云端按 importedAt 取较新者；仅一方有时直接采用并补齐另一方
+function ttSyncUpload() {
+  if (!ttState.data || typeof api !== 'function') return;
+  api('/api/user/timetable/', { method: 'PUT', body: { data: ttState.data } })
+    .then(function () { ttState.cloudSynced = true; })
+    .catch(function () {
+      ttState.cloudSynced = false;
+      ttToast('课表云端同步失败，本次改动仅保存在本机');
+    });
+}
+
+function ttSyncPull() {
+  if (typeof api !== 'function') return;
+  var uidAtCall = ttState.uid;
+  api('/api/user/timetable/').then(function (res) {
+    // 请求期间切换了账号：丢弃结果
+    if (ttState.uid !== uidAtCall) return;
+    var cloud = (res && res.data) ? res.data : null;
+    if (!cloud || !Array.isArray(cloud.courses)) {
+      // 云端为空：本地有则推上去
+      if (ttState.data) ttSyncUpload();
+      return;
+    }
+    if (!cloud.pendingCodes || typeof cloud.pendingCodes !== 'object') cloud.pendingCodes = {};
+    var local = ttState.data;
+    var localAt = local ? (local.importedAt || 0) : -1;
+    var cloudAt = cloud.importedAt || 0;
+    if (cloudAt >= localAt) {
+      // 云端较新（或本地没有）→ 采用云端
+      ttState.data = cloud;
+      if (!ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
+      ttSaveStore(ttState.data);
+      ttComputeWeek();
+      ttApplyScheme();
+      ttRenderAll();
+    } else {
+      // 本地较新 → 推云端
+      ttSyncUpload();
+    }
+  }).catch(function () {});
+}
+
 // ── 视图入口（供导航/恢复调用；仅对管理员开放，与侧边栏入口同条件） ──
 function showTimetable() {
   if (!currentUser || currentUser.role === 'user') { if (!currentUser) showLoginModal(); return; }
@@ -317,6 +360,8 @@ function ttLoadUserData() {
       if (document.getElementById('ttGrid')) ttPaintGrid();
     }).catch(function () {});
   }
+  // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
+  ttSyncPull();
 }
 
 function ttApplyScheme() {
@@ -376,7 +421,7 @@ function ttRenderEmpty(body) {
     '<div class="tt-empty">' +
       '<div class="glyph">课</div>' +
       '<h2>导入你的选课课表</h2>' +
-      '<p>从教务系统「学生选课」导出课程表文件（.xls），在这里生成整学期的周课表。文件仅在浏览器本地解析，不会上传。</p>' +
+      '<p>从教务系统「学生选课」导出课程表文件（.xls），在这里生成整学期的周课表。文件仅在浏览器本地解析，课表数据会同步到你的账号，仅自己可见。</p>' +
       '<div class="steps">' +
         '<span class="step"><b>①</b> 教务系统 → 选课 → 个人课表</span>' +
         '<span class="step"><b>②</b> 导出 / 另存为「学生选课课程表」</span>' +
@@ -571,7 +616,7 @@ function ttRenderConfirmModal(parsed) {
           '<span><b>' + courses.length + '</b> 门课程</span>' +
           (credits ? '<span>共 <b>' + esc(String(credits)) + '</b> 学分</span>' : '') +
         '</div>' +
-        '<div class="tt-privacy-note">🔒 本地解析，仅自己可见：文件不会上传，课表数据只保存在你的浏览器里。</div>' +
+        '<div class="tt-privacy-note">🔒 本地解析，仅自己可见：文件本身不会上传；解析出的课表数据会同步到你的账号，换设备登录即可查看。</div>' +
         (missing.length
           ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程尚未建立资料目录' +
             '（通识 ' + genCount + ' 门）。请为它们选择位置，导入后将自动提交新课程申请，管理员批准前点击课程不会跳转。</div>'
@@ -663,6 +708,7 @@ function ttFillCategoryOptions(sel, collegeId) {
 // 后端辖区逻辑（v=153）：管理员 + 目标位置在辖区内 → auto_approved 直接建课；
 // 否则走审核。直接建课的不标 pending，重新拉树后立即可点击跳转。
 function ttApplyImport(parsed, requests) {
+  parsed.importedAt = Date.now();
   ttSaveStore(parsed);
   ttState.data = parsed;
   ttComputeWeek();
@@ -686,6 +732,7 @@ function ttApplyImport(parsed, requests) {
   });
   Promise.all(jobs).then(function () {
     ttSaveStore(parsed);
+    ttSyncUpload();
     if (treeDirty && typeof loadCourseTree === 'function') {
       // 后端建课已清服务端树缓存；前端 api() 内存缓存（树 TTL 10 分钟）
       // 必须手动清除，否则重拉的仍是旧树，直建课程不会立即变为可跳转
@@ -794,6 +841,7 @@ function ttRenderGrid(body) {
     ttState.start = v;
     ttState.data.start = v;
     ttSaveStore(ttState.data);
+    ttSyncUpload();
     ttComputeWeek();
     ttRenderGrid(body);
   });
@@ -959,7 +1007,7 @@ function ttShowTutorial() {
             img(3, '我的课表导出按钮') +
           '</li>' +
         '</ol>' +
-        '<p class="tt-tut-note">本地解析，仅自己可见：教务导出文件仅在你的浏览器里解析，不会经过本站服务器。</p>' +
+        '<p class="tt-tut-note">本地解析，仅自己可见：教务导出文件仅在你的浏览器里解析；只有解析出的课表数据会同步到你的账号，换设备登录同账号即可查看。</p>' +
       '</div>' +
       '<footer><button type="button" class="tt-btn primary" data-close>知道了</button></footer>' +
     '</div>';
@@ -1005,6 +1053,7 @@ function __ttLoadHtmlText(text) {
   var parsed = ttParseImport(text);
   if (!parsed.start) parsed.start = ttGuessSemesterStart(parsed.meta && parsed.meta.semester);
   if (!parsed.pendingCodes) parsed.pendingCodes = {};
+  parsed.importedAt = Date.now();
   ttSaveStore(parsed);
   ttState.data = parsed;
   ttComputeWeek();

@@ -1010,3 +1010,21 @@ class QaDeleteRequest(models.Model):
 
     def __str__(self):
         return f"删{self.get_target_type_display()}{self.target_id} by {self.requester_id} [{self.status}]"
+
+
+class UserTimetable(models.Model):
+    """我的课表——教务导出解析后的课表数据（JSON），按用户隔离，支持跨设备同步"""
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="timetable",
+        verbose_name="用户",
+    )
+    data = models.JSONField("课表数据")
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "用户课表"
+        verbose_name_plural = "用户课表"
+
+    def __str__(self):
+        return f"课表 of {self.user_id} @ {self.updated_at:%Y-%m-%d %H:%M}"
