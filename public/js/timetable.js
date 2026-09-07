@@ -18,8 +18,13 @@
 //     选学院+层级），确认后自动提交新课程申请，批准前点击不可跳转
 // ═══════════════════════════════════════════════════════════════
 
-var TT_STORE_KEY = 'bnusparks_timetable_v1';
-var TT_SCHEME_KEY = 'bnusparks_timetable_scheme';
+// 课表数据按账号隔离存储（此前用全局 key，同一浏览器换账号会看到别人的课表）
+function ttStoreKey() {
+  return 'bnusparks_timetable_v1_u' + (currentUser && currentUser.id ? currentUser.id : 'anon');
+}
+function ttSchemeKey() {
+  return 'bnusparks_timetable_scheme_u' + (currentUser && currentUser.id ? currentUser.id : 'anon');
+}
 
 // 配色方案（默认「暖秋」即 CSS 基础变量；均为暖色系衍生，仅色相倾向不同）
 var TT_SCHEMES = [
@@ -209,9 +214,24 @@ function ttCourseTone(name) {
 }
 
 // ── 数据存取 ──
+// 兼容迁移：早期版本用全局 key（同一浏览器多账号互相可见），此处仅在
+// 文件内学号与当前账号一致时迁入账号专属 key，否则忽略不迁移
+function ttMigrateLegacyStore() {
+  try {
+    var raw = localStorage.getItem('bnusparks_timetable_v1');
+    if (!raw || !currentUser) return;
+    var data = JSON.parse(raw);
+    if (data && data.meta && data.meta.studentId &&
+        String(data.meta.studentId) === String(currentUser.username)) {
+      localStorage.setItem(ttStoreKey(), raw);
+      localStorage.removeItem('bnusparks_timetable_v1');
+    }
+  } catch (e) {}
+}
+
 function ttLoadStore() {
   try {
-    var raw = localStorage.getItem(TT_STORE_KEY);
+    var raw = localStorage.getItem(ttStoreKey());
     if (!raw) return null;
     var data = JSON.parse(raw);
     if (!data || !Array.isArray(data.courses)) return null;
@@ -220,7 +240,7 @@ function ttLoadStore() {
   } catch (e) { return null; }
 }
 function ttSaveStore(data) {
-  try { localStorage.setItem(TT_STORE_KEY, JSON.stringify(data)); } catch (e) {}
+  try { localStorage.setItem(ttStoreKey(), JSON.stringify(data)); } catch (e) {}
 }
 
 // ── 视图入口（供导航/恢复调用；仅对管理员开放，与侧边栏入口同条件） ──
@@ -239,7 +259,13 @@ function showTimetable() {
 
 function ttInitShell() {
   var shell = document.getElementById('ttShell');
-  if (!shell || shell.dataset.ready) { ttRenderAll(); return; }
+  if (!shell) return;
+  if (shell.dataset.ready) {
+    // 同一页面内切换账号（登出再登录）：按新账号重载数据与配色
+    if (ttState.uid !== (currentUser ? currentUser.id : null)) ttLoadUserData();
+    else { ttMigrateLegacyStore(); ttRenderAll(); }
+    return;
+  }
   shell.dataset.ready = '1';
   shell.innerHTML =
     '<div class="tt-top">' +
@@ -261,13 +287,27 @@ function ttInitShell() {
   });
   document.getElementById('ttFileInput').addEventListener('change', ttOnFilePicked);
 
+  ttLoadUserData();
+}
+
+// 按当前账号载入课表数据与配色（账号切换时重新调用）
+function ttLoadUserData() {
+  ttState.uid = currentUser ? currentUser.id : null;
+  ttMigrateLegacyStore();
   ttState.data = ttLoadStore();
   if (ttState.data && !ttState.data.courses.length) ttState.data = null;
   if (ttState.data) {
     if (!ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
     ttComputeWeek();
   }
-  try { ttState.scheme = localStorage.getItem(TT_SCHEME_KEY) || 'zhongguo'; } catch (e) { ttState.scheme = 'zhongguo'; }
+  try {
+    ttState.scheme = localStorage.getItem(ttSchemeKey()) ||
+      localStorage.getItem('bnusparks_timetable_scheme') || 'zhongguo';
+    if (localStorage.getItem(ttSchemeKey()) === null && localStorage.getItem('bnusparks_timetable_scheme')) {
+      localStorage.setItem(ttSchemeKey(), ttState.scheme);
+      localStorage.removeItem('bnusparks_timetable_scheme');
+    }
+  } catch (e) { ttState.scheme = 'zhongguo'; }
   ttApplyScheme();
   ttRenderAll();
   // 课程树未就绪时延迟解析链接，到达后刷新一次（树有内存单例缓存）
@@ -306,7 +346,7 @@ function ttToggleSchemePop() {
     var opt = e.target.closest('[data-scheme]');
     if (!opt) return;
     ttState.scheme = opt.getAttribute('data-scheme');
-    try { localStorage.setItem(TT_SCHEME_KEY, ttState.scheme); } catch (err) {}
+    try { localStorage.setItem(ttSchemeKey(), ttState.scheme); } catch (err) {}
     ttApplyScheme();
     ttToggleSchemePop();
   });
