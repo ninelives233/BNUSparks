@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try { saved = JSON.parse(sessionStorage.getItem('bnusparks_view')); } catch(e) {}
   }
   var initialView = saved && saved._bnusparks ? saved.view : 'home';
-  var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose'];
+  var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose', 'timetable'];
   var needsAuth = authViews.indexOf(initialView) !== -1;
 
   var viewFeaturePromise = Promise.resolve();
@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Admin 侧栏链接基于 token 存储立即显示，不等待 auth API
   var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
   if (hasToken) {
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink').forEach(function(link) {
+    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
       link.style.display = '';
     });
   }
@@ -314,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
           break;
         case 'userPublic': showUserPublic(saved.userId); break;
         case 'newCourse': renderNewCourseView(); break;
+        case 'timetable': ttNavTimetable(); break;
         default: showHome();
       }
       _suppressingPushState = false;

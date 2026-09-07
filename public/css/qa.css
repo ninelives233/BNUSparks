@@ -172,8 +172,7 @@
 }
 .qa-back-btn:hover { border-color: var(--primary); background: var(--primary-surface, rgba(60, 100, 230, 0.06)); }
 
-/* 2026 门控 */
-.qa-gate-card { max-width: 380px; text-align: center; }
+/* 问答表单与编辑器控件 */
 .qa-gate-desc { font-size: 0.85rem; color: var(--ink-soft); margin: 0 auto var(--space-md); line-height: 1.7; max-width: 300px; }
 .qa-gate-input {
   width: 100%; padding: 10px 14px; font-size: 0.95rem; color: var(--ink);

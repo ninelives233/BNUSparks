@@ -411,6 +411,20 @@
   /* ── Geometric Icon System (replacing emoji) ────────────── */
   .gi { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
+  /* Approved course-card and sidebar SVG system */
+  .icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ci-primary {
+    fill: none; stroke: currentColor; stroke-width: 1.9;
+    stroke-linecap: round; stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .ci-solid { fill: currentColor; stroke: none; }
+  .ci-soft { fill: currentColor; stroke: none; opacity: 0.11; }
+  .sidebar-icon {
+    width: 20px; height: 20px; flex: 0 0 20px;
+    color: currentColor; overflow: visible;
+  }
+
   /* Nav sidebar icons - small geometric marks */
   .gi-nav-home { width: 18px; height: 18px; border: 1.5px solid currentColor; border-radius: 1px 1px 3px 3px; position: relative; }
   .gi-nav-home::before { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 2px;
@@ -538,14 +552,20 @@
     box-shadow: 0 8px 24px oklch(0.45 0.01 55 / 0.05);
   }
   .folder-card .fc-icon {
-    width: 52px; height: 52px;
+    width: 58px; height: 58px;
     display: flex; align-items: center; justify-content: center;
-    background: var(--primary-surface);
-    border-radius: var(--radius-md);
-    transition: background 0.2s, transform 0.2s;
+    background: oklch(from var(--primary-surface) calc(l + 0.018) c h);
+    border: 1px solid oklch(from var(--primary-light) l c h / 0.72);
+    border-radius: 14px;
+    box-shadow: inset 0 0 0 3px oklch(1 0 0 / 0.46);
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
   }
-  .folder-card:hover .fc-icon { background: oklch(from var(--primary) l c h / 0.12); transform: scale(1.05); }
-  .folder-card .fc-icon svg { width: 26px; height: 26px; color: var(--primary); opacity: 0.6; }
+  .folder-card:hover .fc-icon {
+    background: oklch(from var(--primary-surface) calc(l - 0.01) calc(c + 0.008) h);
+    border-color: oklch(from var(--primary-light) l c h / 0.95);
+    transform: scale(1.05);
+  }
+  .folder-card .fc-icon svg { width: 31px; height: 31px; color: var(--primary-dark); opacity: 1; overflow: visible; }
   .folder-card .fc-name {
     font-size: 0.88rem; font-weight: 600; color: var(--ink);
     text-align: center; line-height: 1.3;
@@ -744,8 +764,8 @@
     /* 移动端不再硬切卡片宽度（原 flex:0 0 100px 导致 640px 断点从 218px 突变到 100px）；
        卡片宽度由 .folder-card 的 clamp 渐变控制，375px 视口自然排 2 列 */
     .folder-card { padding: 8px; }
-    .folder-card .fc-icon { width: 46px; height: 46px; }
-    .folder-card .fc-icon svg { width: 26px; height: 26px; }
+    .folder-card .fc-icon { width: 58px; height: 58px; }
+    .folder-card .fc-icon svg { width: 31px; height: 31px; }
     .folder-card .fc-name { font-size: 0.75rem; }
     .folder-list-item { padding: 10px 14px; }
     .file-table thead th,
@@ -1761,14 +1781,15 @@
   }
 
   .home-nav-card .hnc-icon {
-    font-size: 2rem;
-    width: 64px;
-    height: 64px;
+    width: 58px;
+    height: 58px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--primary-surface);
-    border-radius: var(--radius-md);
+    background: oklch(from var(--primary-surface) calc(l + 0.018) c h);
+    border: 1px solid oklch(from var(--primary-light) l c h / 0.72);
+    border-radius: 14px;
+    box-shadow: inset 0 0 0 3px oklch(1 0 0 / 0.46);
   }
 
   .home-nav-card .hnc-title {
@@ -1782,8 +1803,11 @@
     color: var(--ink-faint);
   }
   .home-nav-card .hnc-icon svg {
-    color: var(--primary);
-    opacity: 0.7;
+    width: 31px;
+    height: 31px;
+    color: var(--primary-dark);
+    opacity: 1;
+    overflow: visible;
   }
 
   /* ═══════════════════════════════════════════
@@ -1942,9 +1966,8 @@
       padding: var(--space-md);
     }
     .home-nav-card .hnc-icon {
-      width: 48px;
-      height: 48px;
-      font-size: 1.5rem;
+      width: 58px;
+      height: 58px;
       flex-shrink: 0;
     }
     .rankings-item {

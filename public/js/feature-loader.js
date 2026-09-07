@@ -1,6 +1,6 @@
 /* BNU Sparks · feature-loader.js —— 按视图懒加载非核心前端模块 */
 (function() {
-  var VERSION = '201';
+  var VERSION = '202';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -27,13 +27,17 @@
       'admin-records.js',
       'admin-users.js',
       'qa-admin.js'
+    ],
+    timetable: [
+      'timetable.js'
     ]
   };
 
   var featureStyles = {
     explorer: ['course.css'],
     qa: ['qa.css'],
-    admin: ['admin.css', 'qa.css']
+    admin: ['admin.css', 'qa.css'],
+    timetable: ['timetable.css']
   };
 
   function loadStyle(name) {

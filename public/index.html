@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
 <link rel="stylesheet" href="/static/css/tokens.css?v=204">
-<link rel="stylesheet" href="/static/css/base.css?v=201">
+<link rel="stylesheet" href="/static/css/base.css?v=203">
 <link rel="stylesheet" href="/static/css/user.css?v=204">
 <link rel="stylesheet" href="/static/css/files.css?v=197">
 <link rel="stylesheet" href="/static/css/announcement.css?v=186">
@@ -14,6 +14,59 @@
 <body>
 
 <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
+<!-- 课程卡片与侧边栏共用 SVG 图标符号表 -->
+<svg class="icon-sprite" width="0" height="0" aria-hidden="true">
+  <defs>
+    <symbol id="ci-ideology" viewBox="0 0 24 24"><path class="ci-soft" d="M3.2 5.4c3.6-.7 6.4.1 8.8 2.2v12.1c-2.4-2.1-5.2-2.9-8.8-2.2z"/><path class="ci-primary" d="M3.2 5.4c3.6-.7 6.4.1 8.8 2.2v12.1c-2.4-2.1-5.2-2.9-8.8-2.2zM20.8 5.4c-3.6-.7-6.4.1-8.8 2.2v12.1c2.4-2.1 5.2-2.9 8.8-2.2z"/></symbol>
+    <symbol id="ci-sports" viewBox="0 0 24 24"><rect class="ci-soft" x="8" y="7.1" width="8" height="9.8" rx="2.1"/><path class="ci-primary" d="M4.2 7.2v9.6M7.1 5.5v13M16.9 5.5v13M19.8 7.2v9.6M7.1 9.1h9.8M7.1 14.9h9.8"/></symbol>
+    <symbol id="ci-military" viewBox="0 0 24 24"><path class="ci-soft" d="M12 2.8 19 5.5v5.6c0 4.5-2.6 7.9-7 10.1z"/><path class="ci-primary" d="M12 2.8 19 5.5v5.6c0 4.5-2.6 7.9-7 10.1-4.4-2.2-7-5.6-7-10.1V5.5z"/></symbol>
+    <symbol id="ci-language" viewBox="0 0 24 24"><path class="ci-soft" d="M4.1 5.1h15.8v11.4H11l-4.4 3v-3H4.1z"/><path class="ci-primary" d="M4.1 5.1h15.8v11.4H11l-4.4 3v-3H4.1z"/></symbol>
+    <symbol id="ci-teaching" viewBox="0 0 24 24"><path class="ci-soft" d="M5 10.2h14v8.3H5z"/><path class="ci-primary" d="M5 10.2h14v8.3H5zM7 21h10M8.2 18.5 7.4 21M15.8 18.5l.8 2.5"/><circle class="ci-primary" cx="12" cy="6.3" r="3"/></symbol>
+    <symbol id="ci-values" viewBox="0 0 24 24"><path class="ci-soft" d="m12 3.1 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9z"/><path class="ci-primary" d="m12 3.1 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></symbol>
+    <symbol id="ci-art" viewBox="0 0 24 24"><circle class="ci-soft" cx="8.5" cy="8.5" r="4.2"/><circle class="ci-primary" cx="8.5" cy="8.5" r="4.2"/><path class="ci-primary" d="M4.4 19v-4.2h4.2M13.1 19l3.2-9 3.3 9z"/></symbol>
+    <symbol id="ci-science" viewBox="0 0 24 24"><path class="ci-primary" d="M4.2 4v16h15.7M7.2 16.9l3.2-4 3.2 1.7 4.2-6"/><rect class="ci-soft" x="7" y="14.5" width="3" height="5.5" rx=".7"/><rect class="ci-solid" x="12.4" y="12.5" width="3" height="7.5" rx=".7" opacity=".28"/></symbol>
+    <symbol id="ci-society" viewBox="0 0 24 24"><path class="ci-soft" d="m3.5 9 8.5-5 8.5 5z"/><path class="ci-primary" d="m3.5 9 8.5-5 8.5 5M5.2 11v6.7M9.7 11v6.7M14.3 11v6.7M18.8 11v6.7M3.5 20h17"/></symbol>
+    <symbol id="ci-classics" viewBox="0 0 24 24"><path class="ci-soft" d="M5.2 4.2h13.6v15.6H5.2z"/><path class="ci-primary" d="M7 3v18M17 3v18M4.2 4.2h15.6M4.2 19.8h15.6"/></symbol>
+    <symbol id="ci-international" viewBox="0 0 24 24"><circle class="ci-soft" cx="12" cy="12" r="8.2"/><circle class="ci-primary" cx="12" cy="12" r="8.2"/><ellipse class="ci-primary" cx="12" cy="12" rx="3.8" ry="8.2"/><path class="ci-primary" d="M3.8 12h16.4"/></symbol>
+    <symbol id="ci-math" viewBox="0 0 24 24"><path class="ci-soft" d="M4.2 4.3h15.6v15.4H4.2z"/><path class="ci-primary" d="M18.3 6.4V4.3H6l5.8 7.7L6 19.7h12.3v-2.1"/></symbol>
+    <symbol id="ci-practical" viewBox="0 0 24 24"><path class="ci-soft" d="M3.4 8.1h17.2v10.7H3.4z"/><path class="ci-primary" d="M3.4 8.1h17.2v10.7H3.4zM8.3 8.1V5.4h7.4v2.7M3.4 12h17.2"/></symbol>
+
+    <symbol id="college-economics" viewBox="0 0 24 24"><rect class="ci-soft" x="4.5" y="5.5" width="15" height="3.5" rx="1.35"/><rect class="ci-soft" x="4.5" y="17" width="15" height="3.5" rx="1.35"/><rect class="ci-primary" x="4.5" y="5.5" width="15" height="3.5" rx="1.35"/><path class="ci-primary" d="M7 10.2v5.6M10.3 10.2v5.6M13.7 10.2v5.6M17 10.2v5.6"/><rect class="ci-primary" x="4.5" y="17" width="15" height="3.5" rx="1.35"/><path class="ci-primary" d="M4 21.5h16"/></symbol>
+    <symbol id="college-law" viewBox="0 0 24 24"><path class="ci-primary" d="M12 4v16M6 7h12M8.5 20h7M6 7l-3 7h6zM18 7l-3 7h6z"/></symbol>
+    <symbol id="college-literature" viewBox="0 0 24 24"><path class="ci-soft" d="M4 5.5c3.5-.6 6.1.1 8 2v12c-1.9-1.9-4.6-2.7-8-2z"/><path class="ci-primary" d="M4 5.5c3.5-.6 6.1.1 8 2v12c-1.9-1.9-4.6-2.7-8-2zM20 5.5c-3.5-.6-6.1.1-8 2v12c1.9-1.9 4.6-2.7 8-2z"/></symbol>
+    <symbol id="college-sociology" viewBox="0 0 24 24"><path class="ci-soft" d="m12 4 7.5 14H4.5z"/><path class="ci-primary" d="M12 4 4.5 18h15z"/><circle class="ci-solid" cx="12" cy="4" r="1.7"/><circle class="ci-solid" cx="4.5" cy="18" r="1.7"/><circle class="ci-solid" cx="19.5" cy="18" r="1.7"/></symbol>
+    <symbol id="college-psychology" viewBox="0 0 24 24"><path class="ci-soft" d="M12 5.2c-1.5-2-4.7-1.3-4.7 1.5-2.8 0-3.5 3.6-1.2 4.8-1.5 2.7.8 5.1 3.2 4.5.1 2.4 2.7 3.1 2.7 1.1z"/><path class="ci-primary" d="M12 5.2c-1.5-2-4.7-1.3-4.7 1.5-2.8 0-3.5 3.6-1.2 4.8-1.5 2.7.8 5.1 3.2 4.5.1 2.4 2.7 3.1 2.7 1.1M12 5.2c1.5-2 4.7-1.3 4.7 1.5 2.8 0 3.5 3.6 1.2 4.8 1.5 2.7-.8 5.1-3.2 4.5-.1 2.4-2.7 3.1-2.7 1.1zM12 5.2v11.9"/></symbol>
+    <symbol id="college-history" viewBox="0 0 24 24"><path class="ci-soft" d="M7 5c0 3 2.2 5 5 7-2.8 2-5 4-5 7h10c0-3-2.2-5-5-7 2.8-2 5-4 5-7z"/><path class="ci-primary" d="M5 4h14M5 20h14M7 4v1c0 3 2.2 5 5 7-2.8 2-5 4-5 7v1M17 4v1c0 3-2.2 5-5 7 2.8 2 5 4 5 7v1"/></symbol>
+    <symbol id="college-ai" viewBox="0 0 24 24"><path class="ci-primary" d="M4.5 18 8.5 6l4 12M6.2 13h4.6M15.5 6h4M17.5 6v12M15.5 18h4"/></symbol>
+    <symbol id="college-physics" viewBox="0 0 24 24"><circle class="ci-solid" cx="12" cy="12" r="1.8"/><ellipse class="ci-primary" cx="12" cy="12" rx="9" ry="3.7"/><ellipse class="ci-primary" cx="12" cy="12" rx="9" ry="3.7" transform="rotate(60 12 12)"/><ellipse class="ci-primary" cx="12" cy="12" rx="9" ry="3.7" transform="rotate(-60 12 12)"/></symbol>
+    <symbol id="college-chemistry" viewBox="0 0 24 24"><path class="ci-soft" d="M8 19h8l-3-7H11z"/><path class="ci-primary" d="M9 3h6M10 3v5L5 19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2L14 8V3M8 15h8"/></symbol>
+    <symbol id="college-life" viewBox="0 0 24 24"><path class="ci-primary" d="M6 3c0 5 12 5 12 10s-12 5-12 8M18 3c0 5-12 5-12 10s12 5 12 8M8.5 6.5h7M8 17.5h8"/></symbol>
+    <symbol id="college-government" viewBox="0 0 24 24"><circle class="ci-soft" cx="8" cy="8" r="4.2"/><circle class="ci-primary" cx="8" cy="8" r="4.2"/><path class="ci-primary" d="m11 11 9 9M15.5 15.5l2-2M18 18l2-2"/></symbol>
+    <symbol id="college-math" viewBox="0 0 24 24"><path class="ci-soft" d="M5 4h14L11 12l8 8H5l8-8z"/><path class="ci-primary" d="M18 6V4H5l8 8-8 8h13v-2"/></symbol>
+    <symbol id="college-statistics" viewBox="0 0 24 24"><path class="ci-soft" d="M5 15h3v5H5zM10.5 10h3v10h-3zM16 6h3v14h-3z"/><path class="ci-primary" d="M4 20h16M5 15h3v5h-3zM10.5 10h3v10h-3zM16 6h3v14h-3z"/></symbol>
+    <symbol id="college-geography" viewBox="0 0 24 24"><circle class="ci-primary" cx="12" cy="12" r="8.5"/><path class="ci-soft" d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"/><path class="ci-primary" d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9zM12 3.5V5M12 19v1.5M3.5 12H5M19 12h1.5"/></symbol>
+    <symbol id="college-education" viewBox="0 0 24 24"><path class="ci-soft" d="m3 9 9-4.5L21 9l-9 4.5z"/><path class="ci-primary" d="m3 9 9-4.5L21 9l-9 4.5zM6.5 11v5c0 1.7 2.5 3 5.5 3s5.5-1.3 5.5-3v-5M21 9v5"/></symbol>
+    <symbol id="college-environment" viewBox="0 0 24 24"><path class="ci-soft" d="M4.5 19.5c0-8.2 5-13.5 15-15-1 9-6 14-15 15z"/><path class="ci-primary" d="M4.5 19.5c0-8.2 5-13.5 15-15-1 9-6 14-15 15zM4.5 19.5 16 8"/></symbol>
+    <symbol id="college-languages" viewBox="0 0 24 24"><circle class="ci-soft" cx="12" cy="12" r="8.5"/><circle class="ci-primary" cx="12" cy="12" r="8.5"/><path class="ci-primary" d="M3.5 12h17M12 3.5c2.6 2.3 4 5.1 4 8.5s-1.4 6.2-4 8.5M12 3.5C9.4 5.8 8 8.6 8 12s1.4 6.2 4 8.5"/></symbol>
+    <symbol id="college-journalism" viewBox="0 0 24 24"><path class="ci-soft" d="M4 4h16v16H4z"/><path class="ci-primary" d="M4 4h16v16H4zM8 8h8M8 12h4M8 16h8M15 12h1"/></symbol>
+    <symbol id="college-philosophy" viewBox="0 0 24 24"><ellipse class="ci-soft" cx="12" cy="12" rx="6.5" ry="5"/><path class="ci-primary" d="M12 3.5v17M12 7c-4.3 0-7 1.9-7 5s2.7 5 7 5 7-1.9 7-5-2.7-5-7-5z"/></symbol>
+    <symbol id="college-marxism" viewBox="0 0 24 24"><path class="ci-soft" d="M4 10.5c3.2-.5 5.8.2 8 2v8c-2.2-1.8-4.8-2.5-8-2z"/><path class="ci-primary" d="M4 10.5c3.2-.5 5.8.2 8 2v8c-2.2-1.8-4.8-2.5-8-2zM20 10.5c-3.2-.5-5.8.2-8 2v8c2.2-1.8 4.8-2.5 8-2z"/><path class="ci-solid" d="m12 2.8 1.15 2.35 2.6.38-1.88 1.83.44 2.59L12 8.72 9.69 9.95l.44-2.59-1.88-1.83 2.6-.38z"/></symbol>
+    <symbol id="college-media" viewBox="0 0 24 24"><path class="ci-soft" d="M4 10h16v10H4z"/><path class="ci-primary" d="M4 10h16v10H4zM4 10l2-5h16l-2 5M10 5l-2 5M18 5l-2 5"/><path class="ci-primary" d="m10 13 5 2.5-5 2.5z"/></symbol>
+    <symbol id="college-athletics" viewBox="0 0 24 24"><rect class="ci-soft" x="7" y="9" width="10" height="6" rx="2"/><path class="ci-primary" d="M7 12h10M4 8v8M7 6.5v11M17 6.5v11M20 8v8"/></symbol>
+
+    <symbol id="ni-home" viewBox="0 0 24 24"><path class="ci-primary" d="m4 11 8-7 8 7v9H4zM9 20v-6h6v6"/></symbol>
+    <!-- 导航专属符号：与课程卡片保持形状隔离，避免跨层级撞图标。 -->
+    <symbol id="ni-general" viewBox="0 0 24 24"><rect class="ci-soft" x="5" y="5" width="14" height="14" rx="1.8"/><rect class="ci-primary" x="4" y="4" width="16" height="16" rx="2"/><path class="ci-primary" d="M8 9h8M8 12h5"/></symbol>
+    <symbol id="ni-major" viewBox="0 0 24 24"><rect class="ci-soft" x="6" y="6" width="12" height="12" rx="1.5" transform="rotate(45 12 12)"/><rect class="ci-primary" x="6" y="6" width="12" height="12" rx="1.5" transform="rotate(45 12 12)"/></symbol>
+    <symbol id="ni-qa" viewBox="0 0 24 24"><path class="ci-primary" d="M4 5h16v12h-9l-5 4v-4H4zM9 9.3c.3-1.2 1.3-1.8 3-1.8 1.8 0 3 1 3 2.4 0 1.8-2.8 2-2.8 4M12.2 16.5h.01"/></symbol>
+    <symbol id="ni-rank" viewBox="0 0 24 24"><path class="ci-primary" d="M5 20v-6h3v6M10.5 20V9h3v11M16 20V4h3v16M3 20h18"/></symbol>
+    <symbol id="ni-admin" viewBox="0 0 24 24"><path class="ci-primary" d="M4 6h16M4 12h16M4 18h16"/><circle class="ci-solid" cx="9" cy="6" r="2"/><circle class="ci-solid" cx="15" cy="12" r="2"/><circle class="ci-solid" cx="11" cy="18" r="2"/></symbol>
+    <symbol id="ni-about" viewBox="0 0 24 24"><circle class="ci-primary" cx="12" cy="12" r="9"/><path class="ci-primary" d="M12 10v7M12 7h.01"/></symbol>
+    <symbol id="ni-timetable" viewBox="0 0 24 24"><rect class="ci-primary" x="3.5" y="4.5" width="17" height="16" rx="2"/><path class="ci-primary" d="M3.5 9.5h17M8.5 2.8v3.4M15.5 2.8v3.4"/><rect class="ci-solid" x="7" y="12.5" width="3.4" height="3.4" rx=".7"/><rect class="ci-solid" x="13.6" y="12.5" width="3.4" height="3.4" rx=".7"/></symbol>
+    <symbol id="home-announcement" viewBox="0 0 24 24"><path class="ci-soft" d="M6 16.5h12c-1.2-1.6-1.8-3.9-1.8-6.8A4.2 4.2 0 0 0 12 5.5a4.2 4.2 0 0 0-4.2 4.2c0 2.9-.6 5.2-1.8 6.8z"/><path class="ci-primary" d="M5 17h14M7.8 17c1.2-1.7 1.7-4.1 1.7-7.2A2.5 2.5 0 0 1 12 7.3a2.5 2.5 0 0 1 2.5 2.5c0 3.1.5 5.5 1.7 7.2M10.2 20h3.6"/></symbol>
+  </defs>
+</svg>
 
 <!-- ═══ Header ═══ -->
 <header class="site-header" id="siteHeader">
@@ -38,25 +91,27 @@
     <span class="db-name">木铎星火</span>
     <span class="db-sub">BNU Sparks</span>
   </div>
-  <a href="#" data-view="home" class="active"><span class="gi gi-nav-home" style="width:18px;height:18px"></span> 首页</a>
-  <a href="#" data-view="general"><span class="gi gi-nav-general"></span> 通识课</a>
-  <a href="#" data-view="major"><span class="gi gi-nav-major"></span> 专业课</a>
-  <a href="#" data-view="qa"><span class="gi gi-nav-qa"></span> 问答区</a>
-  <a href="#" data-view="leaderboard"><span class="gi gi-nav-leaderboard" style="width:16px;height:16px"><span></span></span> 排行榜</a>
-  <a href="#" data-view="admin" id="mobAdminLink" style="display:none"><span>⚙️</span> 管理后台</a>
-  <a href="#" data-view="about"><span>ℹ️</span> 关于</a>
+  <a href="#" data-view="home" class="active"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-home"></use></svg> 首页</a>
+  <a href="#" data-view="general"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-general"></use></svg> 通识课</a>
+  <a href="#" data-view="major"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-major"></use></svg> 专业课</a>
+  <a href="#" data-view="qa"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-qa"></use></svg> 问答区</a>
+  <a href="#" data-view="leaderboard"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-rank"></use></svg> 排行榜</a>
+  <a href="#" data-view="admin" id="mobAdminLink" style="display:none"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-admin"></use></svg> 管理后台</a>
+  <a href="#" data-view="timetable" id="mobTimetableLink" style="display:none"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-timetable"></use></svg> 我的课表</a>
+  <a href="#" data-view="about"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-about"></use></svg> 关于</a>
 </div>
 
 <div class="page-layout">
 
 <nav class="side-nav">
-  <a href="#" class="active" data-view="home"><span class="sn-icon gi gi-nav-home" style="width:22px;height:22px"></span>首页</a>
-  <a href="#" data-view="general"><span class="sn-icon gi gi-nav-general"></span>通识课</a>
-  <a href="#" data-view="major"><span class="sn-icon gi gi-nav-major"></span>专业课</a>
-  <a href="#" data-view="qa"><span class="sn-icon gi gi-nav-qa"></span>问答区</a>
-  <a href="#" data-view="leaderboard"><span class="sn-icon gi gi-nav-leaderboard"><span></span></span>排行榜</a>
-  <a href="#" data-view="admin" id="sideAdminLink" style="display:none"><span class="sn-icon gi" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center">⚙️</span>管理后台</a>
-  <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><span class="sn-icon gi" style="width:3px;height:16px;background:currentColor;border-radius:2px;opacity:0.5"></span>关于</a>
+  <a href="#" class="active" data-view="home"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-home"></use></svg>首页</a>
+  <a href="#" data-view="general"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-general"></use></svg>通识课</a>
+  <a href="#" data-view="major"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-major"></use></svg>专业课</a>
+  <a href="#" data-view="qa"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-qa"></use></svg>问答区</a>
+  <a href="#" data-view="leaderboard"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-rank"></use></svg>排行榜</a>
+  <a href="#" data-view="admin" id="sideAdminLink" style="display:none"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-admin"></use></svg>管理后台</a>
+  <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-about"></use></svg>关于</a>
+  <a href="#" data-view="timetable" id="sideTimetableLink" style="display:none"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-timetable"></use></svg>我的课表</a>
 </nav>
 
 <main class="main-content" id="mainContent" tabindex="-1">
@@ -108,17 +163,17 @@
     <div class="container">
       <div class="home-nav-grid">
         <a href="/tutorial" class="home-nav-card" onclick="event.preventDefault();showTutorial()">
-          <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><path d="M8 8h3M8 11h3"/></svg></div>
+          <div class="hnc-icon"><svg class="home-card-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ci-ideology"></use></svg></div>
           <div class="hnc-title">使用教程</div>
           <div class="hnc-desc">快速上手</div>
         </a>
         <a href="/announcements" class="home-nav-card" onclick="event.preventDefault();showAnnouncements()">
-          <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+          <div class="hnc-icon"><svg class="home-card-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#home-announcement"></use></svg></div>
           <div class="hnc-title">公告</div>
           <div class="hnc-desc">最新消息</div>
         </a>
         <a href="/broad" class="home-nav-card" onclick="event.preventDefault();showBroad()">
-          <div class="hnc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28"><path d="M22 10l-10-5-10 5 10 5 10-5z"/><path d="M6 12v5c0 2 3 3 6 3s6-1 6-3v-5"/></svg></div>
+          <div class="hnc-icon"><svg class="home-card-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#college-education"></use></svg></div>
           <div class="hnc-title">关于大类招生</div>
           <div class="hnc-desc">了解政策</div>
         </a>
@@ -331,6 +386,15 @@
       <div class="leaderboard-content" id="leaderboardContent">
         <div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ My Timetable（我的课表 · 本地解析教务导出文件） ═══ -->
+<div class="view-section" id="timetableView">
+  <div class="about-page">
+    <div class="container">
+      <div class="tt-shell" id="ttShell"></div>
     </div>
   </div>
 </div>
@@ -1151,17 +1215,17 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=199" defer></script>
-<script src="/static/js/auth.js?v=196" defer></script>
+<script src="/static/js/utils.js?v=200" defer></script>
+<script src="/static/js/auth.js?v=197" defer></script>
 <script src="/static/js/profile.js?v=199" defer></script>
-<script src="/static/js/notifications.js?v=199" defer></script>
+<script src="/static/js/notifications.js?v=200" defer></script>
 <script src="/static/js/admin-core.js?v=195" defer></script>
-<script src="/static/js/views.js?v=200" defer></script>
-<script src="/static/js/explorer-core.js?v=195" defer></script>
+<script src="/static/js/views.js?v=201" defer></script>
+<script src="/static/js/explorer-core.js?v=196" defer></script>
 <script src="/static/js/explorer-file.js?v=186" defer></script>
 <script src="/static/js/explorer-preview.js?v=186" defer></script>
-<script src="/static/js/feature-loader.js?v=201" defer></script>
-<script src="/static/js/app.js?v=199" defer></script>
+<script src="/static/js/feature-loader.js?v=203" defer></script>
+<script src="/static/js/app.js?v=200" defer></script>
 
 </body>
 </html>

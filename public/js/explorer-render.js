@@ -32,7 +32,7 @@
     const canMgmt = mgmt && item.id &&
       (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1));
     return '<div class="folder-card" data-n="' + esc(item.name) + '">' +
-      '<div class="fc-icon">' + (CARD_ICONS[item.iconClass] || CARD_ICONS['folder']) + '</div>' +
+      '<div class="fc-icon">' + cardIconHtml(item) + '</div>' +
       '<div class="fc-name">' + esc(item.name) + '</div>' +
       '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
       (canMgmt ? _mgmtCardMenuHtml(item) : '') +

@@ -1,12 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
 // 问答区（新生指南）· 浏览端
-// 列表 / 筛选 / 搜索 / 详情 / 收藏 / 点赞 / 2026 门控 / 「我要提问」埋点
+// 列表 / 筛选 / 搜索 / 详情 / 收藏 / 点赞 / 登录提示 / 「我要提问」埋点
 // 依赖：utils.js（api / esc / escJs / lockScroll / ICONS）
 // ═══════════════════════════════════════════════════════════════
 
 var _QA_SEARCH_PLACEHOLDER = '搜索问题、回答…';
 var _DEFAULT_SEARCH_PLACEHOLDER = '搜索课程、资料、课程代码…';
-var _QA_GATE_KEY = 'bnusparks_qa_guest';
 
 // 分页 / 筛选状态
 var _qaPage = 1;
@@ -29,6 +28,8 @@ var _QA_IC_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 
 // v183：普通用户提问/回答开放开关（renderQaView 从 /api/qa/config/ 拉取）
 window._qaUserOpen = false;
+// 未登录进入问答区时，登录成功后恢复问答列表
+window._qaLoginPending = false;
 // 当前详情问题 id（采纳/删除后重渲用）
 var _qaCurrentDetailId = null;
 
@@ -74,10 +75,12 @@ function _initQaPlaceholder() {
 // ── 视图入口 ──
 async function renderQaView() {
   _initQaPlaceholder();
-  if (!currentUser && !sessionStorage.getItem(_QA_GATE_KEY)) {
-    showQaGate();
+  if (!currentUser) {
+    window._qaLoginPending = true;
+    showLoginModal();
     return;
   }
+  window._qaLoginPending = false;
   // v183：拉站点开关（普通用户提问/回答开放状态），失败默认关闭
   api('/api/qa/config/').then(function(cfg) {
     window._qaUserOpen = !!(cfg && cfg.user_open);
@@ -85,59 +88,6 @@ async function renderQaView() {
     window._qaUserOpen = false;
   });
   renderQaList();
-}
-
-// ── 2026 门控 ──
-function showQaGate() {
-  _removeQaOverlay('qa-gate-overlay');
-  var overlay = document.createElement('div');
-  overlay.className = 'modal-overlay qa-gate-overlay';
-  overlay.innerHTML =
-    '<div class="modal-card qa-gate-card">' +
-      '<button class="modal-close" onclick="closeQaGate()">✕</button>' +
-      '<h3 class="modal-title">学号验证</h3>' +
-      '<p class="qa-gate-desc">若邮箱未激活，请填写学号完成验证。</p>' +
-      '<input type="text" id="qaGateSid" class="qa-gate-input" maxlength="20" placeholder="请输入学号" autocomplete="off">' +
-      '<div id="qaGateError" class="qa-gate-error" style="display:none"></div>' +
-      '<div class="qa-gate-actions">' +
-        '<button class="qa-gate-btn" onclick="submitQaGate()">验证并进入</button>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(overlay);
-  lockScroll();
-  activateDialog(overlay);
-  var inp = document.getElementById('qaGateSid');
-  if (inp) {
-    inp.focus();
-    inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitQaGate(); });
-  }
-}
-
-function closeQaGate() {
-  _removeQaOverlay('qa-gate-overlay');
-  // 未验证则回到首页
-  if (!currentUser && !sessionStorage.getItem(_QA_GATE_KEY)) {
-    if (typeof showHome === 'function') showHome();
-  }
-}
-
-async function submitQaGate() {
-  var sid = document.getElementById('qaGateSid').value.trim();
-  var errEl = document.getElementById('qaGateError');
-  if (!sid) { if (errEl) { errEl.style.display = 'block'; errEl.textContent = '请输入学号'; } return; }
-  try {
-    await api('/api/qa/guest/verify/', { method: 'POST', body: { sid: sid } });
-    sessionStorage.setItem(_QA_GATE_KEY, '1');
-    _removeQaOverlay('qa-gate-overlay');
-    renderQaList();
-  } catch (err) {
-    if (errEl) { errEl.style.display = 'block'; errEl.textContent = err.message || err.error || '验证失败'; }
-  }
-}
-
-function _removeQaOverlay(cls) {
-  var el = document.querySelector('.' + cls);
-  if (el) { deactivateDialog(el); el.remove(); unlockScroll(); }
 }
 
 // ── 列表 ──
