@@ -563,6 +563,8 @@ function ttFillCategoryOptions(sel, collegeId) {
 }
 
 // ── 应用导入：本地保存 + 为未建课课程自动提交新课程申请 ──
+// 后端辖区逻辑（v=153）：管理员 + 目标位置在辖区内 → auto_approved 直接建课；
+// 否则走审核。直接建课的不标 pending，重新拉树后立即可点击跳转。
 function ttApplyImport(parsed, requests) {
   ttSaveStore(parsed);
   ttState.data = parsed;
@@ -570,19 +572,31 @@ function ttApplyImport(parsed, requests) {
   ttCloseModal();
   ttRenderAll();
   if (!requests.length) return;
-  var done = 0, failed = 0;
+  var direct = 0, sent = 0, failed = 0;
   var jobs = requests.map(function (r) {
     return api('/api/courses/request/', { method: 'POST', body: r.body })
-      .then(function () { done++; })
-      .catch(function () { failed++; })
-      .then(function () { parsed.pendingCodes[r.code] = true; });
+      .then(function (res) {
+        if (res && res.auto_approved) { direct++; return; }
+        sent++;
+        parsed.pendingCodes[r.code] = true;
+      })
+      .catch(function () { failed++; parsed.pendingCodes[r.code] = true; });
   });
   Promise.all(jobs).then(function () {
     ttSaveStore(parsed);
-    ttResolveCourseLinks();
-    if (document.getElementById('ttGrid')) ttPaintGrid();
-    ttToast('已自动提交 ' + done + ' 个新课程申请' +
-      (failed ? '（' + failed + ' 个提交失败）' : '') + '，管理员批准后即可点击跳转');
+    // 有直接建课时后端已清树缓存，重拉课程树让新课立即可点
+    var refresh = (direct > 0 && typeof loadCourseTree === 'function')
+      ? Promise.resolve(loadCourseTree()).catch(function () {})
+      : Promise.resolve();
+    refresh.then(function () {
+      ttResolveCourseLinks();
+      if (document.getElementById('ttGrid')) ttPaintGrid();
+      var parts = [];
+      if (direct) parts.push(direct + ' 门在辖区内已直接建课');
+      if (sent) parts.push(sent + ' 门申请已送审');
+      if (failed) parts.push(failed + ' 门提交失败');
+      ttToast(parts.join('；') + '，批准后点击课程即可跳转');
+    });
   });
 }
 
