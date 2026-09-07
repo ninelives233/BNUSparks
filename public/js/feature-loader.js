@@ -1,6 +1,6 @@
 /* BNU Sparks · feature-loader.js —— 按视图懒加载非核心前端模块 */
 (function() {
-  var VERSION = '202';
+  var VERSION = '203';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

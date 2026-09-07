@@ -290,13 +290,13 @@ function ttRenderEmpty(body) {
         '<span class="step"><b>③</b> 在这里选择该文件</span>' +
       '</div>' +
       '<button type="button" class="tt-btn primary" id="ttImportBtn">选择教务导出文件</button>' +
-      '<button type="button" class="tt-btn" id="ttSampleBtn" style="margin-left:8px">先看看示例</button>' +
+      '<button type="button" class="tt-btn" id="ttTutorialBtn" style="margin-left:8px">使用教程</button>' +
       '<div class="tt-error" id="ttError" role="alert"></div>' +
     '</div>';
   document.getElementById('ttImportBtn').addEventListener('click', function () {
     document.getElementById('ttFileInput').click();
   });
-  document.getElementById('ttSampleBtn').addEventListener('click', ttLoadSample);
+  document.getElementById('ttTutorialBtn').addEventListener('click', ttShowTutorial);
 }
 
 // ── 文件选择 → 解析 → 确认弹窗 ──
@@ -570,27 +570,40 @@ function ttPaintGrid() {
   grid.classList.add('swap');
 }
 
-// ── 示例数据（取自真实教务文件结构，走同一条解析链路） ──
-function ttLoadSample() {
-  var sample = {
-    meta: { semester: '2026-2027学年秋季学期', studentName: '示例同学', studentId: '202500000000', className: '示例专业', courseCount: 12, credits: '27.25' },
-    courses: [
-      { name: '中级微观经济学', code: 'ECO12004', teachers: ['朱敏'], credits: '3.0', hours: '48', classNo: '04', nature: '初修', timeRaw: '1-16周 三[5-7] 八402(60)', meetings: ttParseMeetings('1-16周 三[5-7] 八402(60)') },
-      { name: '中级宏观经济学', code: 'ECO12005', teachers: ['曹思未'], credits: '3.0', hours: '48', classNo: '03', nature: '初修', timeRaw: '1-16周 二[9-11] 八103(62)', meetings: ttParseMeetings('1-16周 二[9-11] 八103(62)') },
-      { name: '金融学', code: 'ECO12009', teachers: ['李堃'], credits: '2.0', hours: '32', classNo: '03', nature: '初修', timeRaw: '2-16周 五[5-6] 八111(62)', meetings: ttParseMeetings('2-16周 五[5-6] 八111(62)') },
-      { name: '数字经济导论', code: 'ECO12030', teachers: ['戚聿东'], credits: '2.0', hours: '32', classNo: '03', nature: '初修', timeRaw: '1-16周 五[3-4] 四101(182)', meetings: ttParseMeetings('1-16周 五[3-4] 四101(182)') },
-      { name: '统计学', code: 'ECO12032', teachers: ['龚江辉'], credits: '2.0', hours: '32', classNo: '01', nature: '初修', timeRaw: '1-16周 二[3-4] 七202(80)', meetings: ttParseMeetings('1-16周 二[3-4] 七202(80)') },
-      { name: '马克思主义基本原理', code: 'GEN01103', teachers: ['李娉', '尚九玉'], credits: '3.0', hours: '64', classNo: '16', nature: '初修', timeRaw: '1-8周 二[7-8] 九304(102),9-16周 二[7-8] 九304(102)', meetings: ttParseMeetings('1-8周 二[7-8] 九304(102),9-16周 二[7-8] 九304(102)') },
-      { name: '武术与强身避险', code: 'GEN01242', teachers: ['陈新萌'], credits: '1.0', hours: '32', classNo: '01', nature: '初修', timeRaw: '1-16周(单) 五[7-8] 邱季端体武馆-109(30),1-16周(双) 六[11-12] 网上自学(400)', meetings: ttParseMeetings('1-16周(单) 五[7-8] 邱季端体武馆-109(30),1-16周(双) 六[11-12] 网上自学(400)') },
-      { name: '西方哲学史', code: 'GEN03150', teachers: ['李红'], credits: '2.0', hours: '2', classNo: '01', nature: '初修', timeRaw: '1-16周 二[5-6] 十110(148)', meetings: ttParseMeetings('1-16周 二[5-6] 十110(148)') },
-      { name: '人工智能导论', code: 'GEN04251', teachers: ['王醒策'], credits: '2.0', hours: '32', classNo: '03', nature: '初修', timeRaw: '1-16周 四[3-4] 二115(70)', meetings: ttParseMeetings('1-16周 四[3-4] 二115(70)') },
-      { name: '形势与政策3', code: 'GEN09003', teachers: ['谢天', '毛燕', '马琼', '陈夙'], credits: '0.25', hours: '8', classNo: '14', nature: '初修', timeRaw: '7周 一[9-10] 九201(102),8周 一[9-10] 九201(102),9周 一[9-10] 九201(102),10周 一[9-10] 九201(102),11周 一[9-10] 九201(102)', meetings: ttParseMeetings('7周 一[9-10] 九201(102),8周 一[9-10] 九201(102),9周 一[9-10] 九201(102),10周 一[9-10] 九201(102),11周 一[9-10] 九201(102)') },
-      { name: '线性代数', code: 'MAT02008', teachers: ['赵亮'], credits: '4.0', hours: '64', classNo: '04', nature: '初修', timeRaw: '1-16周 一[3-4] 二208(156),1-16周 四[1-2] 二208(156)', meetings: ttParseMeetings('1-16周 一[3-4] 二208(156),1-16周 四[1-2] 二208(156)') },
-      { name: '概率论与数理统计', code: 'STA02001', teachers: ['席玮'], credits: '3.0', hours: '48', classNo: '05', nature: '初修', timeRaw: '1-16周 一[5-7] 七203(80)', meetings: ttParseMeetings('1-16周 一[5-7] 七203(80)') }
-    ]
+// ── 使用教程弹层（图文步骤，链接可点；图片仅在本弹层打开时加载） ──
+function ttShowTutorial() {
+  var existing = ttModalOverlay();
+  var img = function (n, alt) {
+    return '<img src="/static/tt_tutorial/step' + n + '.webp" alt="' + alt + '" loading="lazy" />';
   };
-  sample.start = ttGuessSemesterStart(sample.meta.semester);
-  ttShowConfirmModal(sample);
+  existing.innerHTML =
+    '<div class="tt-modal tt-tut" role="dialog" aria-modal="true" aria-label="课表导入教程">' +
+      '<header><h3>课表导入教程</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
+      '<div class="tt-mbody">' +
+        '<ol class="tt-steps">' +
+          '<li>' +
+            '<p>访问数字京师 <a href="https://one.bnu.edu.cn" target="_blank" rel="noopener noreferrer">one.bnu.edu.cn</a>，登录自己的账号，来到教务管理系统。</p>' +
+            img(1, '数字京师登录页') +
+          '</li>' +
+          '<li>' +
+            '<p>在「网上选课」里找到「我的课表」。</p>' +
+            img(2, '网上选课中的我的课表入口') +
+          '</li>' +
+          '<li>' +
+            '<p>在默认的「按列表方式显示」下点击「导出」，将生成的 xls 文件在本站上传，解析成功后自动生成你的课表；重新导入会覆盖现有课表。</p>' +
+            img(3, '我的课表导出按钮') +
+          '</li>' +
+        '</ol>' +
+        '<p class="tt-tut-note">教务导出文件仅在你自己的浏览器里解析，不会经过本站服务器。</p>' +
+      '</div>' +
+      '<footer><button type="button" class="tt-btn primary" data-close>知道了</button></footer>' +
+    '</div>';
+
+  existing.querySelectorAll('[data-close]').forEach(function (b) {
+    b.addEventListener('click', function () { ttCloseModal(existing); });
+  });
+  existing.addEventListener('click', function (e) { if (e.target === existing) ttCloseModal(existing); });
+  lockScroll();
 }
 
 // 调试钩子：控制台可注入任意教务 HTML 文本验证解析

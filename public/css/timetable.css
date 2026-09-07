@@ -249,6 +249,23 @@
 .tt-mrow .tm { color: var(--ink-faint); margin-left: auto; text-align: right; }
 .tt-modal footer { display: flex; justify-content: flex-end; gap: var(--space-xs); padding: var(--space-sm) var(--space-md) var(--space-md); }
 
+/* ── 使用教程弹层 ───────────────────────────────────── */
+.tt-modal.tt-tut { width: min(680px, 100%); }
+.tt-tut .tt-mbody { padding-top: var(--space-md); }
+.tt-steps { margin: 0; padding-left: 20px; }
+.tt-steps li { padding-bottom: var(--space-md); }
+.tt-steps li::marker { font-family: var(--serif); font-weight: 700; color: var(--primary); }
+.tt-steps p { font-size: var(--fs-sm); line-height: 1.8; color: var(--ink); margin: 0 0 8px; }
+.tt-steps a { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.tt-steps a:hover { color: var(--primary-dark); }
+.tt-steps a:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 2px; }
+.tt-steps img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--border-light); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+.tt-tut-note { margin-top: 4px; font-size: var(--fs-xs); color: var(--ink-faint); border-top: 1px dashed var(--border-light); padding-top: var(--space-sm); }
+
 /* ── 移动端 ─────────────────────────────────────────── */
 @media (max-width: 700px) {
   .tt-top { align-items: flex-start; }
