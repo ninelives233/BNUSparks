@@ -208,7 +208,9 @@ utils → auth → profile → notifications → admin-core → views → explor
 |---|---:|---|
 | `docs/personal-home-prototype/index.html` | 68 | 独立静态个性化首页、课程管理、示例课表核对、搜索收藏、移动导航；不接入生产资源 |
 | `docs/personal-home-prototype/v2.html` | 80 | 第二版：无右侧身份及继续查看，资料更新首页、课程列表与固定管理、统一添加入口 |
-| `docs/personal-home-prototype/brand-spec.md` | 42 | 设计规则、体验路径、示例范围与验证记录 |
+| `docs/personal-home-prototype/v3.html` | 94 | 第三版：中性白灰/墨蓝学习空间，日期分组首页、精简课程列表与示例导入交互 |
+| `docs/personal-home-prototype/v4.html` | 279 | 第四版：按已实现课表能力重做周网格/列表、多时段编辑、教务格式解析与整表替换；独立内存样稿，不接生产接口 |
+| `docs/personal-home-prototype/brand-spec.md` | 89 | 设计规则、体验路径、示例范围与验证记录 |
 
 ## 8. 测试与运维定位
 
