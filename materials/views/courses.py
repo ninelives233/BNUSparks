@@ -260,7 +260,7 @@ def api_search(request):
             if c.code not in seen:
                 seen.add(c.code)
                 codes = [c.code]
-                for alias_code in merged_codes_all.get(c.id, []):
+                for _alias_id, alias_code in merged_codes_all.get(c.id, []):
                     if alias_code not in codes:
                         codes.append(alias_code)
                 results["courses"].append({
