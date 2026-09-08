@@ -28,10 +28,11 @@ from .utils_auth import (
 )
 from .utils_course_tree import (
     _build_tree_node, _clear_category_preload, _college_node_of,
-    _find_existing_course, _find_leaf_under_parent,
+    _find_existing_course, _find_leaf_under_parent, _follow_merge,
     _find_nodes_containing_course, _get_category_preload,
     _get_courses_in_category, _get_courses_in_category_preloaded,
-    _node_contains_course, _node_under, _thread_local, _unique_college_names,
+    _merged_codes_map, _node_contains_course, _node_under, _thread_local,
+    _unique_college_names,
 )
 from .utils_trash import (
     TRASH_RETENTION, TrashStageError, _perform_soft_delete, _purge_expired_trash,

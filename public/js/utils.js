@@ -631,12 +631,12 @@
         results.courses.forEach(function(c) {
           var typeLabel = c.course_type === 'general' ? '通识' : '专业';
           var typeClass = c.course_type === 'general' ? 'sg-pill-general' : 'sg-pill-major';
-          html += '<div class="sg-item" onclick="this.closest(\'.search-overlay\').remove();showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(c.code) + '\')">';
+          html += '<div class="sg-item" onclick="this.closest(\'.search-overlay\').remove();navToCourse(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\',\'' + escJs(c.code) + '\')">';
           html += '<div class="sg-item-body">';
           html += '<span class="sg-item-name">' + esc(c.name) + '</span>';
           html += '<span class="sg-item-meta">';
           html += '<span class="sg-pill ' + typeClass + '">' + typeLabel + '</span>';
-          html += '<span class="sg-item-code">' + esc(c.code) + '</span>';
+          html += '<span class="sg-item-code">' + esc((c.codes && c.codes.length > 1 ? c.codes : [c.code]).join(' · ')) + '</span>';
           html += '</span>';
           html += '</div>';
           html += '<span class="sg-item-arrow">→</span>';
@@ -731,7 +731,7 @@
       const homeTopDownloaded = (s.top_downloaded || []).slice(0, homeRankingLimit);
       if (topEl && homeTopDownloaded.length) {
         topEl.innerHTML = homeTopDownloaded.map(m =>
-          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
+          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};navToCourse(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + escJs(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + m.download_count + ' 次</span>' +
           '</a>'
@@ -748,7 +748,7 @@
           if (m.review_status && m.review_status !== 'approved') {
             badge = '<span class="review-badge review-badge-' + m.review_status + '" style="margin-left:6px;font-size:0.7rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          return '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};showExplorer(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(m.course_code) + '\')">' +
+          return '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};navToCourse(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + escJs(m.course_code) + '\')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + badge + '</div><div class="hc-item-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + esc(m.uploader_name) + '</span>' +
           '</a>';

@@ -18,7 +18,7 @@ from .utils_upload import (
 from .utils import (
     _err, _ok, _get_or_create_profile,
     _strip_exif, _check_auto_approve,
-    _review_candidates, _node_contains_course,
+    _review_candidates, _node_contains_course, _follow_merge,
     _create_notification,
     _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
     require_login, _user_covers_course, ENFORCE_UPLOAD_SCOPE,
@@ -88,6 +88,9 @@ def api_file_upload(request):
             return _err("课程代码不明确，请联系管理员")
         else:
             course = courses.first()
+
+    # 同名合并别名课程：文件归入主课程目录（磁盘路径与展示一致）
+    course = _follow_merge(course)
 
     # v170：上传上下文——用户从哪个专业节点进的上传，决定审核路由 L1/L2。
     # 节点不包含该课程（含伪造/跨学院）一律视为无上下文，路由回落到版主。
@@ -235,6 +238,9 @@ def api_file_upload_text(request):
             return _err("课程代码不明确，请联系管理员")
         else:
             course = courses.first()
+
+    # 同名合并别名课程：文件归入主课程目录（磁盘路径与展示一致）
+    course = _follow_merge(course)
 
     # v170：上传上下文——用户从哪个专业节点进的上传，决定审核路由 L1/L2。
     # 节点不包含该课程（含伪造/跨学院）一律视为无上下文，路由回落到版主。

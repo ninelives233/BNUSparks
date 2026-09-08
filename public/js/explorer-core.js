@@ -6,7 +6,10 @@
     function walk(nodes, path) {
       for (var i = 0; i < nodes.length; i++) {
         var n = nodes[i];
-        if (n.courseId === code) matches.push(path.concat(n.name));
+        // courseCodes：同名同位不同码合并叶子的全部代码（任一代码都指向主目录）
+        if (n.courseId === code || (n.courseCodes && n.courseCodes.indexOf(code) >= 0)) {
+          matches.push(path.concat(n.name));
+        }
         if (n.children) walk(n.children, path.concat(n.name));
       }
     }
@@ -33,17 +36,58 @@
   }
 
   function navToLast(code) {
-    if (!courseTree) {
-      // 首页排行榜/搜索结果可能在课程树尚未加载时点击，等树到达后再定位。
-      _pendingNavToLastCode = code;
-      loadCourseTree();
-      return;
+    // explorer-render 是懒加载模块：renderExplorer 就绪前定位会直接
+    // ReferenceError（搜索结果/首页卡片点不动的根因），统一等模块就绪再定位。
+    // 就绪回调按注册顺序执行：showExplorer 先注册的根渲染先跑，定位后跑，
+    // 天然避免定位被「课程目录加载中…」的异步根渲染覆盖。
+    var locate = function () {
+      if (!courseTree) {
+        // 首页排行榜/搜索结果可能在课程树尚未加载时点击，等树到达后再定位。
+        _pendingNavToLastCode = code;
+        loadCourseTree();
+        return;
+      }
+      const path = findPathByCourseId(code);
+      if (!path) return;
+      expPath = path;
+      pushViewState('explorer', { expPath: [...expPath] }, true);
+      renderExplorer();
+    };
+    if (typeof ensureFeature === 'function') {
+      ensureFeature('explorer').then(locate, locate);
+    } else {
+      locate();
     }
-    const path = findPathByCourseId(code);
-    if (!path) return;
-    expPath = path;
-    pushViewState('explorer', { expPath: [...expPath] }, true);
-    renderExplorer();
+  }
+
+  // 「打开板块 + 定位课程」一步式入口（搜索结果/首页卡片/同名课程侧栏等外部跳转）。
+  // 树中能定位到课程时直接进入资料列表，不走 showExplorer 的板块根渲染——
+  // 两者的异步渲染会互相覆盖（后注册的根渲染会把已定位的 expPath 冲回根）；
+  // 定位不到（树未就绪/代码不在树中）才回退开板块根，由 pending 队列接力定位。
+  function navToCourse(type, code) {
+    var rootType = type === '通识课' ? '通识课' : '专业课';
+    var fallback = function () {
+      if (typeof showExplorer === 'function') showExplorer(rootType);
+      navToLast(code);
+    };
+    var go = function () {
+      var path = null;
+      try { path = findPathByCourseId(code); } catch (e) { path = null; }
+      if (!path) { fallback(); return; }
+      expPath = path;
+      pushViewState('explorer', { expPath: [...expPath] });
+      switchView('explorer');
+      renderExplorer();
+      if (typeof updateSidebar === 'function') {
+        updateSidebar(path[0] === '通识课' ? 'general' : 'major');
+      }
+    };
+    if (typeof ensureFeature === 'function') {
+      // explorer-render 是懒加载模块：renderExplorer 就绪前定位会直接 ReferenceError
+      ensureFeature('explorer').then(go, fallback);
+    } else {
+      go();
+    }
   }
 
   var _fdBreadcrumbPath = null;
@@ -256,7 +300,7 @@
     try {
       courseTree = await api('/api/courses/tree/');
       if (typeof buildSameNameMap === 'function') buildSameNameMap();
-      if (_pendingNavToLastCode && typeof renderExplorer === 'function') {
+      if (_pendingNavToLastCode) {
         var pendingCode = _pendingNavToLastCode;
         _pendingNavToLastCode = null;
         navToLast(pendingCode);

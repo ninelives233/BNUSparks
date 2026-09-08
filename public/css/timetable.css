@@ -416,6 +416,34 @@
 }
 .tt-loc-sel:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-ok-tag { color: var(--success); white-space: nowrap; }
+
+/* ── 专业课建课层级选择器（真实课程树，与新建课程页同规则） ── */
+.tt-loc-lv { padding: 4px 10px; font-size: var(--fs-xs); white-space: nowrap; }
+.tt-loc-lv:disabled { opacity: 0.45; cursor: not-allowed; }
+.tt-loc-path { font-size: var(--fs-xs); color: var(--ink-faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-mrow .tt-loc-path { flex-basis: 100%; }
+.tt-modal.tt-lp { width: min(520px, 100%); }
+.tt-lp .tt-mbody { padding-top: var(--space-md); }
+.tt-lp-tree {
+  margin-top: var(--space-sm); max-height: 46vh; overflow: auto;
+  border: 1px solid var(--border-light); border-radius: var(--radius-md);
+  padding: var(--space-xs);
+}
+.tt-lp-node {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  font-size: var(--fs-sm); color: var(--ink-soft);
+}
+.tt-lp-node.is-select, .tt-lp-node.is-plain { cursor: pointer; }
+.tt-lp-node:hover { background: var(--surface); color: var(--ink); }
+.tt-lp-caret { width: 1em; flex: none; color: var(--ink-faint); font-size: 0.9em; }
+.tt-lp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-lp-count { margin-left: auto; flex: none; font-size: var(--fs-xs); color: var(--ink-faint); }
+.tt-lp-toggle { flex: none; font-size: var(--fs-xs); color: var(--accent); padding: 2px 4px; }
+.tt-lp-toggle:hover { text-decoration: underline; }
+.tt-lp-children { margin-left: 16px; padding-left: 10px; border-left: 1px dashed var(--border-light); }
+.tt-lp-empty { padding: var(--space-lg); text-align: center; color: var(--ink-faint); font-size: var(--fs-sm); }
+
 .tt-modal footer { display: flex; justify-content: flex-end; gap: var(--space-xs); padding: var(--space-sm) var(--space-md) var(--space-md); }
 
 /* ── 使用教程弹层 ───────────────────────────────────── */

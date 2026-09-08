@@ -120,7 +120,7 @@ function ttParseImport(htmlText) {
       classNo: cellText(col.classNo),
       nature: cellText(col.nature),
       timeRaw: timeRaw,
-      meetings: meetings
+      meetings: ttMergeMeetings(meetings)
     });
   });
   return { meta: meta, courses: courses };
@@ -186,6 +186,79 @@ function ttParseMeeting(seg) {
   return mt;
 }
 
+// 教室收敛：同段多教室去重；超两处压缩为「首教室等N处」（卡片宽度有限）
+function ttCompactRooms(rooms) {
+  if (!rooms || !rooms.length) return '';
+  var uniq = [];
+  rooms.forEach(function (r) { if (r && uniq.indexOf(r) < 0) uniq.push(r); });
+  if (!uniq.length) return '';
+  if (uniq.length <= 2) return uniq.join('/');
+  return uniq[0] + '等' + uniq.length + '教室';
+}
+
+// ── 时段合并：教务导出把「同一时段多个可选教室」「分周排课」「连堂」逐条列示，
+// 直接渲染会在网格同一格里叠出多张互相截断的课程卡、把连堂切成多块。规则：
+//   ① 同(星期+节次+单双周)且周次相交/相接 → 并周次为一段（6周+7-8周+…+16周→6-16周）；
+//   ② 同(星期+单双周+周次)且节次相接 → 并连堂（5-6节+7-8节→5-8节）；
+//   ③ 合并中遇到的教室并入同段（>2 处收敛显示）。
+// 幂等：对已合并数据重复执行结果不变（编辑器里的段是用户显式意图，不在此二次合并）。
+function ttMergeMeetings(meetings) {
+  var slots = {};
+  (meetings || []).forEach(function (mt) {
+    if (!mt || !mt.day || !mt.ps) return;
+    var k = mt.day + '|' + mt.ps + '|' + mt.pe + '|' + (mt.parity || 0);
+    (slots[k] = slots[k] || []).push({ ws: mt.ws, we: mt.we, rooms: mt.room ? [mt.room] : [] });
+  });
+  var flat = [];
+  Object.keys(slots).forEach(function (k) {
+    var parts = k.split('|');
+    var segs = slots[k].sort(function (a, b) { return (a.ws - b.ws) || (a.we - b.we); });
+    var acc = [];
+    segs.forEach(function (s) {
+      var last = acc[acc.length - 1];
+      if (last && s.ws <= last.we + 1) {
+        if (s.we > last.we) last.we = s.we;
+        s.rooms.forEach(function (r) { if (last.rooms.indexOf(r) < 0) last.rooms.push(r); });
+      } else {
+        acc.push({ ws: s.ws, we: s.we, rooms: s.rooms.slice() });
+      }
+    });
+    acc.forEach(function (seg) {
+      flat.push({
+        day: +parts[0], ps: +parts[1], pe: +parts[2], parity: +parts[3],
+        ws: seg.ws, we: seg.we, room: ttCompactRooms(seg.rooms)
+      });
+    });
+  });
+  // 连堂合并：同 day+parity+周次且节次相接的相邻段并为一块
+  flat.sort(function (a, b) {
+    return (a.day - b.day) || (a.parity - b.parity) || (a.ws - b.ws) || (a.we - b.we) || (a.ps - b.ps);
+  });
+  var merged = [];
+  flat.forEach(function (mt) {
+    var prev = merged[merged.length - 1];
+    if (prev && prev.day === mt.day && prev.parity === mt.parity &&
+        prev.ws === mt.ws && prev.we === mt.we && prev.pe + 1 === mt.ps) {
+      prev.pe = mt.pe;
+      if (mt.room && prev.room.indexOf(mt.room) < 0) {
+        prev.room = prev.room ? ttCompactRooms(prev.room.split('/').concat(mt.room.split('/'))) : mt.room;
+      }
+    } else {
+      merged.push(mt);
+    }
+  });
+  return merged;
+}
+
+// 存量数据归一化：导入时未合并的旧课表（本地存储/云端拉取）在进入 ttState 前补一次合并
+function ttNormalizeMeetings(data) {
+  if (!data || !Array.isArray(data.courses)) return data;
+  data.courses.forEach(function (c) {
+    if (Array.isArray(c.meetings)) c.meetings = ttMergeMeetings(c.meetings);
+  });
+  return data;
+}
+
 // ── 学期第一周周一推断：秋季→9月起第一个周一；春季→次年2/22起第一个周一 ──
 function ttGuessSemesterStart(semester) {
   var m = String(semester || '').match(/((?:19|20)\d{2})[^0-9]*(?:19|20)\d{2}学年(秋季|春季|第[12一二]学期)?/);
@@ -240,6 +313,8 @@ function ttLoadStore() {
     var data = JSON.parse(raw);
     if (!data || !Array.isArray(data.courses)) return null;
     if (!data.pendingCodes || typeof data.pendingCodes !== 'object') data.pendingCodes = {};
+    // 兼容存量：早期版本未做时段合并（多教室/连堂被拆成多块），进入 ttState 前补一次
+    ttNormalizeMeetings(data);
     return data;
   } catch (e) { return null; }
 }
@@ -276,8 +351,8 @@ function ttSyncPull() {
     var localAt = local ? (local.importedAt || 0) : -1;
     var cloudAt = cloud.importedAt || 0;
     if (cloudAt >= localAt) {
-      // 云端较新（或本地没有）→ 采用云端
-      ttState.data = cloud;
+      // 云端较新（或本地没有）→ 采用云端（云端可能是早期未合并的存量，先归一化）
+      ttState.data = ttNormalizeMeetings(cloud);
       if (!ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
       ttSaveStore(ttState.data);
       ttComputeWeek();
@@ -629,6 +704,7 @@ function ttFindPathByCode(code, courseName) {
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
       var hit = (n.courseId === code) ||
+        (n.courseCodes && n.courseCodes.indexOf(code) >= 0) ||
         (n.courseId && String(n.courseId).indexOf('-') >= 0 && ttInRange(n.courseId, code));
       // 特例：形势与政策系列 → 同名目录（仅认叶子条目，不误挂到同名分类）
       if (!hit && courseName && courseName.indexOf('形势与政策') === 0 &&
@@ -712,6 +788,7 @@ function ttRenderConfirmModal(parsed) {
   var meta = parsed.meta || {};
   var courses = parsed.courses;
   var existing = ttModalOverlay();
+  ttLocPicks = {}; // 本次导入的位置选择从零开始
   var credits = meta.credits || courses.reduce(function (a, c) { return a + (parseFloat(c.credits) || 0); }, 0).toFixed(2);
 
   // 按代码去重判断建课状态（含区段目录与形势与政策特例）
@@ -777,13 +854,8 @@ function ttRenderConfirmModal(parsed) {
   });
   existing.addEventListener('click', function (e) { if (e.target === existing) ttCloseModal(existing); });
 
-  // 学院变更 → 级联刷新层级下拉
-  existing.querySelectorAll('select[data-role="college"]').forEach(function (sel) {
-    sel.addEventListener('change', function () {
-      var catSel = existing.querySelector('select[data-role="cat"][data-code="' + sel.getAttribute('data-code') + '"]');
-      if (catSel) ttFillCategoryOptions(catSel, sel.value);
-    });
-  });
+  // 学院变更 → 重置该课的层级选择并启用层级选择器
+  ttBindLocationControls(existing);
 
   existing.querySelector('#ttConfirmImport').addEventListener('click', function () {
     var requests = [];
@@ -797,9 +869,9 @@ function ttRenderConfirmModal(parsed) {
         } else unchosen++;
       } else {
         var colSel = existing.querySelector('select[data-role="college"][data-code="' + c.code + '"]');
-        var catSel = existing.querySelector('select[data-role="cat"][data-code="' + c.code + '"]');
-        if (colSel && colSel.value && catSel && catSel.value) {
-          requests.push({ code: c.code, body: { course_type: 'major', course_name: c.name, course_code: c.code, college_id: parseInt(colSel.value, 10), target_category_id: parseInt(catSel.value, 10) } });
+        var pick = ttLocPicks[c.code];
+        if (colSel && colSel.value && pick && pick.catId) {
+          requests.push({ code: c.code, body: { course_type: 'major', course_name: c.name, course_code: c.code, college_id: parseInt(colSel.value, 10), target_category_id: pick.catId } });
         } else unchosen++;
       }
     });
@@ -813,7 +885,11 @@ function ttRenderConfirmModal(parsed) {
   lockScroll();
 }
 
-// 未建课课程的位置选择控件（GEN→通识分类；其余→学院+层级）
+// 未建课课程的位置选择控件（GEN→通识分类；其余→学院+真实课程树层级选择器）。
+// 层级选择结果暂存 ttLocPicks[code]（导入确认弹窗与编辑器弹层共用一套控件与收集逻辑）
+var ttLocPicks = {};
+var ttLpActiveCode = null;
+
 function ttLocationControls(course) {
   var codeAttr = esc(course.code);
   if (/^GEN/i.test(course.code)) {
@@ -828,22 +904,158 @@ function ttLocationControls(course) {
   var colleges = (courseTree && courseTree['专业课'] && courseTree['专业课'].children || [])
     .filter(function (n) { return n.id; });
   var colOpts = colleges.map(function (n) {
-    return '<option value="' + (n.collegeId || '') + '" data-node="' + n.id + '">' + esc(n.name) + '</option>';
+    return '<option value="' + (n.collegeId || '') + '">' + esc(n.name) + '</option>';
   }).join('');
   return '<span class="loc">' +
     '<select class="tt-loc-sel" data-role="college" data-code="' + codeAttr + '">' +
       '<option value="">选择学院…</option>' + colOpts + '</select>' +
-    '<select class="tt-loc-sel" data-role="cat" data-code="' + codeAttr + '">' +
-      '<option value="">先选学院…</option></select>' +
+    '<button type="button" class="tt-btn is-ghost tt-loc-lv" data-code="' + codeAttr + '" disabled>选择层级…</button>' +
+    '<span class="tt-loc-path" data-code="' + codeAttr + '"></span>' +
   '</span>';
 }
 
-function ttFillCategoryOptions(sel, collegeId) {
+// 位置控件事件绑定（导入确认弹窗 / 编辑器链接区共用）：学院变更重置层级，
+// 「选择层级…」按钮打开真实课程树选择器
+function ttBindLocationControls(root) {
+  root.querySelectorAll('select[data-role="college"]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var code = sel.getAttribute('data-code');
+      var pick = ttLocPicks[code] = ttLocPicks[code] || {};
+      var opt = sel.selectedOptions && sel.selectedOptions[0];
+      pick.collegeId = sel.value ? parseInt(sel.value, 10) : null;
+      pick.collegeName = opt ? opt.textContent : '';
+      pick.catId = null;
+      pick.catPath = '';
+      var btn = root.querySelector('.tt-loc-lv[data-code="' + code + '"]');
+      var path = root.querySelector('.tt-loc-path[data-code="' + code + '"]');
+      if (btn) { btn.disabled = !sel.value; btn.textContent = '选择层级…'; }
+      if (path) path.textContent = '';
+    });
+  });
+  root.querySelectorAll('.tt-loc-lv[data-code]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      ttOpenLevelPicker(btn.getAttribute('data-code'));
+    });
+  });
+}
+
+// 重绘位置控件时恢复已保存的选择（编辑器改代码触发重渲染等场景）
+function ttRestoreLocationControls(root, code) {
+  var pick = ttLocPicks[code];
+  if (!pick || !pick.catId) return;
+  var btn = root.querySelector('.tt-loc-lv[data-code="' + code + '"]');
+  var path = root.querySelector('.tt-loc-path[data-code="' + code + '"]');
+  if (btn) { btn.disabled = false; btn.textContent = '✓ 已选层级'; }
+  if (path) path.textContent = pick.catPath;
+}
+
+// ── 专业课层级选择器：真实课程树，只到「直接含课程的文件夹」一层
+// （与「新建课程」页同规则；叶子课程节点不展示、不可选）──
+function ttIsCourseLeaf(n) {
+  return !!(n.courseId && String(n.courseId).indexOf('*') === -1) && !(n.children && n.children.length);
+}
+function ttHasDirectCourses(n) { return (n.children || []).some(function (c) { return ttIsCourseLeaf(c); }); }
+function ttHasSubFolders(n) { return (n.children || []).some(function (c) { return !ttIsCourseLeaf(c) && !c.divider; }); }
+function ttCountDirectCourses(n) { return (n.children || []).filter(function (c) { return ttIsCourseLeaf(c); }).length; }
+
+function ttOpenLevelPicker(code) {
+  var pick = ttLocPicks[code] || {};
   var colleges = (courseTree && courseTree['专业课'] && courseTree['专业课'].children || []);
-  var college = colleges.find(function (n) { return String(n.collegeId || '') === String(collegeId); });
-  var cats = (college && college.children || []).filter(function (n) { return n.id && !n.divider; });
-  sel.innerHTML = '<option value="">选择专业 / 层级…</option>' +
-    cats.map(function (n) { return '<option value="' + n.id + '">' + esc(n.name) + '</option>'; }).join('');
+  var college = colleges.find(function (n) {
+    return String(n.collegeId || '') === String(pick.collegeId || '');
+  });
+  if (!college) { ttToast('请先选择学院'); return; }
+  ttLpActiveCode = code;
+  var ov = document.createElement('div');
+  ov.id = 'ttLpOverlay';
+  ov.className = 'tt-overlay';
+  ov.innerHTML =
+    '<div class="tt-modal tt-lp" role="dialog" aria-modal="true" aria-label="选择课程层级">' +
+      '<header><h3>选择课程层级</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
+      '<div class="tt-mbody">' +
+        '<div class="tt-privacy-note">在「' + esc(college.name) + '」目录下选择该课程应归属的文件夹；' +
+          '有 ▸ 的层级可展开，标了课程数的文件夹可直接选为归属位置。</div>' +
+        '<div class="tt-lp-tree" id="ttLpTree"></div>' +
+      '</div>' +
+      '<footer><button type="button" class="tt-btn" data-close>取消</button></footer>' +
+    '</div>';
+  document.body.appendChild(ov);
+  lockScroll();
+  var treeEl = ov.querySelector('#ttLpTree');
+  ttRenderLevelTree(treeEl, college.children || [], [college.name]);
+  if (!treeEl.querySelector('.tt-lp-node.is-select')) {
+    treeEl.innerHTML = '<div class="tt-lp-empty">该学院目录下暂无可新建课程的文件夹层级，可联系管理员调整课程树。</div>';
+  }
+  ov.querySelectorAll('[data-close]').forEach(function (b) {
+    b.addEventListener('click', function () { ttCloseModal(ov); });
+  });
+  ov.addEventListener('click', function (e) { if (e.target === ov) ttCloseModal(ov); });
+  ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') ttCloseModal(ov); });
+}
+
+function ttRenderLevelTree(container, nodes, pathNames) {
+  (nodes || []).forEach(function (n) {
+    if (n.divider) return;
+    var hasCourses = ttHasDirectCourses(n);
+    var hasSubs = ttHasSubFolders(n);
+    if (!hasCourses && !hasSubs) return;
+    var row = document.createElement('div');
+    row.className = 'tt-lp-node' + (hasCourses ? ' is-select' : ' is-plain');
+    row.innerHTML =
+      '<span class="tt-lp-caret">' + (hasSubs ? '▸' : '') + '</span>' +
+      '<span class="tt-lp-name">' + esc(n.name) + '</span>' +
+      (hasCourses ? '<span class="tt-lp-count">' + ttCountDirectCourses(n) + ' 门课</span>' : '');
+    var rowPath = pathNames.concat([n.name || ('#' + n.id)]);
+    if (hasCourses) row.addEventListener('click', function () { ttPickLevel(n, rowPath); });
+    container.appendChild(row);
+    if (hasSubs) {
+      var kids = document.createElement('div');
+      kids.className = 'tt-lp-children';
+      kids.style.display = 'none';
+      container.appendChild(kids);
+      var caret = row.querySelector('.tt-lp-caret');
+      caret.addEventListener('click', function (e) {
+        e.stopPropagation();
+        ttLpToggle(kids, caret);
+      });
+      if (hasCourses) {
+        // 既是可选层级又有子级：整行选中，右侧「展开」进入子级
+        var tog = document.createElement('span');
+        tog.className = 'tt-lp-toggle';
+        tog.textContent = '展开 ▸';
+        tog.addEventListener('click', function (e) {
+          e.stopPropagation();
+          ttLpToggle(kids, caret);
+        });
+        row.appendChild(tog);
+      } else {
+        row.addEventListener('click', function () { ttLpToggle(kids, caret); });
+      }
+      ttRenderLevelTree(kids, n.children, rowPath);
+    }
+  });
+}
+
+function ttLpToggle(wrap, caret) {
+  var open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : '';
+  if (caret) caret.textContent = open ? '▸' : '▾';
+}
+
+function ttPickLevel(node, pathNames) {
+  if (!node || !node.id || !ttLpActiveCode) return;
+  var code = ttLpActiveCode;
+  var pick = ttLocPicks[code] = ttLocPicks[code] || {};
+  pick.catId = node.id;
+  pick.catPath = pathNames.join(' / ');
+  ttCloseModal(document.getElementById('ttLpOverlay'));
+  document.querySelectorAll('.tt-loc-lv[data-code="' + code + '"]').forEach(function (btn) {
+    btn.textContent = '✓ 已选层级';
+  });
+  document.querySelectorAll('.tt-loc-path[data-code="' + code + '"]').forEach(function (span) {
+    span.textContent = pick.catPath;
+  });
 }
 
 // ── 应用导入：本地保存 + 为未建课课程自动提交新课程申请 ──
@@ -857,10 +1069,11 @@ function ttApplyImport(parsed, requests) {
   ttCloseModal();
   ttRenderAll();
   if (!requests.length) return;
-  var direct = 0, sent = 0, failed = 0, treeDirty = false;
+  var direct = 0, sent = 0, failed = 0, mergedN = 0, treeDirty = false;
   var jobs = requests.map(function (r) {
     return api('/api/courses/request/', { method: 'POST', body: r.body })
       .then(function (res) {
+        if (res && res.merged) { mergedN++; treeDirty = true; return; }
         if (res && res.auto_approved) { direct++; treeDirty = true; return; }
         sent++;
         parsed.pendingCodes[r.code] = true;
@@ -882,22 +1095,24 @@ function ttApplyImport(parsed, requests) {
       Promise.resolve(loadCourseTree()).catch(function () {}).then(function () {
         ttResolveCourseLinks();
         ttRepaintCurrent();
-        ttToastImportResult(direct, sent, failed);
+        ttToastImportResult(direct, sent, failed, mergedN);
       });
     } else {
       ttResolveCourseLinks();
       ttRepaintCurrent();
-      ttToastImportResult(direct, sent, failed);
+      ttToastImportResult(direct, sent, failed, mergedN);
     }
   });
 }
 
-function ttToastImportResult(direct, sent, failed) {
+function ttToastImportResult(direct, sent, failed, mergedN) {
   var parts = [];
   if (direct) parts.push(direct + ' 门在辖区内已直接建课');
+  if (mergedN) parts.push(mergedN + ' 门已与同名课程合并显示');
   if (sent) parts.push(sent + ' 门申请已送审');
   if (failed) parts.push(failed + ' 门提交失败');
-  var tail = sent ? '，批准后点击课程即可跳转' : (direct ? '，点击课程即可查看资料' : '');
+  var tail = sent ? '，批准后点击课程即可跳转'
+    : (direct || mergedN ? '，点击课程即可查看资料' : '');
   ttToast(parts.join('；') + tail);
 }
 
@@ -1172,16 +1387,11 @@ function ttEditRenderLink(wc) {
   }
   var isGen = /^GEN/i.test(code);
   el.innerHTML =
-    '<span class="tt-edit-hint">目录未建立' + (isGen ? '（GEN 开头归通识课）' : '（归专业课）') +
+    '<span class="tt-edit-hint">目录未建立' + (isGen ? '（GEN 开头归通识课）' : '（归专业课，需选学院和具体层级）') +
     '。选择位置后，保存时将自动提交新课程申请，管理员批准前点击不跳转；也可留空跳过：</span><span class="loc">' +
     ttLocationControls({ code: code, name: name }) + '</span>';
-  var colSel = el.querySelector('select[data-role="college"]');
-  if (colSel) {
-    colSel.addEventListener('change', function () {
-      var catSel = el.querySelector('select[data-role="cat"]');
-      if (catSel) ttFillCategoryOptions(catSel, colSel.value);
-    });
-  }
+  ttBindLocationControls(el);
+  ttRestoreLocationControls(el, code);
 }
 
 // 从链接区读位置选择 → 建课申请 body；未选则返回 null（跳过申请）
@@ -1191,9 +1401,9 @@ function ttCollectRequestFromModal(code, name) {
     return { course_type: 'general', course_name: name, course_code: code, general_category_id: parseInt(gen.value, 10) };
   }
   var col = document.querySelector('#ttEdLink select[data-role="college"]');
-  var cat = document.querySelector('#ttEdLink select[data-role="cat"]');
-  if (col && col.value && cat && cat.value) {
-    return { course_type: 'major', course_name: name, course_code: code, college_id: parseInt(col.value, 10), target_category_id: parseInt(cat.value, 10) };
+  var pick = ttLocPicks[code];
+  if (col && col.value && pick && pick.catId) {
+    return { course_type: 'major', course_name: name, course_code: code, college_id: parseInt(col.value, 10), target_category_id: pick.catId };
   }
   return null;
 }
@@ -1259,13 +1469,14 @@ function ttEditSave(wc, isNew) {
     return;
   }
   api('/api/courses/request/', { method: 'POST', body: body }).then(function (res) {
-    if (res && res.auto_approved) {
+    if (res && (res.auto_approved || res.merged)) {
       if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
       Promise.resolve(loadCourseTree()).then(function () {
         ttResolveCourseLinks();
         ttRepaintCurrent();
       }).catch(function () {});
-      ttToast('已保存「' + wc.name + '」，并在辖区内直接建课');
+      ttToast('已保存「' + wc.name + '」' +
+        (res.merged ? '，已与同名课程合并显示' : '，并在辖区内直接建课'));
     } else {
       data.pendingCodes[code] = true;
       ttSaveStore(data);
