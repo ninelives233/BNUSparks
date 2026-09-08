@@ -326,9 +326,14 @@ function ttInitShell() {
       '<div class="tt-title">我的课表<small id="ttSubTitle"></small></div>' +
       '<div class="tt-actions">' +
         '<button type="button" class="tt-btn" id="ttSchemeBtn" aria-haspopup="true" aria-expanded="false">配色</button>' +
-        '<button type="button" class="tt-btn" id="ttViewBtn" aria-pressed="false">列表视图</button>' +
         '<button type="button" class="tt-btn" id="ttEditBtn" aria-pressed="false">编辑</button>' +
         '<button type="button" class="tt-btn" id="ttReimportBtn">重新导入</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="tt-viewbar">' +
+      '<div class="pc-seg" id="ttViewSeg" role="tablist" aria-label="视图切换">' +
+        '<button type="button" class="pc-seg-btn" data-view="grid" aria-pressed="true">周课表</button>' +
+        '<button type="button" class="pc-seg-btn" data-view="list" aria-pressed="false">课程列表</button>' +
       '</div>' +
     '</div>' +
     '<div id="ttBody"></div>' +
@@ -338,7 +343,11 @@ function ttInitShell() {
     e.stopPropagation();
     ttToggleSchemePop();
   });
-  document.getElementById('ttViewBtn').addEventListener('click', ttToggleView);
+  document.getElementById('ttViewSeg').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-view]');
+    if (!btn) return;
+    ttSetView(btn.getAttribute('data-view'));
+  });
   document.getElementById('ttEditBtn').addEventListener('click', ttToggleEdit);
   document.getElementById('ttReimportBtn').addEventListener('click', function () {
     document.getElementById('ttFileInput').click();
@@ -392,21 +401,25 @@ function ttApplyScheme() {
   if (ttState.scheme && ttState.scheme !== 'zhongguo') shell.classList.add('tt-sch-' + ttState.scheme);
 }
 
-// ── 视图切换：课表网格 ⇄ 课程列表 ──
-// 按钮文案 = 点击后将去的视图；shell 上的模式类供移动端满屏布局区分网格/列表
+// ── 视图切换：周课表 ⇄ 课程列表（分段控件 .pc-seg，样式同 v4 原型） ──
+// shell 上的模式类供移动端满屏布局区分网格/列表
 function ttApplyViewMode() {
   var shell = document.getElementById('ttShell');
-  var btn = document.getElementById('ttViewBtn');
+  var seg = document.getElementById('ttViewSeg');
   if (shell) shell.classList.toggle('tt-mode-list', ttState.view === 'list');
-  if (btn) {
-    var toList = ttState.view !== 'list';
-    btn.textContent = toList ? '列表视图' : '课表视图';
-    btn.setAttribute('aria-pressed', toList ? 'false' : 'true');
+  if (seg) {
+    seg.querySelectorAll('[data-view]').forEach(function (b) {
+      var on = b.getAttribute('data-view') === ttState.view;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
   }
 }
 
-function ttToggleView() {
-  ttState.view = ttState.view === 'list' ? 'grid' : 'list';
+function ttSetView(view) {
+  if (view !== 'grid' && view !== 'list') return;
+  if (view === ttState.view) return;
+  ttState.view = view;
   try { localStorage.setItem(ttViewKey(), ttState.view); } catch (e) {}
   ttApplyViewMode();
   ttRenderAll();
