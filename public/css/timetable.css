@@ -71,6 +71,11 @@
 .tt-title small { font-family: var(--sans); font-size: var(--fs-xs); font-weight: 400; color: var(--tt-head-soft); letter-spacing: 0.02em; display: block; margin-top: 4px; }
 .tt-actions { display: flex; gap: var(--space-xs); align-items: center; position: relative; }
 
+/* 视图分段控件行（.pc-seg 来自 components.css 共享组件，样式同 v4 原型） */
+.tt-viewbar { display: flex; align-items: center; margin: 0 0 var(--space-sm); }
+.tt-viewbar .pc-seg { background: var(--tt-gutter); }
+.tt-viewbar .pc-seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
 .tt-btn {
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel);
   color: inherit; font-family: var(--sans); font-size: var(--fs-xs);
@@ -454,7 +459,10 @@
     height: calc(100vh - var(--header-height) - var(--space-md));
     height: calc(100dvh - var(--header-height) - var(--space-md));
   }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-top { margin: var(--space-sm) 0; flex-wrap: nowrap; }
+  /* 视图行加入后收紧各留白，满屏网格仍一屏放下 */
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-top { margin: 4px 0 6px; flex-wrap: nowrap; }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-viewbar { margin: 0 0 6px; }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-weekbar { margin-bottom: 6px; }
   /* 高度经 #ttBody 一层层传给 .tt-scroll（后者是 container，高度不能来自内容） */
   #ttShell.tt-shell:not(.tt-mode-list) #ttBody {
     flex: 1; min-height: 0; display: flex; flex-direction: column;
