@@ -224,8 +224,8 @@
         } else {
           html += filtered.map(function(m, i){
             var idx = allItems.indexOf(m) + 1;
-            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'rankings\',scrollY:pageYOffset};showExplorer(\'' +
-                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'rankings\',scrollY:pageYOffset};navToCourse(\'' +
+                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + esc(m.course_code) + '\')">' +
               '<span class="ri-rank">#' + idx + '</span>' +
               '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + esc(m.course_name) + '</div></div>' +
               '<span class="ri-stat">' + m.download_count + ' 次下载</span>' +
@@ -285,8 +285,8 @@
           html += '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint);border:none;background:none">暂无该学院的资料</div>';
         } else {
           html += filtered.map(function(m){
-            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'recentAll\',scrollY:pageYOffset};showExplorer(\'' +
-                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\');navToLast(\'' + esc(m.course_code) + '\')">' +
+            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'recentAll\',scrollY:pageYOffset};navToCourse(\'' +
+                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + esc(m.course_code) + '\')">' +
               '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
               '<span class="ri-stat">' + esc(m.uploader_name) + '</span>' +
             '</a>';
@@ -837,9 +837,9 @@
       var html = '<div class="so-results-list">';
       courses.forEach(function(c) {
         var typeLabel = c.course_type === 'general' ? '通识课' : '专业课';
-        html += '<a href="#" class="so-result-item" onclick="event.preventDefault();_removeOverlay(this.closest(\'.search-overlay\'));showExplorer(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\');navToLast(\'' + escJs(c.code) + '\')">' +
+        html += '<a href="#" class="so-result-item" onclick="event.preventDefault();_removeOverlay(this.closest(\'.search-overlay\'));navToCourse(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\',\'' + escJs(c.code) + '\')">' +
           '<span class="so-ri-name">' + esc(c.name) + '</span>' +
-          '<span class="so-ri-code">' + esc(c.code) + ' · ' + typeLabel + '</span>' +
+          '<span class="so-ri-code">' + esc((c.codes && c.codes.length > 1 ? c.codes : [c.code]).join(' · ')) + ' · ' + typeLabel + '</span>' +
           '<span class="so-ri-arrow">→</span></a>';
       });
       html += '</div>';

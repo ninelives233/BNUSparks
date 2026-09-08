@@ -197,9 +197,10 @@
       return;
     }
 
-    // 查找同名课程
+    // 查找同名课程（同名合并的别名代码不进侧栏：已并入当前课程的双代码展示）
     const sameNameEntries = sameNameMap[course.name] || [];
-    const sameNameOthers = sameNameEntries.filter(e => e.courseId !== code);
+    const sameNameOthers = sameNameEntries.filter(e =>
+      e.courseId !== code && !(course.courseCodes && course.courseCodes.includes(e.courseId)));
     // 按 courseId 分组，合并同一代码的不同专业名
     const sameNameGroups = {};
     sameNameOthers.forEach(e => {
@@ -210,11 +211,15 @@
         sameNameGroups[e.courseId].programs.push(e.program);
       }
     });
+    // 同名合并显示：课程名下并列展示全部代码（主代码 + 别名代码）
+    const mergeCodes = (course.courseCodes && course.courseCodes.length > 1)
+      ? '<span class="fa-codes">' + course.courseCodes.map(c => esc(c)).join(' · ') + '</span>'
+      : '';
 
     container.innerHTML =
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
-          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3><span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>' +
+          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3>' + mergeCodes + '<span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>' +
           '<div class="file-table-wrap"><div class="batch-dl-bar" id="batchDlBar"><span id="selectedCount">已选 0 个</span>' +
             '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">🗑 删除选中</button>' +
             '<button class="admin-btn admin-btn-sm" onclick="showBatchEditDialog()" id="batchEditBtn" style="display:none">✏️ 编辑选中</button>' +
@@ -226,7 +231,7 @@
         '</div>' +
         (Object.keys(sameNameGroups).length ? '<div class="file-area-side-bottom"><div class="fasb-title">📚 同名课程（相同名称的不同课程代码）</div><div class="fasb-list">' +
           Object.values(sameNameGroups).map(g =>
-            '<span class="fasb-item" onclick="showExplorer(\'' + escJs(g.type) + '\');setTimeout(function(){navToLast(\'' + escJs(g.courseId) + '\')},60)">' +
+            '<span class="fasb-item" onclick="navToCourse(\'' + escJs(g.type) + '\',\'' + escJs(g.courseId) + '\')">' +
               '<span class="fasb-code">' + esc(g.courseId) + '</span>' +
               (g.programs.length ? '<span class="fasb-programs">（' + esc(g.programs.join(' / ')) + '）</span>' : '') +
             '</span>'

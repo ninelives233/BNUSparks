@@ -111,6 +111,14 @@ class Course(models.Model):
         default=CourseType.MAJOR,
     )
     description = models.TextField("课程简介", blank=True)
+    # 同名同位不同码合并：别名课程指向主课程（资料目录、文件列表均跟随主课程）
+    merged_into = models.ForeignKey(
+        "self", on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="merged_courses",
+        verbose_name="同名合并至",
+        help_text="非空表示本课程是同名课程的别名代码，展示时与主课程合并",
+    )
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     material_count = models.IntegerField("资料数", default=0)
 
@@ -284,6 +292,7 @@ class Notification(models.Model):
         REPORT_RESULT = "report_result", "举报处理结果"
         REPORT_ESCALATED = "report_escalated", "举报已升级"
         REPORT_MALICIOUS = "report_malicious", "恶意举报提醒"
+        MERGE_ALERT = "merge_alert", "同名课程合并待复核"
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications",
@@ -699,6 +708,7 @@ from django.dispatch import receiver
 
 @receiver(post_save, sender=CourseCategory)
 @receiver(post_delete, sender=CourseCategory)
+@receiver(post_save, sender=Course)
 def _invalidate_course_tree_cache(sender, **kwargs):
     cache.delete(COURSE_TREE_CACHE_KEY)
 

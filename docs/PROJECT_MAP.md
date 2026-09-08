@@ -38,14 +38,14 @@
 
 | 区域 | 当前事实 | 维护提示 |
 |---|---:|---|
-| `materials/models.py` | 1012 行，27 个 Django 模型；另有 `CourseType` 枚举 | `class` 总数不要直接当模型数 |
+| `materials/models.py` | 1030 行，28 个 Django 模型；另有 `CourseType` 枚举；Course 带 `merged_into` 同名合并字段（迁移 0035） | `class` 总数不要直接当模型数 |
 | `materials/urls.py` | 151 行，117 个 `path()` 路由 | 新增 API 先改路由，再补测试和前端调用 |
-| `materials/views/` | 37 个 Python 文件，10632 行 | facade 与子模块一起看，勿把薄 facade 当业务实现 |
-| `materials/tests/` | 33 个 Python 文件，7173 行，436 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试 |
-| `materials/management/commands/` | 8 个可执行管理命令，另有 `__init__.py` | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
+| `materials/views/` | 38 个 Python 文件，10689 行 | facade 与子模块一起看，勿把薄 facade 当业务实现 |
+| `materials/tests/` | 35 个 Python 文件，7493 行，456 个 `test_*` 方法 | 改权限/状态机/文件系统时同步补测试；同名合并用例见 test_course_merge.py |
+| `materials/management/commands/` | 9 个可执行管理命令，另有 `__init__.py`（含 `merge_same_name_courses` 同名重复课程回填） | 清理或数据标注类命令运行前确认 dry-run/备份策略 |
 | `public/index.html` | 1219 行 | 页面骨架、表单、弹窗、课程/学院/首页入口及侧边栏 SVG 符号表和核心/懒加载脚本入口都在这里 |
-| `public/js/` | 22 个文件，11093 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin 按视图懒加载 |
-| `public/css/` | 9 个文件，7217 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
+| `public/js/` | 23 个文件，13094 行 | 顶层函数是跨文件契约，改名前全局搜索；explorer/QA/admin/timetable 按视图懒加载 |
+| `public/css/` | 10 个文件，7764 行 | `tokens.css` 先加载，公共控件在静态 `components/files/user.css`，页面专属样式再懒加载 |
 | `data/` | SQLite、媒体文件、课程映射等运行数据 | 不提交、不用清理脚本替代备份 |
 
 ## 3. 入口、配置与部署
@@ -75,10 +75,10 @@
 | 资料 | `Material`、`MaterialType` | 文件元数据、课程归属、审核状态、置顶、下载数；同时存在 `is_approved` 与 `review_status` |
 | 文件操作 | `FolderOperation`、`DeletionRecord` | 管理模式下的移动/改名/批量操作、软删除暂存与恢复 |
 | 审核 | `ReviewComment` | 驳回、异议和审核说明 |
-| 通知/公告 | `Notification`、`Announcement` | 审核、删除、举报、公告等站内通知 |
+| 通知/公告 | `Notification`、`Announcement` | 审核、删除、举报、公告等站内通知；Type 含 `merge_alert`（同名合并待复核） |
 | 行为统计 | `DownloadRecord`、`DownloadQuotaReservation` | 访问流水区分正式下载/预览/旧记录，并以令牌行为编号幂等去重；资料删除后保留快照；按“用户+资料+日期”唯一占位，原子去重每日配额 |
 | 收藏 | `Favorite`、`CourseFavorite` | 资料、课程收藏；唯一约束吸收并发重复创建 |
-| 课程申请 | `CourseCreationRequest` | 新课程和随附资料申请、审批与迁移 |
+| 课程申请 | `CourseCreationRequest` | 新课程和随附资料申请、审批与迁移；同名同位不同码自动合并显示（免审核 + MERGE_ALERT 通报） |
 | 举报 | `Report` | 材料、问答、用户举报及候选审核人；非总管理员的读取/处理/历史统一受 candidates 限制 |
 | 问答 | `QaTag`、`QaQuestion`、`QaAnswer`、`QaAnswerLike`、`QaFavorite`、`QaEditHistory`、`QaViewLog`、`QaAskClickDaily`、`QaConfig`、`QaDeleteRequest` | 标签、问题、回答、点赞/收藏、编辑、浏览、日报、配置和删除申请；每题最多一个最佳回答由条件唯一约束保证 |
 
@@ -98,7 +98,7 @@
 | 文件详情、更新、置顶、批量编辑 | `views/operations_manage.py`、`operations_batch.py` | 管理模式、元数据或批量操作变化 |
 | 文件夹创建、删除、移动、操作记录 | `views/operations_folder.py`、`operations_records.py` | 课程目录和文件操作日志变化 |
 | 待审、通过、驳回、重分配、历史、统计 | `views/moderation.py`、`utils_moderation.py` | 审核范围、并发幂等、自动审核变化 |
-| 新课程申请及随附资料迁移 | `views/course_requests.py` | 课程创建、审批、物理文件迁移变化 |
+| 新课程申请及随附资料迁移 | `views/course_requests.py` | 课程创建、审批、物理文件迁移变化；提交端同名同位不同码自动合并（`_find_same_name_sibling`/`_notify_course_merged`），查重经 `_find_existing_course` 别名跟随 |
 | 个人资料、公开主页、排行、上传/下载历史 | `views/profile.py` | 用户公开信息和统计变化 |
 | 我的课表跨设备同步（GET/PUT/DELETE `/api/user/timetable/`，`@csrf_exempt`+JWT，200KB 上限） | `views/user_timetable.py`、模型 `UserTimetable`（迁移 0034）、测试 `test_user_timetable.py`（含 `enforce_csrf_checks` 回归护栏） | 同步格式/上限变化；**新建写接口必须带 `@csrf_exempt`（JWT 无 cookie），漏掉会被 CSRF 中间件 403 且本地测试发现不了** |
 | 收藏 | `views/favorites.py`、`qa_public.py` | 资料/课程/问答收藏、分页、计数及唯一键并发冲突变化 |
@@ -169,11 +169,11 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/js/profile.js` | 个人中心、公开资料、上传/下载/收藏页 | 用户模块变化 |
 | `public/js/notifications.js` | 通知抽屉、通知中心、管理/平民模式 | 通知和用户菜单变化 |
 | `public/js/admin-*.js` | 管理概览、待审、记录、用户；`admin-users.js` 含趋势/三项身份/访问流水筛选/运行状态/用户名单 | 后台 tab、用户监测和管理动作变化 |
-| `public/js/explorer-*.js` | 课程树、课程/学院卡片 SVG 名称映射、上传、文件列表、管理、预览 | 课程浏览、卡片图标与文件操作变化 |
+| `public/js/explorer-*.js` | 课程树、课程/学院卡片 SVG 名称映射、上传、文件列表、管理、预览；explorer-core 提供 `navToCourse(type, code)` 统一跳转入口（懒加载就绪后定位，勿手写 `showExplorer+navToLast` 成对调用）；同名合并叶子 `courseCodes` 双代码展示与路径匹配 | 课程浏览、卡片图标与文件操作变化；新增课程跳转入口一律走 navToCourse |
 | `public/js/feature-loader.js` | 按视图串行加载 explorer/QA/admin/timetable 脚本和对应 CSS，并复用脚本/CSS 加载 Promise；失败资源可重试 | 首屏资源、模块依赖顺序、错误恢复或懒加载入口变化 |
 | `public/js/newcourse.js` | 新课程申请和附带资料 | 新课申请变化 |
 | `public/js/qa*.js` | 问答列表、编辑器、管理、提问、浏览器侧 HTML 白名单 | 问答与富文本变化 |
-| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部，1705 行）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1_u<uid>` 按账号分储）；4 套配色方案 × 资料丰度冷暖对比三档；按课程代码链接课程树（`ttFindPathByCode`：精确/区段代码/形势与政策特例，身份入口优先，点击直达课程目录，树未就绪时 `ttEnsureCourseTree` 自愈）；跨设备同步 `ttSyncPull`/`ttSyncUpload`（按 importedAt 取较新，接口 `/api/user/timetable/`）；未建课确认时选位置自动 POST `/api/courses/request/` 记入 `pendingCodes`，批准前不可跳转；「切换视图」`ttToggleView` 周网格 ⇄ 课程列表（`ttRenderList`+`ttStatusTag`，偏好 `bnusparks_timetable_view_u<uid>`）；「编辑模式」`ttToggleEdit`（工具栏第 3 按钮）：`ttOpenCourseEditor` 课程编辑弹窗（名称/教师/代码/8 色相覆盖/多时间段增删复制/仅本周）、`ttStripCurrentWeek` 从本周移除拆段、空位点击新建课程（手动建课+选位置提申请）、`ttEnsureIds` 存量补 id、删除两步确认，保存即 bump importedAt 走云同步；移动端网格满屏（`tt-w5` 无周末课自动收列，cqh 字体缩放） | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI/配色/同步/编辑/视图切换/课程链接跳转变化 |
+| `public/js/timetable.js` | 我的课表（管理员专属入口，侧边栏最底部，1932 行）：解析教务导出「学生选课课程表」（GBK HTML 伪装 .xls，纯前端 `ttParseImport`），周次/单双周/节次过滤渲染周网格（`ttState`+localStorage `bnusparks_timetable_v1_u<uid>` 按账号分储）；4 套配色方案 × 资料丰度冷暖对比三档；按课程代码链接课程树（`ttFindPathByCode`：精确/区段代码/形势与政策特例，身份入口优先，点击直达课程目录，树未就绪时 `ttEnsureCourseTree` 自愈）；跨设备同步 `ttSyncPull`/`ttSyncUpload`（按 importedAt 取较新，接口 `/api/user/timetable/`）；未建课确认时选位置自动 POST `/api/courses/request/` 记入 `pendingCodes`，批准前不可跳转；「切换视图」`ttToggleView` 周网格 ⇄ 课程列表（`ttRenderList`+`ttStatusTag`，偏好 `bnusparks_timetable_view_u<uid>`）；「编辑模式」`ttToggleEdit`（工具栏第 3 按钮）：`ttOpenCourseEditor` 课程编辑弹窗（名称/教师/代码/8 色相覆盖/多时间段增删复制/仅本周）、`ttStripCurrentWeek` 从本周移除拆段、空位点击新建课程（手动建课+选位置提申请）、`ttEnsureIds` 存量补 id、删除两步确认，保存即 bump importedAt 走云同步；移动端网格满屏（`tt-w5` 无周末课自动收列，cqh 字体缩放）；`ttMergeMeetings` 时段合并（多教室同段合一、碎片周次并段、连堂并块，`ttLoadStore`/云端拉取时对存量归一化）；专业课建课层级选择器 `ttOpenLevelPicker`（真实课程树只到「直接含课程的文件夹」，选择暂存 `ttLocPicks`，导入确认与编辑器共用） | 教务导出格式变化（改 `ttParseMeetings`/`ttParseMeeting`）、课表 UI/配色/同步/编辑/视图切换/课程链接跳转变化 |
 | `public/js/app.js` | 启动、移动抽屉、滚动阴影、`popstate`、刷新恢复 | 启动顺序、浏览器返回、深链变化 |
 | `public/css/tokens.css` | OKLCH 色彩（青靛墨蓝/琥珀）、首页上传入口专用色、字体、间距、动效变量 | 设计系统变化 |
 | `public/css/base.css` | 全局布局、表单、弹窗、首页搜索上传入口、首页入口/课程卡片图标底框、侧边栏图标和移动基础 | 基础 UI 或首页入口/卡片/侧栏图标变化 |
@@ -183,7 +183,7 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `public/css/course.css` | 课程树、课程页面及新建课程控件 | 课程浏览或新建课程 UI 变化 |
 | `public/css/announcement.css` | 公告 UI | 公告页面变化 |
 | `public/css/qa.css` | 问答与编辑器 UI | 问答 UI 变化 |
-| `public/css/timetable.css` | 我的课表（「纸墨 × 中国色」卡片、4 套配色 `.tt-sch-*` + 资料丰度 `.tt-rich-*` 色阶、周网格与导入/教程弹窗、列表视图 `.tt-list/.tt-lrow/.tt-tag`、编辑模式 `.tt-editing`（空位 `＋`/表单 `.tt-fld`/时间段 `.tt-seg`/色板 `.tt-swatch`/危险按钮 `.danger.armed`）、移动端满屏 `:not(.tt-mode-list)` flex 链 `#ttBody→.tt-scroll` + 容器查询 cqh 字体；5 日网格移动端显式清零 `min-width` 并用 `minmax(0, 1fr)` 防止窄屏裁切） | 课表 UI、配色方案、编辑器或移动端适配变化 |
+| `public/css/timetable.css` | 我的课表（「纸墨 × 中国色」卡片、4 套配色 `.tt-sch-*` + 资料丰度 `.tt-rich-*` 色阶、周网格与导入/教程弹窗、列表视图 `.tt-list/.tt-lrow/.tt-tag`、编辑模式 `.tt-editing`（空位 `＋`/表单 `.tt-fld`/时间段 `.tt-seg`/色板 `.tt-swatch`/危险按钮 `.danger.armed`）、移动端满屏 `:not(.tt-mode-list)` flex 链 `#ttBody→.tt-scroll` + 容器查询 cqh 字体；5 日网格移动端显式清零 `min-width` 并用 `minmax(0, 1fr)` 防止窄屏裁切；层级选择器 `.tt-lp-*` 与位置控件 `.tt-loc-lv/.tt-loc-path`） | 课表 UI、配色方案、编辑器或移动端适配变化 |
 | `public/css/components.css` | 跨页面按钮、弹窗基座、分段控件、开关、空态/加载态及全站文字输入焦点状态 | 共享组件或输入焦点反馈变化 |
 
 跨文件契约：顶层函数和全局变量被大量内联 `onclick` 与其他模块调用；改名/删除前必须 `rg` 全仓库。SPA 深链当前覆盖静态页、explorer、用户、文件、问答编辑，但问答编辑参数需要重点回归。

@@ -1551,6 +1551,13 @@
     flex-shrink: 0;
     font-size: 0.75rem; color: var(--ink-faint);
   }
+  /* 同名合并显示：课程名旁并列的别名代码（主代码 · 别名代码） */
+  .file-area-header .fa-codes {
+    flex-shrink: 0;
+    font-size: 0.72rem; color: var(--ink-faint);
+    font-family: var(--mono, monospace);
+    max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .file-area-header .fa-upload-header-btn {
     flex-shrink: 0;
   }

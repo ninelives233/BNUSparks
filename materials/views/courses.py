@@ -19,6 +19,7 @@ from .utils import (
     _err, _ok, _get_user, _get_or_create_profile,
     _build_tree_node, _get_courses_in_category,
     _create_notification, _user_can_edit_material,
+    _follow_merge, _merged_codes_map,
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
@@ -99,6 +100,8 @@ def api_course_files(request, course_code):
             return _err("课程代码不明确")
         else:
             course = courses.first()
+    # 同名合并别名课程：资料目录跟随主课程
+    course = _follow_merge(course)
 
     user = _get_user(request)
 
@@ -191,8 +194,8 @@ def api_course_tree(request):
     if cached is not None:
         return _etag_json_response(request, cached)
 
-    # 1. 一次性加载所有 CourseCategory（带 select_related('course') 避免 FK N+1）
-    all_cats = CourseCategory.objects.select_related('course').all()
+    # 1. 一次性加载所有 CourseCategory（避免 FK N+1；merged_into 供同名合并展示）
+    all_cats = CourseCategory.objects.select_related('course', 'course__merged_into').all()
     child_map = {}
     for c in all_cats:
         pid = c.parent_id if c.parent_id else None
@@ -210,6 +213,7 @@ def api_course_tree(request):
         'child_map': child_map,
         'course_by_code': course_by_code,
         'material_counts': material_counts,
+        'merged_codes': _merged_codes_map(all_courses),
     }
 
     roots = child_map.get(None, [])
@@ -239,18 +243,29 @@ def api_search(request):
     results = {"courses": [], "materials": []}
 
     if search_type in ("all", "course"):
+        # 同名合并：别名课程代码也命中主课程（merged_courses 反向联表），
+        # 别名行本身不单独返回，由主课程行携带全代码列表展示
         courses_qs = Course.objects.select_related('college').filter(
-            Q(code__icontains=query) | Q(name__icontains=query),
+            Q(code__icontains=query) | Q(name__icontains=query)
+            | Q(merged_courses__code__icontains=query),
             # v=147：排除已删除文件夹的孤儿 Course，避免搜索结果残留
             coursecategory__isnull=False,
-        ).order_by("code")
+        ).order_by("code").distinct()
         seen = set()
         results["courses"] = []
+        merged_codes_all = _merged_codes_map()
         for c in courses_qs:
+            if c.merged_into_id:
+                continue
             if c.code not in seen:
                 seen.add(c.code)
+                codes = [c.code]
+                for alias_code in merged_codes_all.get(c.id, []):
+                    if alias_code not in codes:
+                        codes.append(alias_code)
                 results["courses"].append({
                     "code": c.code,
+                    "codes": codes,
                     "name": c.name,
                     "course_type": c.course_type,
                     "college_name": c.college.short_name if c.college_id else "",

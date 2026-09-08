@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
@@ -19,7 +20,7 @@ from .utils import (
     _err, _ok, _get_or_create_profile, _strip_exif, _create_notification,
     _get_category_preload, require_login, require_role,
     _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
-    _find_existing_course, _find_leaf_under_parent,
+    _find_existing_course, _find_leaf_under_parent, _follow_merge,
 )
 from .operations import _can_create_under
 from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
@@ -101,6 +102,94 @@ def _category_covered(profile, cat):
             return True
         p = p.parent
     return False
+
+
+# ── 同名同位不同码自动合并显示（免审核，事后通报复核）──
+
+def _norm_course_name(name):
+    """课程名归一化：去空白、全半角标点统一、小写，供同名判定。"""
+    s = (name or "").strip().lower()
+    for a, b in (("（", "("), ("）", ")"), ("：", ":"), ("，", ","), ("；", ";"),
+                 ("【", "["), ("】", "]")):
+        s = s.replace(a, b)
+    return "".join(s.split())
+
+
+def _find_same_name_sibling(parent, course_name, exclude_code):
+    """目标位置（parent）直接子叶子中同名不同码的既有课程 → 合并显示对象。
+
+    候选本身若是别名课程则跟随到主课程。无则返回 None。
+    """
+    if parent is None:
+        return None
+    target = _norm_course_name(course_name)
+    if not target:
+        return None
+    leaves = (CourseCategory.objects.filter(parent=parent, course__isnull=False)
+              .select_related("course", "course__merged_into"))
+    for leaf in leaves:
+        c = _follow_merge(leaf.course)
+        if c is None or c.code == exclude_code:
+            continue
+        if _norm_course_name(c.name) == target:
+            return c
+    return None
+
+
+def _notify_course_merged(requester, req, merged_course, target_cat):
+    """合并显示通报：申请人收结果通知；辖区小版主/版主 + 全部总管理员收待复核通报。"""
+    path = _category_path(target_cat) if target_cat else ""
+    _create_notification(
+        recipient=requester,
+        type=Notification.Type.OPERATION,
+        title="新课程已与同名课程合并显示",
+        message=(
+            f"你提交的「{req.course_name}」({req.course_code}) 与既有同名课程"
+            f"「{merged_course.name}」({merged_course.code}) 位于同一位置，"
+            "已自动合并为同一资料目录（无需审核），上传的资料将进入该目录。"
+        ),
+        course_code=req.course_code, course_name=req.course_name,
+    )
+    recipient_ids = set()
+    if target_cat is not None:
+        for sm in UserProfile.objects.filter(
+            role=UserProfile.Role.SUB_MODERATOR
+        ).prefetch_related("moderated_sections"):
+            if _category_covered(sm, target_cat):
+                recipient_ids.add(sm.user_id)
+    if req.course_type == CourseCreationRequest.Type.MAJOR:
+        if req.college_id:
+            for m in UserProfile.objects.filter(
+                role=UserProfile.Role.MODERATOR, managed_majors=req.college_id
+            ):
+                recipient_ids.add(m.user_id)
+    else:
+        for m in UserProfile.objects.filter(
+            role=UserProfile.Role.MODERATOR, can_moderate_general=True
+        ):
+            recipient_ids.add(m.user_id)
+    for sa in UserProfile.objects.filter(role=UserProfile.Role.SUPER_ADMIN):
+        recipient_ids.add(sa.user_id)
+    recipient_ids.discard(requester.id)
+    for uid in recipient_ids:
+        try:
+            _create_notification(
+                recipient=User.objects.filter(id=uid).first(),
+                type=Notification.Type.MERGE_ALERT,
+                title="同名课程已自动合并（请复核）",
+                message=(
+                    f"{req.user.first_name or req.user.username}（{req.user.username}）提交的新课程"
+                    f"「{req.course_name}」({req.course_code}) 与既有课程"
+                    f"「{merged_course.name}」({merged_course.code}) 同名同位，"
+                    "已自动合并为同一资料目录"
+                    + (f"，位置：{path}" if path else "")
+                    + "。若合并有误，请在管理台拆分处理。"
+                ),
+                course_code=req.course_code, course_name=req.course_name,
+                triggered_by=requester,
+            )
+        except Exception:
+            continue
 
 
 def _calculate_course_request_assignment(req):
@@ -266,10 +355,12 @@ def api_course_request_create(request):
     # v=165：课程代码已存在时的提交端处理——
     #   目标位置已有该课程入口 → 引导直接上传，不创建申请（含 auto-approve 路径）；
     #   仅存在于别处 → 允许提交，批准后链接为「壳」节点（复用既有课程目录）。
+    # 查重经 _find_existing_course：同名合并别名代码同样命中主课程。
     will_link = False
     existing_locations = []
-    if Course.objects.filter(code=course_code).exists():
-        locations, in_target = _course_locations(course_code, target_cat)
+    existing_course = _find_existing_course(course_code)
+    if existing_course is not None:
+        locations, in_target = _course_locations(existing_course.code, target_cat)
         if in_target:
             return _err(
                 f"该课程已在本专业课程树「{locations[0] if locations else '该位置'}」中，"
@@ -278,6 +369,56 @@ def api_course_request_create(request):
             )
         will_link = True
         existing_locations = locations
+
+    # 同名同位不同码 → 自动合并显示（免审核）：新代码登记为主课程别名，
+    # 不新建文件夹，资料目录跟随主课程；详情通报辖区管理员与总管理员复核。
+    merged_course = None
+    if not will_link:
+        merged_course = _find_same_name_sibling(target_cat, course_name, course_code)
+
+    if merged_course is not None:
+        req = CourseCreationRequest.objects.create(
+            user=request.user,
+            course_type=course_type,
+            course_name=course_name,
+            course_code=course_code,
+            college_id=college_id or None,
+            target_category_id=target_category_id or None,
+            general_category_id=general_category_id or None,
+            auto_approved=True,
+            status=CourseCreationRequest.Status.APPROVED,
+            reviewed_at=timezone.now(),
+            review_notes=(
+                f"同名同位自动合并至 {merged_course.code}（{merged_course.name}），未新建文件夹"
+            ),
+        )
+        with transaction.atomic():
+            alias, created = Course.objects.get_or_create(
+                code=course_code,
+                defaults={
+                    "name": course_name,
+                    "course_type": course_type,
+                    "college_id": college_id or None,
+                    "merged_into": merged_course,
+                },
+            )
+            if not created and alias.merged_into_id is None:
+                alias.merged_into = merged_course
+                alias.save(update_fields=["merged_into"])
+        _notify_course_merged(request.user, req, merged_course, target_cat)
+        leaf = _find_leaf_under_parent(target_cat, merged_course)
+        return _ok({
+            "id": req.id,
+            "auto_approved": True,
+            "merged": True,
+            "merged_into": merged_course.code,
+            "merged_into_name": merged_course.name,
+            "category_id": leaf.id if leaf else None,
+            "parent_path": _category_path(target_cat) if target_cat else "",
+            "course_name": merged_course.name,
+            "will_link": True,
+            "existing_locations": existing_locations,
+        })
 
     req = CourseCreationRequest.objects.create(
         user=request.user,

@@ -13,18 +13,41 @@ from ..models import Course, CourseCategory, Material
 # 放本模块避免 course_requests → operations 循环依赖。
 
 def _find_existing_course(code, college_id=None):
-    """确定性收敛同码 Course：① 学院匹配 → ② 有已审资料（最早）→ ③ 最早。找不到返回 None。"""
+    """确定性收敛同码 Course：① 学院匹配 → ② 有已审资料（最早）→ ③ 最早。找不到返回 None。
+
+    同名合并别名课程跟随到主课程（资料目录统一归属主课程）。
+    """
     if not code:
         return None
     qs = Course.objects.filter(code=code)
     if college_id:
         hit = qs.filter(college_id=college_id).first()
         if hit:
-            return hit
+            return _follow_merge(hit)
     hit = qs.filter(materials__is_approved=True).order_by("id").first()
     if hit:
-        return hit
-    return qs.order_by("id").first()
+        return _follow_merge(hit)
+    return _follow_merge(qs.order_by("id").first())
+
+
+def _follow_merge(course):
+    """跟随同名合并链到主课程（别名课程的资料目录/文件列表跟随主课程）。带环保护。"""
+    seen = set()
+    while course is not None and course.merged_into_id and course.merged_into_id not in seen:
+        seen.add(course.id)
+        course = course.merged_into
+    return course
+
+
+def _merged_codes_map(courses=None):
+    """{主课程 id: [别名代码]} —— 同名同位合并显示用。"""
+    out = {}
+    qs = (courses if courses is not None
+          else Course.objects.filter(merged_into__isnull=False))
+    for c in qs:
+        if c.merged_into_id:
+            out.setdefault(c.merged_into_id, []).append(c.code)
+    return out
 
 
 def _find_leaf_under_parent(parent, course):
@@ -47,7 +70,7 @@ def _get_category_preload():
     if hasattr(_thread_local, 'cat_preload'):
         return _thread_local.cat_preload
 
-    all_cats = list(CourseCategory.objects.select_related('course').all())
+    all_cats = list(CourseCategory.objects.select_related('course', 'course__merged_into').all())
     child_map = {}
     cat_by_id = {}
     for c in all_cats:
@@ -61,6 +84,7 @@ def _get_category_preload():
         'child_map': child_map,
         'cat_by_id': cat_by_id,
         'course_by_code': course_by_code,
+        'merged_codes': _merged_codes_map(all_courses),
     }
     return _thread_local.cat_preload
 
@@ -114,12 +138,19 @@ def _build_tree_node(qs, *, preload=None):
         'child_map': {parent_id: [CourseCategory]},
         'course_by_code': {code: Course},
         'material_counts': {code: int},
+        'merged_codes': {主课程id: [别名代码]},
     }
     """
     result = []
     child_map = preload.get('child_map') if preload else None
     course_by_code = preload.get('course_by_code') if preload else None
     material_counts = preload.get('material_counts') if preload else None
+    merged_codes = preload.get('merged_codes') if preload is not None else None
+    if merged_codes is None:
+        merged_codes = _merged_codes_map()
+
+    # 本层已有的课程 id 集合：别名叶子若其主课程叶子也在本层 → 并入主叶子显示
+    course_ids_here = {c.course_id for c in qs if c.course_id}
 
     for cat in qs:
         if cat.is_divider:
@@ -156,12 +187,30 @@ def _build_tree_node(qs, *, preload=None):
                         node["collegeId"] = cid
                         break
         elif cat.course_id:
-            node["courseId"] = cat.course.code
+            course = cat.course
+            primary = course.merged_into if course.merged_into_id else course
+            if course.merged_into_id and primary is not None and primary.id in course_ids_here:
+                # 同名同位不同码合并：主课程叶子在本层，别名叶子不再单独出现
+                continue
+            if course.merged_into_id:
+                # 别名叶子单独出现（主课程叶子在别处）：指向主课程目录，双代码并列展示
+                node["courseId"] = primary.code if primary is not None else course.code
+                node["courseCodes"] = list(dict.fromkeys(
+                    [course.code] + ([primary.code] if primary is not None else [])
+                ))
+            else:
+                node["courseId"] = course.code
+                codes = [course.code] + [
+                    a for a in merged_codes.get(course.id, []) if a != course.code
+                ]
+                if len(codes) > 1:
+                    node["courseCodes"] = codes
+            count_code = primary.code if primary is not None else course.code
             if material_counts is not None:
-                node["fileCount"] = material_counts.get(cat.course.code, 0)
+                node["fileCount"] = material_counts.get(count_code, 0)
             else:
                 node["fileCount"] = Material.objects.filter(
-                    course__code=cat.course.code, is_approved=True
+                    course__code=count_code, is_approved=True
                 ).count()
         elif cat.course_text:
             code = cat.course_text.replace("*", "").replace("-", "")
