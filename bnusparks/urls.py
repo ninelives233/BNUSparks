@@ -12,14 +12,16 @@ from pathlib import Path
 
 def frontend(request, *args, **kwargs):
     """服务前端 index.html（ETag + revalidate，未变返回 304，省 50KB 刷新重传）。
+    no-store：SPA 入口绝不落盘，防止个别浏览器/WebView 无视 revalidation
+    复活旧页面（部署新前端后"硬刷新也看不到新功能"的根因）。
     *args/**kwargs 兼容 catch-all 路由 <path:rest> 传入的 rest 关键字参数。"""
     html_path = Path(__file__).resolve().parent.parent / "public" / "index.html"
     st = html_path.stat()
     etag = f'"{int(st.st_mtime)}-{st.st_size}"'
     if request.headers.get("If-None-Match") == etag:
-        return HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "no-cache"})
+        return HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "no-cache, no-store, must-revalidate"})
     html = html_path.read_text(encoding="utf-8")
-    return HttpResponse(html, headers={"Cache-Control": "no-cache", "ETag": etag})
+    return HttpResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate", "ETag": etag})
 
 
 urlpatterns = [
