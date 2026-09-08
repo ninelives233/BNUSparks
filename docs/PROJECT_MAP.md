@@ -91,7 +91,7 @@
 | API/业务域 | 主要实现文件 | 什么时候改 |
 |---|---|---|
 | 注册、重发验证邮件、登录、邮箱验证、改密、找回/重置 | `views/auth.py`、`views/utils_auth.py` | 认证、JWT、密码、邮件和 IP/账号限流策略变化 |
-| 课程列表、课程树、课程文件、搜索、统计、学院 | `views/courses.py`、`utils_course_tree.py` | 课程查询、树结构、聚合、缓存、ETag 变化 |
+| 课程列表、课程树、课程文件、搜索、统计、学院 | `views/courses.py`、`utils_course_tree.py` | 课程查询、树结构、聚合、缓存、ETag 变化；同名合并的 `courseCodes` 为**位置级标注**：仅别名叶子与主叶子同层共现的目录显示双代码（别名叶子同层隐藏），别名叶子单独出现时单码展示自己、资料仍跟随主课程 |
 | 文件上传、文字录入 | `views/files_upload.py`、`utils_upload.py`、`utils_security.py` | 服务端硬限额、临时写入、失败清理、类型、文件名、EXIF 变化 |
 | 文件下载、预览、下载令牌、X-Accel | `views/files_download.py`、`utils_auth.py`、`utils_quota.py` | 正式下载/预览分类、同 IP 跨浏览器移交令牌、幂等留痕、响应头、权限、配额和 X-Accel/FileResponse 共用的路径边界变化 |
 | 单删、批删、软删除、恢复 | `views/files_delete.py`、`utils_trash.py`、`operations_records.py` | 文件生命周期和恢复策略变化 |

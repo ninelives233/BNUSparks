@@ -40,13 +40,17 @@ def _follow_merge(course):
 
 
 def _merged_codes_map(courses=None):
-    """{主课程 id: [别名代码]} —— 同名同位合并显示用。"""
+    """{主课程 id: [(别名 id, 别名代码)]} —— 同名同位合并显示用。
+
+    别名带 id 是因为双代码标注是位置级的：只有别名叶子与主叶子
+    同层共现的目录才标注 courseCodes，避免跨学院/专业串台。
+    """
     out = {}
     qs = (courses if courses is not None
           else Course.objects.filter(merged_into__isnull=False))
     for c in qs:
         if c.merged_into_id:
-            out.setdefault(c.merged_into_id, []).append(c.code)
+            out.setdefault(c.merged_into_id, []).append((c.id, c.code))
     return out
 
 
@@ -138,7 +142,7 @@ def _build_tree_node(qs, *, preload=None):
         'child_map': {parent_id: [CourseCategory]},
         'course_by_code': {code: Course},
         'material_counts': {code: int},
-        'merged_codes': {主课程id: [别名代码]},
+        'merged_codes': {主课程id: [(别名id, 别名代码)]},
     }
     """
     result = []
@@ -193,18 +197,18 @@ def _build_tree_node(qs, *, preload=None):
                 # 同名同位不同码合并：主课程叶子在本层，别名叶子不再单独出现
                 continue
             if course.merged_into_id:
-                # 别名叶子单独出现（主课程叶子在别处）：指向主课程目录，双代码并列展示
-                node["courseId"] = primary.code if primary is not None else course.code
-                node["courseCodes"] = list(dict.fromkeys(
-                    [course.code] + ([primary.code] if primary is not None else [])
-                ))
+                # 别名叶子单独出现（主课程叶子不在本层）：只显示自己的单码，
+                # 资料目录仍跟随主课程（files/上传接口会 _follow_merge）。
+                # 双代码标注仅限同层共现位置，不同学院/专业的同名合并不串台。
+                node["courseId"] = course.code
             else:
                 node["courseId"] = course.code
-                codes = [course.code] + [
-                    a for a in merged_codes.get(course.id, []) if a != course.code
+                alias_here = [
+                    a_code for a_id, a_code in merged_codes.get(course.id, [])
+                    if a_id in course_ids_here and a_code != course.code
                 ]
-                if len(codes) > 1:
-                    node["courseCodes"] = codes
+                if alias_here:
+                    node["courseCodes"] = list(dict.fromkeys([course.code] + alias_here))
             count_code = primary.code if primary is not None else course.code
             if material_counts is not None:
                 node["fileCount"] = material_counts.get(count_code, 0)

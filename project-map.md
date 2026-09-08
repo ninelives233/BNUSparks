@@ -29,7 +29,7 @@
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
 - 前端入口、启动时序与懒加载契约：`public/index.html`、`public/js/feature-loader.js`、`public/js/utils.js`、`public/js/app.js`
 - 我的课表（教务 xls 导入 + 课程代码链回资料目录/自动建课申请 + 「切换视图」网格⇄列表 + 「编辑模式」课程编辑/手动建课/从本周移除/颜色覆盖 + 移动端满屏适配（含 5 日网格 min-width 清零），管理员专属入口在侧边栏最底部；导入解析带 `ttMergeMeetings` 时段合并——多教室同段合并、碎片周次并段、连堂并块，存量数据在 `ttLoadStore`/云端拉取时归一化；专业课建课用真实课程树层级选择器 `ttOpenLevelPicker`）：`public/js/timetable.js`、`public/css/timetable.css`、设计草案 `docs/课表编辑功能草案.md`
-- 同名同位不同码课程合并显示：模型 `Course.merged_into`（迁移 0035）、提交流程 `views/course_requests.py`（同名同位自动合并免审核 + `MERGE_ALERT` 通报辖区/总管）、树/搜索/文件列表按别名解析到主课程（`utils_course_tree.py` `_follow_merge`/`_merged_codes_map`、`courses.py`）、回填命令 `management/commands/merge_same_name_courses.py`、测试 `tests/test_course_merge.py`；前端叶子节点 `courseCodes` 双代码展示在 `explorer-render.js`/`explorer-core.js`
+- 同名同位不同码课程合并显示：模型 `Course.merged_into`（迁移 0035）、提交流程 `views/course_requests.py`（同名同位自动合并免审核 + `MERGE_ALERT` 通报辖区/总管）、树/搜索/文件列表按别名解析到主课程（`utils_course_tree.py` `_follow_merge`/`_merged_codes_map`、`courses.py`）、回填命令 `management/commands/merge_same_name_courses.py`、测试 `tests/test_course_merge.py`；前端叶子节点 `courseCodes` 双代码展示在 `explorer-render.js`/`explorer-core.js`。**`courseCodes` 是位置级标注**：只有别名叶子与主叶子同层共现的目录，主叶子才带双代码（别名叶子同层隐藏）；别名叶子单独出现的位置显示自己单码（courseId=别名代码，资料仍跟随主课程）——跨学院/层级不串台
 - 搜索/首页卡片/排行榜/个人页跳转课程：统一走 `explorer-core.js` 的 `navToCourse(type, code)`（内部 `navToLast` 已确保 explorer 懒加载模块就绪后再定位；**勿再手写 `showExplorer(...);navToLast(...)` 成对调用——两者异步渲染会互相覆盖**）
 - 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀，首页上传入口保留历史蓝）及其余 CSS 模块
 - 回归测试：`materials/tests/`
