@@ -11,8 +11,8 @@
 - `materials/tests/`：34 个 Python 文件，7262 行，444 个 `test_*` 方法
 - `materials/management/commands/`：8 个可执行管理命令
 - `public/index.html`：1231 行
-- `public/js/`：23 个文件，15027 行（按视图懒加载 explorer/QA/admin/timetable 模块）
-- `public/css/`：10 个文件，7721 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
+- `public/js/`：23 个文件，12834 行（按视图懒加载 explorer/QA/admin/timetable 模块）
+- `public/css/`：10 个文件，7729 行（共享控件归入静态 components/files/user，页面专属样式再懒加载；新建课程控件在 course.css，我的课表在 timetable.css）
 
 ## 按任务定位
 
@@ -37,6 +37,6 @@
 
 - 全站设计审查与三套独立静态方案：`docs/design-review-2026-09-06/REVIEW.md`（审查、取舍、迁移规则），同目录 `01-library.html` / `02-workbench.html` / `03-circulation.html`（不接入生产资源）
 
-- 个性化学习空间静态样板：`docs/personal-home-prototype/index.html`（首页、我的课程、导入核对、课程目录与移动布局），第二版见同目录 `v2.html`（课程更新首页与课程列表）；说明见 `brand-spec.md`。
+- 个性化学习空间静态样板：`docs/personal-home-prototype/index.html`（首页、我的课程、导入核对、课程目录与移动布局），第二版见同目录 `v2.html`（课程更新首页与课程列表）；第三版 `v3.html` 为中性白灰/墨蓝配色、日期分组与精简课程列表；第四版 `v4.html` 按实际课表能力重做周网格/列表、多时段编辑与整表覆盖导入；说明见 `brand-spec.md`。
 
 完整地图、调用链、权限边界和“什么时候改哪里”见 [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md)。
