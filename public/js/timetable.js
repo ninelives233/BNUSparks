@@ -701,7 +701,6 @@ function ttInitShell() {
     '<div class="tt-top">' +
       '<div class="tt-title">我的课程<small id="ttSubTitle"></small></div>' +
       '<div class="tt-actions">' +
-        '<button type="button" class="tt-btn" id="ttEditBtn" aria-pressed="false">编辑</button>' +
         '<button type="button" class="tt-btn" id="ttManageBtn" aria-haspopup="true" aria-expanded="false">管理</button>' +
       '</div>' +
     '</div>' +
@@ -716,6 +715,8 @@ function ttInitShell() {
 
   document.getElementById('ttManageBtn').addEventListener('click', function (e) {
     e.stopPropagation();
+    // 编辑态下按钮即「完成」：一键退出，不必再进菜单
+    if (ttState.editing) { ttToggleEdit(); return; }
     ttToggleManagePop();
   });
   document.getElementById('ttViewSeg').addEventListener('click', function (e) {
@@ -723,7 +724,6 @@ function ttInitShell() {
     if (!btn) return;
     ttSetView(btn.getAttribute('data-view'));
   });
-  document.getElementById('ttEditBtn').addEventListener('click', ttToggleEdit);
   document.getElementById('ttFileInput').addEventListener('change', ttOnFilePicked);
 
   ttLoadUserData();
@@ -796,13 +796,14 @@ function ttSetView(view) {
   ttRenderAll();
 }
 
-// ── 编辑模式（参照 APK「开启编辑/完成编辑」）：编辑态下点击课程=编辑、点空格=新增 ──
+// ── 编辑模式（参照 APK「开启编辑/完成编辑」）：编辑态下点击课程=编辑、点空格=新增；
+// 入口收在「管理」菜单，编辑态下管理按钮本身变为「完成」──
 function ttApplyEditMode() {
   var shell = document.getElementById('ttShell');
-  var btn = document.getElementById('ttEditBtn');
+  var btn = document.getElementById('ttManageBtn');
   if (shell) shell.classList.toggle('tt-editing', !!ttState.editing);
   if (btn) {
-    btn.textContent = ttState.editing ? '完成' : '编辑';
+    btn.textContent = ttState.editing ? '完成' : '管理';
     btn.setAttribute('aria-pressed', ttState.editing ? 'true' : 'false');
     btn.classList.toggle('is-active', !!ttState.editing);
   }
@@ -851,6 +852,8 @@ function ttToggleManagePop() {
   pop.id = 'ttManagePop';
   pop.className = 'tt-manage-pop';
   pop.innerHTML =
+    '<button type="button" class="tt-mg-opt" data-mg="edit">编辑课程' +
+      '<span class="tt-mg-sub">行内编辑、手动建课、调整颜色</span></button>' +
     '<button type="button" class="tt-mg-opt" data-mg="reimport">重新导入课表' +
       '<span class="tt-mg-sub">用教务导出文件替换教务课程</span></button>' +
     '<button type="button" class="tt-mg-opt" data-mg="scheme">课程配色' +
@@ -859,8 +862,11 @@ function ttToggleManagePop() {
   pop.addEventListener('click', function (e) {
     var opt = e.target.closest('[data-mg]');
     if (!opt) return;
+    var act = opt.getAttribute('data-mg');
     pop.remove();
-    if (opt.getAttribute('data-mg') === 'reimport') {
+    if (act === 'edit') {
+      ttToggleEdit();
+    } else if (act === 'reimport') {
       document.getElementById('ttFileInput').click();
     } else {
       ttToggleSchemePop();
@@ -1235,7 +1241,12 @@ function ttRenderConfirmModal(parsed) {
           ? '<div class="tt-code-note" role="note"><span class="tt-code-note-mark">!</span><div><strong>此文件未提供课程代码</strong><p>仍可继续导入并正常生成课表，但课程卡不会提供资料目录跳转。导入后打开「编辑课表」，为课程补上代码并保存，即可恢复对应课程的跳转。</p></div></div>'
           : '') +
         (ttState.data && ttState.data.courses.length
-          ? '<div class="tt-privacy-note">⚠ 导入将替换现有教务课程与手动编辑；手动添加的自学 / 补修课程会保留。</div>'
+          ? (ttState.data.courses.some(function (c) { return c.src === 'manual'; })
+            ? '<div class="tt-privacy-note tt-manual-note">⚠ 导入将替换现有教务课程与手动编辑。检测到 <b>' +
+              ttState.data.courses.filter(function (c) { return c.src === 'manual'; }).length +
+              '</b> 门手动添加的课程：<label class="tt-keep-manual"><input type="checkbox" id="ttKeepManual" checked> 保留这些课程（自学 / 补修）</label>' +
+              '<span class="tt-keep-sub">取消勾选则导入时一并移除；与本次导入同代码或同名的，始终以导入为准。</span></div>'
+            : '<div class="tt-privacy-note">⚠ 导入将整表替换现有课程与手动编辑。</div>')
           : '') +
         (courseCodeMissing ? '' : (missing.length
           ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程尚未建立资料目录' +
@@ -1285,6 +1296,9 @@ function ttRenderConfirmModal(parsed) {
       ttToast('还有 ' + unchosen + ' 门未建课程未选择位置，选择后才能导入');
       return;
     }
+    // 手动课程去留由用户在弹窗里决定（默认保留）
+    var keepEl = document.getElementById('ttKeepManual');
+    parsed.keepManual = !keepEl || keepEl.checked;
     if (!parsed.pendingCodes || typeof parsed.pendingCodes !== 'object') parsed.pendingCodes = {};
     ttApplyImport(parsed, requests);
   });
@@ -1479,8 +1493,8 @@ function ttPickLevel(node, pathNames) {
 // 后端辖区逻辑（v=153）：管理员 + 目标位置在辖区内 → auto_approved 直接建课；
 // 否则走审核。直接建课的不标 pending，重新拉树后立即可点击跳转。
 function ttApplyImport(parsed, requests) {
-  // 「我的课程」≠ 导入课表：手动添加的自学/补修课程（src='manual'）在重导入时保留；
-  // 与导入课程同代码或同名的以导入为准（教务课表是排课事实来源）
+  // 「我的课程」≠ 导入课表：手动添加课程（src='manual'）的去留在导入弹窗里由用户
+  // 勾选决定（parsed.keepManual，默认保留）。保留时与导入同代码/同名者仍以导入为准。
   var prev = ttState.data;
   if (prev && prev.courses && prev.courses.length) {
     var manual = prev.courses.filter(function (c) { return c.src === 'manual'; });
@@ -1491,9 +1505,18 @@ function ttApplyImport(parsed, requests) {
         var nk = (c.name || '').trim();
         if (nk) imNames[nk] = true;
       });
-      var kept = manual.filter(function (c) {
-        return !(c.code && imCodes[c.code]) && !imNames[(c.name || '').trim()];
-      });
+      var kept = [];
+      if (parsed.keepManual !== false) {
+        // 保留手动课程；与导入同代码/同名的以导入为准
+        kept = manual.filter(function (c) {
+          return !(c.code && imCodes[c.code]) && !imNames[(c.name || '').trim()];
+        });
+      } else {
+        // 用户选择覆盖：移除手动课程遗留的申请中标记（导入仍用该代码的除外）
+        manual.forEach(function (c) {
+          if (c.code && !imCodes[c.code] && parsed.pendingCodes) delete parsed.pendingCodes[c.code];
+        });
+      }
       if (kept.length) {
         parsed.courses = parsed.courses.concat(kept);
         kept.forEach(function (c) {
