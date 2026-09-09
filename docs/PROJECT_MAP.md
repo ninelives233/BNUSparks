@@ -212,6 +212,8 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `docs/personal-home-prototype/v4.html` | 279 | 第四版：按已实现课表能力重做周网格/列表、多时段编辑、教务格式解析与整表替换；独立内存样稿，不接生产接口 |
 | `docs/personal-home-prototype/v5.html` | 310 | 第五版：内嵌只读课程树快照，首页目录入口及已审资料快照、全部课程分层浏览与路径搜索；独立静态稿 |
 | `docs/personal-home-prototype/v6.html` | 328 行 | 专注目录静态稿：取消第二侧栏、逐层返回、按需路径、分类选择器及移动端单列 |
+| `docs/personal-home-prototype/v7.html` | 341 行 | 首页静态稿：公告、真实本地规模、示例课程更新、按身份显示招生说明与可收起教程 |
+| `docs/personal-home-prototype/v8.html` | 352 行 | 用户三行首页方案：公告快捷入口、横向个性化推荐、下载/收藏切换榜与最近上传 |
 | `docs/personal-home-prototype/brand-spec.md` | 110 | 设计规则、体验路径、示例范围与验证记录 |
 
 ## 8. 测试与运维定位
