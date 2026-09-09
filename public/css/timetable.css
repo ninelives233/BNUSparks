@@ -113,6 +113,26 @@
 .tt-sch-opt:hover { background: var(--surface); }
 .tt-sch-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-sch-opt.is-active { background: var(--primary-surface); color: var(--primary-dark); font-weight: 600; }
+
+/* 「管理」菜单：低频操作收纳（重新导入 / 课程配色），与配色弹层同一套语言 */
+.tt-manage-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+  background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); padding: 6px; min-width: 216px;
+  animation: ttPop 0.14s ease-out both;
+}
+.tt-mg-opt {
+  display: block; width: 100%;
+  appearance: none; border: none; background: none; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  font-family: var(--sans); font-size: var(--fs-sm); color: var(--ink); text-align: left;
+}
+.tt-mg-opt:hover { background: var(--surface); }
+.tt-mg-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-mg-sub { display: block; margin-top: 2px; font-size: var(--fs-2xs); color: var(--ink-faint); font-weight: 400; }
+
+/* 课程编辑弹层：无排课课程（自学/补修）提示 */
+.tt-seg-note { margin: 8px 0 0; font-size: var(--fs-2xs); color: var(--ink-faint); line-height: 1.55; }
 .tt-sch-dots { display: flex; gap: 3px; flex: none; }
 .tt-sch-dots i { width: 12px; height: 12px; border-radius: 4px; border: 1px solid oklch(0.85 0.03 60 / 0.6); }
 
@@ -272,12 +292,12 @@
   border: 0; border-radius: 0; background: transparent; overflow: visible;
 }
 .tt-lrow {
-  position: relative; min-height: 104px; padding: 18px 24px 18px 26px;
+  position: relative; min-height: 0; padding: 15px 24px 14px 26px;
   border: 1px solid var(--tt-line); border-radius: var(--radius-md);
   background: var(--tt-panel); box-shadow: var(--shadow-xs); overflow: hidden;
-  display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
-  grid-template-areas: 'head sched' 'meta sched';
-  align-items: center; column-gap: var(--space-lg); row-gap: 2px;
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'head' 'meta';
+  align-items: center; column-gap: var(--space-lg); row-gap: 3px;
 }
 .tt-lrow::before {
   content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
@@ -302,12 +322,20 @@
 .tt-lrow.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
 .tt-lrow.tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
 .tt-lmeta { grid-area: meta; margin-top: 3px; font-size: var(--fs-sm); color: var(--ink-soft); line-height: 1.45; }
-.tt-lsched {
-  grid-area: sched; align-self: center; min-width: 0;
-  padding: 4px 0 4px var(--space-lg); border-left: 1px solid var(--tt-line-soft);
-  font-size: var(--fs-sm); color: var(--ink-soft); font-weight: 500;
-  font-variant-numeric: tabular-nums; line-height: 1.65; overflow-wrap: anywhere;
+/* 上课安排降为辅助信息：行内淡墨，周次/教室细节留在悬停提示 */
+.tt-lmeta .tt-lsched { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.tt-lmeta .tt-lsched::before { content: '· '; }
+/* 课程为主体的动线：查看资料（仅已建目录且非编辑态出现） */
+.tt-lhead .tt-open {
+  flex: none; margin-left: 10px; align-self: center;
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap;
+  color: oklch(0.60 0.095 var(--th));
+  transition: color 0.15s ease;
 }
+.tt-lrow.is-link:hover .tt-open { color: oklch(0.48 0.115 var(--th)); }
+/* 页脚辅助说明 + 手动添加课程入口 */
+.tt-foot-hint { color: var(--ink-faint); }
+.tt-foot .tt-add-course { margin-left: auto; flex: none; }
 .tt-lrow.is-link { cursor: pointer; }
 .tt-lrow.is-link:hover { background: var(--tt-panel); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
 .tt-lrow.is-link:hover::before { top: 7px; bottom: 7px; background: oklch(0.68 0.1 var(--th)); }
@@ -613,8 +641,8 @@
   /* 列表在手机端采用独立课程卡，课程信息 + 安排双层阅读。 */
   .tt-list { width: 100%; gap: 8px; }
   .tt-lrow {
-    min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'head head' 'meta meta' 'sched sched';
+    min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'head' 'meta';
     align-items: start; gap: 0; padding: 12px 13px 11px 17px;
   }
   .tt-lrow::before { top: 11px; bottom: 11px; width: 3px; }
@@ -625,12 +653,13 @@
   }
   .tt-tag { margin-top: 1px; padding: 4px 8px; }
   .tt-lmeta { margin-top: 3px; font-size: var(--fs-2xs); line-height: 1.35; }
-  .tt-lsched {
-    width: 100%; margin-top: 8px; padding: 7px 0 0;
-    border-top: 1px solid var(--tt-line-soft); border-left: none;
+  .tt-lmeta .tt-lsched {
+    display: block; width: 100%; margin-top: 7px; padding: 6px 0 0;
+    border-top: 1px solid var(--tt-line-soft);
     font-size: var(--fs-2xs); line-height: 1.45; text-align: left;
     overflow-wrap: anywhere;
   }
+  .tt-lmeta .tt-lsched::before { content: none; }
 
   /* 网格课程卡在窄屏内缩进一点，保留格线呼吸感，避免整块铺满单元格。 */
   .tt-card { margin: 2px; padding: 2px 4px; border-radius: 5px; }
@@ -705,6 +734,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop { animation: none; transition: none; transform: none; }
+  .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop, .tt-manage-pop { animation: none; transition: none; transform: none; }
   .tt-grid.swap .tt-card, .tt-list.swap .tt-lrow { animation: none; }
 }

@@ -10,7 +10,7 @@ from django.db import IntegrityError
 
 from .utils import (
     _err, _ok, _get_or_create_profile, require_login, _safe_int,
-    Favorite, Material,
+    Favorite, Material, _bump_user_public_gen,
 )
 from ..models import Course, CourseFavorite
 
@@ -29,6 +29,7 @@ def api_favorite_toggle(request, file_id):
     fav = Favorite.objects.filter(user=request.user, material=material)
     deleted, _ = fav.delete()
     if deleted:
+        _bump_user_public_gen(material.uploader_id)
         return _ok({"favorited": False})
 
     try:
@@ -36,6 +37,7 @@ def api_favorite_toggle(request, file_id):
     except IntegrityError:
         # 另一个并发请求已经创建；唯一约束保证最终仍只有一条。
         pass
+    _bump_user_public_gen(material.uploader_id)
     return _ok({"favorited": True})
 
 
