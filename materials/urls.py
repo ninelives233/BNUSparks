@@ -69,6 +69,9 @@ urlpatterns = [
     path("user/rankings/", views.api_user_rankings, name="api_user_rankings"),
     path("user/public/<int:uid>/", views.api_user_public, name="api_user_public"),
 
+    # 意见反馈（直达总管理员消息中心）
+    path("feedback/", views.api_feedback, name="api_feedback"),
+
     # 公告（Iter 7）
     path("announcements/", views.api_announcements, name="api_announcements"),
     path("announcements/<int:aid>/", views.api_announcement_delete, name="api_announcement_delete"),

@@ -13,6 +13,9 @@ from .auth import (
 # 通知
 from .notifications import api_notifications, api_notification_read
 
+# 意见反馈
+from .feedback import api_feedback
+
 # 个人资料 / 用户
 from .profile import (
     api_profile, api_avatar_upload,

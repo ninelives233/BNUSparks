@@ -293,6 +293,7 @@ class Notification(models.Model):
         REPORT_ESCALATED = "report_escalated", "举报已升级"
         REPORT_MALICIOUS = "report_malicious", "恶意举报提醒"
         MERGE_ALERT = "merge_alert", "同名课程合并待复核"
+        FEEDBACK = "feedback", "意见反馈"
 
     recipient = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="notifications",

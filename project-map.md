@@ -5,10 +5,10 @@
 
 ## 当前基线（2026-09-09）
 
-- `materials/models.py`：1040 行，28 个 Django 模型（另有 `CourseType` 枚举；Course 新增 `merged_into` 同名合并字段，迁移 0035）
-- `materials/urls.py`：153 行，119 个 `path()` 路由
-- `materials/views/`：38 个 Python 文件，11115 行
-- `materials/tests/`：35 个 Python 文件，7656 行，466 个 `test_*` 方法
+- `materials/models.py`：1041 行，28 个 Django 模型（另有 `CourseType` 枚举；Course 新增 `merged_into` 同名合并字段，迁移 0035；Notification.Type 新增 feedback，迁移 0036）
+- `materials/urls.py`：156 行，120 个 `path()` 路由
+- `materials/views/`：39 个 Python 文件，11183 行（新增 `feedback.py` 意见反馈接口）
+- `materials/tests/`：35 个 Python 文件，7739 行，472 个 `test_*` 方法
 - `materials/management/commands/`：9 个可执行管理命令（含 `merge_same_name_courses` 同名重复课程回填）
 - `public/index.html`：1235 行
 - `public/js/`：23 个文件，13769 行（按视图懒加载 explorer/QA/admin/timetable 模块）
@@ -28,7 +28,7 @@
 - 总管理员用户监测与访问追溯：`materials/views/admin_monitoring.py`、`public/js/admin-users.js`、`public/js/views.js`；身份分布页含用户数量趋势
 - 注册/个人身份三标签：`materials/views/auth.py`、`profile.py`、`public/js/auth.js`、`profile.js`
 - 前端入口、启动时序与懒加载契约：`public/index.html`、`public/js/feature-loader.js`、`public/js/utils.js`、`public/js/app.js`
-- 我的课程（原「我的课表」，v=236 起课程为主体、课表为一种视图：「课程列表/周课表」分段默认列表并记忆上次选择；列表行突出课程名+资料签+「查看资料」，上课安排为辅助行；v=237 头部仅一个「管理」按钮——编辑课程/重新导入课表/课程配色全收进菜单，编辑态下按钮变「完成」一键退出；v=238 「管理」菜单再收「导入教程」入口，且只接受「按列表方式显示」明细导出——`ttParseImport` 检测到 `xkinfo` 网格模板（按周方式显示/选课结果网格：无课程代码、一格堆多个教学班）即拒收，重弹教程并在顶部渲染 danger 横幅说明原因，网格解析代码已删除；手动添加课程带 `src:'manual'` 标记，重导入确认弹窗检测到手动课程时由用户勾选保留/覆盖（默认保留，同代码/同名以导入为准，`ttApplyImport` 的 `parsed.keepManual`），无排课课程只进列表不进网格。教务 xls 导入 + 课程代码链回资料目录/自动建课申请 + 「编辑模式」课程编辑/手动建课/从本周移除/颜色覆盖 + 移动端满屏适配；导入解析带 `ttMergeMeetings` 时段合并；专业课建课用真实课程树层级选择器 `ttOpenLevelPicker`，非 GEN 的公共选修课可在「学院」下拉选「通识课」归入通识树（确认弹窗顶部有提醒，请求体走 general + `general_category_id`）；刷新/汉堡菜单入口等待认证并先激活课表路由，课程树未就绪时点击课程自动补载后再跳转）：`public/js/timetable.js`、`public/css/timetable.css`、设计草案 `docs/课表编辑功能草案.md`
+- 我的课程（原「我的课表」，v=236 起课程为主体、课表为一种视图：「课程列表/周课表」分段默认列表并记忆上次选择；列表行突出课程名+资料签+「查看资料」，上课安排为辅助行；v=237 头部仅一个「管理」按钮——编辑课程/重新导入课表/课程配色全收进菜单，编辑态下按钮变「完成」一键退出；v=238 「管理」菜单再收「导入教程」入口，且只接受「按列表方式显示」明细导出——`ttParseImport` 检测到 `xkinfo` 网格模板（按周方式显示/选课结果网格：无课程代码、一格堆多个教学班）即拒收，重弹教程并在顶部渲染 danger 横幅说明原因，网格解析代码已删除；v=239 菜单再收「意见反馈」（`ttShowFeedbackModal` → POST `/api/feedback/` 广播全部超管 `Notification.Type.FEEDBACK`，缓存限流 60s 冷却 + 每日 5 条，弹窗右下角邮箱链接引导附图/文件走邮件）；手动添加课程带 `src:'manual'` 标记，重导入确认弹窗检测到手动课程时由用户勾选保留/覆盖（默认保留，同代码/同名以导入为准，`ttApplyImport` 的 `parsed.keepManual`），无排课课程只进列表不进网格。教务 xls 导入 + 课程代码链回资料目录/自动建课申请 + 「编辑模式」课程编辑/手动建课/从本周移除/颜色覆盖 + 移动端满屏适配；导入解析带 `ttMergeMeetings` 时段合并；专业课建课用真实课程树层级选择器 `ttOpenLevelPicker`，非 GEN 的公共选修课可在「学院」下拉选「通识课」归入通识树（确认弹窗顶部有提醒，请求体走 general + `general_category_id`）；刷新/汉堡菜单入口等待认证并先激活课表路由，课程树未就绪时点击课程自动补载后再跳转）：`public/js/timetable.js`、`public/css/timetable.css`、设计草案 `docs/课表编辑功能草案.md`
 - 同名同位不同码课程合并显示：模型 `Course.merged_into`（迁移 0035）、提交流程 `views/course_requests.py`（同名同位自动合并免审核 + `MERGE_ALERT` 通报辖区/总管）、树/搜索/文件列表按别名解析到主课程（`utils_course_tree.py` `_follow_merge`/`_merged_codes_map`、`courses.py`）、回填命令 `management/commands/merge_same_name_courses.py`、测试 `tests/test_course_merge.py`；前端叶子节点 `courseCodes` 双代码展示在 `explorer-render.js`/`explorer-core.js`。**`courseCodes` 是位置级标注**：只有别名叶子与主叶子同层共现的目录，主叶子才带双代码（别名叶子同层隐藏）；别名叶子单独出现的位置显示自己单码（courseId=别名代码，资料仍跟随主课程）——跨学院/层级不串台
 - 搜索/首页卡片/排行榜/个人页跳转课程：统一走 `explorer-core.js` 的 `navToCourse(type, code)`（内部先确保 explorer 懒加载模块与课程树就绪再定位；**勿再手写 `showExplorer(...);navToLast(...)` 成对调用——两者异步渲染会互相覆盖**）
 - 设计系统与页面样式：`public/css/tokens.css`（青靛墨蓝/琥珀，首页上传入口保留历史蓝）及其余 CSS 模块

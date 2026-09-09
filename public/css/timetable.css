@@ -521,6 +521,20 @@
 .tt-lp-empty { padding: var(--space-lg); text-align: center; color: var(--ink-faint); font-size: var(--fs-sm); }
 
 .tt-modal footer { display: flex; justify-content: flex-end; gap: var(--space-xs); padding: var(--space-sm) var(--space-md) var(--space-md); }
+/* 意见反馈弹层：textarea + 字数计，footer 末尾是邮箱链接（右下角，窄屏换行） */
+.tt-fb .tt-mbody textarea {
+  width: 100%; resize: vertical; min-height: 120px;
+  font: inherit; font-size: var(--fs-sm); line-height: 1.7; color: var(--ink);
+  letter-spacing: 0.02em; background: var(--surface);
+  border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.tt-fb .tt-mbody textarea:focus { outline: none; border-color: var(--accent); }
+.tt-fb .tt-fb-count { text-align: right; font-size: var(--fs-xs); color: var(--ink-faint); margin-top: 4px; }
+.tt-fb footer { flex-wrap: wrap; }
+.tt-fb .tt-fb-mail { align-self: center; margin-left: var(--space-sm); font-size: var(--fs-xs); color: var(--ink-faint); }
+.tt-fb .tt-fb-mail a { color: var(--accent); }
+.tt-fb .tt-fb-mail a:hover { color: var(--accent-hover); }
 
 /* ── 使用教程弹层 ───────────────────────────────────── */
 .tt-modal.tt-tut { width: min(680px, 100%); }
