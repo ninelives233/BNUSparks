@@ -99,9 +99,9 @@
 | 文件夹创建、删除、移动、操作记录 | `views/operations_folder.py`、`operations_records.py` | 课程目录和文件操作日志变化 |
 | 待审、通过、驳回、重分配、历史、统计 | `views/moderation.py`、`utils_moderation.py` | 审核范围、并发幂等、自动审核变化 |
 | 新课程申请及随附资料迁移 | `views/course_requests.py` | 课程创建、审批、物理文件迁移变化；提交端同名同位不同码自动合并（`_find_same_name_sibling`/`_notify_course_merged`），查重经 `_find_existing_course` 别名跟随 |
-| 个人资料、公开主页、排行、上传/下载历史 | `views/profile.py` | 用户公开信息和统计变化 |
+| 个人资料、公开主页、排行、上传/下载历史 | `views/profile.py` | 用户公开信息和统计变化；公开主页实时聚合已审核未删除资料的上传/下载/收藏数据 |
 | 我的课表跨设备同步（GET/PUT/DELETE `/api/user/timetable/`，GET 支持 `since` 增量检查，`@csrf_exempt`+JWT，200KB 上限） | `views/user_timetable.py`、模型 `UserTimetable`（迁移 0034）、测试 `test_user_timetable.py`（含条件拉取、乱序覆盖和 `enforce_csrf_checks` 回归护栏） | 同步格式/上限/版本冲突变化；**新建写接口必须带 `@csrf_exempt`（JWT 无 cookie），漏掉会被 CSRF 中间件 403 且本地测试发现不了** |
-| 收藏 | `views/favorites.py`、`qa_public.py` | 资料/课程/问答收藏、分页、计数及唯一键并发冲突变化 |
+| 收藏 | `views/favorites.py`、`qa_public.py` | 资料/课程/问答收藏、分页、计数及唯一键并发冲突变化；资料收藏会使上传者公开页统计缓存失效 |
 | 公告 | `views/announcements.py` | 管理员发布、纯文本约束、公告列表变化 |
 | 通知 | `views/notifications.py` | 未读、已读、删除、跳转数据变化 |
 | 举报 | `views/reports.py` | 举报对象、候选版主、对象级 candidates 权限、处理和历史作用域变化 |
@@ -210,7 +210,9 @@ utils → auth → profile → notifications → admin-core → views → explor
 | `docs/personal-home-prototype/v2.html` | 80 | 第二版：无右侧身份及继续查看，资料更新首页、课程列表与固定管理、统一添加入口 |
 | `docs/personal-home-prototype/v3.html` | 94 | 第三版：中性白灰/墨蓝学习空间，日期分组首页、精简课程列表与示例导入交互 |
 | `docs/personal-home-prototype/v4.html` | 279 | 第四版：按已实现课表能力重做周网格/列表、多时段编辑、教务格式解析与整表替换；独立内存样稿，不接生产接口 |
-| `docs/personal-home-prototype/brand-spec.md` | 89 | 设计规则、体验路径、示例范围与验证记录 |
+| `docs/personal-home-prototype/v5.html` | 310 | 第五版：内嵌只读课程树快照，首页目录入口及已审资料快照、全部课程分层浏览与路径搜索；独立静态稿 |
+| `docs/personal-home-prototype/v6.html` | 328 行 | 专注目录静态稿：取消第二侧栏、逐层返回、按需路径、分类选择器及移动端单列 |
+| `docs/personal-home-prototype/brand-spec.md` | 110 | 设计规则、体验路径、示例范围与验证记录 |
 
 ## 8. 测试与运维定位
 

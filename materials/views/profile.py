@@ -385,6 +385,10 @@ def api_user_public(request, uid):
     download_count = Material.objects.filter(
         uploader=user, review_status="approved"
     ).exclude(id__in=ghost_ids).aggregate(total=Sum("download_count"))["total"] or 0
+    collection_count = Favorite.objects.filter(
+        material__uploader=user,
+        material__review_status="approved",
+    ).exclude(material_id__in=ghost_ids).count()
     contact_email = profile.contact_email if profile.contact_email and profile.role != UserProfile.Role.USER else ""
 
     # 分页查询该用户上传的文件
@@ -435,7 +439,7 @@ def api_user_public(request, uid):
             "major": identity_major,
             "upload_count": upload_count,
             "download_count": download_count,
-            "collection_count": 0,
+            "collection_count": collection_count,
             "member_since": user.date_joined.strftime("%Y-%m"),
         },
         "materials": materials_list,
