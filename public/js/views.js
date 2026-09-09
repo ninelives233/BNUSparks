@@ -929,17 +929,58 @@
     });
   }
 
-  // 我的课表：timetable.js 为懒加载模块，这里统一做「确保加载 → 进入视图」
-  function ttNavTimetable() {
-    if (typeof showTimetable === 'function') { showTimetable(); return; }
-    if (typeof ensureFeature === 'function') {
-      ensureFeature('timetable').then(function () {
-        if (typeof showTimetable === 'function') showTimetable();
-        else showHome();
-      }).catch(function () { showHome(); });
-    } else {
-      showHome();
+  // 我的课表：timetable.js 为懒加载模块，这里统一做「认证 → 激活视图 → 确保加载」
+  // 先激活路由再等懒加载，避免手机首次从汉堡菜单进入时看起来没有响应。
+  var _ttNavPromise = null;
+
+  function ttActivateRoute(writeHistory) {
+    if (typeof switchView === 'function') switchView('timetable');
+    if (typeof updateSidebar === 'function') updateSidebar('timetable');
+    if (writeHistory && typeof pushViewState === 'function') pushViewState('timetable', {});
+    if (typeof _updateFooterVisibility === 'function') _updateFooterVisibility('timetable');
+  }
+
+  function ttShowModuleError() {
+    ttActivateRoute(false);
+    var shell = document.getElementById('ttShell');
+    if (shell) shell.innerHTML = '<div class="empty-state compact">课表模块加载失败，请刷新重试。</div>';
+  }
+
+  function ttEnterTimetableModule() {
+    if (typeof showTimetable === 'function') {
+      showTimetable();
+      return Promise.resolve(true);
     }
+    ttActivateRoute(true);
+    if (typeof ensureFeature !== 'function') {
+      ttShowModuleError();
+      return Promise.resolve(false);
+    }
+    return ensureFeature('timetable').then(function () {
+      if (typeof showTimetable === 'function') {
+        // 路由已经在懒加载开始时写入，避免重复压入一条 timetable 历史记录。
+        showTimetable(true);
+        return true;
+      }
+      ttShowModuleError();
+      return false;
+    }).catch(function () {
+      ttShowModuleError();
+      return false;
+    });
+  }
+
+  function ttNavTimetable() {
+    var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var authReady = window._bnusparksAuthReady;
+    if (!currentUser && hasToken && authReady) {
+      if (!_ttNavPromise) {
+        _ttNavPromise = Promise.resolve(authReady).then(ttEnterTimetableModule);
+        _ttNavPromise.then(function () { _ttNavPromise = null; }, function () { _ttNavPromise = null; });
+      }
+      return _ttNavPromise;
+    }
+    return ttEnterTimetableModule();
   }
 
   // ── Sidebar ──

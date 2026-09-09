@@ -18,6 +18,7 @@ from ..models import (
     QaViewLog,
 )
 from .qa_helpers import (
+    _avatar_url,
     _can_manage_qa,
     _ensure_qa_l1_tags,
     _json_body,
@@ -110,7 +111,9 @@ def api_qa_question_detail(request, qid):
         return api_qa_question_edit_user(request, qid)
     if request.method != "GET":
         return _err("仅支持 GET/PUT/DELETE", 405)
-    q = QaQuestion.objects.select_related("author", "tag_l1", "tag_l2").filter(id=qid).first()
+    q = QaQuestion.objects.select_related(
+        "author", "author__profile", "tag_l1", "tag_l2",
+    ).filter(id=qid).first()
     if not q:
         return _err("内容不存在", 404)
     user = _get_user(request)
@@ -141,7 +144,7 @@ def api_qa_question_detail(request, qid):
     # v183：annotate 收藏总数消除 N+1；排序最佳回答前置
     answers = list(QaAnswer.objects.filter(
         question=q, status=QaAnswer.Status.PUBLISHED,
-    ).select_related("author").annotate(fav_n=Count("qa_favorited_by"))
+    ).select_related("author", "author__profile").annotate(fav_n=Count("qa_favorited_by"))
         .order_by("-is_pinned", "-is_accepted", "-created_at"))
 
     return _ok({
@@ -151,6 +154,7 @@ def api_qa_question_detail(request, qid):
         "content": q.content,
         "status": q.status,
         "author": _nickname(q.author),
+        "avatar_url": _avatar_url(q.author),
         "owner_id": q.author_id,
         "tag_l1_id": q.tag_l1_id,
         "tag_l1": q.tag_l1.name if q.tag_l1_id else "",

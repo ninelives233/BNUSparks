@@ -31,6 +31,23 @@
     return 'other';
   }
 
+  // 移动端浏览器通常不会在 iframe 内渲染 PDF，而是把 inline 响应交给系统
+  // 下载/文档查看器。详情页不能在用户只想查看资料时隐式触发这个行为。
+  function _isMobilePdfPreview() {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 768 ||
+      (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  }
+
+  function _mobilePdfFallbackHtml(fileId, fileName) {
+    return '<div class="pv-unsupported pv-mobile-pdf">' +
+      '<div class="pv-unsupported-icon">📄</div>' +
+      '<div class="pv-unsupported-text">手机浏览器暂不支持内嵌 PDF 预览</div>' +
+      '<div class="pv-unsupported-sub">请点击下方按钮，由系统查看器打开或下载文件</div>' +
+      '<button class="pv-dl-btn" onclick="doDirectDownload(' + fileId + ')">⬇ 下载 PDF</button>' +
+      '</div>';
+  }
+
   function showPreview(fileId) {
     // 关闭已有预览弹窗
     var existing = document.querySelector('.preview-overlay');
@@ -62,11 +79,18 @@
       var extType = _isPreviewableExt(fn);
       var extBadgeHtml = extBadge(fn);
 
-      // 异步获取预览 URL（短时下载令牌）
-      _previewUrl(fileId).then(function(previewUrl) {
+      // 仅对真正需要内容的类型获取预览令牌；移动端 PDF 改为显式兜底，
+      // 不创建 iframe，也不让浏览器在进入详情时自动弹出下载提示。
+      var needsPreviewUrl = ['pdf', 'image', 'text'].includes(extType);
+      var previewPromise = needsPreviewUrl && !(extType === 'pdf' && _isMobilePdfPreview())
+        ? _previewUrl(fileId)
+        : Promise.resolve(null);
+      previewPromise.then(function(previewUrl) {
         var bodyHtml = '';
         if (extType === 'pdf') {
-          bodyHtml = '<iframe src="' + previewUrl + '" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>';
+          bodyHtml = previewUrl
+            ? '<iframe src="' + previewUrl + '" style="width:100%;height:100%;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>'
+            : _mobilePdfFallbackHtml(fileId, fn);
         } else if (extType === 'image') {
           bodyHtml = '<img src="' + previewUrl + '" alt="' + esc(fn) + '" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
         } else if (extType === 'text') {
@@ -246,4 +270,3 @@
 
 
   /* renderEmpty moved to views.js */
-

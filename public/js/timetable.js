@@ -5,12 +5,15 @@
 // explorer-core.js（courseTree / findPathByCourseId / navToLast）、
 // views.js（showExplorer / switchView）。
 //
-// 教务文件结构（所有教务导出一致）：
+// 教务文件结构：支持“课程明细表”和新版“按星期网格”两种导出布局。
+// 课程明细表结构：
 //   · 标题「北京师范大学学生选课课程表」+（XXXX-XXXX学年XX学期）
 //   · 学号/姓名/所在班级/选课课程门数/总学分
 //   · 表头：[课程号]课程名|总学时|学分|上课班号|任课教师|上课时间、地点|修读性质|...
 //   · 时间格语法：`1-16周(单) 五[7-8] 邱季端体武馆-109(30),9-16周(双) 六[11-12] 网上自学(400)`
 //     即 周次段(可单/双) + 星期([一二三四五六日]，可带周/星期前缀) + [起-止节] + 教室(容量)，逗号分段
+// 按星期网格结构：课程格内按“课程名 / 教师 / 周次[节次] / 教室”分行，
+// 星期和节次由表格列、行确定；同一课程的不同周次可能连续拼在同一个格内。
 //
 // 课程链接：导入时保留课程代码（不展示）。每门课通过代码在课程树中定位：
 //   · 已建课 → 卡片可点击，按用户身份标签优先从对应课程树入口跳到资料列表
@@ -48,12 +51,135 @@ var TT_DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', 
 // 12 节 → 网格行号（1=表头，2-5=上午1-4节，6=午休，7-10=下午5-8节，11=傍晚，12-15=晚上9-12节）
 var TT_ROW_OF_PERIOD = [2, 3, 4, 5, 7, 8, 9, 10, 12, 13, 14, 15];
 
-var ttState = { data: null, week: 1, maxWeek: 20, start: '', scheme: 'zhongguo', view: 'grid', editing: false, links: {} };
+var ttState = {
+  data: null, week: 1, maxWeek: 20, start: '', scheme: 'zhongguo', view: 'grid',
+  editing: false, links: {}, counts: {}, _countKey: '', _countError: false,
+  _treeError: false, cloudUpdatedAt: null, cloudSynced: false
+};
 
 // ── 解析：字节 → 文本（教务文件是 GBK；UTF-8 优先探测） ──
 function ttDecodeBuffer(buffer) {
   try { return new TextDecoder('utf-8', { fatal: true }).decode(buffer); }
   catch (e) { return new TextDecoder('gbk').decode(buffer); }
+}
+
+function ttInputValue(doc, selector) {
+  var el = doc.querySelector(selector);
+  return el ? String(el.value || el.getAttribute('value') || '').trim() : '';
+}
+
+// 新版网格导出把学号和学年放在 hidden input 中，不再输出明细表里的文字元数据。
+function ttReadHiddenMeta(doc, meta) {
+  if (!meta.studentId) meta.studentId = ttInputValue(doc, 'input[name="xh"], input#xh');
+  if (!meta.semester) {
+    var year = ttInputValue(doc, 'input[name="xn"], input#xn');
+    var term = ttInputValue(doc, 'input[name="xq_m"], input#xq_m');
+    if (/^(?:19|20)\d{2}$/.test(year)) {
+      var termName = term === '2' ? '第二学期' : (term === '0' || term === '1' ? '第一学期' : '');
+      meta.semester = year + '-' + (parseInt(year, 10) + 1) + '学年' + termName;
+    }
+  }
+}
+
+function ttWeeklyEntryLines(entry) {
+  var clone = entry.cloneNode(true);
+  var brs = clone.querySelectorAll('br');
+  Array.prototype.forEach.call(brs, function (br) {
+    br.parentNode && br.parentNode.replaceChild(clone.ownerDocument.createTextNode('\n'), br);
+  });
+  return (clone.textContent || '').split(/\r?\n/).map(function (line) {
+    return line.replace(/\u00a0/g, ' ').trim();
+  }).filter(Boolean);
+}
+
+// 新版网格：`1-16[7-8]`、`1-16单周[7-8]`、`11[9-10]`。
+function ttParseWeeklyMeeting(timeRaw, roomRaw, day) {
+  var s = String(timeRaw || '').replace(/\s+/g, '');
+  var m = s.match(/^(\d+)(?:-(\d+))?(?:周)?(?:(单|双)周|[（(](单|双)[）)])?\[(\d+)(?:-(\d+))?\](.*)$/);
+  if (!m) return null;
+  var ws = parseInt(m[1], 10);
+  var we = m[2] !== undefined ? parseInt(m[2], 10) : ws;
+  var ps = parseInt(m[5], 10);
+  var pe = m[6] !== undefined ? parseInt(m[6], 10) : ps;
+  if (!day || !ws || !ps || ps > 12) return null;
+  if (we < ws) { var wt = ws; ws = we; we = wt; }
+  if (pe < ps) { var pt = ps; ps = pe; pe = pt; }
+  return {
+    ws: Math.max(ws, 1), we: Math.min(we, 60),
+    parity: (m[3] || m[4]) === '单' ? 1 : ((m[3] || m[4]) === '双' ? 2 : 0),
+    day: day, ps: ps, pe: Math.min(Math.max(pe, ps), 12),
+    room: String(roomRaw || m[7] || '').replace(/[（(]\d+[）)]\s*$/, '').trim()
+  };
+}
+
+// 解析教务系统“按星期网格”导出的伪 .xls。表格最后 7 列始终对应周一至周日，
+// 前面的时段列带有 rowspan，所以不依赖具体的 DOM 行列索引。
+function ttParseWeeklyGrid(doc, meta) {
+  var tables = Array.prototype.slice.call(doc.querySelectorAll('table'));
+  for (var ti = 0; ti < tables.length; ti++) {
+    var rows = tables[ti].querySelectorAll('tr');
+    if (rows.length < 2) continue;
+    var headerCells = rows[0].querySelectorAll('th,td');
+    var headerText = Array.prototype.map.call(headerCells, function (cell) {
+      return (cell.textContent || '').replace(/\s+/g, '');
+    }).join('|');
+    if (headerText.indexOf('星期一') < 0 || headerText.indexOf('星期日') < 0) continue;
+
+    var courses = [];
+    var courseByKey = Object.create(null);
+    for (var ri = 1; ri < rows.length; ri++) {
+      var cells = Array.prototype.slice.call(rows[ri].querySelectorAll('th,td'));
+      if (cells.length < 8) continue;
+      var dayCells = cells.slice(-7);
+      dayCells.forEach(function (cell, dayIndex) {
+        var infos = Array.prototype.slice.call(cell.querySelectorAll('.xkinfo'));
+        if (!infos.length) return;
+        infos.forEach(function (info) {
+          var entries = Array.prototype.slice.call(info.children).filter(function (child) {
+            return child.tagName && child.tagName.toLowerCase() === 'div';
+          });
+          if (!entries.length) entries = [info];
+          entries.forEach(function (entry) {
+            var lines = ttWeeklyEntryLines(entry);
+            if (lines.length < 3) return;
+            var name = lines[0];
+            var teacher = lines[1];
+            var timeRaw = lines[2];
+            var room = lines[3] || '';
+            var parsedName = ttSplitCourseName(name);
+            if (!parsedName.name) return;
+            var key = (parsedName.code || '') + '|' + parsedName.name;
+            var course = courseByKey[key];
+            if (!course) {
+              course = courseByKey[key] = {
+                code: parsedName.code,
+                name: parsedName.name,
+                teachers: [], hours: '', credits: '', classNo: '', nature: '',
+                timeRaw: '', meetings: []
+              };
+              courses.push(course);
+            }
+            if (teacher && course.teachers.indexOf(teacher) < 0) course.teachers.push(teacher);
+            var meeting = ttParseWeeklyMeeting(timeRaw, room, dayIndex + 1);
+            if (meeting) {
+              course.meetings.push(meeting);
+              course.timeRaw = course.timeRaw ? course.timeRaw + ',' + timeRaw : timeRaw;
+            }
+          });
+        });
+      });
+    }
+    if (courses.length) {
+      meta.sourceFormat = 'weekly-grid';
+      meta.courseCodeMissing = true;
+      meta.courseCount = meta.courseCount || courses.length;
+      return { meta: meta, courses: courses.map(function (course) {
+        course.meetings = ttMergeMeetings(course.meetings);
+        return course;
+      }) };
+    }
+  }
+  return null;
 }
 
 // ── 解析：HTML 文本 → { meta, courses } ──
@@ -68,6 +194,7 @@ function ttParseImport(htmlText) {
   if ((m = plain.match(/所在班级[:：]\s*(\S+)/))) meta.className = m[1];
   if ((m = plain.match(/选课课程门数[:：]\s*(\d+)/))) meta.courseCount = parseInt(m[1], 10);
   if ((m = plain.match(/总学分[:：]\s*([\d.]+)/))) meta.credits = m[1];
+  ttReadHiddenMeta(doc, meta);
 
   // 定位课程表：表头需同时含「课程名」和「上课时间」
   var table = null, col = null;
@@ -88,7 +215,7 @@ function ttParseImport(htmlText) {
     });
     if (idx.name !== undefined && idx.time !== undefined) { table = tables[i]; col = idx; }
   }
-  if (!table) return { meta: meta, courses: [] };
+  if (!table) return ttParseWeeklyGrid(doc, meta) || { meta: meta, courses: [] };
 
   var courses = [];
   var rows = table.querySelectorAll('tbody tr');
@@ -123,6 +250,8 @@ function ttParseImport(htmlText) {
       meetings: ttMergeMeetings(meetings)
     });
   });
+  meta.sourceFormat = 'detail-table';
+  meta.courseCodeMissing = courses.some(function (course) { return !course.code; });
   return { meta: meta, courses: courses };
 }
 
@@ -322,54 +451,225 @@ function ttSaveStore(data) {
   try { localStorage.setItem(ttStoreKey(), JSON.stringify(data)); } catch (e) {}
 }
 
+// 课表只按自己的课程代码请求资料数量，避免进入课表时等待整棵课程树。
+var ttCountLoadPromise = null;
+var ttCountLoadKey = '';
+var ttCountLoadGeneration = 0;
+function ttCourseCodesKey() {
+  if (!ttState.data || !Array.isArray(ttState.data.courses)) return '';
+  var seen = Object.create(null);
+  return ttState.data.courses.map(function (c) { return c.code || ''; })
+    .filter(function (code) {
+      if (!code || seen[code]) return false;
+      seen[code] = true;
+      return true;
+    }).sort().join(',');
+}
+
+function ttResetCourseCounts() {
+  ttCountLoadGeneration++;
+  ttState.counts = {};
+  ttState._countKey = '';
+  ttState._countError = false;
+  ttCountLoadPromise = null;
+  ttCountLoadKey = '';
+}
+
+function ttLoadCourseCounts() {
+  var key = ttCourseCodesKey();
+  if (!key || typeof api !== 'function') return Promise.resolve(false);
+  if (ttState._countKey === key) return Promise.resolve(true);
+  if (ttCountLoadPromise && ttCountLoadKey === key) return ttCountLoadPromise;
+
+  var uidAtCall = ttState.uid;
+  var generation = ttCountLoadGeneration;
+  ttCountLoadKey = key;
+  var request = api('/api/courses/timetable-summary/?codes=' + encodeURIComponent(key))
+    .then(function (summary) {
+      // 账号或课表在请求期间发生变化时，不能把旧结果写进新课表。
+      if (generation !== ttCountLoadGeneration || ttState.uid !== uidAtCall || ttCourseCodesKey() !== key) return false;
+      ttState.counts = summary || {};
+      ttState._countKey = key;
+      ttState._countError = false;
+      ttResolveCourseLinks();
+      ttRepaintCurrent();
+      return true;
+    })
+    .catch(function () {
+      if (generation === ttCountLoadGeneration && ttState.uid === uidAtCall && ttCourseCodesKey() === key) {
+        ttState._countError = true;
+        ttRepaintCurrent();
+      }
+      return false;
+    });
+  ttCountLoadPromise = request;
+  request.then(function () {
+    if (ttCountLoadPromise === request) {
+      ttCountLoadPromise = null;
+      ttCountLoadKey = '';
+    }
+  });
+  return request;
+}
+
 // ── 云端同步：课表数据（解析结果，不含文件）随账号跨设备 ──
 // 冲突规则：本地与云端按 importedAt 取较新者；仅一方有时直接采用并补齐另一方
+var ttSyncUploadPromise = null;
+var ttSyncUploadQueued = false;
+var ttSyncMutationVersion = 0;
+var ttSyncPullPromise = null;
+var ttSyncGeneration = 0;
+var ttSyncPollTimer = null;
+var ttSyncWatchersInstalled = false;
+
+function ttResetSyncState() {
+  ttSyncGeneration++;
+  ttSyncUploadPromise = null;
+  ttSyncUploadQueued = false;
+  ttSyncPullPromise = null;
+  ttState.cloudUpdatedAt = null;
+  ttState.cloudSynced = false;
+}
+
+function ttAdoptCloudTimetable(cloud) {
+  if (!cloud || !Array.isArray(cloud.courses)) return false;
+  if (!cloud.pendingCodes || typeof cloud.pendingCodes !== 'object') cloud.pendingCodes = {};
+  ttState.data = ttNormalizeMeetings(cloud);
+  if (!ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
+  ttSaveStore(ttState.data);
+  ttComputeWeek();
+  ttApplyScheme();
+  ttRenderAll();
+  ttResetCourseCounts();
+  ttLoadCourseCounts();
+  return true;
+}
+
 function ttSyncUpload() {
-  if (!ttState.data || typeof api !== 'function') return;
-  api('/api/user/timetable/', { method: 'PUT', body: { data: ttState.data } })
-    .then(function () { ttState.cloudSynced = true; })
-    .catch(function () {
-      ttState.cloudSynced = false;
-      ttToast('课表云端同步失败，本次改动仅保存在本机');
-    });
+  if (!ttState.data || typeof api !== 'function') return Promise.resolve(false);
+  ttSyncMutationVersion++;
+  ttSyncUploadQueued = true;
+  ttState.cloudSynced = false;
+  if (ttSyncUploadPromise) return ttSyncUploadPromise;
+
+  var uidAtCall = ttState.uid;
+  var generation = ttSyncGeneration;
+  var flush = function () {
+    if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return Promise.resolve(false);
+    if (!ttSyncUploadQueued || !ttState.data) return Promise.resolve(true);
+    ttSyncUploadQueued = false;
+    // 请求期间本地对象可能继续变化，发送快照避免旧请求携带新对象的半成品。
+    var sentVersion = ttSyncMutationVersion;
+    var snapshot = JSON.parse(JSON.stringify(ttState.data));
+    var snapshotAt = Number(snapshot.importedAt) || 0;
+    return api('/api/user/timetable/', { method: 'PUT', body: { data: snapshot } })
+      .then(function (res) {
+        if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return false;
+        if (res && res.updated_at) ttState.cloudUpdatedAt = res.updated_at;
+        if (res && res.accepted === false && res.data && Array.isArray(res.data.courses)) {
+          // 服务端已有更新版本：只有当前没有更新中的本地编辑时才采用它。
+          var currentAt = ttState.data ? Number(ttState.data.importedAt) || 0 : 0;
+          if (currentAt <= snapshotAt) {
+            ttAdoptCloudTimetable(res.data);
+            snapshotAt = Number(ttState.data.importedAt) || snapshotAt;
+          } else {
+            ttSyncUploadQueued = true;
+          }
+        }
+        if (ttSyncMutationVersion > sentVersion ||
+            (ttState.data && (Number(ttState.data.importedAt) || 0) > snapshotAt)) {
+          ttSyncUploadQueued = true;
+          return flush();
+        }
+        ttState.cloudSynced = true;
+        return true;
+      })
+      .catch(function () {
+        if (generation === ttSyncGeneration && ttState.uid === uidAtCall) {
+          ttState.cloudSynced = false;
+          ttToast('课表云端同步失败，本次改动仅保存在本机');
+        }
+        return false;
+      });
+  };
+  var request = flush();
+  var wrapped = request.then(function (result) {
+    if (ttSyncUploadPromise === wrapped) {
+      ttSyncUploadPromise = null;
+      ttSyncUploadQueued = false;
+    }
+    return result;
+  });
+  ttSyncUploadPromise = wrapped;
+  return wrapped;
 }
 
 function ttSyncPull() {
-  if (typeof api !== 'function') return;
+  if (typeof api !== 'function') return Promise.resolve(false);
+  if (ttSyncPullPromise) return ttSyncPullPromise;
   var uidAtCall = ttState.uid;
-  api('/api/user/timetable/').then(function (res) {
+  var generation = ttSyncGeneration;
+  var url = '/api/user/timetable/';
+  if (ttState.cloudUpdatedAt) url += '?since=' + encodeURIComponent(ttState.cloudUpdatedAt);
+  var request = api(url).then(function (res) {
     // 请求期间切换了账号：丢弃结果
-    if (ttState.uid !== uidAtCall) return;
+    if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return false;
+    if (res && res.updated_at) ttState.cloudUpdatedAt = res.updated_at;
+    // since 命中时 data=null 代表“未变化”，不能误判为空表再上传本地数据。
+    if (res && res.unchanged) return true;
     var cloud = (res && res.data) ? res.data : null;
     if (!cloud || !Array.isArray(cloud.courses)) {
       // 云端为空：本地有则推上去
       if (ttState.data) ttSyncUpload();
-      return;
+      return true;
     }
     if (!cloud.pendingCodes || typeof cloud.pendingCodes !== 'object') cloud.pendingCodes = {};
+    // 本地有尚未完成的写入时，轮询结果不能覆盖刚保存的改动。
+    if (ttSyncUploadPromise || ttSyncUploadQueued) {
+      ttSyncUpload();
+      return true;
+    }
     var local = ttState.data;
     var localAt = local ? (local.importedAt || 0) : -1;
     var cloudAt = cloud.importedAt || 0;
     if (cloudAt >= localAt) {
       // 云端较新（或本地没有）→ 采用云端（云端可能是早期未合并的存量，先归一化）
-      ttState.data = ttNormalizeMeetings(cloud);
-      if (!ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
-      ttSaveStore(ttState.data);
-      ttComputeWeek();
-      ttApplyScheme();
-      ttRenderAll();
-      // 关键：ttLoadUserData 里检查 data 时云端还没回来（本地为 null）会跳过
-      // 树预载，这里补上，否则链接永远解析不了（全部误显「未建目录」且点击无效）
-      ttEnsureCourseTree();
+      ttAdoptCloudTimetable(cloud);
     } else {
       // 本地较新 → 推云端
       ttSyncUpload();
     }
-  }).catch(function () {});
+    return true;
+  }).catch(function () { return false; });
+  ttSyncPullPromise = request;
+  request.then(function () {
+    if (ttSyncPullPromise === request) ttSyncPullPromise = null;
+  });
+  return request;
+}
+
+function ttSyncIsActive() {
+  var view = document.getElementById('timetableView');
+  return !!(currentUser && view && view.classList.contains('active'));
+}
+
+function ttStartSyncWatchers() {
+  if (ttSyncPollTimer) return;
+  ttSyncPollTimer = setInterval(function () {
+    if (!document.hidden && ttSyncIsActive()) ttSyncPull();
+  }, 5000);
+  if (ttSyncWatchersInstalled) return;
+  ttSyncWatchersInstalled = true;
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && ttSyncIsActive()) ttSyncPull();
+  });
+  window.addEventListener('focus', function () {
+    if (ttSyncIsActive()) ttSyncPull();
+  });
 }
 
 // ── 视图入口（供导航/恢复调用；仅对管理员开放，与侧边栏入口同条件） ──
-function showTimetable() {
+function showTimetable(skipHistory) {
   if (!currentUser || currentUser.role === 'user') { if (!currentUser) showLoginModal(); return; }
   var view = document.getElementById('timetableView');
   if (!view) return;
@@ -377,7 +677,7 @@ function showTimetable() {
   view.classList.add('active');
   updateSidebar('timetable');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  pushViewState('timetable', {});
+  if (!skipHistory) pushViewState('timetable', {});
   _updateFooterVisibility('timetable');
   ttInitShell();
 }
@@ -385,13 +685,14 @@ function showTimetable() {
 function ttInitShell() {
   var shell = document.getElementById('ttShell');
   if (!shell) return;
+  ttStartSyncWatchers();
   if (shell.dataset.ready) {
     // 同一页面内切换账号（登出再登录）：按新账号重载数据与配色
     if (ttState.uid !== (currentUser ? currentUser.id : null)) ttLoadUserData();
     else {
       ttMigrateLegacyStore();
       ttRenderAll();
-      if (ttState.data) ttEnsureCourseTree(); // 上次树加载失败时借重开视图重试
+      if (ttState.data && ttState._countError) ttLoadCourseCounts();
     }
     return;
   }
@@ -435,6 +736,9 @@ function ttInitShell() {
 // 按当前账号载入课表数据与配色（账号切换时重新调用）
 function ttLoadUserData() {
   ttState.uid = currentUser ? currentUser.id : null;
+  ttResetSyncState();
+  ttResetCourseCounts();
+  ttState._treeError = false;
   ttState.editing = false;
   ttApplyEditMode();
   ttMigrateLegacyStore();
@@ -458,12 +762,7 @@ function ttLoadUserData() {
   ttApplyViewMode();
   ttRenderAll();
   if (ttState.data) {
-    // 课程树未就绪时加载并解析链接（树有内存单例缓存，失败后重开视图会重试）
-    ttEnsureCourseTree();
-    // 预热课程浏览器懒加载脚本：点课程卡直达资料列表时无需现场下载
-    if (typeof ensureFeature === 'function') {
-      ensureFeature('explorer').catch(function () {});
-    }
+    ttLoadCourseCounts();
   }
   // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
   ttSyncPull();
@@ -521,6 +820,7 @@ function ttToggleEdit() {
   }
   ttApplyEditMode();
   ttRenderAll();
+  if (ttState.editing) ttEnsureCourseTree();
 }
 
 // 稳定 id：'ttc' + 时间戳36进制 + 两位随机；只增不改
@@ -656,26 +956,68 @@ function ttShowImportError(msg) {
 
 // ── 课程目录匹配：code → { state: linked|pending|missing, path?, fileCount? } ──
 
-// 课程树是否就绪（树加载失败时 _loadCourseTree 会置空对象 {}，同样视为未就绪）
+// 课程树是否就绪（树加载失败时 _loadCourseTree 会置空对象 {}，同样视为未就绪）。
+// 用 typeof 防止课表懒加载早于 explorer-core 时触发跨脚本 ReferenceError。
 function ttTreeReady() {
-  return !!(courseTree && Object.keys(courseTree).length);
+  return typeof courseTree !== 'undefined' && !!(courseTree && Object.keys(courseTree).length);
 }
 
 // 确保课程树就绪后解析链接并重绘当前视图。
 // 自愈入口：云端拉取课表后 / 树加载失败后 / 用户点击时树尚未就绪，
-// 都会走到这里重新拉树（loadCourseTree 失败会清掉内部缓存 Promise，可重试）
+// 都会走到这里重新拉树。explorer-core 还没完成时先等懒加载，
+// 空树也会自动再试一次，避免列表永久停在「目录加载中」。
+var ttTreeLoadPromise = null;
 function ttEnsureCourseTree() {
   if (ttTreeReady()) {
+    ttState._treeError = false;
     ttResolveCourseLinks();
     ttRepaintCurrent();
-    return Promise.resolve();
+    return Promise.resolve(true);
   }
-  if (typeof loadCourseTree !== 'function') return Promise.resolve();
-  ttState._treeTryAt = Date.now();
-  return loadCourseTree().then(function () {
+  if (ttTreeLoadPromise) return ttTreeLoadPromise;
+  ttState._treeError = false;
+
+  var attempt = function () {
+    var load = typeof loadCourseTree === 'function'
+      ? Promise.resolve(loadCourseTree())
+      : (typeof ensureFeature === 'function'
+        ? ensureFeature('explorer').then(function () {
+            if (typeof loadCourseTree !== 'function') throw new Error('课程目录模块未就绪');
+            return loadCourseTree();
+          })
+        : Promise.reject(new Error('课程目录模块未加载')));
+    ttState._treeTryAt = Date.now();
+    return load.then(function () {
+      return ttTreeReady();
+    });
+  };
+
+  var retries = 0;
+  var result = (function retry() {
+    return attempt().then(function (ready) {
+      if (ready) return true;
+      if (retries++ < 1) {
+        return new Promise(function (resolve) { setTimeout(resolve, 280); }).then(retry);
+      }
+      throw new Error('课程目录返回空数据');
+    });
+  })().then(function () {
+    ttState._treeError = false;
     ttResolveCourseLinks();
     ttRepaintCurrent();
-  }).catch(function () {});
+    return true;
+  }).catch(function () {
+    // 不把失败伪装成「未建目录」；保留一个可见的重试入口。
+    ttState._treeError = true;
+    ttResolveCourseLinks();
+    ttRepaintCurrent();
+    return false;
+  });
+  ttTreeLoadPromise = result;
+  result.then(function () {
+    if (ttTreeLoadPromise === result) ttTreeLoadPromise = null;
+  });
+  return result;
 }
 
 // 区段课程代码匹配：目录节点 courseId 形如「GEN09001-GEN09008」（或 GEN09001-008）
@@ -737,8 +1079,26 @@ function ttFindPathByCode(code, courseName) {
 function ttResolveCourseLinks() {
   var map = {};
   ttState.links = map;
-  // 树未就绪（含加载失败置 {}）时保持链接表为空：UI 显示「加载中」而非误报「未建目录」
-  if (!ttState.data || !ttTreeReady()) return map;
+  if (!ttState.data) return map;
+  // 先用轻量摘要渲染资料数；完整课程树仅在点击课程、编辑或导入时加载。
+  if (!ttTreeReady()) {
+    ttState.data.courses.forEach(function (c) {
+      if (!c.code || map[c.code]) return;
+      var summary = ttState.counts[c.code];
+      if (!summary) return;
+      if (ttState.data.pendingCodes && ttState.data.pendingCodes[c.code]) {
+        map[c.code] = { state: 'pending', quick: true };
+      } else if (summary.exists) {
+        map[c.code] = {
+          state: 'linked', type: summary.course_type === 'general' ? '通识课' : '专业课',
+          fileCount: Number(summary.file_count) || 0, quick: true
+        };
+      } else {
+        map[c.code] = { state: 'missing', quick: true };
+      }
+    });
+    return map;
+  }
   ttState.data.courses.forEach(function (c) {
     if (!c.code || map[c.code]) return;
     var path = ttFindPathByCode(c.code, c.name);
@@ -787,6 +1147,7 @@ function ttShowConfirmModal(parsed) {
 function ttRenderConfirmModal(parsed) {
   var meta = parsed.meta || {};
   var courses = parsed.courses;
+  var courseCodeMissing = meta.sourceFormat === 'weekly-grid' && meta.courseCodeMissing;
   var existing = ttModalOverlay();
   ttLocPicks = {}; // 本次导入的位置选择从零开始
   var credits = meta.credits || courses.reduce(function (a, c) { return a + (parseFloat(c.credits) || 0); }, 0).toFixed(2);
@@ -799,6 +1160,8 @@ function ttRenderConfirmModal(parsed) {
   });
   var missing = courses.filter(function (c) { return c.code && statusByCode[c.code] === 'missing'; });
   var genCount = missing.filter(function (c) { return /^GEN/i.test(c.code); }).length;
+  // 有非 GEN 的待建课 → 顶部提醒可手动归入通识课（见下方「通识课」学院选项）
+  var majorMissing = missing.some(function (c) { return !/^GEN/i.test(c.code); });
 
   var locRendered = {};
   var rows = courses.map(function (c) {
@@ -826,6 +1189,9 @@ function ttRenderConfirmModal(parsed) {
     '<div class="tt-modal tt-tut" role="dialog" aria-modal="true" aria-label="确认导入课表">' +
       '<header><h3>确认导入</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
       '<div class="tt-mbody">' +
+        (majorMissing
+          ? '<div class="tt-code-note" role="note"><span class="tt-code-note-mark">!</span><div><strong>「公共选修课」中的非 GEN 课程请归入通识课</strong><p>有些在“公共选修课”中选中的课程，虽编码不为 GEN，但不在任何培养方案里，仍要归入通识课中。请在「学院」一栏手动选择「通识课」，将其归入对应的通识课分类，谢谢配合。</p></div></div>'
+          : '') +
         '<div class="tt-msummary">' +
           (meta.studentName ? '<span><b>' + esc(meta.studentName) + '</b>' + (meta.className ? ' · ' + esc(meta.className) : '') + '</span>' : '') +
           (meta.semester ? '<span>' + esc(meta.semester) + '</span>' : '') +
@@ -833,13 +1199,16 @@ function ttRenderConfirmModal(parsed) {
           (credits ? '<span>共 <b>' + esc(String(credits)) + '</b> 学分</span>' : '') +
         '</div>' +
         '<div class="tt-privacy-note">🔒 本地解析，仅自己可见：文件本身不会上传；解析出的课表数据会同步到你的账号，换设备登录即可查看。</div>' +
+        (courseCodeMissing
+          ? '<div class="tt-code-note" role="note"><span class="tt-code-note-mark">!</span><div><strong>此文件未提供课程代码</strong><p>仍可继续导入并正常生成课表，但课程卡不会提供资料目录跳转。导入后打开「编辑课表」，为课程补上代码并保存，即可恢复对应课程的跳转。</p></div></div>'
+          : '') +
         (ttState.data && ttState.data.courses.length
           ? '<div class="tt-privacy-note">⚠ 导入将整表覆盖现有课表（含手动编辑和手动添加的课程）。</div>'
           : '') +
-        (missing.length
+        (courseCodeMissing ? '' : (missing.length
           ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程尚未建立资料目录' +
             '（通识 ' + genCount + ' 门）。请为它们选择位置，导入后将自动提交新课程申请，管理员批准前点击课程不会跳转。</div>'
-          : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>') +
+          : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>')) +
         '<div class="tt-mlist">' + rows + '</div>' +
       '</div>' +
       '<footer>' +
@@ -871,7 +1240,12 @@ function ttRenderConfirmModal(parsed) {
         var colSel = existing.querySelector('select[data-role="college"][data-code="' + c.code + '"]');
         var pick = ttLocPicks[c.code];
         if (colSel && colSel.value && pick && pick.catId) {
-          requests.push({ code: c.code, body: { course_type: 'major', course_name: c.name, course_code: c.code, college_id: parseInt(colSel.value, 10), target_category_id: pick.catId } });
+          if (colSel.value === 'gen') {
+            // 非 GEN 但属公共选修课：按通识课申请，归入通识树内选中的分类
+            requests.push({ code: c.code, body: { course_type: 'general', course_name: c.name, course_code: c.code, general_category_id: pick.catId } });
+          } else {
+            requests.push({ code: c.code, body: { course_type: 'major', course_name: c.name, course_code: c.code, college_id: parseInt(colSel.value, 10), target_category_id: pick.catId } });
+          }
         } else unchosen++;
       }
     });
@@ -908,7 +1282,8 @@ function ttLocationControls(course) {
   }).join('');
   return '<span class="loc">' +
     '<select class="tt-loc-sel" data-role="college" data-code="' + codeAttr + '">' +
-      '<option value="">选择学院…</option>' + colOpts + '</select>' +
+      '<option value="">选择学院…</option>' + colOpts +
+      '<option value="gen">通识课</option></select>' +
     '<button type="button" class="tt-btn is-ghost tt-loc-lv" data-code="' + codeAttr + '" disabled>选择层级…</button>' +
     '<span class="tt-loc-path" data-code="' + codeAttr + '"></span>' +
   '</span>';
@@ -922,7 +1297,9 @@ function ttBindLocationControls(root) {
       var code = sel.getAttribute('data-code');
       var pick = ttLocPicks[code] = ttLocPicks[code] || {};
       var opt = sel.selectedOptions && sel.selectedOptions[0];
-      pick.collegeId = sel.value ? parseInt(sel.value, 10) : null;
+      var isGenTree = sel.value === 'gen'; // 非 GEN 课程手动归入通识课
+      pick.isGenTree = isGenTree;
+      pick.collegeId = sel.value && !isGenTree ? parseInt(sel.value, 10) : null;
       pick.collegeName = opt ? opt.textContent : '';
       pick.catId = null;
       pick.catPath = '';
@@ -961,11 +1338,19 @@ function ttCountDirectCourses(n) { return (n.children || []).filter(function (c)
 
 function ttOpenLevelPicker(code) {
   var pick = ttLocPicks[code] || {};
-  var colleges = (courseTree && courseTree['专业课'] && courseTree['专业课'].children || []);
-  var college = colleges.find(function (n) {
-    return String(n.collegeId || '') === String(pick.collegeId || '');
-  });
+  var college;
+  if (pick.isGenTree) {
+    // 非 GEN 课程归通识课：浏览通识课树选分类
+    college = (courseTree && courseTree['通识课']) || null;
+  } else {
+    var colleges = (courseTree && courseTree['专业课'] && courseTree['专业课'].children || []);
+    college = colleges.find(function (n) {
+      return String(n.collegeId || '') === String(pick.collegeId || '');
+    });
+  }
   if (!college) { ttToast('请先选择学院'); return; }
+  // 通识课根节点在树 JSON 中是 {children:[…]}，不带 name 字段
+  var rootLabel = college.name || '通识课';
   ttLpActiveCode = code;
   var ov = document.createElement('div');
   ov.id = 'ttLpOverlay';
@@ -974,7 +1359,7 @@ function ttOpenLevelPicker(code) {
     '<div class="tt-modal tt-lp" role="dialog" aria-modal="true" aria-label="选择课程层级">' +
       '<header><h3>选择课程层级</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
       '<div class="tt-mbody">' +
-        '<div class="tt-privacy-note">在「' + esc(college.name) + '」目录下选择该课程应归属的文件夹；' +
+        '<div class="tt-privacy-note">在「' + esc(rootLabel) + '」目录下选择该课程应归属的文件夹；' +
           '有 ▸ 的层级可展开，标了课程数的文件夹可直接选为归属位置。</div>' +
         '<div class="tt-lp-tree" id="ttLpTree"></div>' +
       '</div>' +
@@ -983,7 +1368,7 @@ function ttOpenLevelPicker(code) {
   document.body.appendChild(ov);
   lockScroll();
   var treeEl = ov.querySelector('#ttLpTree');
-  ttRenderLevelTree(treeEl, college.children || [], [college.name]);
+  ttRenderLevelTree(treeEl, college.children || [], [rootLabel]);
   if (!treeEl.querySelector('.tt-lp-node.is-select')) {
     treeEl.innerHTML = '<div class="tt-lp-empty">该学院目录下暂无可新建课程的文件夹层级，可联系管理员调整课程树。</div>';
   }
@@ -1065,9 +1450,11 @@ function ttApplyImport(parsed, requests) {
   parsed.importedAt = Date.now();
   ttSaveStore(parsed);
   ttState.data = parsed;
+  ttResetCourseCounts();
   ttComputeWeek();
   ttCloseModal();
   ttRenderAll();
+  ttLoadCourseCounts();
   if (!requests.length) return;
   var direct = 0, sent = 0, failed = 0, mergedN = 0, treeDirty = false;
   var jobs = requests.map(function (r) {
@@ -1119,6 +1506,15 @@ function ttToastImportResult(direct, sent, failed, mergedN) {
 // ── 课程卡点击：跳转 / 状态提示 ──
 function ttOpenCourse(code) {
   var info = ttState.links[code];
+  // 轻量摘要已确认课程存在，但完整课程树尚未到达时，必须先补树再导航。
+  // 直接走 navToCourse 会与板块根渲染产生竞态，首点容易被覆盖。
+  if (info && info.quick && info.state === 'linked' && !ttTreeReady()) {
+    ttEnsureCourseTree().then(function (ready) {
+      if (ready) ttOpenCourse(code);
+      else ttToast('课程目录加载失败，请稍后再试');
+    });
+    return;
+  }
   // 树未就绪（如刚从云端拉取、或树加载失败）时链接还没解析：
   // 先加载课程树再重试一次；5 秒内不重复尝试，避免加载失败时死循环
   if ((!info || info.state !== 'linked') && !ttTreeReady() &&
@@ -1129,7 +1525,6 @@ function ttOpenCourse(code) {
   }
   if (!info) return;
   if (info.state === 'linked') {
-    if (typeof showExplorer !== 'function') return;
     var go = function () {
       // 优先用课表自己的解析结果（支持区段目录/形势与政策特例，
       // navToLast 只认精确代码会停在板块根）；身份优先级已在解析时应用
@@ -1139,7 +1534,9 @@ function ttOpenCourse(code) {
         switchView('explorer');
         renderExplorer();
         updateSidebar(info.path[0] === '通识课' ? 'general' : 'major');
-      } else if (typeof navToLast === 'function') {
+      } else if (typeof navToCourse === 'function') {
+        navToCourse(info.type === '通识课' ? '通识课' : '专业课', code);
+      } else if (typeof showExplorer === 'function' && typeof navToLast === 'function') {
         showExplorer(info.type === '通识课' ? '通识课' : '专业课');
         navToLast(code);
       }
@@ -1254,7 +1651,9 @@ function ttRenderCourseModal(wc, isNew) {
 
   // 课程代码变化 → 重解析链接状态（含位置选择控件）
   var codeEl = existing.querySelector('#ttEdCode');
-  codeEl.addEventListener('change', function () { ttEditRenderLink(wc); });
+  function refreshCodeLink() { ttEditRenderLink(wc); }
+  codeEl.addEventListener('input', refreshCodeLink);
+  codeEl.addEventListener('change', refreshCodeLink);
 
   // 从本周移除：工作副本内拆段，行上可见，保存才落库
   var stripBtn = existing.querySelector('#ttEdStrip');
@@ -1372,7 +1771,7 @@ function ttEditRenderLink(wc) {
     return;
   }
   if (!code) {
-    el.innerHTML = '<span class="tt-edit-hint">未填代码：保存后不链接资料目录，随时可回来补填</span>';
+    el.innerHTML = '<span class="tt-edit-hint">未填课程代码：保存后不会提供课程跳转；补填代码并保存即可恢复</span>';
     return;
   }
   var pending = ttState.data && ttState.data.pendingCodes && ttState.data.pendingCodes[code];
@@ -1387,7 +1786,7 @@ function ttEditRenderLink(wc) {
   }
   var isGen = /^GEN/i.test(code);
   el.innerHTML =
-    '<span class="tt-edit-hint">目录未建立' + (isGen ? '（GEN 开头归通识课）' : '（归专业课，需选学院和具体层级）') +
+    '<span class="tt-edit-hint">目录未建立' + (isGen ? '（GEN 开头归通识课）' : '（归专业课，或在「学院」一栏选「通识课」；均需再选具体层级）') +
     '。选择位置后，保存时将自动提交新课程申请，管理员批准前点击不跳转；也可留空跳过：</span><span class="loc">' +
     ttLocationControls({ code: code, name: name }) + '</span>';
   ttBindLocationControls(el);
@@ -1403,6 +1802,10 @@ function ttCollectRequestFromModal(code, name) {
   var col = document.querySelector('#ttEdLink select[data-role="college"]');
   var pick = ttLocPicks[code];
   if (col && col.value && pick && pick.catId) {
+    if (col.value === 'gen') {
+      // 非 GEN 但属公共选修课：按通识课申请，归入通识树内选中的分类
+      return { course_type: 'general', course_name: name, course_code: code, general_category_id: pick.catId };
+    }
     return { course_type: 'major', course_name: name, course_code: code, college_id: parseInt(col.value, 10), target_category_id: pick.catId };
   }
   return null;
@@ -1456,10 +1859,12 @@ function ttEditSave(wc, isNew) {
   var needsRequest = code && ttTreeReady() && !data.pendingCodes[code] && !ttFindPathByCode(code, wc.name);
   var body = needsRequest ? ttCollectRequestFromModal(code, wc.name) : null;
   data.importedAt = Date.now();
+  ttResetCourseCounts();
   ttComputeWeek();
   ttSaveStore(data);
   ttCloseModal();
   ttRenderAll();
+  ttLoadCourseCounts();
   ttSyncUpload();
   ttResolveCourseLinks();
   ttRepaintCurrent();
@@ -1612,9 +2017,9 @@ function ttPaintGrid() {
 
   ttResolveCourseLinks();
 
-  // 学期内没有周末课 → 收掉周六/周日空列（移动端行宽更充裕，桌面同理）
+  // 当前周没有周末课 → 收掉周六/周日空列（避免整学期某个周末课把本周工作日压窄）
   var hasWeekend = ttState.data.courses.some(function (c) {
-    return c.meetings.some(function (mt) { return mt.day >= 6; });
+    return c.meetings.some(function (mt) { return mt.day >= 6 && ttMeetingInWeek(mt, week); });
   });
   grid.classList.toggle('tt-w5', !hasWeekend);
   var dayCount = hasWeekend ? 7 : 5;
@@ -1770,16 +2175,34 @@ function ttFmtMeeting(mt) {
 }
 
 // 资料状态签：与课表卡同一冷暖语言（无=冷、有=暖、丰富=更深）
-// 树未就绪时不能断言「未建目录」，先显示加载中（树到达后 ttEnsureCourseTree 会重绘）
-function ttStatusTag(link) {
-  if (!ttTreeReady()) return '<span class="tt-tag">目录加载中…</span>';
+function ttFileCountTag(n) {
+  if (n >= 10) return '<span class="tt-tag tt-tag-warm2">资料丰富</span>';
+  if (n >= 1) return '<span class="tt-tag tt-tag-warm">' + n + ' 份资料</span>';
+  return '<span class="tt-tag tt-tag-cold">暂无资料</span>';
+}
+
+function ttStatusTag(link, code) {
+  if (!code) return '<span class="tt-tag tt-tag-cold">待绑定代码</span>';
+  // 轻量摘要已经足够显示数量；点击课程时才补完整目录路径。
+  if (link && link.quick) {
+    if (link.state === 'missing') return '<span class="tt-tag tt-tag-cold">未建目录</span>';
+    if (link.state === 'pending') return '<span class="tt-tag tt-tag-cold">申请审核中</span>';
+    return ttFileCountTag(link.fileCount);
+  }
+  if (!ttTreeReady()) {
+    if (ttState._countError) {
+      return '<button type="button" class="tt-tag tt-tag-cold tt-count-retry" title="重新加载资料数量">重试资料数</button>';
+    }
+    if (ttState._treeError) {
+      return '<button type="button" class="tt-tag tt-tag-cold tt-tree-retry" title="重新加载课程目录">重试目录</button>';
+    }
+    return '<span class="tt-tag">目录加载中…</span>';
+  }
   if (!link || link.state === 'missing') return '<span class="tt-tag tt-tag-cold">未建目录</span>';
   if (link.state === 'pending') return '<span class="tt-tag tt-tag-cold">申请审核中</span>';
   var n = link.fileCount;
   if (n === null || n === undefined) return '<span class="tt-tag">已有目录</span>';
-  if (n >= 10) return '<span class="tt-tag tt-tag-warm2">资料丰富</span>';
-  if (n >= 1) return '<span class="tt-tag tt-tag-warm">' + n + ' 份资料</span>';
-  return '<span class="tt-tag tt-tag-cold">暂无资料</span>';
+  return ttFileCountTag(n);
 }
 
 function ttRenderList(body) {
@@ -1824,7 +2247,7 @@ function ttRenderList(body) {
       ' title="' + esc(tip) + '" style="--li:' + idx + '">' +
         '<div class="tt-lhead">' +
           '<span class="nm">' + esc(c.name) + '</span>' +
-          ttStatusTag(link) +
+          ttStatusTag(link, c.code) +
         '</div>' +
         (meta.length ? '<div class="tt-lmeta">' + meta.join(' · ') + '</div>' : '') +
         '<div class="tt-lsched">' + (sched ? esc(sched) : '未排课') + '</div>' +
@@ -1834,9 +2257,27 @@ function ttRenderList(body) {
     '<div class="tt-foot" id="ttFoot"><span>共 ' + data.courses.length + ' 门课程</span>' +
       '<span class="tt-legend"><i class="lg2"></i> 资料丰富 <i class="lg1"></i> 有资料 <i class="lg0"></i> 暂无资料</span></div>';
   body.innerHTML = html;
+  var list = document.getElementById('ttList');
+  if (!list) return;
 
   // 行点击（事件委托）：普通模式=跳转/提示；编辑模式=编辑课程
   list.onclick = function (e) {
+    var countRetry = e.target.closest('.tt-count-retry');
+    if (countRetry) {
+      e.preventDefault();
+      e.stopPropagation();
+      ttState._countError = false;
+      ttLoadCourseCounts();
+      return;
+    }
+    var retry = e.target.closest('.tt-tree-retry');
+    if (retry) {
+      e.preventDefault();
+      e.stopPropagation();
+      ttState._treeError = false;
+      ttEnsureCourseTree();
+      return;
+    }
     var row = e.target.closest('.tt-lrow');
     if (!row) return;
     if (ttState.editing) {
@@ -1873,7 +2314,7 @@ function ttShowTutorial() {
             img(2, '网上选课中的我的课表入口') +
           '</li>' +
           '<li>' +
-            '<p>在默认的「按列表方式显示」下点击「导出」，将生成的 xls 文件在本站上传，解析成功后自动生成你的课表；重新导入会覆盖现有课表。</p>' +
+            '<p>在「按列表方式显示」或「按周方式显示」下点击「导出」，将生成的 xls 文件在本站上传，解析成功后自动生成你的课表；重新导入会覆盖现有课表。</p>' +
             img(3, '我的课表导出按钮') +
           '</li>' +
         '</ol>' +
@@ -1926,7 +2367,9 @@ function __ttLoadHtmlText(text) {
   parsed.importedAt = Date.now();
   ttSaveStore(parsed);
   ttState.data = parsed;
+  ttResetCourseCounts();
   ttComputeWeek();
   ttRenderAll();
+  ttLoadCourseCounts();
   return parsed;
 }

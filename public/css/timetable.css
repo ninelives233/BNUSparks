@@ -64,10 +64,14 @@
 
 /* ── 顶部：标题 + 操作 ─────────────────────────────── */
 .tt-top {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: var(--space-sm); margin: var(--space-lg) 0 var(--space-md); flex-wrap: wrap;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: var(--space-md);
+  margin: var(--space-lg) 0 var(--space-md);
 }
-.tt-title { font-family: var(--serif); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0.04em; line-height: 1.2; }
+.tt-title {
+  font-family: var(--serif); font-size: clamp(1.6rem, 3vw, 1.95rem);
+  font-weight: 700; letter-spacing: 0.02em; line-height: 1.2;
+}
 .tt-title small { font-family: var(--sans); font-size: var(--fs-xs); font-weight: 400; color: var(--tt-head-soft); letter-spacing: 0.02em; display: block; margin-top: 4px; }
 .tt-actions { display: flex; gap: var(--space-xs); align-items: center; position: relative; }
 
@@ -79,10 +83,12 @@
 .tt-btn {
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel);
   color: inherit; font-family: var(--sans); font-size: var(--fs-xs);
-  padding: 6px 12px; border-radius: var(--radius-sm); cursor: pointer;
+  min-height: 36px; padding: 0 12px; border-radius: var(--radius-sm);
+  cursor: pointer; white-space: nowrap;
   transition: background var(--t-fast), border-color var(--t-fast);
 }
 .tt-btn:hover { background: var(--tt-gutter); }
+.tt-btn:active:not(:disabled) { transform: scale(0.97); }
 .tt-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-btn.is-active { background: var(--primary-surface); border-color: var(--primary); color: var(--primary-dark); font-weight: 600; }
 .tt-btn.danger { color: var(--danger); border-color: oklch(from var(--danger) l c h / 0.4); }
@@ -114,18 +120,20 @@
 .tt-weekbar {
   display: flex; align-items: center; gap: var(--space-sm);
   margin-bottom: var(--space-sm); flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--tt-line-soft);
+  border-radius: var(--radius-md); background: var(--surface);
 }
 .tt-weeknav { display: flex; align-items: center; gap: 4px; }
 .tt-wbtn {
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel); color: inherit;
-  width: 28px; height: 28px; border-radius: var(--radius-sm); cursor: pointer;
+  width: 34px; height: 34px; border-radius: var(--radius-sm); cursor: pointer;
   font-size: var(--fs-sm); line-height: 1; display: inline-flex; align-items: center; justify-content: center;
   transition: background var(--t-fast);
 }
 .tt-wbtn:hover:not(:disabled) { background: var(--tt-gutter); }
 .tt-wbtn:disabled { opacity: 0.35; cursor: default; }
 .tt-wbtn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.tt-week-label { font-family: var(--serif); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.06em; min-width: 86px; text-align: center; }
+.tt-week-label { font-family: var(--sans); font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.02em; min-width: 86px; text-align: center; }
 .tt-now-btn {
   appearance: none; border: none; background: none; cursor: pointer; font-family: var(--sans);
   font-size: var(--fs-xs); color: var(--tt-today); padding: 2px 4px; border-radius: var(--radius-xs);
@@ -134,7 +142,8 @@
 .tt-start-edit { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--tt-time); font-size: var(--fs-xs); }
 .tt-start-edit input {
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel); color: inherit;
-  color-scheme: light; font-family: var(--sans); font-size: var(--fs-xs); padding: 4px 8px; border-radius: var(--radius-sm);
+  color-scheme: light; font-family: var(--sans); font-size: var(--fs-xs);
+  min-height: 34px; padding: 4px 8px; border-radius: var(--radius-sm);
 }
 .tt-start-edit input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
@@ -195,12 +204,12 @@
 .tt-card {
   flex: 1; min-height: 0; min-width: 0;
   display: flex; flex-direction: column; padding: 7px 9px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid oklch(var(--tt-bl) var(--tt-bc) var(--th));
   background: oklch(var(--tt-l) var(--tt-c) var(--th));
   color: oklch(var(--tt-il) var(--tt-ic) var(--th));
   overflow: hidden;
-  box-shadow: 0 1px 2px oklch(0.4 0.02 60 / 0.10);
+  box-shadow: var(--shadow-xs);
   transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
 .tt-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
@@ -222,8 +231,8 @@
 .tt-card.tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
 
 .tt-card-name {
-  font-family: var(--serif); font-weight: 700; font-size: var(--fs-sm);
-  line-height: 1.4; letter-spacing: 0.03em;
+  font-family: var(--sans); font-weight: 650; font-size: var(--fs-sm);
+  line-height: 1.4; letter-spacing: 0;
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
 }
 .tt-card-meta { margin-top: auto; padding-top: 4px; font-size: var(--fs-2xs); line-height: 1.45; opacity: 0.88; overflow: hidden; }
@@ -258,25 +267,28 @@
    网格扫一眼，列表查细节：纸面行 + 左缘课程色条（色即身份），
    资料状态签延续冷暖语言。左缘色条是网格课程卡颜色的延伸。 */
 .tt-list {
-  list-style: none; margin: 0; padding: 0; max-width: 760px;
-  border: 1px solid var(--tt-line); border-radius: var(--radius-md);
-  background: var(--tt-panel); overflow: hidden;
+  list-style: none; display: grid; gap: var(--space-sm);
+  width: min(100%, 980px); margin: 0; padding: 0;
+  border: 0; border-radius: 0; background: transparent; overflow: visible;
 }
 .tt-lrow {
-  position: relative; padding: 11px 16px 11px 20px;
-  border-bottom: 1px solid var(--tt-line-soft);
-  display: flex; flex-direction: column; gap: 3px;
+  position: relative; min-height: 104px; padding: 18px 24px 18px 26px;
+  border: 1px solid var(--tt-line); border-radius: var(--radius-md);
+  background: var(--tt-panel); box-shadow: var(--shadow-xs); overflow: hidden;
+  display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-areas: 'head sched' 'meta sched';
+  align-items: center; column-gap: var(--space-lg); row-gap: 2px;
 }
-.tt-lrow:last-child { border-bottom: none; }
 .tt-lrow::before {
   content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
   border-radius: 0 2px 2px 0;
   background: oklch(0.78 0.075 var(--th));
 }
-.tt-lhead { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.tt-lhead { display: flex; align-items: flex-start; gap: 10px; min-width: 0; grid-area: head; }
 .tt-lrow .nm {
-  font-family: var(--serif); font-weight: 700; font-size: var(--fs-md);
-  letter-spacing: 0.03em; min-width: 0;
+  flex: 1; min-width: 0; display: block;
+  font-family: var(--sans); font-weight: 600; font-size: var(--fs-lg);
+  letter-spacing: 0; line-height: 1.4; overflow-wrap: anywhere;
 }
 .tt-tag {
   margin-left: auto; flex: none; font-size: var(--fs-2xs); line-height: 1;
@@ -285,12 +297,19 @@
   background: oklch(var(--tt-l) var(--tt-c) var(--th));
   color: oklch(var(--tt-il) var(--tt-ic) var(--th));
 }
+.tt-tree-retry { appearance: none; cursor: pointer; font-family: var(--sans); font-weight: 600; }
+.tt-tree-retry:hover { filter: brightness(0.97); }
 .tt-lrow.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
 .tt-lrow.tt-rich-2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
-.tt-lmeta { font-size: var(--fs-xs); color: var(--ink-soft); }
-.tt-lsched { font-size: var(--fs-xs); color: var(--ink-faint); font-variant-numeric: tabular-nums; line-height: 1.6; }
+.tt-lmeta { grid-area: meta; margin-top: 3px; font-size: var(--fs-sm); color: var(--ink-soft); line-height: 1.45; }
+.tt-lsched {
+  grid-area: sched; align-self: center; min-width: 0;
+  padding: 4px 0 4px var(--space-lg); border-left: 1px solid var(--tt-line-soft);
+  font-size: var(--fs-sm); color: var(--ink-soft); font-weight: 500;
+  font-variant-numeric: tabular-nums; line-height: 1.65; overflow-wrap: anywhere;
+}
 .tt-lrow.is-link { cursor: pointer; }
-.tt-lrow.is-link:hover { background: var(--tt-gutter); }
+.tt-lrow.is-link:hover { background: var(--tt-panel); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
 .tt-lrow.is-link:hover::before { top: 7px; bottom: 7px; background: oklch(0.68 0.1 var(--th)); }
 .tt-lrow.is-pending { cursor: help; }
 .tt-list.swap .tt-lrow { animation: ttPop 0.18s ease-out both; animation-delay: calc(var(--li) * 16ms); }
@@ -404,6 +423,20 @@
 .tt-msummary { display: flex; gap: var(--space-md); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--ink-soft); margin-bottom: var(--space-sm); }
 .tt-msummary b { color: var(--ink); font-weight: 600; }
 .tt-privacy-note { font-size: var(--fs-xs); color: var(--ink-faint); background: var(--surface); border: 1px dashed var(--border-light); border-radius: var(--radius-sm); padding: 6px 10px; margin-bottom: var(--space-sm); }
+.tt-code-note {
+  display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start;
+  font-size: var(--fs-xs); line-height: 1.65; color: var(--ink-soft);
+  background: var(--accent-light); border: 1px solid oklch(from var(--accent) l c h / 0.28);
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  padding: 8px 10px; margin-bottom: var(--space-sm);
+}
+.tt-code-note-mark {
+  width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--accent-hover); border: 1px solid oklch(from var(--accent) l c h / 0.45);
+  border-radius: 50%; font-weight: 700; line-height: 1;
+}
+.tt-code-note strong { display: block; color: var(--ink); font-weight: 650; }
+.tt-code-note p { margin: 2px 0 0; }
 .tt-mlist { border-top: 1px solid var(--border-light); }
 .tt-mrow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-light); font-size: var(--fs-xs); flex-wrap: wrap; }
 .tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(0.925 0.042 var(--th)); }
@@ -475,10 +508,57 @@
 
 /* ── 移动端 ─────────────────────────────────────────── */
 @media (max-width: 700px) {
-  .tt-top { align-items: flex-start; }
-  .tt-title { font-size: var(--fs-xl); }
-  /* 「第一周周一」标签文字隐藏，仅留日期输入，周次条可单行放下 */
-  .tt-start-edit { margin-left: auto; font-size: 0; gap: 0; }
+  .tt-top {
+    display: flex; align-items: center; gap: 10px; margin: 12px 0 10px;
+  }
+  .tt-title { flex: 1; min-width: 0; font-size: clamp(1.5rem, 7vw, 1.9rem); letter-spacing: 0.01em; text-wrap: pretty; }
+  .tt-actions {
+    width: auto; flex: none; gap: 0; overflow: hidden;
+    border: 1px solid var(--tt-line); border-radius: 9px; background: var(--tt-panel);
+  }
+  .tt-actions .tt-btn {
+    min-height: 38px; padding: 0 9px; border: 0; border-radius: 0;
+    background: transparent; font-size: var(--fs-2xs);
+  }
+  .tt-actions .tt-btn + .tt-btn { border-left: 1px solid var(--tt-line-soft); }
+  .tt-actions .tt-btn:hover { background: var(--tt-gutter); }
+  /* 所有移动宽度统一沿用桌面端分段控件，避免 481–700px 命中旧废案样式。 */
+  .tt-viewbar { margin: 0 0 8px; border-bottom: 0; }
+  .tt-viewbar .pc-seg {
+    width: auto; padding: 3px; gap: 2px;
+    background: var(--tt-gutter); border-radius: var(--radius-sm);
+  }
+  .tt-viewbar .pc-seg-btn {
+    position: static; flex: none; min-height: 0; justify-content: center;
+    padding: 6px 14px; border-radius: 6px;
+    background: transparent; color: var(--ink-soft); font-size: 0.82rem;
+    font-weight: 500; box-shadow: none;
+  }
+  .tt-viewbar .pc-seg-btn:hover { background: var(--tt-gutter); color: var(--ink); }
+  .tt-viewbar .pc-seg-btn.active {
+    background: var(--raised); color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 3px oklch(0.3 0.01 60 / 0.12);
+  }
+  .tt-viewbar .pc-seg-btn.active::after { display: none; content: none; }
+  .tt-weekbar {
+    display: flex; align-items: center; flex-wrap: nowrap;
+    gap: 6px; padding: 8px 10px; margin-bottom: 8px;
+    border: 1px solid var(--tt-line); border-radius: var(--radius-md);
+    background: var(--tt-panel); box-shadow: var(--shadow-xs); box-sizing: border-box;
+  }
+  .tt-weeknav { flex: 1; min-width: 0; gap: 2px; }
+  .tt-wbtn { width: 32px; height: 32px; flex: none; }
+  .tt-week-label { min-width: 62px; font-size: var(--fs-sm); }
+  .tt-now-btn { flex: none; min-height: 32px; padding: 6px 4px; white-space: nowrap; font-size: var(--fs-2xs); }
+  .tt-start-edit { flex: none; margin-left: 0; gap: 0; font-size: 0; }
+  .tt-start-edit input { width: 116px; min-height: 32px; padding: 3px 6px; font-size: var(--fs-2xs); }
+
+  @media (max-width: 380px) {
+    .tt-week-label { min-width: 56px; }
+    .tt-now-btn { width: 32px; padding-inline: 2px; font-size: 0; }
+    .tt-now-btn::after { content: '本周'; font-size: var(--fs-2xs); }
+    .tt-start-edit input { width: 108px; }
+  }
 
   /* 网格视图满屏：一屏内完整看完一周课表，不做垂直滚动；
      列表视图保持常规文档流 */
@@ -516,7 +596,8 @@
   }
 
   /* 字号随可视高度缩放（1cqh = .tt-scroll 高度的 1%） */
-  .tt-card { padding: 3px 5px; border-radius: 7px; }
+  .tt-scroll { border-radius: 10px; }
+  .tt-card { padding: 3px 5px; border-radius: 6px; box-shadow: none; }
   .tt-card-name { font-size: clamp(8.5px, 2.1cqh, 11px); line-height: 1.25; -webkit-line-clamp: 3; }
   .tt-card-meta { display: none; } /* 细节移步列表视图 */
   .tt-time b { font-size: clamp(10px, 2.4cqh, 14px); }
@@ -524,14 +605,103 @@
   .tt-day { padding: 2px; gap: 0; }
   .tt-day .dt { display: none; }
   .tt-day .d { font-size: clamp(10px, 2.6cqh, 14px); }
+  .tt-time b, .tt-day .d, .tt-corner b { font-family: var(--sans); }
   .tt-day.is-today .dj { display: none; } /* 今日列已有淡染，不再放「今」签 */
   .tt-corner b { font-size: clamp(12px, 3cqh, 18px); }
   .tt-corner span { display: none; }
+
+  /* 列表在手机端采用独立课程卡，课程信息 + 安排双层阅读。 */
+  .tt-list { width: 100%; gap: 8px; }
+  .tt-lrow {
+    min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'head head' 'meta meta' 'sched sched';
+    align-items: start; gap: 0; padding: 12px 13px 11px 17px;
+  }
+  .tt-lrow::before { top: 11px; bottom: 11px; width: 3px; }
+  .tt-lhead { align-items: flex-start; gap: 8px; }
+  .tt-lrow .nm {
+    white-space: normal; overflow: visible; text-overflow: clip;
+    font-size: var(--fs-md); line-height: 1.3; font-weight: 650;
+  }
+  .tt-tag { margin-top: 1px; padding: 4px 8px; }
+  .tt-lmeta { margin-top: 3px; font-size: var(--fs-2xs); line-height: 1.35; }
+  .tt-lsched {
+    width: 100%; margin-top: 8px; padding: 7px 0 0;
+    border-top: 1px solid var(--tt-line-soft); border-left: none;
+    font-size: var(--fs-2xs); line-height: 1.45; text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  /* 网格课程卡在窄屏内缩进一点，保留格线呼吸感，避免整块铺满单元格。 */
+  .tt-card { margin: 2px; padding: 2px 4px; border-radius: 5px; }
 
   /* 编辑弹层：表单控件在窄屏下保持可点面积 */
   .tt-fld > span { width: 58px; }
   .tt-edit-link { margin-left: 66px; }
   .tt-seg .tt-room { min-width: 100%; }
+}
+
+/* ── 窄屏优先：把可视空间留给课表画布 ─────────────────── */
+@media (max-width: 480px) {
+  /* 手机页容器保留统一的左右呼吸边距，控件和课表共享同一条对齐基线。 */
+  #timetableView .about-page > .container {
+    max-width: none; padding-inline: var(--space-sm);
+  }
+
+  /* 窄屏将标题行拆成「学期 + 视图切换」与右侧操作两列，两个按钮组底部对齐。 */
+  #ttShell.tt-shell {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 8px; row-gap: 8px; width: 100%; padding-top: 8px;
+    align-items: center; box-sizing: border-box;
+  }
+  /* 覆盖网格视图满屏规则中的 flex 布局，避免工具栏被推到页面中部。 */
+  #ttShell.tt-shell:not(.tt-mode-list) {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    padding-top: 8px;
+  }
+  #ttShell .tt-top { display: contents; }
+  #ttShell .tt-title { display: none; }
+  #ttShell .tt-actions {
+    grid-column: 2; grid-row: 1; align-self: center;
+    display: flex; width: auto; margin-right: 0; gap: 4px;
+    border: 0; border-radius: 0; overflow: visible; background: transparent;
+  }
+  #ttShell .tt-actions .tt-btn {
+    min-width: 0; min-height: 30px; height: 30px; padding-inline: 7px;
+    border: 1px solid var(--tt-line); border-radius: 7px;
+    background: var(--tt-panel); font-size: 10px; font-weight: 500;
+    box-shadow: 0 1px 2px oklch(0.4 0.02 60 / 0.06);
+  }
+  #ttShell .tt-actions .tt-btn + .tt-btn { border-left: 1px solid var(--tt-line); }
+  #ttShell .tt-actions .tt-btn:hover { background: var(--tt-gutter); }
+
+  /* 分段切换与 max-width:700px 共用桌面端灰底分段控件。 */
+  #ttShell .tt-viewbar {
+    grid-column: 1; grid-row: 1; align-self: center;
+    width: max-content; margin: 0; border-bottom: 0;
+  }
+  #ttShell .tt-viewbar .pc-seg {
+    width: auto;
+  }
+  #ttShell .tt-viewbar .pc-seg-btn {
+    min-width: 0;
+  }
+
+  /* 课表主体从两组按钮下方开始，并使用同一满宽基线。 */
+  #ttShell #ttBody {
+    grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; align-self: stretch;
+  }
+  #ttShell .tt-weekbar,
+  #ttShell .tt-scroll,
+  #ttShell .tt-foot {
+    width: 100%;
+  }
+  #ttShell .tt-viewbar { margin-bottom: 0; }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-viewbar { margin: 0; }
+  #ttShell .tt-weekbar { margin-bottom: 6px; }
+  #ttShell .tt-foot { padding-inline: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

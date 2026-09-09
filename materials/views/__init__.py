@@ -22,7 +22,7 @@ from .profile import (
 
 # 课程 / 搜索 / 统计
 from .courses import (
-    api_courses, api_course_files, api_course_tree,
+    api_courses, api_course_files, api_course_tree, api_course_timetable_summary,
     api_search, api_stats, api_colleges,
 )
 

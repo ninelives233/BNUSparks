@@ -94,6 +94,10 @@
 .pv-unsupported-text { font-size: 1.1rem; font-weight: 500; margin-bottom: 4px; }
 .pv-unsupported-sub { font-size: 0.82rem; opacity: 0.5; margin-bottom: var(--space-lg); }
 
+.pv-mobile-pdf { max-width: 28rem; padding: 24px; }
+.fd-preview-body .pv-mobile-pdf { color: var(--ink-soft, #555); }
+.pv-mobile-pdf .pv-dl-btn { margin-top: 4px; }
+
 .pv-zip-loading { text-align: center; padding: var(--space-lg); color: var(--ink-faint, #999); font-size: 0.85rem; }
 .pv-zip-header {
   padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--border-light, #e8e8e8);

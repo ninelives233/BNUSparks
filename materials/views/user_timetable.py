@@ -11,13 +11,28 @@ DELETE /api/user/timetable/   清除云端课表
 
 import json
 
+from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from .utils import _err, _ok, require_login
 from ..models import UserTimetable
 
 # 课表 JSON 体积很小（12 门课约 4KB）；上限仅防滥用
 _MAX_BYTES = 200 * 1024
+
+
+def _imported_at(data):
+    try:
+        return int(data.get("importedAt") or 0)
+    except (AttributeError, TypeError, ValueError):
+        return 0
+
+
+def _updated_at_value(row):
+    """保留微秒，避免 JSON 默认时间编码截断后条件拉取漏掉极短更新。"""
+    return row.updated_at.isoformat(timespec="microseconds") if row.updated_at else None
 
 
 # csrf_exempt 必须作用于最终视图对象（放最外层）：JWT Bearer 认证不依赖
@@ -30,7 +45,20 @@ def api_user_timetable(request):
         row = UserTimetable.objects.filter(user=request.user).first()
         if not row:
             return _ok({"data": None, "updated_at": None})
-        return _ok({"data": row.data, "updated_at": row.updated_at})
+        since = parse_datetime(request.GET.get("since", ""))
+        if since:
+            # 测试环境可能 USE_TZ=False；生产环境通常是 aware，统一两边再比较。
+            if timezone.is_naive(row.updated_at) and not timezone.is_naive(since):
+                since = timezone.make_naive(since)
+            elif not timezone.is_naive(row.updated_at) and timezone.is_naive(since):
+                since = timezone.make_aware(since)
+        if since and row.updated_at <= since:
+            return _ok({
+                "data": None,
+                "updated_at": _updated_at_value(row),
+                "unchanged": True,
+            })
+        return _ok({"data": row.data, "updated_at": _updated_at_value(row)})
 
     if request.method in ("PUT", "POST"):
         try:
@@ -42,10 +70,22 @@ def api_user_timetable(request):
             return _err("课表数据格式不正确")
         if len(json.dumps(data, ensure_ascii=False)) > _MAX_BYTES:
             return _err("课表数据过大")
-        row, _ = UserTimetable.objects.update_or_create(
-            user=request.user, defaults={"data": data}
-        )
-        return _ok({"updated_at": row.updated_at})
+        # 上传请求可能因网络重试/跨端同时保存而乱序到达；较旧的导入版本
+        # 不能覆盖更新的课表。锁住单用户行，保持“比较版本→写入”原子化。
+        with transaction.atomic():
+            row = UserTimetable.objects.select_for_update().filter(user=request.user).first()
+            if row and _imported_at(row.data) > _imported_at(data):
+                return _ok({
+                    "updated_at": _updated_at_value(row),
+                    "accepted": False,
+                    "data": row.data,
+                })
+            if row:
+                row.data = data
+                row.save(update_fields=["data", "updated_at"])
+            else:
+                row = UserTimetable.objects.create(user=request.user, data=data)
+        return _ok({"updated_at": _updated_at_value(row), "accepted": True})
 
     if request.method == "DELETE":
         deleted, _ = UserTimetable.objects.filter(user=request.user).delete()
