@@ -75,19 +75,25 @@
   function showLoginModal() {
     var modal = document.getElementById('loginModal');
     modal.style.display = 'flex';
+    _hideLoginResendAction();
     lockScroll();
     _pushModalHistory(modal);
   }
-  function showRegister() {
+  function showRegister(options) {
+    options = options || {};
     document.getElementById('loginModal').style.display = 'none';
     var modal = document.getElementById('registerModal');
     modal.style.display = 'flex';
-    document.getElementById('registerResendAction').style.display = 'block';
+    if (options.showResend) {
+      _showVerificationResendAction(options.message);
+    } else {
+      _hideVerificationResendAction();
+    }
     activateDialog(modal);
     populateIdentitySelects('regCollege', 'regMajor', {});
   }
   function showVerificationResend(message) {
-    showRegister();
+    showRegister({ showResend: true, message: message });
     document.getElementById('registerForm').style.display = 'block';
     document.getElementById('registerSuccess').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
@@ -101,6 +107,7 @@
     document.getElementById('registerModal').style.display = 'none';
     var modal = document.getElementById('loginModal');
     modal.style.display = 'flex';
+    _hideLoginResendAction();
     activateDialog(modal);
   }
   function closeAuthModal() {
@@ -109,6 +116,7 @@
     document.getElementById('loginError').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
     document.getElementById('registerResendAction').style.display = 'none';
+    _hideLoginResendAction();
     document.getElementById('registerSuccess').style.display = 'none';
     document.getElementById('registerForm').style.display = 'block';
     _clearVerificationResendState();
@@ -205,7 +213,16 @@
       if (resumeQa && typeof isQaViewActive === 'function' && isQaViewActive() && typeof renderQaView === 'function') {
         renderQaView();
       }
-    } catch (err) { el.textContent = err.message; el.style.display = 'block'; }
+    } catch (err) {
+      var message = err.message || '登录失败';
+      el.textContent = message;
+      el.style.display = 'block';
+      if (/请先验证邮箱|未验证/.test(message)) {
+        _showLoginResendAction();
+      } else {
+        _hideLoginResendAction();
+      }
+    }
     return false;
   }
 
@@ -336,6 +353,32 @@
   })();
 
   // ── 注册验证邮件重发 ──
+  function _showVerificationResendAction(message) {
+    var action = document.getElementById('registerResendAction');
+    if (action) action.style.display = 'block';
+    if (message) {
+      document.querySelectorAll('#registerResendAction .register-resend-status').forEach(function(status) {
+        status.textContent = message;
+      });
+    }
+  }
+
+  function _hideVerificationResendAction() {
+    var action = document.getElementById('registerResendAction');
+    if (action) action.style.display = 'none';
+    _clearVerificationResendState();
+  }
+
+  function _showLoginResendAction() {
+    var action = document.getElementById('loginResendAction');
+    if (action) action.style.display = 'block';
+  }
+
+  function _hideLoginResendAction() {
+    var action = document.getElementById('loginResendAction');
+    if (action) action.style.display = 'none';
+  }
+
   function _clearVerificationResendState() {
     if (_verificationResendTimer) {
       clearTimeout(_verificationResendTimer);
@@ -440,10 +483,12 @@
       el.textContent = err.message;
       el.style.display = 'block';
       success.style.display = 'none';
-      var resendAction = document.getElementById('registerResendAction');
       var canResend = (err.message || '').indexOf('未验证') !== -1;
-      resendAction.style.display = 'block';
-      if (!canResend) _clearVerificationResendState();
+      if (canResend) {
+        _showVerificationResendAction('该邮箱已注册但尚未验证，可在这里重新发送验证邮件。');
+      } else {
+        _hideVerificationResendAction();
+      }
     }
     return false;
   }

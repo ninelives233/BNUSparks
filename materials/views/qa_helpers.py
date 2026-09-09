@@ -35,6 +35,8 @@ from .utils import (
 # v175：加 h2/h3 支持长文小标题（无属性，走 _QA_ALLOWED_TAGS 分支天然安全）
 _QA_ALLOWED_TAGS = {"p", "br", "strong", "em", "u", "s", "ul", "ol", "li", "img", "a", "h2", "h3"}
 _QA_ATTRS = {"img": {"src", "alt"}, "a": {"href", "title", "rel", "target"}}
+_QA_TAG_ALIASES = {"div": "p", "b": "strong", "i": "em", "strike": "s"}
+_QA_DROP_CONTENT_TAGS = {"script", "style", "iframe", "object", "embed", "svg", "math"}
 
 
 class _QaSanitizer(HTMLParser):
@@ -43,6 +45,7 @@ class _QaSanitizer(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.out = []
+        self._drop_depth = 0
 
     @staticmethod
     def _safe_url(tag, attr, value):
@@ -99,6 +102,14 @@ class _QaSanitizer(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
+        if self._drop_depth:
+            if tag in _QA_DROP_CONTENT_TAGS:
+                self._drop_depth += 1
+            return
+        if tag in _QA_DROP_CONTENT_TAGS:
+            self._drop_depth = 1
+            return
+        tag = _QA_TAG_ALIASES.get(tag, tag)
         if tag == "br":
             self.out.append("<br>")
         elif tag in _QA_ALLOWED_TAGS:
@@ -113,11 +124,24 @@ class _QaSanitizer(HTMLParser):
 
     def handle_endtag(self, tag):
         tag = tag.lower()
+        if self._drop_depth:
+            if tag in _QA_DROP_CONTENT_TAGS:
+                self._drop_depth -= 1
+            return
+        tag = _QA_TAG_ALIASES.get(tag, tag)
         if tag in _QA_ALLOWED_TAGS and tag != "br":
             self.out.append(f"</{tag}>")
 
     def handle_data(self, data):
-        self.out.append(escape(data, quote=False))
+        if self._drop_depth:
+            return
+        # contenteditable 在不同浏览器里可能把回车保留成文本换行；
+        # 转成 <br>，避免 HTML 的空白折叠再次吞掉用户的换行。
+        lines = data.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        for index, line in enumerate(lines):
+            self.out.append(escape(line, quote=False))
+            if index < len(lines) - 1:
+                self.out.append("<br>")
 
     def handle_comment(self, data):
         pass
@@ -144,6 +168,15 @@ def _strip_html(raw):
 
 def _nickname(user):
     return user.first_name or user.username
+
+
+def _avatar_url(user):
+    """返回问答详情所需的头像地址；没有头像或历史用户缺资料时返回空串。"""
+    try:
+        profile = user.profile
+    except UserProfile.DoesNotExist:
+        return ""
+    return profile.avatar.url if profile.avatar else ""
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -245,6 +278,7 @@ def _qa_answer_item(a, user=None, qa_fav_count=None):
         "content": a.content,
         "author": _nickname(a.author),
         "author_id": a.author_id,
+        "avatar_url": _avatar_url(a.author),
         "is_pinned": a.is_pinned,
         "is_accepted": a.is_accepted,
         "like_count": a.like_count,

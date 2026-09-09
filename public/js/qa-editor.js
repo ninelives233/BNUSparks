@@ -8,18 +8,50 @@
 
 var _qaEditorTarget = null;   // 当前正在编辑的 contenteditable（插图用）
 
+// v184：兼容早期已被 div 净化成纯文本的“新生指南”长文。
+// 只在内容完全没有 HTML 且同时出现多级中文标题/编号时启用，避免猜测普通用户正文。
+function qaLegacyGuideHtml(raw) {
+  if (!raw || /<[a-z][^>]*>/i.test(raw)) return null;
+  var probe = document.createElement('div');
+  probe.innerHTML = raw;
+  var text = (probe.textContent || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (!/[一二三四五六七八九十百千万]+、/.test(text) || !/\d+\.\s*(?=[\u4e00-\u9fff【])/.test(text)) return null;
+
+  var parts = text.split(/(?=(?:[一二三四五六七八九十百千万]+、|\d+\.\s*(?=[\u4e00-\u9fff【])))/g)
+    .map(function(part) { return part.trim(); })
+    .filter(Boolean);
+  if (parts.length < 3) return null;
+
+  return parts.map(function(part) {
+    var tag = /^[一二三四五六七八九十百千万]+、/.test(part) ? 'h2' : 'p';
+    var el = document.createElement(tag);
+    el.textContent = part;
+    return el.outerHTML;
+  }).join('');
+}
+
 // 服务端白名单之外再加一层浏览器侧防御：历史脏数据或接口回归也不能直接进入 innerHTML。
 function qaSafeHtml(raw) {
   var template = document.createElement('template');
-  template.innerHTML = raw || '';
+  template.innerHTML = qaLegacyGuideHtml(raw) || raw || '';
   var allowed = {
     p: [], br: [], strong: [], em: [], u: [], s: [], ul: [], ol: [], li: [], h2: [], h3: [],
     img: ['src', 'alt'], a: ['href', 'title', 'rel', 'target']
   };
+  // contenteditable 的实现差异：Chrome 常把回车和加粗分别输出成 div/b，
+  // Safari 还可能输出 i/strike。发布前统一成服务端白名单里的语义标签。
+  var aliases = { div: 'p', b: 'strong', i: 'em', strike: 's' };
   var active = { script: true, style: true, iframe: true, object: true, embed: true, svg: true, math: true };
 
   Array.from(template.content.querySelectorAll('*')).forEach(function(el) {
     var tag = el.tagName.toLowerCase();
+    if (aliases[tag]) {
+      var replacement = document.createElement(aliases[tag]);
+      while (el.firstChild) replacement.appendChild(el.firstChild);
+      el.replaceWith(replacement);
+      el = replacement;
+      tag = aliases[tag];
+    }
     if (!Object.prototype.hasOwnProperty.call(allowed, tag)) {
       if (active[tag]) el.remove();
       else el.replaceWith.apply(el, Array.from(el.childNodes));
@@ -47,6 +79,23 @@ function qaSafeHtml(raw) {
       el.setAttribute('target', '_blank');
       el.setAttribute('rel', 'noopener noreferrer');
     }
+  });
+
+  // 纯文本粘贴或旧数据可能把换行留在 text node 中；HTML 默认会折叠它，
+  // 所以在安全净化后显式还原为换行元素。
+  var walker = document.createTreeWalker(template.content, 4 /* NodeFilter.SHOW_TEXT */);
+  var textNodes = [];
+  var node;
+  while ((node = walker.nextNode())) textNodes.push(node);
+  textNodes.forEach(function(textNode) {
+    if (!/[\r\n]/.test(textNode.nodeValue || '')) return;
+    var fragment = document.createDocumentFragment();
+    var lines = (textNode.nodeValue || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    lines.forEach(function(line, index) {
+      if (line) fragment.appendChild(document.createTextNode(line));
+      if (index < lines.length - 1) fragment.appendChild(document.createElement('br'));
+    });
+    textNode.replaceWith(fragment);
   });
   return template.innerHTML;
 }
@@ -145,7 +194,9 @@ function handleQaEditorCmd(btn, editable) {
 
 function getQaEditorHtml(editable) {
   if (!editable) return '';
-  return (editable.innerHTML || '').trim();
+  // 提交前再走一次同构净化，确保 contenteditable 的 div/b/i 输出不会
+  // 绕过浏览器侧规范化而在服务端被拆平。
+  return qaSafeHtml(editable.innerHTML || '').trim();
 }
 
 // ── 插图 ──

@@ -220,6 +220,22 @@ function _qaStatHtml(q) {
     '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + q.answer_count + '</b></span>';
 }
 
+function _qaAvatarHtml(name, url, role) {
+  var initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  var image = url
+    ? '<img src="' + esc(url) + '" alt="" loading="lazy">'
+    : '<span>' + esc(initial) + '</span>';
+  return '<span class="qa-avatar qa-avatar--' + (role || 'answer') + '" aria-hidden="true">' + image + '</span>';
+}
+
+function _qaPersonHtml(name, url, role, label) {
+  return '<div class="qa-person">' +
+    _qaAvatarHtml(name, url, role) +
+    '<div class="qa-person-copy"><span class="qa-person-name">' + esc(name) + '</span>' +
+      '<span class="qa-person-label">' + esc(label || '') + '</span></div>' +
+  '</div>';
+}
+
 function _qaCardHtml(q) {
   var badges = _qaBadgesHtml(q);
   var pinHtml = q.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '';
@@ -372,10 +388,10 @@ function _qaDetailHtml(d) {
     solvedBadge +
     '<h3 class="qa-q-title">' + esc(d.title) + '</h3>' +
     (badges ? '<div class="qa-q-tags">' + badges + '</div>' : '') +
+    _qaPersonHtml(d.author, d.avatar_url, 'question', '提问者 · ' + d.created_at) +
     '<div class="qa-rich">' + qaSafeHtml(d.content) + '</div>' +
     '<div class="qa-q-meta">' + stats + '</div>' +
     '<div class="qa-q-foot">' +
-      '<span class="qa-card-author">' + esc(d.author) + ' · ' + esc(d.created_at) + '</span>' +
       '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleQuestionFav(' + d.id + ', this)">' + favIcon + '<span>' + (d.is_favorited ? '已收藏' : '收藏') + '</span><b class="qa-count">' + d.favorite_count + '</b></button>' +
       '<button class="qa-report-btn" onclick="openQaReportModal(\'question\', ' + d.id + ')">举报</button>' +
     '</div>' +
@@ -444,8 +460,7 @@ function _qaAnswerHtml(a, idx, expanded, total, d) {
   '</div>' : '';
 
   return '<div class="qa-answer' + expanded + '" data-qa-answer>' +
-    '<div class="qa-answer-head">' + pin + acceptedBadge + '<span class="qa-answer-author">' + esc(a.author) + '</span>' +
-      '<span class="qa-answer-date">' + esc(a.created_at) + '</span>' + collapseBtn + '</div>' +
+    '<div class="qa-answer-head">' + pin + acceptedBadge + _qaPersonHtml(a.author, a.avatar_url, 'answer', '回答者 · ' + a.created_at) + collapseBtn + '</div>' +
     '<div class="qa-answer-body"><div class="qa-rich">' + qaSafeHtml(a.content) + '</div></div>' +
     '<div class="qa-answer-actions">' +
       '<button class="qa-like-btn ' + likeState + '" onclick="qaToggleAnswerLike(' + a.id + ', this)">' + likeIcon + '<span>赞</span><b class="qa-count">' + a.like_count + '</b></button>' +

@@ -1015,6 +1015,8 @@
 .monitor-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .monitor-chart-legend i { width: 18px; height: 2px; background: var(--primary); }
 .monitor-chart-legend .legend-download i { background: var(--accent); }
+.monitor-chart-legend .legend-new-users i { background: var(--accent); }
+.monitor-chart-legend .legend-total-users i { background: var(--primary); }
 .monitor-chart-wrap { width: 100%; overflow: hidden; }
 .monitor-chart-wrap svg { display: block; width: 100%; height: auto; min-height: 220px; }
 .monitor-grid line { stroke: var(--border-light); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -1025,6 +1027,16 @@
 }
 .monitor-line-upload { stroke: var(--primary); }
 .monitor-line-download { stroke: var(--accent); }
+.monitor-line-new-users { stroke: var(--accent); stroke-dasharray: 5 4; }
+.monitor-line-total-users { stroke: var(--primary); }
+
+.identity-user-trend-card { margin-bottom: 12px; }
+.identity-trend-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; padding: 0 4px 5px;
+}
+.identity-trend-head h4 { color: var(--ink); font-size: 0.88rem; font-weight: 600; }
+.identity-trend-head p { color: var(--ink-faint); font-size: 0.72rem; margin-top: 3px; }
 
 .identity-monitor-grid {
   display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.15fr) minmax(0, 1fr);
@@ -1132,6 +1144,8 @@
   .monitor-section-head { align-items: flex-start; flex-direction: column; gap: 10px; }
   .monitor-period-seg { display: flex; width: 100%; overflow-x: auto; }
   .monitor-period-seg .pc-seg-btn { white-space: nowrap; flex: 1 0 auto; }
+  .identity-trend-head { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .identity-trend-head .monitor-chart-legend { justify-content: flex-start; padding-left: 0; }
   .monitor-stats-grid, .monitor-stats-grid--three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .identity-monitor-grid { grid-template-columns: 1fr; }
   .monitor-stream-tools { width: 100%; justify-content: space-between; overflow-x: auto; }

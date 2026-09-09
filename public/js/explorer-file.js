@@ -530,6 +530,15 @@
     var area = document.getElementById('fdPreviewArea');
     var extType = _isPreviewableExt(fileName);
 
+    // 移动端无法可靠地在 iframe 内渲染 PDF。若仍创建 iframe，浏览器会把
+    // inline PDF 响应交给系统下载器，用户进入详情页时就会看到下载提示。
+    // 保留预览区域，但改为明确的用户主动下载入口。
+    if (extType === 'pdf' && _isMobilePdfPreview()) {
+      if (area) area.style.display = '';
+      body.innerHTML = _mobilePdfFallbackHtml(fileId, fileName);
+      return;
+    }
+
     // Zip 文件：读取内部结构并展示文件树
     if (extType === 'zip') {
       if (area) area.style.display = '';

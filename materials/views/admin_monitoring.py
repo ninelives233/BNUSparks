@@ -139,7 +139,69 @@ def _trend_payload(period):
     }
 
 
-def _identity_payload():
+def _user_period_buckets(period):
+    """按注册时间返回用户趋势的时间桶；全部时间按自然月聚合。"""
+    now = _local()
+    if period == "day":
+        end = now.replace(minute=0, second=0, microsecond=0)
+        buckets = [end - timedelta(hours=i) for i in range(23, -1, -1)]
+        return buckets[0], "hour", buckets, "近 24 小时"
+    if period == "week":
+        end = now.date()
+        buckets = [end - timedelta(days=i) for i in range(6, -1, -1)]
+        return _day_start(buckets[0]), "day", buckets, "近 7 天"
+    if period == "month":
+        end = now.date()
+        buckets = [end - timedelta(days=i) for i in range(29, -1, -1)]
+        return _day_start(buckets[0]), "day", buckets, "近 30 天"
+
+    first_user = User.objects.filter(is_active=True).aggregate(value=Min("date_joined"))["value"]
+    start = _month_start(_local(first_user)) if first_user else _month_start(now)
+    end = _month_start(now)
+    buckets = []
+    cursor = start
+    while cursor <= end:
+        buckets.append(cursor)
+        cursor = _next_month(cursor)
+    return start, "month", buckets, "全部时间"
+
+
+def _group_user_counts(start, bucket_type):
+    tz = timezone.get_current_timezone() if settings.USE_TZ else None
+    trunc = {
+        "hour": TruncHour("date_joined", tzinfo=tz),
+        "day": TruncDate("date_joined", tzinfo=tz),
+        "month": TruncMonth("date_joined", tzinfo=tz),
+    }[bucket_type]
+    rows = (
+        User.objects.filter(is_active=True, date_joined__gte=start)
+        .annotate(bucket=trunc)
+        .values("bucket")
+        .annotate(total=Count("id"))
+        .order_by("bucket")
+    )
+    return {_bucket_key(row["bucket"], bucket_type): row["total"] for row in rows}
+
+
+def _user_trend_payload(period):
+    start, bucket_type, buckets, period_label = _user_period_buckets(period)
+    new_counts = _group_user_counts(start, bucket_type)
+    new_values = [new_counts.get(_bucket_key(bucket, bucket_type), 0) for bucket in buckets]
+    running = User.objects.filter(is_active=True, date_joined__lt=start).count()
+    total_values = []
+    for value in new_values:
+        running += value
+        total_values.append(running)
+    return {
+        "period": period,
+        "period_label": period_label,
+        "labels": [_bucket_label(bucket, bucket_type) for bucket in buckets],
+        "new_users": new_values,
+        "total_users": total_values,
+    }
+
+
+def _identity_payload(period="month"):
     profiles = UserProfile.objects.filter(user__is_active=True)
     total = profiles.count()
     complete = profiles.exclude(identity_education="").exclude(identity_college="").exclude(identity_major="")
@@ -178,6 +240,7 @@ def _identity_payload():
         "total_users": total,
         "tagged_users": tagged,
         "untagged_users": max(0, total - tagged),
+        "user_trend": _user_trend_payload(period),
         "education_levels": [
             {"name": row["identity_education"], "count": row["count"]}
             for row in education_rows
@@ -314,7 +377,10 @@ def api_admin_monitoring(request):
             return _err("无效的时间范围")
         return _ok(_trend_payload(period))
     if section == "identity":
-        return _ok(_identity_payload())
+        period = (request.GET.get("period") or "month").strip()
+        if period not in {"day", "week", "month", "all"}:
+            return _err("无效的时间范围")
+        return _ok(_identity_payload(period))
     if section == "downloads":
         return _ok(_downloads_payload(request))
     if section == "health":

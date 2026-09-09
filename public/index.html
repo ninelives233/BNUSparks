@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/tokens.css?v=204">
-<link rel="stylesheet" href="/static/css/base.css?v=217">
+<link rel="stylesheet" href="/static/css/tokens.css?v=205">
+<link rel="stylesheet" href="/static/css/base.css?v=218">
 <link rel="stylesheet" href="/static/css/user.css?v=204">
-<link rel="stylesheet" href="/static/css/files.css?v=197">
+<link rel="stylesheet" href="/static/css/files.css?v=198">
 <link rel="stylesheet" href="/static/css/announcement.css?v=186">
 <link rel="stylesheet" href="/static/css/components.css?v=197">
 </head>
@@ -1016,6 +1016,10 @@
       <p class="mf-switch">还没有账号？<a href="#" onclick="showRegister();return false">注册</a> · <a href="#" onclick="showForgotPassword();return false">忘记密码？</a></p>
     </form>
     <div id="loginError" class="mf-error" role="alert" aria-live="assertive"></div>
+    <div id="loginResendAction" class="login-resend-action" style="display:none">
+      <p>这个账号还没有完成邮箱验证。</p>
+      <button type="button" class="ms-resend-btn" onclick="showVerificationResend()">前往重发验证邮件</button>
+    </div>
   </div>
 </div>
 
@@ -1035,7 +1039,7 @@
           </select>
         </div>
         <p class="mf-email-hint">新生可能暂时无法使用师大邮箱，建议关注即将推出的新生专区，无需登录也可浏览。可联系微信：Rsun1949进行人工核验，直接发放账号。</p>
-        <div id="registerResendAction" class="register-resend register-resend-error" style="display:block">
+        <div id="registerResendAction" class="register-resend register-resend-error" style="display:none">
           <p class="register-resend-note">已注册但未验证？填写学号并选择邮箱后缀即可重新发送，无需重填其他信息。</p>
           <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
           <span class="register-resend-status" role="status" aria-live="polite"></span>
@@ -1216,16 +1220,16 @@
 
 <!-- ═══ Scripts ═══ -->
 <script src="/static/js/utils.js?v=217" defer></script>
-<script src="/static/js/auth.js?v=197" defer></script>
+<script src="/static/js/auth.js?v=198" defer></script>
 <script src="/static/js/profile.js?v=217" defer></script>
 <script src="/static/js/notifications.js?v=200" defer></script>
 <script src="/static/js/admin-core.js?v=195" defer></script>
-<script src="/static/js/views.js?v=217" defer></script>
-<script src="/static/js/explorer-core.js?v=217" defer></script>
-<script src="/static/js/explorer-file.js?v=186" defer></script>
-<script src="/static/js/explorer-preview.js?v=186" defer></script>
-<script src="/static/js/feature-loader.js?v=217" defer></script>
-<script src="/static/js/app.js?v=200" defer></script>
+<script src="/static/js/views.js?v=232" defer></script>
+<script src="/static/js/explorer-core.js?v=218" defer></script>
+<script src="/static/js/explorer-file.js?v=187" defer></script>
+<script src="/static/js/explorer-preview.js?v=187" defer></script>
+<script src="/static/js/feature-loader.js?v=235" defer></script>
+<script src="/static/js/app.js?v=232" defer></script>
 
 </body>
 </html>

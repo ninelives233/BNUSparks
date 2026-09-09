@@ -200,6 +200,15 @@ document.addEventListener('DOMContentLoaded', () => {
     viewFeaturePromise = ensureFeature('qa');
   } else if (initialView === 'admin') {
     viewFeaturePromise = ensureFeature('admin');
+  } else if (initialView === 'timetable') {
+    viewFeaturePromise = ensureFeature('timetable');
+  }
+
+  // 刷新课表时先保留目标视图，避免认证/懒加载期间短暂显示首页，
+  // 也避免模块请求失败时被兜底逻辑带回首页。
+  if (initialView === 'timetable' && typeof switchView === 'function') {
+    switchView('timetable', true);
+    if (typeof updateSidebar === 'function') updateSidebar('timetable');
   }
 
   // 课程树只在首次视图确实需要时加载；进入 explorer 时 renderExplorer 会兜底按需加载。
@@ -222,6 +231,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (explorer && explorer.classList.contains('active')) renderExplorer();
     }
   });
+  // 受保护视图入口（尤其移动端汉堡菜单）可能早于认证请求完成；
+  // 暴露同一条认证 Promise，让入口等待“认证中”而不是误判为未登录。
+  window._bnusparksAuthReady = authPromise;
 
   // Admin 侧栏链接基于 token 存储立即显示，不等待 auth API
   var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');

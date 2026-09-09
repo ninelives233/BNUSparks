@@ -229,6 +229,41 @@ def api_course_tree(request):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 课表资料数量
+# ═══════════════════════════════════════════════════════════════
+
+def api_course_timetable_summary(request):
+    """GET /api/courses/timetable-summary/?codes=... — 批量返回课表课程摘要。
+
+    课表只需要课程是否存在、课程类型和已审核资料数，不应为此等待整棵课程树。
+    课程树仍由 explorer 在真正进入课程目录时按需加载。
+    """
+    raw_codes = request.GET.get("codes", "")
+    codes = list(dict.fromkeys(
+        code.strip() for code in raw_codes.split(",") if code.strip()
+    ))[:200]
+    summary = {
+        code: {"exists": False, "course_type": "", "file_count": 0}
+        for code in codes
+    }
+    if not codes:
+        return _ok(summary)
+
+    courses = Course.objects.filter(code__in=codes).annotate(
+        _material_count=Count(
+            "materials", filter=Q(materials__is_approved=True)
+        )
+    ).values("code", "course_type", "_material_count")
+    for row in courses:
+        item = summary[row["code"]]
+        item["exists"] = True
+        item["course_type"] = row["course_type"]
+        item["file_count"] = max(item["file_count"], row["_material_count"] or 0)
+
+    return _ok(summary)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 搜索
 # ═══════════════════════════════════════════════════════════════
 

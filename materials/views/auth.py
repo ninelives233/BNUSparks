@@ -20,9 +20,10 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core import signing
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
+from django.utils.html import escape
 
 from .utils import (
     _err, _ok, _jwt_encode, _get_user, _get_or_create_profile,
@@ -123,17 +124,41 @@ def _send_verification_email(request, user):
     token = _make_verification_token(user)
     query = urlencode({"uid": user.id, "vtoken": token})
     link = request.build_absolute_uri(f"/verify-email/?{query}")
-    sent = send_mail(
-        "BNU Sparks — 验证你的邮箱",
+    display_name = escape(user.first_name or user.username)
+    escaped_link = escape(link)
+    text_body = (
         f"你好 {user.first_name or user.username}，\n\n"
         f"感谢注册 BNU Sparks（木铎星火）课程资料共享平台！\n\n"
         f"请点击以下链接验证你的北师大邮箱（30 分钟内有效）：\n{link}\n\n"
         f"如果这不是你本人操作，请忽略此邮件。\n\n"
-        f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn",
+        f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn"
+    )
+    html_body = f"""<!doctype html>
+<html lang="zh-CN">
+  <body style="margin:0;background:#f5f6f8;color:#1f2937;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;line-height:1.7;">
+    <div style="max-width:560px;margin:32px auto;padding:0 16px;">
+      <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:32px 28px;">
+        <p style="margin:0 0 20px;color:#203a70;font-size:18px;font-weight:700;">BNU Sparks · 木铎星火</p>
+        <p style="margin:0 0 12px;">你好，{display_name}：</p>
+        <p style="margin:0 0 22px;">感谢注册课程资料共享平台。点击下面的按钮验证你的北师大邮箱，链接 30 分钟内有效。</p>
+        <p style="margin:0 0 24px;text-align:center;">
+          <a href="{escaped_link}" style="display:inline-block;padding:12px 24px;background:#203a70;border-radius:6px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">立即验证邮箱</a>
+        </p>
+        <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">如果按钮无法点击，请复制下面的完整链接到浏览器打开：</p>
+        <p style="margin:0 0 20px;word-break:break-all;color:#203a70;font-size:13px;">{escaped_link}</p>
+        <p style="margin:0;color:#9ca3af;font-size:12px;">如果这不是你本人操作，请忽略此邮件。</p>
+      </div>
+    </div>
+  </body>
+</html>"""
+    message = EmailMultiAlternatives(
+        "BNU Sparks — 验证你的邮箱",
+        text_body,
         "bnusparks@163.com",
         [user.email],
-        fail_silently=False,
     )
+    message.attach_alternative(html_body, "text/html")
+    sent = message.send(fail_silently=False)
     if sent != 1:
         raise RuntimeError(f"verification email backend returned sent={sent}")
 

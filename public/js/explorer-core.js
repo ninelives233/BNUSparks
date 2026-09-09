@@ -41,17 +41,13 @@
     // 就绪回调按注册顺序执行：showExplorer 先注册的根渲染先跑，定位后跑，
     // 天然避免定位被「课程目录加载中…」的异步根渲染覆盖。
     var locate = function () {
-      if (!courseTree) {
-        // 首页排行榜/搜索结果可能在课程树尚未加载时点击，等树到达后再定位。
-        _pendingNavToLastCode = code;
-        loadCourseTree();
-        return;
-      }
-      const path = findPathByCourseId(code);
-      if (!path) return;
-      expPath = path;
-      pushViewState('explorer', { expPath: [...expPath] }, true);
-      renderExplorer();
+      _ensureCourseTreeReady().then(function () {
+        const path = findPathByCourseId(code);
+        if (!path) return;
+        expPath = path;
+        pushViewState('explorer', { expPath: [...expPath] }, true);
+        renderExplorer();
+      }).catch(function () {});
     };
     if (typeof ensureFeature === 'function') {
       ensureFeature('explorer').then(locate, locate);
@@ -62,8 +58,8 @@
 
   // 「打开板块 + 定位课程」一步式入口（搜索结果/首页卡片/同名课程侧栏等外部跳转）。
   // 树中能定位到课程时直接进入资料列表，不走 showExplorer 的板块根渲染——
-  // 两者的异步渲染会互相覆盖（后注册的根渲染会把已定位的 expPath 冲回根）；
-  // 定位不到（树未就绪/代码不在树中）才回退开板块根，由 pending 队列接力定位。
+  // 两者的异步渲染会互相覆盖（后注册的根渲染会把已定位的 expPath 冲回根）。
+  // 首次从首页/排行榜进入时，必须先等 explorer 和课程树都就绪再查路径。
   function navToCourse(type, code) {
     var rootType = type === '通识课' ? '通识课' : '专业课';
     var fallback = function () {
@@ -82,12 +78,15 @@
         updateSidebar(path[0] === '通识课' ? 'general' : 'major');
       }
     };
-    if (typeof ensureFeature === 'function') {
-      // explorer-render 是懒加载模块：renderExplorer 就绪前定位会直接 ReferenceError
-      ensureFeature('explorer').then(go, fallback);
-    } else {
-      go();
-    }
+    // explorer-render 是懒加载模块；课程树也只在进入 explorer 时按需加载。
+    // 两者都准备好后再执行 go，避免首点时 findPathByCourseId 在 null 上查询，
+    // 随后又被 showExplorer 的异步根渲染覆盖。
+    var ready = typeof ensureFeature === 'function'
+      ? ensureFeature('explorer')
+      : Promise.resolve();
+    ready.then(function () {
+      return _ensureCourseTreeReady();
+    }).then(go, fallback);
   }
 
   var _fdBreadcrumbPath = null;
@@ -283,6 +282,19 @@
   // ── 从后端加载课程导航树 ──
   var _courseTreePromise = null;
 
+  function _courseTreeReady() {
+    return !!(courseTree && Object.keys(courseTree).length);
+  }
+
+  // 所有外部跳转共用同一条就绪链，避免首次点击时读取到 null/空树。
+  function _ensureCourseTreeReady() {
+    if (_courseTreeReady()) return Promise.resolve(courseTree);
+    return Promise.resolve(loadCourseTree()).then(function () {
+      if (!_courseTreeReady()) throw new Error('课程目录为空');
+      return courseTree;
+    });
+  }
+
   // 首屏与进入课程浏览器可能同时触发加载，避免同页发送两个 751KB 的树请求。
   function loadCourseTree() {
     if (_courseTreePromise) return _courseTreePromise;
@@ -300,7 +312,7 @@
     try {
       courseTree = await api('/api/courses/tree/');
       if (typeof buildSameNameMap === 'function') buildSameNameMap();
-      if (_pendingNavToLastCode) {
+      if (_pendingNavToLastCode && _courseTreeReady()) {
         var pendingCode = _pendingNavToLastCode;
         _pendingNavToLastCode = null;
         navToLast(pendingCode);

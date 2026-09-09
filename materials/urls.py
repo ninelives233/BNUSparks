@@ -19,6 +19,7 @@ urlpatterns = [
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
     path("courses/tree/", views.api_course_tree, name="api_course_tree"),
+    path("courses/timetable-summary/", views.api_course_timetable_summary, name="api_course_timetable_summary"),
     path("courses/request/", views.api_course_request_create, name="api_course_request_create"),
     path("courses/request/check/", views.api_course_request_check, name="api_course_request_check"),
     path("courses/request/<int:request_id>/files/", views.api_course_request_upload_file, name="api_course_request_upload_file"),

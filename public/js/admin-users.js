@@ -4,6 +4,7 @@
   var _userRoleFilter = ''; // '' | 'admin' | 'user'
   var _adminUserSection = 'trend';
   var _monitorPeriod = 'week';
+  var _identityPeriod = 'month';
   var _downloadActivity = 'all';
   var _identityMonitorData = null;
 
@@ -151,18 +152,66 @@
     }
   }
 
+  function setIdentityPeriod(period) {
+    _identityPeriod = period;
+    renderAdminIdentityDistribution(document.getElementById('adminUserSectionContent'));
+  }
+
+  function _identityPeriodButtons() {
+    var periods = [
+      ['day', '近 24 小时'], ['week', '近 7 天'],
+      ['month', '近 30 天'], ['all', '全部时间']
+    ];
+    return '<div class="pc-seg monitor-period-seg identity-period-seg" role="tablist" aria-label="用户数量趋势时间范围">' + periods.map(function(p) {
+      return '<button class="pc-seg-btn' + (_identityPeriod === p[0] ? ' active' : '') + '" role="tab" ' +
+        'aria-selected="' + (_identityPeriod === p[0] ? 'true' : 'false') + '" onclick="setIdentityPeriod(\'' + p[0] + '\')">' + p[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function _identityUserTrendChart(trend) {
+    var labels = trend.labels || [];
+    var newUsers = trend.new_users || [];
+    var totalUsers = trend.total_users || [];
+    var width = 960, height = 270, left = 48, right = 18, top = 22, bottom = 42;
+    var maxValue = Math.max(1, Math.max.apply(null, newUsers.concat(totalUsers)));
+    var grid = '', yLabels = '';
+    var tickCount = Math.min(4, Math.max(1, Math.ceil(maxValue)));
+    for (var t = 0; t <= tickCount; t++) {
+      var y = top + (height - top - bottom) * t / tickCount;
+      var tickValue = Math.round(maxValue * (tickCount - t) / tickCount);
+      grid += '<line x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" />';
+      yLabels += '<text x="' + (left - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + tickValue + '</text>';
+    }
+    var xLabels = '';
+    var labelStep = Math.max(1, Math.ceil(labels.length / 7));
+    labels.forEach(function(label, index) {
+      if (index % labelStep !== 0 && index !== labels.length - 1) return;
+      var x = left + (labels.length <= 1 ? (width - left - right) / 2 : index * (width - left - right) / (labels.length - 1));
+      xLabels += '<text x="' + x + '" y="' + (height - 13) + '" text-anchor="middle">' + esc(label) + '</text>';
+    });
+    return '<div class="monitor-chart-card identity-user-trend-card">' +
+      '<div class="identity-trend-head"><div><h4>用户数量趋势</h4><p>新增用户与当前有效用户的累计变化 · ' + esc(trend.period_label || '') + '</p></div>' +
+        '<div class="monitor-chart-legend"><span class="legend-new-users"><i></i>新增用户</span><span class="legend-total-users"><i></i>累计用户</span></div></div>' +
+      '<div class="monitor-chart-wrap"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="用户数量趋势">' +
+        '<g class="monitor-grid">' + grid + '</g><g class="monitor-axis-labels">' + yLabels + xLabels + '</g>' +
+        '<path class="monitor-line monitor-line-new-users" d="' + _monitorLinePath(newUsers, width, height, left, top, right, bottom, maxValue) + '" />' +
+        '<path class="monitor-line monitor-line-total-users" d="' + _monitorLinePath(totalUsers, width, height, left, top, right, bottom, maxValue) + '" />' +
+      '</svg></div></div>';
+  }
+
   function renderAdminIdentityDistribution(content) {
     if (!content) return;
     content.innerHTML = '<div class="admin-loading">加载身份分布…</div>';
-    api('/api/admin/monitoring/?section=identity').then(function(data) {
+    api('/api/admin/monitoring/?section=identity&period=' + encodeURIComponent(_identityPeriod)).then(function(data) {
       data.selectedIndex = data.colleges && data.colleges.length ? 0 : -1;
       _identityMonitorData = data;
       var coverage = data.total_users ? Math.round(data.tagged_users / data.total_users * 100) : 0;
       content.innerHTML = '<div class="monitor-section-head"><div><h3>入站身份分布</h3>' +
-        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。</p></div></div>' +
+        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。</p></div>' + _identityPeriodButtons() + '</div>' +
         '<div class="monitor-stats-grid monitor-stats-grid--three">' +
           _monitorStat(data.total_users, '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
           _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
+        _identityUserTrendChart(data.user_trend || {}) +
         '<div class="identity-monitor-grid">' +
           '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (data.untagged_users || 0) + ' 人未补全</span></div>' +
             _distributionBars(data.education_levels || [], -1, '') + '</section>' +
