@@ -762,7 +762,9 @@ function ttToggleManagePop() {
     '<button type="button" class="tt-mg-opt" data-mg="scheme">课程配色' +
       '<span class="tt-mg-sub">当前：' + esc(curScheme ? curScheme.name : '中国色') + '</span></button>' +
     '<button type="button" class="tt-mg-opt" data-mg="tutorial">导入教程' +
-      '<span class="tt-mg-sub">如何从教务系统导出可导入的课表</span></button>';
+      '<span class="tt-mg-sub">如何从教务系统导出可导入的课表</span></button>' +
+    '<button type="button" class="tt-mg-opt" data-mg="feedback">意见反馈' +
+      '<span class="tt-mg-sub">直达总管理员的消息中心</span></button>';
   actions.appendChild(pop);
   pop.addEventListener('click', function (e) {
     var opt = e.target.closest('[data-mg]');
@@ -775,6 +777,8 @@ function ttToggleManagePop() {
       document.getElementById('ttFileInput').click();
     } else if (act === 'tutorial') {
       ttShowTutorial();
+    } else if (act === 'feedback') {
+      ttShowFeedbackModal();
     } else {
       ttToggleSchemePop();
     }
@@ -2355,6 +2359,56 @@ function ttShowTutorial(reason) {
     b.addEventListener('click', function () { ttCloseModal(existing); });
   });
   existing.addEventListener('click', function (e) { if (e.target === existing) ttCloseModal(existing); });
+  lockScroll();
+}
+
+// ── 意见反馈弹层：直达总管理员消息中心；要附图/文件走邮件 ──
+function ttShowFeedbackModal() {
+  var existing = ttModalOverlay();
+  existing.innerHTML =
+    '<div class="tt-modal tt-fb" role="dialog" aria-modal="true" aria-label="意见反馈">' +
+      '<header><h3>意见反馈</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
+      '<div class="tt-mbody">' +
+        '<div class="tt-privacy-note">你的意见会直接送达总管理员的消息中心，并附上你的账号方便回复。</div>' +
+        '<textarea id="ttFbInput" maxlength="500" rows="6" placeholder="说说你想改进的地方，或遇到的问题；越具体越容易处理。"></textarea>' +
+        '<div class="tt-fb-count"><span id="ttFbCount">0</span>/500</div>' +
+        '<div class="tt-error" id="ttFbError" role="alert"></div>' +
+      '</div>' +
+      '<footer>' +
+        '<button type="button" class="tt-btn" data-close>取消</button>' +
+        '<button type="button" class="tt-btn primary" id="ttFbSend">发送反馈</button>' +
+        '<span class="tt-fb-mail">要附图或文件？<a href="mailto:bnusparks@163.com?subject=' +
+          encodeURIComponent('木铎星火意见反馈') + '">发邮件至 bnusparks@163.com</a></span>' +
+      '</footer>' +
+    '</div>';
+
+  existing.querySelectorAll('[data-close]').forEach(function (b) {
+    b.addEventListener('click', function () { ttCloseModal(existing); });
+  });
+  existing.addEventListener('click', function (e) { if (e.target === existing) ttCloseModal(existing); });
+
+  var ta = existing.querySelector('#ttFbInput');
+  var countEl = existing.querySelector('#ttFbCount');
+  ta.addEventListener('input', function () { countEl.textContent = String(ta.value.length); });
+
+  var btn = existing.querySelector('#ttFbSend');
+  var errEl = existing.querySelector('#ttFbError');
+  btn.addEventListener('click', function () {
+    var text = ta.value.trim();
+    if (!text) { errEl.textContent = '请先写下你想反馈的内容'; return; }
+    btn.disabled = true;
+    btn.textContent = '发送中…';
+    api('/api/feedback/', { method: 'POST', body: { message: text } })
+      .then(function () {
+        ttCloseModal(existing);
+        ttToast('已送达总管理员');
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = '发送反馈';
+        errEl.textContent = (err && err.message) || '发送失败，请稍后重试';
+      });
+  });
   lockScroll();
 }
 
