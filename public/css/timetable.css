@@ -473,6 +473,13 @@
 }
 .tt-code-note strong { display: block; color: var(--ink); font-weight: 650; }
 .tt-code-note p { margin: 2px 0 0; }
+/* 拒收网格课表时的警示变体：同一结构换 danger 色系 */
+.tt-code-note.is-danger {
+  background: var(--danger-light);
+  border-color: var(--danger-border);
+  border-left-color: var(--danger);
+}
+.tt-code-note.is-danger .tt-code-note-mark { color: var(--danger-dark); border-color: var(--danger-border); }
 .tt-mlist { border-top: 1px solid var(--border-light); }
 .tt-mrow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-light); font-size: var(--fs-xs); flex-wrap: wrap; }
 .tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(0.925 0.042 var(--th)); }

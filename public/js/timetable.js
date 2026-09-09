@@ -81,107 +81,6 @@ function ttReadHiddenMeta(doc, meta) {
   }
 }
 
-function ttWeeklyEntryLines(entry) {
-  var clone = entry.cloneNode(true);
-  var brs = clone.querySelectorAll('br');
-  Array.prototype.forEach.call(brs, function (br) {
-    br.parentNode && br.parentNode.replaceChild(clone.ownerDocument.createTextNode('\n'), br);
-  });
-  return (clone.textContent || '').split(/\r?\n/).map(function (line) {
-    return line.replace(/\u00a0/g, ' ').trim();
-  }).filter(Boolean);
-}
-
-// 新版网格：`1-16[7-8]`、`1-16单周[7-8]`、`11[9-10]`。
-function ttParseWeeklyMeeting(timeRaw, roomRaw, day) {
-  var s = String(timeRaw || '').replace(/\s+/g, '');
-  var m = s.match(/^(\d+)(?:-(\d+))?(?:周)?(?:(单|双)周|[（(](单|双)[）)])?\[(\d+)(?:-(\d+))?\](.*)$/);
-  if (!m) return null;
-  var ws = parseInt(m[1], 10);
-  var we = m[2] !== undefined ? parseInt(m[2], 10) : ws;
-  var ps = parseInt(m[5], 10);
-  var pe = m[6] !== undefined ? parseInt(m[6], 10) : ps;
-  if (!day || !ws || !ps || ps > 12) return null;
-  if (we < ws) { var wt = ws; ws = we; we = wt; }
-  if (pe < ps) { var pt = ps; ps = pe; pe = pt; }
-  return {
-    ws: Math.max(ws, 1), we: Math.min(we, 60),
-    parity: (m[3] || m[4]) === '单' ? 1 : ((m[3] || m[4]) === '双' ? 2 : 0),
-    day: day, ps: ps, pe: Math.min(Math.max(pe, ps), 12),
-    room: String(roomRaw || m[7] || '').replace(/[（(]\d+[）)]\s*$/, '').trim()
-  };
-}
-
-// 解析教务系统“按星期网格”导出的伪 .xls。表格最后 7 列始终对应周一至周日，
-// 前面的时段列带有 rowspan，所以不依赖具体的 DOM 行列索引。
-function ttParseWeeklyGrid(doc, meta) {
-  var tables = Array.prototype.slice.call(doc.querySelectorAll('table'));
-  for (var ti = 0; ti < tables.length; ti++) {
-    var rows = tables[ti].querySelectorAll('tr');
-    if (rows.length < 2) continue;
-    var headerCells = rows[0].querySelectorAll('th,td');
-    var headerText = Array.prototype.map.call(headerCells, function (cell) {
-      return (cell.textContent || '').replace(/\s+/g, '');
-    }).join('|');
-    if (headerText.indexOf('星期一') < 0 || headerText.indexOf('星期日') < 0) continue;
-
-    var courses = [];
-    var courseByKey = Object.create(null);
-    for (var ri = 1; ri < rows.length; ri++) {
-      var cells = Array.prototype.slice.call(rows[ri].querySelectorAll('th,td'));
-      if (cells.length < 8) continue;
-      var dayCells = cells.slice(-7);
-      dayCells.forEach(function (cell, dayIndex) {
-        var infos = Array.prototype.slice.call(cell.querySelectorAll('.xkinfo'));
-        if (!infos.length) return;
-        infos.forEach(function (info) {
-          var entries = Array.prototype.slice.call(info.children).filter(function (child) {
-            return child.tagName && child.tagName.toLowerCase() === 'div';
-          });
-          if (!entries.length) entries = [info];
-          entries.forEach(function (entry) {
-            var lines = ttWeeklyEntryLines(entry);
-            if (lines.length < 3) return;
-            var name = lines[0];
-            var teacher = lines[1];
-            var timeRaw = lines[2];
-            var room = lines[3] || '';
-            var parsedName = ttSplitCourseName(name);
-            if (!parsedName.name) return;
-            var key = (parsedName.code || '') + '|' + parsedName.name;
-            var course = courseByKey[key];
-            if (!course) {
-              course = courseByKey[key] = {
-                code: parsedName.code,
-                name: parsedName.name,
-                teachers: [], hours: '', credits: '', classNo: '', nature: '',
-                timeRaw: '', meetings: []
-              };
-              courses.push(course);
-            }
-            if (teacher && course.teachers.indexOf(teacher) < 0) course.teachers.push(teacher);
-            var meeting = ttParseWeeklyMeeting(timeRaw, room, dayIndex + 1);
-            if (meeting) {
-              course.meetings.push(meeting);
-              course.timeRaw = course.timeRaw ? course.timeRaw + ',' + timeRaw : timeRaw;
-            }
-          });
-        });
-      });
-    }
-    if (courses.length) {
-      meta.sourceFormat = 'weekly-grid';
-      meta.courseCodeMissing = true;
-      meta.courseCount = meta.courseCount || courses.length;
-      return { meta: meta, courses: courses.map(function (course) {
-        course.meetings = ttMergeMeetings(course.meetings);
-        return course;
-      }) };
-    }
-  }
-  return null;
-}
-
 // ── 解析：HTML 文本 → { meta, courses } ──
 function ttParseImport(htmlText) {
   var doc = new DOMParser().parseFromString(htmlText, 'text/html');
@@ -195,6 +94,11 @@ function ttParseImport(htmlText) {
   if ((m = plain.match(/选课课程门数[:：]\s*(\d+)/))) meta.courseCount = parseInt(m[1], 10);
   if ((m = plain.match(/总学分[:：]\s*([\d.]+)/))) meta.credits = m[1];
   ttReadHiddenMeta(doc, meta);
+
+  // 「按周方式显示」网格导出（xkinfo 模板）直接拒收：不带课程代码、一格堆多个
+  // 教学班（同名课会被拆成多份重复课程），解析不出准确课程列表。
+  // rejected 标记由 ttOnFilePicked 转成「说明原因 + 重弹教程」。
+  if (doc.querySelector('.xkinfo')) return { meta: meta, courses: [], rejected: 'grid' };
 
   // 定位课程表：表头需同时含「课程名」和「上课时间」
   var table = null, col = null;
@@ -215,7 +119,7 @@ function ttParseImport(htmlText) {
     });
     if (idx.name !== undefined && idx.time !== undefined) { table = tables[i]; col = idx; }
   }
-  if (!table) return ttParseWeeklyGrid(doc, meta) || { meta: meta, courses: [] };
+  if (!table) return { meta: meta, courses: [] };
 
   var courses = [];
   var rows = table.querySelectorAll('tbody tr');
@@ -251,7 +155,6 @@ function ttParseImport(htmlText) {
     });
   });
   meta.sourceFormat = 'detail-table';
-  meta.courseCodeMissing = courses.some(function (course) { return !course.code; });
   return { meta: meta, courses: courses };
 }
 
@@ -857,7 +760,9 @@ function ttToggleManagePop() {
     '<button type="button" class="tt-mg-opt" data-mg="reimport">重新导入课表' +
       '<span class="tt-mg-sub">用教务导出文件替换教务课程</span></button>' +
     '<button type="button" class="tt-mg-opt" data-mg="scheme">课程配色' +
-      '<span class="tt-mg-sub">当前：' + esc(curScheme ? curScheme.name : '中国色') + '</span></button>';
+      '<span class="tt-mg-sub">当前：' + esc(curScheme ? curScheme.name : '中国色') + '</span></button>' +
+    '<button type="button" class="tt-mg-opt" data-mg="tutorial">导入教程' +
+      '<span class="tt-mg-sub">如何从教务系统导出可导入的课表</span></button>';
   actions.appendChild(pop);
   pop.addEventListener('click', function (e) {
     var opt = e.target.closest('[data-mg]');
@@ -868,6 +773,8 @@ function ttToggleManagePop() {
       ttToggleEdit();
     } else if (act === 'reimport') {
       document.getElementById('ttFileInput').click();
+    } else if (act === 'tutorial') {
+      ttShowTutorial();
     } else {
       ttToggleSchemePop();
     }
@@ -976,6 +883,11 @@ function ttOnFilePicked(ev) {
   reader.onload = function () {
     var text = ttDecodeBuffer(reader.result);
     var parsed = ttParseImport(text);
+    if (parsed.rejected === 'grid') {
+      // 拒收「按周方式显示」网格文件：说明原因并重新弹出导入教程
+      ttShowTutorial('grid');
+      return;
+    }
     if (!parsed.courses.length) {
       ttShowImportError('没有识别到课程表格：请确认这是教务系统导出的「学生选课课程表」文件。');
       return;
@@ -1185,7 +1097,6 @@ function ttShowConfirmModal(parsed) {
 function ttRenderConfirmModal(parsed) {
   var meta = parsed.meta || {};
   var courses = parsed.courses;
-  var courseCodeMissing = meta.sourceFormat === 'weekly-grid' && meta.courseCodeMissing;
   var existing = ttModalOverlay();
   ttLocPicks = {}; // 本次导入的位置选择从零开始
   var credits = meta.credits || courses.reduce(function (a, c) { return a + (parseFloat(c.credits) || 0); }, 0).toFixed(2);
@@ -1237,9 +1148,6 @@ function ttRenderConfirmModal(parsed) {
           (credits ? '<span>共 <b>' + esc(String(credits)) + '</b> 学分</span>' : '') +
         '</div>' +
         '<div class="tt-privacy-note">🔒 本地解析，仅自己可见：文件本身不会上传；解析出的课表数据会同步到你的账号，换设备登录即可查看。</div>' +
-        (courseCodeMissing
-          ? '<div class="tt-code-note" role="note"><span class="tt-code-note-mark">!</span><div><strong>此文件未提供课程代码</strong><p>仍可继续导入并正常生成课表，但课程卡不会提供资料目录跳转。导入后打开「编辑课表」，为课程补上代码并保存，即可恢复对应课程的跳转。</p></div></div>'
-          : '') +
         (ttState.data && ttState.data.courses.length
           ? (ttState.data.courses.some(function (c) { return c.src === 'manual'; })
             ? '<div class="tt-privacy-note tt-manual-note">⚠ 导入将替换现有教务课程与手动编辑。检测到 <b>' +
@@ -1248,10 +1156,10 @@ function ttRenderConfirmModal(parsed) {
               '<span class="tt-keep-sub">取消勾选则导入时一并移除；与本次导入同代码或同名的，始终以导入为准。</span></div>'
             : '<div class="tt-privacy-note">⚠ 导入将整表替换现有课程与手动编辑。</div>')
           : '') +
-        (courseCodeMissing ? '' : (missing.length
+        (missing.length
           ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程尚未建立资料目录' +
             '（通识 ' + genCount + ' 门）。请为它们选择位置，导入后将自动提交新课程申请，管理员批准前点击课程不会跳转。</div>'
-          : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>')) +
+          : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>') +
         '<div class="tt-mlist">' + rows + '</div>' +
       '</div>' +
       '<footer>' +
@@ -2408,7 +2316,8 @@ function ttRenderList(body) {
 }
 
 // ── 使用教程弹层（图文步骤，链接可点；图片仅在本弹层打开时加载） ──
-function ttShowTutorial() {
+// reason==='grid'：用户刚上传了被拒收的网格课表，顶部先给拒收原因，再教正确导出方式
+function ttShowTutorial(reason) {
   var existing = ttModalOverlay();
   var img = function (n, alt) {
     return '<img src="/static/tt_tutorial/step' + n + '.webp" alt="' + alt + '" loading="lazy" />';
@@ -2417,6 +2326,12 @@ function ttShowTutorial() {
     '<div class="tt-modal tt-tut" role="dialog" aria-modal="true" aria-label="课表导入教程">' +
       '<header><h3>课表导入教程</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
       '<div class="tt-mbody">' +
+        (reason === 'grid'
+          ? '<div class="tt-code-note is-danger" role="alert"><span class="tt-code-note-mark">!</span><div>' +
+            '<strong>这份网格课表无法导入</strong>' +
+            '<p>这是「按周方式显示」的网格文件：不带课程代码，同一格还堆着多个教学班，解析不出准确的课程列表。请回到教务系统「我的课表」，切到「按列表方式显示」再点「导出」，上传新导出的文件。</p>' +
+            '</div></div>'
+          : '') +
         '<ol class="tt-steps">' +
           '<li>' +
             '<p>访问数字京师 <a href="https://one.bnu.edu.cn" target="_blank" rel="noopener noreferrer">one.bnu.edu.cn</a>，登录自己的账号，来到教务管理系统。</p>' +
@@ -2427,7 +2342,7 @@ function ttShowTutorial() {
             img(2, '网上选课中的我的课表入口') +
           '</li>' +
           '<li>' +
-            '<p>在「按列表方式显示」或「按周方式显示」下点击「导出」，将生成的 xls 文件在本站上传，解析成功后自动生成你的课表；重新导入会覆盖现有课表。</p>' +
+            '<p>在「按列表方式显示」下点击「导出」，将生成的 xls 文件在本站上传，解析成功后自动生成你的课表；重新导入会覆盖现有课表。「按周方式显示」的网格文件无法解析，请勿使用。</p>' +
             img(3, '我的课表导出按钮') +
           '</li>' +
         '</ol>' +
