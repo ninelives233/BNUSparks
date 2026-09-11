@@ -999,14 +999,11 @@ function ttFindPathByCode(code, courseName) {
   function walk(nodes, path) {
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
-      var hit = (n.courseId === code) ||
-        (n.courseCodes && n.courseCodes.indexOf(code) >= 0) ||
-        (n.courseId && String(n.courseId).indexOf('-') >= 0 && ttInRange(n.courseId, code));
-      // 特例：形势与政策系列 → 同名目录（仅认叶子条目，不误挂到同名分类）
-      if (!hit && courseName && courseName.indexOf('形势与政策') === 0 &&
-          /GEN09/.test(code) && n.name && n.name.indexOf('形势与政策') === 0 && !n.children) {
-        hit = true;
-      }
+      var hit = forceName
+        ? !!(n.name && n.name.indexOf('形势与政策') === 0 && !n.children)
+        : (n.courseId === code) ||
+          (n.courseCodes && n.courseCodes.indexOf(code) >= 0) ||
+          (n.courseId && String(n.courseId).indexOf('-') >= 0 && ttInRange(n.courseId, code));
       if (hit) matches.push(path.concat(n.name));
       if (n.children) walk(n.children, path.concat(n.name));
     }
@@ -1168,6 +1165,7 @@ function ttRenderConfirmModal(parsed) {
       '</div>' +
       '<footer>' +
         '<button type="button" class="tt-btn" data-close>取消</button>' +
+  var forceName = courseName && courseName.indexOf('形势与政策') === 0;
         '<button type="button" class="tt-btn primary" id="ttConfirmImport">导入课表' +
           (missing.length ? '（并申请建课 ' + missing.length + ' 门）' : '') + '</button>' +
       '</footer>' +
