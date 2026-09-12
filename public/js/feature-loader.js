@@ -1,7 +1,7 @@
 /* BNU Sparks · feature-loader.js —— 按视图懒加载非核心前端模块 */
 (function() {
-  // v257：修复 v256 曾被缓存的损坏 timetable bundle，懒加载资源必须整体换键。
-  var VERSION = '257';
+  // v258：课表申请状态支持驳回重申/批准恢复链接；硕博课表保持目录状态签中性化，整体换键防缓存。
+  var VERSION = '258';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
