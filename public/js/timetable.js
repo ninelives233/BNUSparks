@@ -1232,7 +1232,9 @@ function ttRenderEditEmpty(body) {
     '<div class="tt-empty">' +
       '<div class="glyph">编</div>' +
       '<h2>手动建立课程列表</h2>' +
-      '<p>逐门添加课程：填名称和上课时间即可，不依赖教务导出文件。填了课程代码的课程会自动链接到资料目录，未建目录的可提交建课申请。</p>' +
+      '<p>逐门添加课程：填名称和上课时间即可，不依赖教务导出文件。' + (ttIsUndergrad()
+        ? '填了课程代码的课程会自动链接到资料目录，未建目录的可提交建课申请。'
+        : '课程代码会先保存，硕博板块上线后自动链接资料目录。') + '</p>' +
       '<button type="button" class="tt-btn primary" id="ttManualAddBtn">＋ 添加课程</button>' +
       '<button type="button" class="tt-btn" id="ttTutorialBtn2" style="margin-left:8px">改用教务导入</button>' +
     '</div>';
@@ -2200,6 +2202,11 @@ function ttEditRenderLink(wc) {
     el.innerHTML = '<span class="tt-edit-hint">课程目录加载中…</span>';
     return;
   }
+  // 硕博板块筹备中：不链接目录、不提供建课入口；代码照常随课程保存，板块上线后自动接入
+  if (!ttIsUndergrad()) {
+    el.innerHTML = '<span class="tt-edit-hint">硕、博板块正在筹备中：课程代码会保存，板块上线后自动链接目录</span>';
+    return;
+  }
   if (!code) {
     el.innerHTML = '<span class="tt-edit-hint">未填课程代码：保存后不会提供课程跳转；补填代码并保存即可恢复</span>';
     return;
@@ -2286,7 +2293,7 @@ function ttEditSave(wc, isNew) {
   }
   // 建课申请要在关弹层前收集（位置选择控件在弹层 DOM 里）
   var code = wc.code;
-  var needsRequest = code && ttTreeReady() && !data.pendingCodes[code] && !ttFindPathByCode(code, wc.name);
+  var needsRequest = code && ttIsUndergrad() && ttTreeReady() && !data.pendingCodes[code] && !ttFindPathByCode(code, wc.name);
   var body = needsRequest ? ttCollectRequestFromModal(code, wc.name) : null;
   data.importedAt = Date.now();
   ttResetCourseCounts();
