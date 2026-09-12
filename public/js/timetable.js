@@ -1007,6 +1007,7 @@ function ttInRange(rangeId, code) {
 function ttFindPathByCode(code, courseName) {
   if (!courseTree) return null;
   var matches = [];
+  var forceName = courseName && courseName.indexOf('形势与政策') === 0;
   function walk(nodes, path) {
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
@@ -1176,7 +1177,6 @@ function ttRenderConfirmModal(parsed) {
       '</div>' +
       '<footer>' +
         '<button type="button" class="tt-btn" data-close>取消</button>' +
-  var forceName = courseName && courseName.indexOf('形势与政策') === 0;
         '<button type="button" class="tt-btn primary" id="ttConfirmImport">导入课表' +
           (missing.length ? '（并申请建课 ' + missing.length + ' 门）' : '') + '</button>' +
       '</footer>' +
