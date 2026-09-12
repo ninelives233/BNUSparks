@@ -293,6 +293,59 @@ function ttNormalizeMeetings(data) {
   return data;
 }
 
+// ── 多学期课表槽（切换课表）：整个槽表就挂在活动表 blob 的 slots/activeId 字段上，
+// 本地 ttSaveStore 与云端 /api/user/timetable/ 全链路原样携带，服务端零改动。
+// 云端只认顶层 courses/importedAt（活动表平铺其中），旧版前端读到新 blob 也只当单表用。
+var TT_SLOT_MAX = 8;
+
+function ttNewSlotId() {
+  return 'tts' + Date.now().toString(36) + Math.floor(Math.random()*1296).toString(36);
+}
+
+// 槽内数据不能递归携带 slots/activeId，剥成纯整表 blob
+function ttStripSlotFields(blob) {
+  var copy = JSON.parse(JSON.stringify(blob || {}));
+  delete copy.slots;
+  delete copy.activeId;
+  return copy;
+}
+
+// 存量/旧端单表 blob → 一个槽；缺 activeId 时取首槽。所有入库路径（本地载入/
+// 云端采用/导入落地）都过这里，保证 ttState.data 永远带合法的槽结构。
+function ttEnsureSlotsShape(data) {
+  if (!data || !Array.isArray(data.courses)) return data;
+  if (!Array.isArray(data.slots)) {
+    data.slots = [{
+      id: ttNewSlotId(),
+      name: (data.meta && data.meta.semester) || '我的课表',
+      savedAt: data.importedAt || Date.now(),
+      data: ttStripSlotFields(data)
+    }];
+  }
+  if (!data.activeId || !data.slots.some(function (s) { return s.id === data.activeId; })) {
+    data.activeId = data.slots.length ? data.slots[0].id : null;
+  }
+  return data;
+}
+
+// 当前活动表写回自己的槽（切换/导入新课表前的落盘点）；其余槽不动
+function ttPersistActiveIntoSlots() {
+  var d = ttState.data;
+  if (!d || !Array.isArray(d.slots)) return;
+  var hit = d.slots.find(function (s) { return s.id === d.activeId; });
+  if (!hit) return;
+  hit.data = ttStripSlotFields(d);
+  hit.savedAt = Date.now();
+}
+
+function ttCurrentSlotName() {
+  var d = ttState.data;
+  if (!d) return '';
+  var hit = Array.isArray(d.slots) && d.slots.find(function (s) { return s.id === d.activeId; });
+  return hit ? hit.name : ((d.meta && d.meta.semester) || '我的课表');
+}
+
+
 // ── 学期第一周周一推断：秋季→9月起第一个周一；春季→次年2/22起第一个周一 ──
 function ttGuessSemesterStart(semester) {
   var m = String(semester || '').match(/((?:19|20)\d{2})[^0-9]*(?:19|20)\d{2}学年(秋季|春季|第[12一二]学期)?/);
@@ -349,6 +402,7 @@ function ttLoadStore() {
     if (!data.pendingCodes || typeof data.pendingCodes !== 'object') data.pendingCodes = {};
     // 兼容存量：早期版本未做时段合并（多教室/连堂被拆成多块），进入 ttState 前补一次
     ttNormalizeMeetings(data);
+    ttEnsureSlotsShape(data);
     return data;
   } catch (e) { return null; }
 }
@@ -440,6 +494,8 @@ function ttAdoptCloudTimetable(cloud) {
   if (!cloud || !Array.isArray(cloud.courses)) return false;
   if (!cloud.pendingCodes || typeof cloud.pendingCodes !== 'object') cloud.pendingCodes = {};
   ttState.data = ttNormalizeMeetings(cloud);
+  // 云端 blob 可能是旧端传的单表（无槽结构），采用前补齐
+  ttEnsureSlotsShape(ttState.data);
   if (!ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
   ttSaveStore(ttState.data);
   ttComputeWeek();
@@ -761,6 +817,8 @@ function ttToggleManagePop() {
       '<div class="tt-mg-label">课表</div>' +
       '<button type="button" class="tt-mg-opt is-key" data-mg="reimport">重新导入课表' +
         '<span class="tt-mg-sub">用教务导出文件替换教务课程</span></button>' +
+      '<button type="button" class="tt-mg-opt" data-mg="slots">切换课表' +
+        '<span class="tt-mg-sub">当前：' + esc(ttCurrentSlotName()) + '</span></button>' +
       '<button type="button" class="tt-mg-opt" data-mg="edit">编辑课程' +
         '<span class="tt-mg-sub">行内编辑、手动建课、调整颜色</span></button>' +
     '</div>' +
@@ -785,7 +843,10 @@ function ttToggleManagePop() {
     if (act === 'edit') {
       ttToggleEdit();
     } else if (act === 'reimport') {
+      ttState.importTarget = 'current';
       document.getElementById('ttFileInput').click();
+    } else if (act === 'slots') {
+      ttShowSlotPop();
     } else if (act === 'tutorial') {
       ttShowTutorial();
     } else if (act === 'feedback') {
@@ -832,6 +893,154 @@ function ttToggleSchemePop() {
       if (pop.isConnected && !pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', close); }
     });
   }, 0);
+}
+
+// ── 切换课表弹层：整表换入换出（机制对齐极简课程表 APK 的多课表）──
+// 槽表挂在活动表 blob 的 slots/activeId 上随云同步走；当前表永远是顶层平铺字段。
+function ttShowSlotPop() {
+  var actions = document.querySelector('#ttShell .tt-actions');
+  var exist = document.getElementById('ttSlotPop');
+  if (exist) { exist.remove(); return; }
+  var d = ttState.data;
+  var pop = document.createElement('div');
+  pop.id = 'ttSlotPop';
+  pop.className = 'tt-slot-pop';
+  var slots = (d && Array.isArray(d.slots)) ? d.slots : [];
+  var atCap = slots.length >= TT_SLOT_MAX;
+  var rows = slots.map(function (s) {
+    var isActive = d && s.id === d.activeId;
+    var n = s.data && Array.isArray(s.data.courses) ? s.data.courses.length : 0;
+    return '<div class="tt-slot-row' + (isActive ? ' is-active' : '') + '" data-slot="' + esc(s.id) + '">' +
+      '<button type="button" class="tt-slot-main" data-slot-act="switch" data-slot="' + esc(s.id) + '"' + (isActive ? ' disabled' : '') + '>' +
+        '<span class="tt-slot-name">' + esc(s.name) + (isActive ? '<i class="tt-slot-cur">当前</i>' : '') + '</span>' +
+        '<span class="tt-slot-sub">' + n + ' 门课程</span>' +
+      '</button>' +
+      (isActive ? '' :
+        '<span class="tt-slot-ops">' +
+          '<button type="button" class="tt-slot-op" data-slot-act="rename" data-slot="' + esc(s.id) + '" title="重命名">✎</button>' +
+          '<button type="button" class="tt-slot-op is-danger" data-slot-act="del" data-slot="' + esc(s.id) + '" title="删除">🗑</button>' +
+        '</span>') +
+    '</div>';
+  }).join('');
+  pop.innerHTML =
+    '<div class="tt-slot-head">切换课表<span class="tt-slot-count">' + slots.length + '/' + TT_SLOT_MAX + '</span></div>' +
+    (rows ||
+      '<div class="tt-slot-empty">还没有保存的课表。<br>导入教务导出文件后会自动存为一份，可按学期存放多份。</div>') +
+    '<button type="button" class="tt-slot-new" data-slot-act="new"' + (atCap ? ' disabled' : '') + '>＋ 导入为新课表</button>' +
+    (atCap ? '<div class="tt-slot-capnote">最多存 ' + TT_SLOT_MAX + ' 份，先删除不用的学期再导入</div>' : '');
+  actions.appendChild(pop);
+  pop.addEventListener('click', function (e) {
+    var op = e.target.closest('[data-slot-act]');
+    if (!op) return;
+    var act = op.getAttribute('data-slot-act');
+    var sid = op.getAttribute('data-slot');
+    if (act === 'switch') {
+      pop.remove();
+      ttSwitchSlot(sid);
+    } else if (act === 'new') {
+      if (atCap) return;
+      pop.remove();
+      ttState.importTarget = 'new';
+      var fi = document.getElementById('ttFileInput');
+      if (fi) fi.click();
+    } else if (act === 'rename') {
+      ttRenameSlotInline(pop, sid);
+    } else if (act === 'del') {
+      ttDeleteSlot(sid, op);
+    }
+  });
+  // 点击其他区域关闭
+  setTimeout(function () {
+    document.addEventListener('click', function close(e2) {
+      if (pop.isConnected && !pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', close); }
+    });
+  }, 0);
+}
+
+// 切换 = 整表换入换出。换入表 importedAt 置为当前时间：
+// 云端按 importedAt newer-wins，不 bump 会被「上一张活动表」的旧版本拒掉并回滚。
+function ttSwitchSlot(sid) {
+  var d = ttState.data;
+  if (!d || !Array.isArray(d.slots) || sid === d.activeId) return;
+  var target = d.slots.find(function (s) { return s.id === sid; });
+  if (!target) return;
+  ttPersistActiveIntoSlots();
+  var next = ttStripSlotFields(target.data);
+  next.slots = d.slots;
+  next.activeId = sid;
+  next.importedAt = Date.now();
+  if (!next.start) next.start = ttGuessSemesterStart(next.meta && next.meta.semester);
+  ttState.data = ttNormalizeMeetings(next);
+  ttEnsureSlotsShape(ttState.data);
+  ttSaveStore(ttState.data);
+  ttResetCourseCounts();
+  ttComputeWeek();
+  ttRenderAll();
+  ttLoadCourseCounts();
+  ttSyncUpload();
+  ttToast('已切换到「' + target.name + '」');
+}
+
+function ttRenameSlotInline(pop, sid) {
+  var d = ttState.data;
+  if (!d || !Array.isArray(d.slots)) return;
+  var slot = d.slots.find(function (s) { return s.id === sid; });
+  var row = pop.querySelector('[data-slot="' + sid + '"]');
+  if (!slot || !row || row.querySelector('input')) return;
+  var main = row.querySelector('.tt-slot-main');
+  var nameEl = row.querySelector('.tt-slot-name');
+  if (!main || !nameEl) return;
+  var input = document.createElement('input');
+  input.className = 'tt-slot-input';
+  input.maxLength = 24;
+  input.value = slot.name;
+  nameEl.textContent = '';
+  nameEl.appendChild(input);
+  input.focus();
+  input.select();
+  var commit = function () {
+    if (!input.isConnected) return;
+    input.removeEventListener('blur', commit);
+    var v = input.value.trim();
+    if (v && v !== slot.name) {
+      slot.name = v;
+      ttSaveStore(ttState.data);
+      ttSyncUpload();
+      ttToast('已重命名为「' + v + '」');
+    }
+    var p = document.getElementById('ttSlotPop');
+    if (p) p.remove();
+  };
+  input.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') commit();
+    if (ev.key === 'Escape') { input.value = slot.name; commit(); }
+  });
+  input.addEventListener('blur', commit);
+  input.addEventListener('click', function (ev) { ev.stopPropagation(); });
+}
+
+// 删除非活动槽：两步确认（第一次点进入 armed，再点确认；点别处自动解除）
+function ttDeleteSlot(sid, btn) {
+  var d = ttState.data;
+  if (!d || !Array.isArray(d.slots) || sid === d.activeId) return;
+  var idx = d.slots.findIndex(function (s) { return s.id === sid; });
+  if (idx < 0) return;
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = '确认删除';
+    setTimeout(function () {
+      if (btn.isConnected) { btn.classList.remove('armed'); btn.textContent = '🗑'; }
+    }, 2600);
+    return;
+  }
+  var name = d.slots[idx].name;
+  d.slots.splice(idx, 1);
+  ttSaveStore(ttState.data);
+  ttSyncUpload();
+  var p = document.getElementById('ttSlotPop');
+  if (p) p.remove();
+  ttShowSlotPop(); // 重建列表（行数/计数已变化）
+  ttToast('已删除「' + name + '」');
 }
 
 function ttRenderAll() {
@@ -1447,6 +1656,24 @@ function ttApplyImport(parsed, requests) {
     }
   }
   parsed.importedAt = Date.now();
+  // 「导入为新课表」：当前表先落回自己的槽，导入结果作为新槽挂上并激活；
+  // 默认（重新导入课表）则整表替换当前活动表，槽结构原样保留。
+  var importTarget = ttState.importTarget === 'new' ? 'new' : 'current';
+  ttState.importTarget = null;
+  if (importTarget === 'new') {
+    var carried = (prev && Array.isArray(prev.slots)) ?
+      prev.slots.filter(function (s) { return s && s.id && s.data; }) : [];
+    var curHit = carried.find(function (s) { return s.id === (prev && prev.activeId); });
+    if (curHit) curHit.data = ttStripSlotFields(prev);
+    var newSlot = {
+      id: ttNewSlotId(),
+      name: (parsed.meta && parsed.meta.semester) || '新课表',
+      savedAt: parsed.importedAt,
+      data: ttStripSlotFields(parsed)
+    };
+    parsed.slots = carried.slice(0, TT_SLOT_MAX - 1).concat([newSlot]);
+    parsed.activeId = newSlot.id;
+  }
   ttSaveStore(parsed);
   ttState.data = parsed;
   ttResetCourseCounts();

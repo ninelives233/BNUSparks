@@ -137,6 +137,67 @@
 .tt-mg-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-mg-sub { display: block; margin-top: 2px; font-size: var(--fs-2xs); color: var(--ink-faint); font-weight: 400; }
 
+/* 切换课表弹层：学期槽列表，与管理/配色弹层同一套语言 */
+.tt-slot-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+  background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); padding: 8px; min-width: 264px; max-width: min(320px, calc(100vw - 32px));
+  animation: ttPop 0.14s ease-out both;
+}
+.tt-slot-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 2px 6px 8px; font-family: var(--serif, var(--sans));
+  font-size: var(--fs-sm); font-weight: 600; color: var(--ink);
+}
+.tt-slot-count { font-size: var(--fs-2xs); color: var(--ink-faint); font-weight: 400; letter-spacing: 0.06em; }
+.tt-slot-row { display: flex; align-items: stretch; gap: 2px; }
+.tt-slot-row + .tt-slot-row { margin-top: 2px; }
+.tt-slot-main {
+  flex: 1; min-width: 0; display: block; text-align: left;
+  appearance: none; border: none; background: none; cursor: pointer;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  font-family: var(--sans); color: var(--ink);
+}
+.tt-slot-main:hover { background: var(--surface); }
+.tt-slot-main:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-slot-row.is-active .tt-slot-main { background: var(--primary-surface); cursor: default; }
+.tt-slot-row.is-active .tt-slot-name { color: var(--primary-dark); font-weight: 600; }
+.tt-slot-name { display: block; font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-slot-cur {
+  font-style: normal; font-size: var(--fs-2xs); font-weight: 400;
+  color: var(--primary-dark); border: 1px solid oklch(from var(--primary) l c h / 0.35);
+  border-radius: 999px; padding: 0 6px; margin-left: 6px; vertical-align: 1px;
+}
+.tt-slot-sub { display: block; margin-top: 2px; font-size: var(--fs-2xs); color: var(--ink-faint); }
+.tt-slot-ops { display: flex; align-items: center; gap: 2px; padding-left: 2px; }
+.tt-slot-op {
+  appearance: none; border: none; background: none; cursor: pointer;
+  padding: 6px; border-radius: var(--radius-sm); font-size: var(--fs-xs);
+  color: var(--ink-faint); line-height: 1;
+}
+.tt-slot-op:hover { background: var(--surface); color: var(--ink); }
+.tt-slot-op:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-slot-op.is-danger.armed { color: var(--danger); background: oklch(from var(--danger) l c h / 0.1); font-weight: 600; }
+.tt-slot-input {
+  width: 100%; font-family: var(--sans); font-size: var(--fs-sm); color: var(--ink);
+  background: var(--raised); border: 1px solid var(--primary); border-radius: var(--radius-sm);
+  padding: 3px 6px;
+}
+.tt-slot-input:focus { outline: none; box-shadow: var(--focus-ring); }
+.tt-slot-empty { padding: 10px 6px 12px; font-size: var(--fs-xs); color: var(--ink-faint); line-height: 1.7; }
+.tt-slot-new {
+  display: block; width: 100%; margin-top: 6px;
+  appearance: none; cursor: pointer;
+  border: 1px dashed oklch(from var(--ink) l c h / 0.3); border-radius: var(--radius-sm);
+  background: none; padding: 8px 10px;
+  font-family: var(--sans); font-size: var(--fs-sm); color: var(--ink);
+}
+.tt-slot-new:hover:not(:disabled) { border-color: var(--primary); color: var(--primary-dark); background: var(--primary-surface); }
+.tt-slot-new:disabled { opacity: 0.45; cursor: not-allowed; }
+.tt-slot-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tt-slot-capnote { margin-top: 6px; font-size: var(--fs-2xs); color: var(--ink-faint); text-align: center; }
+
+
 /* 课程编辑弹层：无排课课程（自学/补修）提示 */
 .tt-seg-note { margin: 8px 0 0; font-size: var(--fs-2xs); color: var(--ink-faint); line-height: 1.55; }
 
@@ -769,6 +830,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop, .tt-manage-pop { animation: none; transition: none; transform: none; }
+  .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop, .tt-manage-pop, .tt-slot-pop { animation: none; transition: none; transform: none; }
   .tt-grid.swap .tt-card, .tt-list.swap .tt-lrow { animation: none; }
 }
