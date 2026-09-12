@@ -114,12 +114,17 @@
 .tt-sch-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-sch-opt.is-active { background: var(--primary-surface); color: var(--primary-dark); font-weight: 600; }
 
-/* 「管理」菜单：低频操作收纳（重新导入 / 课程配色），与配色弹层同一套语言 */
+/* 「管理」菜单：按重要度分三层（课表 / 外观 / 帮助），眉标分层 + 组间细线 */
 .tt-manage-pop {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
   background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg); padding: 6px; min-width: 216px;
+  box-shadow: var(--shadow-lg); padding: 6px; min-width: 224px;
   animation: ttPop 0.14s ease-out both;
+}
+.tt-mg-sec + .tt-mg-sec { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.tt-mg-label {
+  padding: 2px 10px 4px; font-size: var(--fs-2xs); color: var(--ink-faint);
+  letter-spacing: 0.12em; user-select: none;
 }
 .tt-mg-opt {
   display: block; width: 100%;
@@ -127,6 +132,7 @@
   padding: 8px 10px; border-radius: var(--radius-sm);
   font-family: var(--sans); font-size: var(--fs-sm); color: var(--ink); text-align: left;
 }
+.tt-mg-opt.is-key { font-weight: 600; }
 .tt-mg-opt:hover { background: var(--surface); }
 .tt-mg-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-mg-sub { display: block; margin-top: 2px; font-size: var(--fs-2xs); color: var(--ink-faint); font-weight: 400; }
