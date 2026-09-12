@@ -54,8 +54,9 @@ var TT_ROW_OF_PERIOD = [2, 3, 4, 5, 7, 8, 9, 10, 12, 13, 14, 15];
 var ttState = {
   data: null, week: 1, maxWeek: 20, start: '', scheme: 'zhongguo', view: 'grid',
   editing: false, links: {}, counts: {}, _countKey: '', _countError: false,
+  requestStatuses: {}, _requestStatusKey: '', _requestStatusAt: 0, _requestStatusPromise: null,
   _treeError: false, cloudUpdatedAt: null, cloudSynced: false,
-  viewerMode: false, viewerUserName: '', _renderRoot: null, _inlineBody: null
+  viewerMode: false, viewerUserName: '', viewerEducation: '', _renderRoot: null, _inlineBody: null
 };
 
 // 课表既可以渲染在独立页面，也可以嵌入管理员用户主页。
@@ -479,6 +480,140 @@ function ttLoadCourseCounts() {
   return request;
 }
 
+// ── 新建课程申请状态 ────────────────────────────────────────
+// pendingCodes 是课表数据里的旧兼容字段，早期只保存 true，无法区分驳回。
+// 现在以服务端返回的本人最新申请为准，同时把结果写回本地，断网时仍能给出
+// 上一次已知状态；课程目录一旦出现，目录匹配优先于申请状态。
+function ttRequestCode(code) {
+  return String(code || '').trim().toUpperCase().replace(/[\-*]/g, '');
+}
+
+function ttRequestCodesKey() {
+  if (!ttState.data || !Array.isArray(ttState.data.courses)) return '';
+  var seen = Object.create(null);
+  return ttState.data.courses.map(function (c) { return ttRequestCode(c.code); })
+    .filter(function (code) {
+      if (!code || seen[code]) return false;
+      seen[code] = true;
+      return true;
+    }).sort().join(',');
+}
+
+function ttStoredRequestState(data, code) {
+  var pending = data && data.pendingCodes;
+  var key = ttRequestCode(code);
+  if (!pending || !key) return null;
+  var hit = null;
+  Object.keys(pending).some(function (storedCode) {
+    if (ttRequestCode(storedCode) !== key) return false;
+    var value = pending[storedCode];
+    hit = value === true ? { status: 'pending', legacy: true }
+      : (value && typeof value === 'object' ? value : null);
+    return true;
+  });
+  return hit;
+}
+
+function ttRequestState(code) {
+  var key = ttRequestCode(code);
+  if (!key) return null;
+  var server = ttState.requestStatuses && ttState.requestStatuses[key];
+  return server || ttStoredRequestState(ttState.data, key);
+}
+
+function ttSaveRequestState(data, code, state) {
+  if (!data) return;
+  if (!data.pendingCodes || typeof data.pendingCodes !== 'object') data.pendingCodes = {};
+  var key = ttRequestCode(code);
+  if (!key) return;
+  Object.keys(data.pendingCodes).forEach(function (storedCode) {
+    if (ttRequestCode(storedCode) === key) delete data.pendingCodes[storedCode];
+  });
+  if (!state || (state.status !== 'pending' && state.status !== 'rejected')) return;
+  data.pendingCodes[key] = {
+    status: state.status,
+    requestId: state.id || state.request_id || null,
+    reviewNotes: state.review_notes || state.reviewNotes || '',
+    payload: state.payload || null
+  };
+}
+
+function ttRequestStateSignature(state) {
+  if (!state) return '';
+  return [state.status, state.id || state.request_id || state.requestId || '',
+    state.review_notes || state.reviewNotes || ''].join('|');
+}
+
+// 拉取本人课表中各代码对应的最新申请。成功响应是权威状态：服务器没有申请时，
+// 清掉旧端遗留的 pending 标记；申请批准后主动刷新课程树，保证链接恢复。
+function ttRefreshRequestStatuses(force) {
+  if (!currentUser || ttState.viewerMode || !ttState.data || !ttIsUndergrad()) {
+    return Promise.resolve(false);
+  }
+  var key = ttRequestCodesKey();
+  if (!key || typeof api !== 'function') return Promise.resolve(false);
+  if (ttState._requestStatusPromise && ttState._requestStatusKey === key) {
+    return ttState._requestStatusPromise;
+  }
+  if (!force && ttState._requestStatusKey === key &&
+      Date.now() - ttState._requestStatusAt < 4500) {
+    return Promise.resolve(true);
+  }
+
+  var uidAtCall = ttState.uid;
+  var dataAtCall = ttState.data;
+  ttState._requestStatusKey = key;
+  var request = api('/api/courses/request/status/?codes=' + encodeURIComponent(key))
+    .then(function (res) {
+      if (ttState.uid !== uidAtCall || ttState.data !== dataAtCall || ttState.viewerMode) return false;
+      var rawItems = res && res.items && typeof res.items === 'object' ? res.items : {};
+      var items = {};
+      Object.keys(rawItems).forEach(function (rawCode) {
+        var normalized = ttRequestCode(rawCode);
+        if (normalized) items[normalized] = rawItems[rawCode];
+      });
+
+      var treeNeedsRefresh = false;
+      var seen = Object.create(null);
+      ttState.data.courses.forEach(function (course) {
+        var code = ttRequestCode(course.code);
+        if (!code || seen[code]) return;
+        seen[code] = true;
+        var before = ttStoredRequestState(ttState.data, code);
+        var item = items[code] || null;
+        ttSaveRequestState(ttState.data, code, item);
+        if (item && item.status === 'approved' &&
+            ttRequestStateSignature(before) !== ttRequestStateSignature(item)) {
+          treeNeedsRefresh = true;
+        }
+      });
+      ttState.requestStatuses = items;
+      ttState._requestStatusAt = Date.now();
+      ttSaveStore(ttState.data);
+      ttResolveCourseLinks();
+      ttRepaintCurrent();
+      if (treeNeedsRefresh) {
+        if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+        // ttEnsureCourseTree 在已有旧树时会直接返回，批准后必须明确走一次网络刷新，
+        // 否则新建的叶子要等到手动进入课程浏览器才会出现。
+        var reload = typeof loadCourseTree === 'function'
+          ? loadCourseTree()
+          : ttEnsureCourseTree();
+        Promise.resolve(reload).then(function () {
+          ttResolveCourseLinks();
+          ttRepaintCurrent();
+        });
+      }
+      return true;
+    })
+    .catch(function () { return false; });
+  ttState._requestStatusPromise = request;
+  request.then(function () {
+    if (ttState._requestStatusPromise === request) ttState._requestStatusPromise = null;
+  });
+  return request;
+}
+
 // ── 云端同步：课表数据（解析结果，不含文件）随账号跨设备 ──
 // 冲突规则：本地与云端按 importedAt 取较新者；仅一方有时直接采用并补齐另一方
 var ttSyncUploadPromise = null;
@@ -513,6 +648,7 @@ function ttAdoptCloudTimetable(cloud) {
   ttRenderAll();
   ttResetCourseCounts();
   ttLoadCourseCounts();
+  ttRefreshRequestStatuses(true);
   return true;
 }
 
@@ -631,15 +767,24 @@ function ttSyncIsActive() {
 function ttStartSyncWatchers() {
   if (ttSyncPollTimer) return;
   ttSyncPollTimer = setInterval(function () {
-    if (!document.hidden && ttSyncIsActive()) ttSyncPull();
+    if (!document.hidden && ttSyncIsActive()) {
+      ttSyncPull();
+      ttRefreshRequestStatuses(false);
+    }
   }, 5000);
   if (ttSyncWatchersInstalled) return;
   ttSyncWatchersInstalled = true;
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && ttSyncIsActive()) ttSyncPull();
+    if (!document.hidden && ttSyncIsActive()) {
+      ttSyncPull();
+      ttRefreshRequestStatuses(true);
+    }
   });
   window.addEventListener('focus', function () {
-    if (ttSyncIsActive()) ttSyncPull();
+    if (ttSyncIsActive()) {
+      ttSyncPull();
+      ttRefreshRequestStatuses(true);
+    }
   });
 }
 
@@ -677,6 +822,7 @@ function ttInitShell(viewerUserId) {
       if (!ttState.viewerMode) ttMigrateLegacyStore();
       ttRenderAll();
       if (!ttState.viewerMode && ttState.data && ttState._countError) ttLoadCourseCounts();
+      if (!ttState.viewerMode && ttState.data) ttRefreshRequestStatuses(true);
     }
     ttApplyViewerMode();
     return;
@@ -724,6 +870,10 @@ function ttLoadUserData() {
   ttState.viewerUserName = '';
   ttState.uid = currentUser ? currentUser.id : null;
   ttResetSyncState();
+  ttState.requestStatuses = {};
+  ttState._requestStatusKey = '';
+  ttState._requestStatusAt = 0;
+  ttState._requestStatusPromise = null;
   ttResetCourseCounts();
   ttState._treeError = false;
   ttState.editing = false;
@@ -752,6 +902,7 @@ function ttLoadUserData() {
   if (ttState.data) {
     ttLoadCourseCounts();
   }
+  ttRefreshRequestStatuses(true);
   // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
   ttSyncPull();
 }
@@ -764,9 +915,14 @@ function ttLoadAdminUserData(userId) {
   ttState.uid = Number(userId);
   ttState.viewerUid = Number(userId);
   ttState.viewerUserName = '';
+  ttState.viewerEducation = '';
   ttState.data = null;
   ttState.cloudUpdatedAt = null;
   ttState.cloudSynced = false;
+  ttState.requestStatuses = {};
+  ttState._requestStatusKey = '';
+  ttState._requestStatusAt = 0;
+  ttState._requestStatusPromise = null;
   ttState.editing = false;
   ttResetCourseCounts();
   ttApplyViewerMode();
@@ -774,12 +930,14 @@ function ttLoadAdminUserData(userId) {
   api('/api/admin/users/' + encodeURIComponent(userId) + '/timetable/').then(function (res) {
     if (!ttState.viewerMode || ttState.uid !== Number(userId)) return;
     ttState.viewerUserName = res.user && res.user.nickname ? res.user.nickname : '用户课表';
+    ttState.viewerEducation = (res.user && res.user.education) || '';
     ttState.data = res.data && Array.isArray(res.data.courses) ? ttNormalizeMeetings(res.data) : null;
     if (ttState.data && !ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
     if (ttState.data) ttComputeWeek();
     ttApplyViewerMode();
     ttRenderAll();
     if (ttState.data) ttLoadCourseCounts();
+    ttRefreshRequestStatuses(true);
   }).catch(function (err) {
     if (!ttState.viewerMode || ttState.uid !== Number(userId)) return;
     var body = document.getElementById('ttBody');
@@ -797,6 +955,7 @@ function ttRenderInlineAdminTimetable(panel, userId) {
   ttState.uid = uid;
   ttState.viewerUid = uid;
   ttState.viewerUserName = '';
+  ttState.viewerEducation = '';
   ttState.data = null;
   ttState.cloudUpdatedAt = null;
   ttState.cloudSynced = false;
@@ -838,6 +997,7 @@ function ttRenderInlineAdminTimetable(panel, userId) {
   return api('/api/admin/users/' + encodeURIComponent(uid) + '/timetable/').then(function (res) {
     if (!ttState.viewerMode || ttState.uid !== uid || ttState._renderRoot !== panel) return res;
     ttState.viewerUserName = res.user && res.user.nickname ? res.user.nickname : '用户';
+    ttState.viewerEducation = (res.user && res.user.education) || '';
     var title = panel.querySelector('.tt-inline-title strong');
     if (title) title.textContent = '用户课表 · ' + ttState.viewerUserName;
     ttState.data = res.data && Array.isArray(res.data.courses) ? ttNormalizeMeetings(res.data) : null;
@@ -857,6 +1017,7 @@ function ttClearInlineAdminTimetable() {
   ttState._inlineBody = null;
   ttState.viewerMode = false;
   ttState.viewerUid = null;
+  ttState.viewerEducation = '';
   ttState.uid = currentUser ? currentUser.id : null;
   ttState.data = null;
   ttResetCourseCounts();
@@ -1425,22 +1586,28 @@ function ttResolveCourseLinks() {
   var map = {};
   ttState.links = map;
   if (!ttState.data) return map;
-  // 非本科身份：渲染层同样不链接（含历史已导入的课表，一律置为未链接）
-  if (!ttIsUndergrad()) return map;
+  // 非本科课表（含管理员查看硕博用户）：渲染层同样不链接（含历史已导入的课表，一律置为未链接）
+  if (!ttOwnerUndergrad()) return map;
   // 先用轻量摘要渲染资料数；完整课程树仅在点击课程、编辑或导入时加载。
   if (!ttTreeReady()) {
     ttState.data.courses.forEach(function (c) {
       if (!c.code || map[c.code]) return;
       var summary = ttState.counts[c.code];
-      if (!summary) return;
-      if (ttState.data.pendingCodes && ttState.data.pendingCodes[c.code]) {
-        map[c.code] = { state: 'pending', quick: true };
-      } else if (summary.exists) {
+      var requestState = ttRequestState(c.code);
+      if (summary && summary.exists) {
         map[c.code] = {
           state: 'linked', type: summary.course_type === 'general' ? '通识课' : '专业课',
           fileCount: Number(summary.file_count) || 0, quick: true
         };
-      } else {
+      } else if (requestState && requestState.status === 'pending') {
+        map[c.code] = { state: 'pending', quick: true };
+      } else if (requestState && requestState.status === 'rejected') {
+        map[c.code] = {
+          state: 'rejected', reviewNotes: requestState.review_notes || requestState.reviewNotes || '',
+          requestId: requestState.id || requestState.requestId || null,
+          payload: requestState.payload || null, quick: true
+        };
+      } else if (summary) {
         map[c.code] = { state: 'missing', quick: true };
       }
     });
@@ -1456,7 +1623,18 @@ function ttResolveCourseLinks() {
         fileCount: node && typeof node.fileCount === 'number' ? node.fileCount : null
       };
     } else {
-      map[c.code] = { state: (ttState.data.pendingCodes && ttState.data.pendingCodes[c.code]) ? 'pending' : 'missing' };
+      var requestState = ttRequestState(c.code);
+      if (requestState && requestState.status === 'pending') {
+        map[c.code] = { state: 'pending' };
+      } else if (requestState && requestState.status === 'rejected') {
+        map[c.code] = {
+          state: 'rejected', reviewNotes: requestState.review_notes || requestState.reviewNotes || '',
+          requestId: requestState.id || requestState.requestId || null,
+          payload: requestState.payload || null
+        };
+      } else {
+        map[c.code] = { state: 'missing' };
+      }
     }
   });
   return map;
@@ -1497,6 +1675,13 @@ function ttIsUndergrad() {
     currentUser.identity_education === '本科');
 }
 
+// 目录功能归属于「课表主人」：管理员查看他人课表时以被查看用户的身份为准，
+// 而非当前登录者（总管理员多半是本科身份，不代表正在查看的硕博用户也有目录体系）
+function ttOwnerUndergrad() {
+  if (ttState.viewerMode) return ttState.viewerEducation === '本科';
+  return ttIsUndergrad();
+}
+
 // ── 确认弹窗（汇总 + 课程清单 + 未建课位置选择） ──
 function ttShowConfirmModal(parsed) {
   // 非本科身份：无链接/建课可确认，跳过弹窗直接纯导入，并告知目录暂不可用
@@ -1504,7 +1689,7 @@ function ttShowConfirmModal(parsed) {
     parsed.keepManual = true;
     if (!parsed.pendingCodes || typeof parsed.pendingCodes !== 'object') parsed.pendingCodes = {};
     ttApplyImport(parsed, []);
-    ttToast('硕、博板块正在筹备中，暂无资料目录');
+    ttToast('硕、博板块正在筹备中，暂时只有课程表功能');
     return;
   }
   // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入。
@@ -1524,14 +1709,44 @@ function ttRenderConfirmModal(parsed) {
   // 按代码去重判断建课状态（含区段目录与形势与政策特例）
   var statusByCode = {};
   courses.forEach(function (c) {
-    if (!c.code || statusByCode[c.code]) return;
-    statusByCode[c.code] = ttFindPathByCode(c.code, c.name) ? 'linked' : 'missing';
+    var code = ttRequestCode(c.code);
+    if (!code || statusByCode[code]) return;
+    var requestState = ttRequestState(code);
+    statusByCode[code] = ttFindPathByCode(c.code, c.name) ? 'linked'
+      : (requestState && requestState.status === 'pending' ? 'pending'
+        : (requestState && requestState.status === 'rejected' ? 'rejected' : 'missing'));
   });
-  var missing = courses.filter(function (c) { return c.code && statusByCode[c.code] === 'missing'; });
+  var missing = [];
+  var missingSeen = {};
+  courses.forEach(function (c) {
+    var code = ttRequestCode(c.code);
+    var status = code && statusByCode[code];
+    if ((status === 'missing' || status === 'rejected') && !missingSeen[code]) {
+      missingSeen[code] = true;
+      missing.push(c);
+    }
+  });
+  var rejectedCount = missing.filter(function (c) { return statusByCode[ttRequestCode(c.code)] === 'rejected'; }).length;
+  var pendingCount = Object.keys(statusByCode).filter(function (code) { return statusByCode[code] === 'pending'; }).length;
   var genCount = missing.filter(function (c) { return /^GEN/i.test(c.code); }).length;
   // 有非 GEN 的待建课 → 顶部提醒可手动归入通识课（见下方「通识课」学院选项）
   var majorMissing = missing.some(function (c) { return !/^GEN/i.test(c.code); });
   var showAdmissionReminder = ttIs2026Student() && missing.length > 0;
+  var rejectedReasons = missing.filter(function (c) {
+    return statusByCode[ttRequestCode(c.code)] === 'rejected';
+  }).map(function (c) {
+    var state = ttRequestState(c.code);
+    return '<li><b>' + esc(c.name) + '</b>' +
+      (c.code ? ' <span>(' + esc(c.code) + ')</span>' : '') +
+      '：' + esc(ttRequestReviewReason(state)) + '</li>';
+  }).join('');
+  var rejectionReminder = rejectedCount
+    ? '<div class="tt-code-note is-danger tt-reapply-banner" role="alert"><span class="tt-code-note-mark">!</span><div>' +
+      '<strong>上次申请被驳回，请先查看原因</strong>' +
+      '<p>重新提交前请按驳回原因调整课程位置：</p>' +
+      '<ul class="tt-reapply-reasons">' + rejectedReasons + '</ul>' +
+      '</div></div>'
+    : '';
 
   var locRendered = {};
   var rows = courses.map(function (c) {
@@ -1539,13 +1754,20 @@ function ttRenderConfirmModal(parsed) {
     var times = c.meetings.map(function (mt) {
       return TT_DAY_NAMES[mt.day - 1] + mt.ps + '-' + mt.pe + '节';
     }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' ');
-    var st = c.code ? statusByCode[c.code] : null;
+    var code = ttRequestCode(c.code);
+    var st = code ? statusByCode[code] : null;
+    var requestState = code ? ttRequestState(code) : null;
     var extra = '';
     if (st === 'linked') {
       extra = '<span class="tt-ok-tag">✓ 已有目录</span>';
-    } else if (st === 'missing' && !locRendered[c.code]) {
-      locRendered[c.code] = true;
-      extra = ttLocationControls(c);
+    } else if (st === 'pending') {
+      extra = '<span class="tt-request-pending">申请审核中</span>';
+    } else if ((st === 'missing' || st === 'rejected') && !locRendered[code]) {
+      locRendered[code] = true;
+      if (st === 'rejected') {
+        extra += '<span class="tt-request-rejected">上次申请已驳回：' + esc(ttRequestReviewReason(requestState)) + '</span>';
+      }
+      extra += ttLocationControls(c);
     }
     return '<div class="tt-mrow ttp' + tone + '">' +
       '<span class="dot"></span>' +
@@ -1559,6 +1781,7 @@ function ttRenderConfirmModal(parsed) {
     '<div class="tt-modal tt-tut" role="dialog" aria-modal="true" aria-label="确认导入课表">' +
       '<header><h3>确认导入</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
       '<div class="tt-mbody">' +
+        rejectionReminder +
         (majorMissing
           ? '<div class="tt-code-note" role="note"><span class="tt-code-note-mark">!</span><div><strong>「公共选修课」中的非 GEN 课程请归入通识课</strong><p>有些在“公共选修课”中选中的课程，虽编码不为 GEN，但不在任何培养方案里，仍要归入通识课中。请在「学院」一栏手动选择「通识课」，将其归入对应的通识课分类，谢谢配合。</p></div></div>'
           : '') +
@@ -1581,15 +1804,18 @@ function ttRenderConfirmModal(parsed) {
             : '<div class="tt-privacy-note">⚠ 导入将整表替换现有课程与手动编辑。</div>')
           : '') +
         (missing.length
-          ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程尚未建立资料目录' +
-            '（通识 ' + genCount + ' 门）。请为它们选择位置，导入后将自动提交新课程申请，管理员批准前点击课程不会跳转。</div>'
-          : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>') +
+          ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程需要建立资料目录' +
+            (rejectedCount ? '，其中 <b>' + rejectedCount + '</b> 门上次申请被驳回，可重新选择位置' : '') +
+            '（通识 ' + genCount + ' 门）。导入后将提交新建/重新申请，管理员批准前点击课程不会跳转。</div>'
+          : (pendingCount
+            ? '<div class="tt-privacy-note">⏳ 有 <b>' + pendingCount + '</b> 门课程的建课申请正在审核，批准后会自动恢复课程链接。</div>'
+            : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>')) +
         '<div class="tt-mlist">' + rows + '</div>' +
       '</div>' +
       '<footer>' +
         '<button type="button" class="tt-btn" data-close>取消</button>' +
         '<button type="button" class="tt-btn primary" id="ttConfirmImport">导入课表' +
-          (missing.length ? '（并申请建课 ' + missing.length + ' 门）' : '') + '</button>' +
+          (missing.length ? '（申请/重新申请 ' + missing.length + ' 门）' : '') + '</button>' +
       '</footer>' +
     '</div>';
 
@@ -1852,7 +2078,8 @@ function ttApplyImport(parsed, requests) {
       if (kept.length) {
         parsed.courses = parsed.courses.concat(kept);
         kept.forEach(function (c) {
-          if (c.code && prev.pendingCodes && prev.pendingCodes[c.code]) parsed.pendingCodes[c.code] = true;
+          var previousState = c.code && ttStoredRequestState(prev, c.code);
+          if (previousState) ttSaveRequestState(parsed, c.code, previousState);
         });
       }
     }
@@ -1885,26 +2112,50 @@ function ttApplyImport(parsed, requests) {
   ttRenderAll();
   ttLoadCourseCounts();
   ttSyncUpload(importEvent);
-  if (!requests.length) return;
+  if (!requests.length) {
+    ttRefreshRequestStatuses(true);
+    return;
+  }
   var direct = 0, sent = 0, failed = 0, mergedN = 0, treeDirty = false;
   var jobs = requests.map(function (r) {
     return api('/api/courses/request/', { method: 'POST', body: r.body })
       .then(function (res) {
-        if (res && res.merged) { mergedN++; treeDirty = true; return; }
-        if (res && res.auto_approved) { direct++; treeDirty = true; return; }
+        if (res && res.merged) {
+          mergedN++;
+          treeDirty = true;
+          delete ttState.requestStatuses[ttRequestCode(r.code)];
+          ttSaveRequestState(parsed, r.code, null);
+          return;
+        }
+        if (res && res.auto_approved) {
+          direct++;
+          treeDirty = true;
+          delete ttState.requestStatuses[ttRequestCode(r.code)];
+          ttSaveRequestState(parsed, r.code, null);
+          return;
+        }
         sent++;
-        parsed.pendingCodes[r.code] = true;
+        var pendingState = { status: 'pending', id: res && res.id, payload: r.body };
+        ttState.requestStatuses[ttRequestCode(r.code)] = pendingState;
+        ttSaveRequestState(parsed, r.code, pendingState);
       })
       .catch(function (err) {
         // 「已在目标位置」= 缓存过期导致的重复申请，课程其实已建好
-        if (err && err.message && err.message.indexOf('已在') >= 0) { direct++; treeDirty = true; return; }
+        if (err && err.message && err.message.indexOf('已在') >= 0) {
+          direct++;
+          treeDirty = true;
+          delete ttState.requestStatuses[ttRequestCode(r.code)];
+          ttSaveRequestState(parsed, r.code, null);
+          return;
+        }
+        // 409 代表已经存在一条待审申请，随后从服务端刷新其真实状态。
         failed++;
-        parsed.pendingCodes[r.code] = true;
       });
   });
   Promise.all(jobs).then(function () {
     ttSaveStore(parsed);
     ttSyncUpload();
+    ttRefreshRequestStatuses(true);
     if (treeDirty && typeof loadCourseTree === 'function') {
       // 后端建课已清服务端树缓存；前端 api() 内存缓存（树 TTL 10 分钟）
       // 必须手动清除，否则重拉的仍是旧树，直建课程不会立即变为可跳转
@@ -1980,9 +2231,126 @@ function ttOpenCourse(code) {
     }
   } else if (info.state === 'pending') {
     ttToast('「' + ttCourseNameByCode(code) + '」的新课程申请审核中，批准后即可跳转');
+  } else if (info.state === 'rejected') {
+    ttToast('「' + ttCourseNameByCode(code) + '」的建课申请已驳回，请在课程列表点击“重新申请”');
   } else {
     ttToast('「' + ttCourseNameByCode(code) + '」还没有资料目录，重新导入可为它选择位置');
   }
+}
+
+function ttRequestReviewReason(state) {
+  var reason = state && (state.review_notes || state.reviewNotes);
+  return String(reason || '').trim() || '未填写';
+}
+
+// 所有课表重申入口共用这一层确认：把驳回原因放在弹窗正文里，避免只藏在 title 或浏览器原生确认框中。
+function ttShowReapplyConfirm(state, payload, onConfirm, options) {
+  options = options || {};
+  var existing = ttModalOverlay();
+  var hasTarget = options.hasTarget !== false;
+  var courseName = (payload && payload.course_name) || options.courseName || '这门课程';
+  var reason = ttRequestReviewReason(state);
+  var note = options.note || (hasTarget
+    ? '将按上次申请的位置重新提交；原随附资料不会随此次申请再次提交。'
+    : '原申请位置已不可用，请重新选择课程位置；保存后会再次提交申请。');
+  var actionLabel = options.actionLabel || (hasTarget ? '确认重新申请' : '去选择位置');
+  existing.innerHTML =
+    '<div class="tt-modal tt-reapply" role="dialog" aria-modal="true" aria-labelledby="ttReapplyTitle">' +
+      '<header><h3 id="ttReapplyTitle">重新申请课程</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
+      '<div class="tt-mbody">' +
+        '<div class="tt-code-note is-danger tt-reapply-banner" role="alert">' +
+          '<span class="tt-code-note-mark">!</span><div>' +
+          '<strong>上次申请已被驳回</strong>' +
+          '<p><b>课程：</b>「' + esc(courseName) + '」</p>' +
+          '<p><b>驳回原因：</b>' + esc(reason) + '</p>' +
+          '</div>' +
+        '</div>' +
+        '<p class="tt-reapply-note">' + esc(note) + '</p>' +
+      '</div>' +
+      '<footer>' +
+        '<button type="button" class="tt-btn" data-close>取消</button>' +
+        '<button type="button" class="tt-btn primary" id="ttReapplyConfirm">' + esc(actionLabel) + '</button>' +
+      '</footer>' +
+    '</div>';
+  existing.querySelectorAll('[data-close]').forEach(function (b) {
+    b.addEventListener('click', function () { ttCloseModal(existing); });
+  });
+  existing.addEventListener('click', function (e) { if (e.target === existing) ttCloseModal(existing); });
+  existing.querySelector('#ttReapplyConfirm').addEventListener('click', function () {
+    ttCloseModal(existing);
+    if (typeof onConfirm === 'function') onConfirm();
+  });
+  lockScroll();
+  var confirmBtn = existing.querySelector('#ttReapplyConfirm');
+  if (confirmBtn) setTimeout(function () { if (confirmBtn.isConnected) confirmBtn.focus(); }, 0);
+}
+
+// 驳回后的快捷重申：沿用上一条申请的位置，不重复打开完整新建流程。
+// 若历史申请缺少位置（旧数据），回退到课表编辑器让用户重新选择。
+function ttReapplyCourse(code, button) {
+  var key = ttRequestCode(code);
+  var state = ttRequestState(key);
+  if (!state || state.status !== 'rejected') {
+    ttRefreshRequestStatuses(true);
+    return;
+  }
+  var payload = state.payload;
+  var hasTarget = payload && payload.course_type && payload.course_name &&
+    (payload.course_type === 'general' ? payload.general_category_id : payload.target_category_id);
+  var oldCourse = ttState.data && ttState.data.courses && ttState.data.courses.find(function (c) {
+    return ttRequestCode(c.code) === key;
+  });
+  if (!hasTarget) {
+    ttShowReapplyConfirm(state, payload, function () {
+      if (oldCourse) {
+        ttOpenCourseEditor(oldCourse.id);
+        ttToast('请重新选择课程位置，保存后再次提交申请');
+      } else {
+        ttToast('原申请位置已不可用，请重新导入课表后选择位置');
+      }
+    }, {
+      hasTarget: false,
+      courseName: oldCourse && oldCourse.name,
+      actionLabel: oldCourse ? '去选择位置' : '知道了'
+    });
+    return;
+  }
+  ttShowReapplyConfirm(state, payload, function () {
+    if (button) { button.disabled = true; button.textContent = '提交中…'; }
+    api('/api/courses/request/', { method: 'POST', body: payload }).then(function (res) {
+      if (res && (res.auto_approved || res.merged)) {
+        delete ttState.requestStatuses[key];
+        ttSaveRequestState(ttState.data, key, null);
+        ttSaveStore(ttState.data);
+        if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+        Promise.resolve(loadCourseTree()).then(function () {
+          ttResolveCourseLinks();
+          ttRepaintCurrent();
+        }).catch(function () {});
+        ttToast(res.merged ? '已重新申请并与同名课程合并' : '已重新申请并在辖区内直接建课');
+      } else {
+        var pendingState = { status: 'pending', id: res && res.id, payload: payload };
+        ttState.requestStatuses[key] = pendingState;
+        ttSaveRequestState(ttState.data, key, pendingState);
+        ttSaveStore(ttState.data);
+        ttResolveCourseLinks();
+        ttRepaintCurrent();
+        ttToast('已重新提交，等待管理员审核');
+      }
+    }).catch(function (err) {
+      if (err && err.status === 409) {
+        ttRefreshRequestStatuses(true);
+        ttToast('该课程已有申请正在审核，请等待审核结果');
+      } else {
+        alert('重新申请失败：' + (err && err.message || '请稍后重试'));
+      }
+    }).then(function () {
+      if (button && button.isConnected) {
+        button.disabled = false;
+        button.textContent = '重新申请';
+      }
+    });
+  });
 }
 
 // ── 课程编辑器（编辑模式；字段集参照 APK AddCourseView） ──
@@ -2019,6 +2387,7 @@ function ttRenderCourseModal(wc, isNew) {
     '<div class="tt-modal tt-edit" role="dialog" aria-modal="true" aria-label="' + (isNew ? '新增课程' : '编辑课程') + '">' +
       '<header><h3>' + (isNew ? '新增课程' : '编辑课程') + '</h3><button type="button" class="tt-btn is-ghost" data-close aria-label="关闭">✕</button></header>' +
       '<div class="tt-mbody">' +
+        '<div id="ttEdRejection" class="tt-code-note is-danger tt-reapply-banner" role="alert" style="display:none"></div>' +
         '<label class="tt-fld"><span>课程名称<i>*</i></span>' +
           '<input id="ttEdName" maxlength="60" value="' + esc(wc.name) + '" placeholder="如：线性代数"></label>' +
         '<label class="tt-fld"><span>任课教师</span>' +
@@ -2196,36 +2565,62 @@ function ttEditRenderLink(wc) {
   if (!el) return;
   var codeEl = document.getElementById('ttEdCode');
   var nameEl = document.getElementById('ttEdName');
-  var code = codeEl ? codeEl.value.trim().toUpperCase() : '';
+  var code = codeEl ? ttRequestCode(codeEl.value) : ttRequestCode(wc.code);
   var name = nameEl ? nameEl.value.trim() : wc.name;
+  var requestState = code ? ttRequestState(code) : null;
+  var rejectionEl = document.getElementById('ttEdRejection');
+  var showRejection = function () {
+    if (!rejectionEl || !requestState || requestState.status !== 'rejected' || !code || !ttIsUndergrad()) return;
+    rejectionEl.innerHTML = '<span class="tt-code-note-mark">!</span><div>' +
+      '<strong>上次申请已被驳回，请先查看原因</strong>' +
+      '<p><b>课程：</b>「' + esc(name || code) + '」</p>' +
+      '<p><b>驳回原因：</b>' + esc(ttRequestReviewReason(requestState)) + '</p>' +
+      '<p>请重新选择课程位置并保存，提交新的申请。</p>' +
+      '</div>';
+    rejectionEl.style.display = '';
+  };
+  var hideRejection = function () {
+    if (!rejectionEl) return;
+    rejectionEl.style.display = 'none';
+    rejectionEl.innerHTML = '';
+  };
+  showRejection();
   if (!ttTreeReady()) {
     el.innerHTML = '<span class="tt-edit-hint">课程目录加载中…</span>';
     return;
   }
   // 硕博板块筹备中：不链接目录、不提供建课入口；代码照常随课程保存，板块上线后自动接入
   if (!ttIsUndergrad()) {
+    hideRejection();
     el.innerHTML = '<span class="tt-edit-hint">硕、博板块正在筹备中：课程代码会保存，板块上线后自动链接目录</span>';
     return;
   }
   if (!code) {
+    hideRejection();
     el.innerHTML = '<span class="tt-edit-hint">未填课程代码：保存后不会提供课程跳转；补填代码并保存即可恢复</span>';
-    return;
-  }
-  var pending = ttState.data && ttState.data.pendingCodes && ttState.data.pendingCodes[code];
-  if (pending) {
-    el.innerHTML = '<span class="tt-edit-hint">该代码的新课程申请审核中，批准后自动可跳转</span>';
     return;
   }
   var path = ttFindPathByCode(code, name);
   if (path) {
+    hideRejection();
     el.innerHTML = '<span class="tt-ok-tag">✓ 已有资料目录</span>';
     return;
   }
+  if (requestState && requestState.status === 'pending') {
+    hideRejection();
+    el.innerHTML = '<span class="tt-edit-hint">该代码的新课程申请审核中，批准后自动可跳转</span>';
+    return;
+  }
   var isGen = /^GEN/i.test(code);
+  var rejectedHint = requestState && requestState.status === 'rejected'
+    ? '<span class="tt-edit-hint tt-rejected-hint">请重新选择位置并保存：</span>'
+    : '';
   el.innerHTML =
-    '<span class="tt-edit-hint">目录未建立' + (isGen ? '（GEN 开头归通识课）' : '（归专业课，或在「学院」一栏选「通识课」；均需再选具体层级）') +
-    '。选择位置后，保存时将自动提交新课程申请，管理员批准前点击不跳转；也可留空跳过：</span><span class="loc">' +
-    ttLocationControls({ code: code, name: name }) + '</span>';
+    rejectedHint +
+    (rejectedHint ? '' : '<span class="tt-edit-hint">目录未建立' +
+      (isGen ? '（GEN 开头归通识课）' : '（归专业课，或在「学院」一栏选「通识课」；均需再选具体层级）') +
+      '。选择位置后，保存时将自动提交新课程申请，管理员批准前点击不跳转；也可留空跳过：</span>') +
+    '<span class="loc">' + ttLocationControls({ code: code, name: name }) + '</span>';
   ttBindLocationControls(el);
   ttRestoreLocationControls(el, code);
 }
@@ -2293,7 +2688,10 @@ function ttEditSave(wc, isNew) {
   }
   // 建课申请要在关弹层前收集（位置选择控件在弹层 DOM 里）
   var code = wc.code;
-  var needsRequest = code && ttIsUndergrad() && ttTreeReady() && !data.pendingCodes[code] && !ttFindPathByCode(code, wc.name);
+  var requestState = ttRequestState(code);
+  var needsRequest = code && ttIsUndergrad() && ttTreeReady() &&
+    !(requestState && requestState.status === 'pending') &&
+    !ttFindPathByCode(code, wc.name);
   var body = needsRequest ? ttCollectRequestFromModal(code, wc.name) : null;
   data.importedAt = Date.now();
   ttResetCourseCounts();
@@ -2310,34 +2708,55 @@ function ttEditSave(wc, isNew) {
     ttToast('已保存「' + wc.name + '」');
     return;
   }
-  api('/api/courses/request/', { method: 'POST', body: body }).then(function (res) {
-    if (res && (res.auto_approved || res.merged)) {
-      if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
-      Promise.resolve(loadCourseTree()).then(function () {
+  var submitRequest = function () {
+    return api('/api/courses/request/', { method: 'POST', body: body }).then(function (res) {
+      var requestKey = ttRequestCode(code);
+      if (res && (res.auto_approved || res.merged)) {
+        delete ttState.requestStatuses[requestKey];
+        ttSaveRequestState(data, code, null);
+        ttSaveStore(data);
+        if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+        Promise.resolve(loadCourseTree()).then(function () {
+          ttResolveCourseLinks();
+          ttRepaintCurrent();
+        }).catch(function () {});
+        ttToast('已保存「' + wc.name + '」' +
+          (res.merged ? '，已与同名课程合并显示' : '，并在辖区内直接建课'));
+      } else {
+        var pendingState = { status: 'pending', id: res && res.id, payload: body };
+        ttState.requestStatuses[requestKey] = pendingState;
+        ttSaveRequestState(data, code, pendingState);
+        ttSaveStore(data);
         ttResolveCourseLinks();
         ttRepaintCurrent();
-      }).catch(function () {});
-      ttToast('已保存「' + wc.name + '」' +
-        (res.merged ? '，已与同名课程合并显示' : '，并在辖区内直接建课'));
-    } else {
-      data.pendingCodes[code] = true;
-      ttSaveStore(data);
-      ttResolveCourseLinks();
-      ttRepaintCurrent();
-      ttToast('已保存「' + wc.name + '」，建课申请已送审');
-    }
-  }).catch(function (err) {
-    if (err && err.message && err.message.indexOf('已在') >= 0) {
-      if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
-      Promise.resolve(loadCourseTree()).then(function () {
-        ttResolveCourseLinks();
-        ttRepaintCurrent();
-      }).catch(function () {});
-      ttToast('已保存「' + wc.name + '」，目录已存在');
-    } else {
-      ttToast('课程已保存，但建课申请失败：' + (err && err.message || '请稍后重试'));
-    }
-  });
+        ttToast('已保存「' + wc.name + '」，建课申请已送审');
+      }
+    }).catch(function (err) {
+      var message = err && err.message || '';
+      if (err && (err.status === 409 || message.indexOf('已有申请') >= 0)) {
+        ttRefreshRequestStatuses(true);
+        ttToast('该课程已有申请正在审核，请等待审核结果');
+      } else if (message.indexOf('已在') >= 0) {
+        delete ttState.requestStatuses[ttRequestCode(code)];
+        ttSaveRequestState(data, code, null);
+        if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+        Promise.resolve(loadCourseTree()).then(function () {
+          ttResolveCourseLinks();
+          ttRepaintCurrent();
+        }).catch(function () {});
+        ttToast('已保存「' + wc.name + '」，目录已存在');
+      } else {
+        ttToast('课程已保存，但建课申请失败：' + (err && err.message || '请稍后重试'));
+      }
+    });
+  };
+  if (requestState && requestState.status === 'rejected') {
+    ttShowReapplyConfirm(requestState, body, submitRequest, {
+      note: '将按你刚刚选择的位置重新提交；原随附资料不会随此次申请再次提交。'
+    });
+    return;
+  }
+  submitRequest();
 }
 
 function ttEditDelete(wc) {
@@ -2539,14 +2958,23 @@ function ttPaintGrid() {
       var link = it.code ? ttState.links[it.code] : null;
       var linkClass = link && link.state === 'linked' ? ' is-link' : '';
       var pendClass = link && link.state === 'pending' ? ' is-pending' : '';
-      // 未建课/审核中必然无资料 → 同「暂无资料」灰系
-      var rich = link && link.state === 'linked' ? ttRichClass(link.fileCount) : ' tt-rich-0';
+      var rejectClass = link && link.state === 'rejected' ? ' is-rejected' : '';
+      // 未建课/审核中必然无资料 → 同「暂无资料」灰系；硕博课表无目录体系，保持中性色调
+      var rich = !ttOwnerUndergrad() ? '' :
+        (link && link.state === 'linked' ? ttRichClass(link.fileCount) : ' tt-rich-0');
       var tip = it.name + (it.room ? ' · ' + it.room : '') + (it.teachers.length ? ' · ' + it.teachers.join('、') : '') +
         ' · 第' + ttState.week + '周';
       if (ttState.editing) tip += ' · 编辑模式：点击修改';
       else if (link && link.state === 'linked') tip += ' · 点击查看课程资料';
       else if (link && link.state === 'pending') tip += ' · 新课程申请审核中，批准后可跳转';
-      cell += '<div class="tt-card ttp' + tone + rich + linkClass + pendClass + '" data-code="' + esc(it.code || '') + '"' +
+      else if (link && link.state === 'rejected') tip += ' · 上次建课申请已驳回：' +
+        (link.reviewNotes || '未填写') + '，点击“重新申请”';
+      var cardStatus = link && link.state === 'rejected'
+        ? (ttState.viewerMode || ttState.editing
+          ? '<span class="tt-card-status tt-card-status-rejected">驳回</span>'
+          : '<button type="button" class="tt-card-status tt-card-status-rejected" data-tt-action="reapply" data-code="' + esc(it.code || '') + '">重新申请</button>')
+        : '';
+      cell += '<div class="tt-card ttp' + tone + rich + linkClass + pendClass + rejectClass + '" data-code="' + esc(it.code || '') + '"' +
         ' data-cid="' + esc(it.cid || '') + '"' +
         ' data-tip="' + esc(tip) + '" title="' + esc(tip) + '">' +
         '<div class="tt-card-name">' + esc(it.name) + '</div>' +
@@ -2554,6 +2982,7 @@ function ttPaintGrid() {
           (it.room ? '<span class="r">' + esc(it.room) + '</span>' : '') +
           (it.teachers.length ? '<span class="t">' + esc(it.teachers.join('、')) + '</span>' : '') +
         '</div>' +
+        cardStatus +
       '</div>';
       weekPeriodCount += span;
     });
@@ -2565,6 +2994,13 @@ function ttPaintGrid() {
 
   // 网格点击（事件委托）：普通模式=跳转/状态提示；编辑模式=编辑课程/空位新建
   grid.onclick = function (e) {
+    var reapply = e.target.closest('[data-tt-action="reapply"]');
+    if (reapply) {
+      e.preventDefault();
+      e.stopPropagation();
+      ttReapplyCourse(reapply.getAttribute('data-code'), reapply);
+      return;
+    }
     if (ttState.editing) {
       var ecard = e.target.closest('.tt-card');
       if (ecard) {
@@ -2651,8 +3087,24 @@ function ttFileCountTag(n) {
   return '<span class="tt-tag tt-tag-cold">暂无资料</span>';
 }
 
+function ttReapplyButton(code) {
+  return '<button type="button" class="tt-reapply-btn" data-tt-action="reapply" data-code="' +
+    esc(code) + '" title="按上次申请位置重新申请">重新申请</button>';
+}
+
+function ttRejectedStatusTag(link, code) {
+  var reason = link && link.reviewNotes ? link.reviewNotes : '上次申请已驳回';
+  return '<span class="tt-request-status" title="' + esc('驳回原因：' + reason) + '">' +
+    '<span class="tt-tag tt-tag-rejected">申请已驳回</span>' +
+    ((!ttState.editing && !ttState.viewerMode) ? ttReapplyButton(code) : '') +
+    '</span>';
+}
+
 function ttStatusTag(link, code) {
+  // 硕博课表暂无目录体系：不渲染任何目录状态签，右上角留白
+  if (!ttOwnerUndergrad()) return '';
   if (!code) return '<span class="tt-tag tt-tag-cold">待绑定代码</span>';
+  if (link && link.state === 'rejected') return ttRejectedStatusTag(link, code);
   // 轻量摘要已经足够显示数量；点击课程时才补完整目录路径。
   if (link && link.quick) {
     if (link.state === 'missing') return '<span class="tt-tag tt-tag-cold">未建目录</span>';
@@ -2705,11 +3157,15 @@ function ttRenderList(body) {
     var link = c.code ? ttState.links[c.code] : null;
     var linkClass = link && link.state === 'linked' ? ' is-link' : '';
     var pendClass = link && link.state === 'pending' ? ' is-pending' : '';
-    var rich = link && link.state === 'linked' ? ttRichClass(link.fileCount) : ' tt-rich-0';
+    var rejectClass = link && link.state === 'rejected' ? ' is-rejected' : '';
+    // 硕博课表无目录体系：资料丰度维度不存在，保持中性色调，不压「无资料」冷调
+    var rich = !ttOwnerUndergrad() ? '' :
+      (link && link.state === 'linked' ? ttRichClass(link.fileCount) : ' tt-rich-0');
     var sched = ttCompactSched(c);
     var tip = c.name + (sched ? ' · ' + c.meetings.map(ttFmtMeeting).join('；') : ' · 未排课');
     if (link && link.state === 'linked') tip += ' · 点击查看课程资料';
     else if (link && link.state === 'pending') tip += ' · 新课程申请审核中，批准后可跳转';
+    else if (link && link.state === 'rejected') tip += ' · 上次建课申请已驳回，点击“重新申请”';
     // 辅助行：任课/学分 + 上课安排（课程为主体，排课是它的属性之一）
     var meta = [];
     if (c.teachers.length) meta.push(esc(c.teachers.join('、')));
@@ -2720,7 +3176,12 @@ function ttRenderList(body) {
     else if (metaHtml) auxHtml = metaHtml;
     else if (sched) auxHtml = '<span class="tt-lsched">' + esc(sched) + '</span>';
     else if (!c.meetings.length) auxHtml = '自学 / 补修 · 无排课';
-    html += '<li class="tt-lrow ttp' + tone + rich + linkClass + pendClass + '" data-code="' + esc(c.code || '') + '"' +
+    var requestNoteHtml = link && link.state === 'rejected'
+      ? '<span class="tt-request-note">驳回原因：' + esc(link.reviewNotes || '未填写') + '</span>' : '';
+    if (requestNoteHtml) {
+      auxHtml = requestNoteHtml + (auxHtml ? '<span class="tt-request-extra">' + auxHtml + '</span>' : '');
+    }
+    html += '<li class="tt-lrow ttp' + tone + rich + linkClass + pendClass + rejectClass + '" data-code="' + esc(c.code || '') + '"' +
       ' data-cid="' + esc(c.id || '') + '"' +
       ' title="' + esc(tip) + '" style="--li:' + idx + '">' +
         '<div class="tt-lhead">' +
@@ -2744,6 +3205,13 @@ function ttRenderList(body) {
 
   // 行点击（事件委托）：普通模式=跳转/提示；编辑模式=编辑课程
   list.onclick = function (e) {
+    var reapply = e.target.closest('[data-tt-action="reapply"]');
+    if (reapply) {
+      e.preventDefault();
+      e.stopPropagation();
+      ttReapplyCourse(reapply.getAttribute('data-code'), reapply);
+      return;
+    }
     var countRetry = e.target.closest('.tt-count-retry');
     if (countRetry) {
       e.preventDefault();
