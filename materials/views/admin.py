@@ -14,7 +14,7 @@ from django.db.models import Q, Count
 
 from .utils import (
     _err, _ok, _get_or_create_profile, _safe_int,
-    require_login, require_role, UserProfile, CourseCategory, College, DownloadRecord,
+    require_login, require_role, UserProfile, CourseCategory, College, DownloadRecord, Material,
 )
 
 
@@ -32,26 +32,10 @@ def _coerce_int_list(values):
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_users(request):
     """GET /api/admin/users/ — 用户列表（仅 super_admin）"""
-    qs = User.objects.filter(is_active=True).select_related(
-        'profile'
-    ).prefetch_related(
-        'profile__managed_majors', 'profile__moderated_sections'
-    ).annotate(
-        material_count=Count('uploads', distinct=True),
-        download_count=Count(
-            'download_records',
-            filter=Q(download_records__activity_type__in=(
-                DownloadRecord.ActivityType.LEGACY,
-                DownloadRecord.ActivityType.DOWNLOAD,
-            )),
-            distinct=True,
-        ),
-        preview_count=Count(
-            'download_records',
-            filter=Q(download_records__activity_type=DownloadRecord.ActivityType.PREVIEW),
-            distinct=True,
-        ),
-    ).order_by("-date_joined")
+    # 先筛选和分页，再对当前页的用户做三次小范围聚合。
+    # 旧实现把 uploads 与 download_records 同时 JOIN 后再 COUNT(DISTINCT)，
+    # 用户上传/访问记录较多时会产生巨大的中间结果，拖慢整个列表查询。
+    qs = User.objects.filter(is_active=True).order_by("-date_joined")
     search = request.GET.get("search", "").strip()
     if search:
         qs = qs.filter(
@@ -80,6 +64,35 @@ def api_admin_users(request):
         except Exception:
             return None  # 极少数无 profile 的用户，安全兜底
 
+    page_users = list(qs[offset:offset + per_page].select_related(
+        'profile'
+    ).prefetch_related(
+        'profile__managed_majors', 'profile__moderated_sections'
+    ))
+    user_ids = [u.id for u in page_users]
+    material_counts = dict(
+        Material.objects.filter(uploader_id__in=user_ids)
+        .values('uploader_id').annotate(count=Count('id'))
+        .values_list('uploader_id', 'count')
+    )
+    download_counts = dict(
+        DownloadRecord.objects.filter(
+            user_id__in=user_ids,
+            activity_type__in=(
+                DownloadRecord.ActivityType.LEGACY,
+                DownloadRecord.ActivityType.DOWNLOAD,
+            ),
+        ).values('user_id').annotate(count=Count('id'))
+        .values_list('user_id', 'count')
+    )
+    preview_counts = dict(
+        DownloadRecord.objects.filter(
+            user_id__in=user_ids,
+            activity_type=DownloadRecord.ActivityType.PREVIEW,
+        ).values('user_id').annotate(count=Count('id'))
+        .values_list('user_id', 'count')
+    )
+
     def _serialize_user(u):
         p = _profile_of(u)
         return {
@@ -93,9 +106,9 @@ def api_admin_users(request):
             "education": p.identity_education if p else "",
             "college": p.identity_college if p else "",
             "major": p.identity_major if p else "",
-            "material_count": u.material_count,
-            "download_count": u.download_count,
-            "preview_count": u.preview_count,
+            "material_count": material_counts.get(u.id, 0),
+            "download_count": download_counts.get(u.id, 0),
+            "preview_count": preview_counts.get(u.id, 0),
             "auto_approve": p.auto_approve if p else False,
             "can_auto_approve": p.can_auto_approve if p else False,
             "can_moderate_general": p.can_moderate_general if p else False,
@@ -110,7 +123,7 @@ def api_admin_users(request):
         }
 
     return _ok({
-        "users": [_serialize_user(u) for u in qs[offset:offset + per_page]],
+        "users": [_serialize_user(u) for u in page_users],
         "total": total,
         "page": page,
         "total_pages": total_pages,

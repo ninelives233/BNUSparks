@@ -1017,6 +1017,7 @@
 .monitor-chart-legend .legend-download i { background: var(--accent); }
 .monitor-chart-legend .legend-new-users i { background: var(--accent); }
 .monitor-chart-legend .legend-total-users i { background: var(--primary); }
+.monitor-chart-legend .legend-timetable-import i { background: var(--accent); }
 .monitor-chart-wrap { width: 100%; overflow: hidden; }
 .monitor-chart-wrap svg { display: block; width: 100%; height: auto; min-height: 220px; }
 .monitor-grid line { stroke: var(--border-light); stroke-width: 1; vector-effect: non-scaling-stroke; }
@@ -1029,6 +1030,7 @@
 .monitor-line-download { stroke: var(--accent); }
 .monitor-line-new-users { stroke: var(--accent); stroke-dasharray: 5 4; }
 .monitor-line-total-users { stroke: var(--primary); }
+.monitor-line-timetable-import { stroke: var(--accent); }
 
 .identity-user-trend-card { margin-bottom: 12px; }
 .identity-trend-head {
@@ -1037,6 +1039,44 @@
 }
 .identity-trend-head h4 { color: var(--ink); font-size: 0.88rem; font-weight: 600; }
 .identity-trend-head p { color: var(--ink-faint); font-size: 0.72rem; margin-top: 3px; }
+.monitor-stat-value--text {
+  font-size: clamp(0.9rem, 1.7vw, 1.2rem);
+  line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.timetable-import-list-head { margin-top: 18px; margin-bottom: 10px; }
+.timetable-import-list {
+  background: oklch(1 0 0 / 0.62); border: 1px solid var(--border-light);
+  border-radius: var(--radius-md); padding: 5px 14px 10px; box-shadow: var(--shadow-xs);
+}
+.timetable-import-group { border-bottom: 1px solid var(--border-light); }
+.timetable-import-group:last-child { border-bottom: none; }
+.timetable-import-group > summary {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 18px;
+  gap: 16px; align-items: center; padding: 11px 0; list-style: none; cursor: pointer;
+}
+.timetable-import-group > summary::-webkit-details-marker { display: none; }
+.timetable-import-group > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: var(--radius-sm); }
+.timetable-import-user {
+  min-width: 0; display: flex; align-items: center; gap: 9px; border: none;
+  background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.timetable-import-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: var(--primary-surface); color: var(--primary); font-size: 0.78rem; font-weight: 700;
+}
+.timetable-import-user > span:last-child { min-width: 0; display: flex; flex-direction: column; }
+.timetable-import-user strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; }
+.timetable-import-user small { color: var(--ink-faint); font-size: 0.69rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timetable-import-summary { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--primary); font-size: 0.76rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timetable-import-summary time { color: var(--ink-faint); font-size: 0.7rem; }
+.timetable-import-chevron { color: var(--ink-faint); font-size: 1rem; transition: transform var(--t-fast); }
+.timetable-import-group[open] .timetable-import-chevron { transform: rotate(180deg); }
+.timetable-import-events { padding: 0 12px 11px 41px; }
+.timetable-import-events-head, .timetable-import-event { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.timetable-import-events-head { color: var(--ink-faint); font-size: 0.68rem; padding: 0 0 5px; }
+.timetable-import-event { color: var(--ink-soft); font-size: 0.73rem; padding: 6px 0; border-top: 1px solid var(--border-light); }
+.timetable-import-event strong { color: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .identity-monitor-grid {
   display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.15fr) minmax(0, 1fr);
@@ -1146,6 +1186,9 @@
   .monitor-period-seg .pc-seg-btn { white-space: nowrap; flex: 1 0 auto; }
   .identity-trend-head { align-items: flex-start; flex-direction: column; gap: 5px; }
   .identity-trend-head .monitor-chart-legend { justify-content: flex-start; padding-left: 0; }
+  .timetable-import-group > summary { gap: 8px; }
+  .timetable-import-summary { align-items: flex-end; font-size: 0.7rem; }
+  .timetable-import-events { padding-left: 41px; }
   .monitor-stats-grid, .monitor-stats-grid--three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .identity-monitor-grid { grid-template-columns: 1fr; }
   .monitor-stream-tools { width: 100%; justify-content: space-between; overflow-x: auto; }
@@ -1296,4 +1339,127 @@
   .qa-record-actions { flex-direction: column; gap: 6px; align-items: stretch; }
   .qa-record-actions .admin-btn-sm { justify-content: center; }
   .stat-card--lead .stat-number { font-size: 1.6rem; }
+}
+
+/* 暗色主题：审核状态和概览强调卡使用低亮度语义面，避免整块浅色跳出。 */
+html[data-bnu-theme="dark"] .qa-status-published,
+html[data-bnu-theme="dark"] .qa-status-pending,
+html[data-bnu-theme="dark"] .qa-status-rejected,
+html[data-bnu-theme="dark"] .qa-status-deleted {
+  background: var(--surface);
+}
+html[data-bnu-theme="dark"] .admin-role-select:has(option[value="sub_moderator"]:checked) {
+  background: var(--success-light);
+  color: var(--success);
+  border-color: var(--success);
+}
+html[data-bnu-theme="dark"] .admin-role-select:has(option[value="user"]:checked) {
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-color: var(--border-light);
+}
+html[data-bnu-theme="dark"] .admin-search-box,
+html[data-bnu-theme="dark"] .ov-tool-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .stat-icon--amber,
+html[data-bnu-theme="dark"] .stat-icon--orange {
+  background: var(--accent-light);
+}
+html[data-bnu-theme="dark"] .stat-card--lead {
+  background: var(--raised);
+  border-color: var(--accent);
+}
+html[data-bnu-theme="dark"] .admin-table-card,
+html[data-bnu-theme="dark"] .qa-record-card,
+html[data-bnu-theme="dark"] .cr-card,
+html[data-bnu-theme="dark"] .admin-search-box,
+html[data-bnu-theme="dark"] .ov-tool-card {
+  background: var(--raised);
+}
+html[data-bnu-theme="dark"] .admin-table-card .admin-table th {
+  background: var(--surface);
+}
+html[data-bnu-theme="dark"] .admin-table-card .admin-table tr:hover td {
+  background: var(--primary-surface);
+}
+html[data-bnu-theme="dark"] .report-detail,
+html[data-bnu-theme="dark"] .pc-comments,
+html[data-bnu-theme="dark"] .cr-files,
+html[data-bnu-theme="dark"] .cr-path,
+html[data-bnu-theme="dark"] .rh-radio,
+html[data-bnu-theme="dark"] .rh-field textarea {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .report-reason-tag,
+html[data-bnu-theme="dark"] .cr-tag-general,
+html[data-bnu-theme="dark"] .cr-link-tag {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+html[data-bnu-theme="dark"] .cr-tag-major,
+html[data-bnu-theme="dark"] .cr-waiting-tag {
+  background: var(--primary-surface);
+  color: var(--primary);
+  border-color: var(--primary-light);
+}
+html[data-bnu-theme="dark"] .rh-radio:has(input:checked) {
+  background: var(--primary-surface);
+}
+html[data-bnu-theme="dark"] .pc-peer-approved,
+html[data-bnu-theme="dark"] .pc-sub-handled {
+  background: var(--surface);
+}
+
+/* v=207：后台监测页的旧白面规则需要显式映射到暗色语义表面。
+   否则 oklch(1 / .6) 会在深色背景上合成大块灰白，文字与图表也失去对比度。 */
+html[data-bnu-theme="dark"] .admin-stat-card,
+html[data-bnu-theme="dark"] .admin-pending-card,
+html[data-bnu-theme="dark"] .monitor-stat-card,
+html[data-bnu-theme="dark"] .monitor-chart-card,
+html[data-bnu-theme="dark"] .monitor-data-card,
+html[data-bnu-theme="dark"] .timetable-import-list,
+html[data-bnu-theme="dark"] .download-stream,
+html[data-bnu-theme="dark"] .health-overall,
+html[data-bnu-theme="dark"] .health-card {
+  background: var(--raised);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+html[data-bnu-theme="dark"] .admin-stat-card.stat-card--lead {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+html[data-bnu-theme="dark"] .admin-table th,
+html[data-bnu-theme="dark"] .admin-table-card .admin-table th {
+  background: var(--surface);
+}
+html[data-bnu-theme="dark"] .admin-table tr:hover td,
+html[data-bnu-theme="dark"] .admin-table-card .admin-table tr:hover td {
+  background: var(--primary-surface);
+}
+html[data-bnu-theme="dark"] .monitor-grid line {
+  stroke: var(--border);
+}
+html[data-bnu-theme="dark"] .identity-bar-track,
+html[data-bnu-theme="dark"] .storage-meter {
+  background: var(--border);
+}
+html[data-bnu-theme="dark"] .download-stream-date {
+  background: var(--raised);
+}
+html[data-bnu-theme="dark"] .admin-role-select,
+html[data-bnu-theme="dark"] .admin-search-box input,
+html[data-bnu-theme="dark"] .admin-search-box .admin-role-filter,
+html[data-bnu-theme="dark"] .admin-pagination button {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .admin-pagination button:hover:not(:disabled) {
+  background: var(--primary-surface);
 }

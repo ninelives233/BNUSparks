@@ -209,3 +209,13 @@
   .nc-code-hint-error { background: oklch(0.95 0.06 30); color: oklch(0.4 0.12 30); }
   .nc-code-hint-warn { background: oklch(0.94 0.09 75); color: oklch(0.42 0.14 45);
     border: 1px solid oklch(0.8 0.13 60); }
+
+  html[data-bnu-theme="dark"] .nc-code-hint-error {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+  html[data-bnu-theme="dark"] .nc-code-hint-warn {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: var(--accent);
+  }

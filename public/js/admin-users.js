@@ -5,6 +5,7 @@
   var _adminUserSection = 'trend';
   var _monitorPeriod = 'week';
   var _identityPeriod = 'month';
+  var _timetableImportPeriod = 'month';
   var _downloadActivity = 'all';
   var _identityMonitorData = null;
 
@@ -21,6 +22,7 @@
         '<div class="pc-seg" role="tablist" aria-label="用户管理功能分区">' +
           _adminUserSectionButton('trend', '活动趋势') +
           _adminUserSectionButton('identity', '身份分布') +
+          _adminUserSectionButton('timetable', '课表导入') +
           _adminUserSectionButton('downloads', '访问流水') +
           _adminUserSectionButton('health', '运行状态') +
           _adminUserSectionButton('users', '用户名单') +
@@ -30,6 +32,7 @@
     var sectionContent = document.getElementById('adminUserSectionContent');
     if (_adminUserSection === 'trend') renderAdminMonitoringTrend(sectionContent);
     else if (_adminUserSection === 'identity') renderAdminIdentityDistribution(sectionContent);
+    else if (_adminUserSection === 'timetable') renderAdminTimetableImports(sectionContent);
     else if (_adminUserSection === 'downloads') renderAdminDownloadStream(sectionContent, page || 1);
     else if (_adminUserSection === 'health') renderAdminSiteHealth(sectionContent);
     else renderAdminUserList(sectionContent, search || '', page || 1);
@@ -221,6 +224,92 @@
       selectIdentityCollege(data.selectedIndex);
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">身份分布加载失败：' + esc(err.message) + '</div>';
+    });
+  }
+
+  function setTimetableImportPeriod(period) {
+    _timetableImportPeriod = period;
+    renderAdminTimetableImports(document.getElementById('adminUserSectionContent'));
+  }
+
+  function _timetableImportPeriodButtons() {
+    var periods = [
+      ['day', '近 24 小时'], ['week', '近 7 天'],
+      ['month', '近 30 天'], ['all', '全部时间']
+    ];
+    return '<div class="pc-seg monitor-period-seg timetable-import-period-seg" role="tablist" aria-label="课表导入趋势时间范围">' + periods.map(function(p) {
+      return '<button class="pc-seg-btn' + (_timetableImportPeriod === p[0] ? ' active' : '') + '" role="tab" ' +
+        'aria-selected="' + (_timetableImportPeriod === p[0] ? 'true' : 'false') + '" onclick="setTimetableImportPeriod(\'' + p[0] + '\')">' + p[1] + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function _timetableImportChart(data) {
+    var labels = data.labels || [];
+    var imports = data.imports || [];
+    var width = 960, height = 270, left = 48, right = 18, top = 22, bottom = 42;
+    var maxValue = Math.max(1, Math.max.apply(null, imports));
+    var grid = '', yLabels = '';
+    var tickCount = Math.min(4, Math.max(1, Math.ceil(maxValue)));
+    for (var t = 0; t <= tickCount; t++) {
+      var y = top + (height - top - bottom) * t / tickCount;
+      var tickValue = Math.round(maxValue * (tickCount - t) / tickCount);
+      grid += '<line x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" />';
+      yLabels += '<text x="' + (left - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + tickValue + '</text>';
+    }
+    var xLabels = '';
+    var labelStep = Math.max(1, Math.ceil(labels.length / 7));
+    labels.forEach(function(label, index) {
+      if (index % labelStep !== 0 && index !== labels.length - 1) return;
+      var x = left + (labels.length <= 1 ? (width - left - right) / 2 : index * (width - left - right) / (labels.length - 1));
+      xLabels += '<text x="' + x + '" y="' + (height - 13) + '" text-anchor="middle">' + esc(label) + '</text>';
+    });
+    return '<div class="monitor-chart-card timetable-import-chart-card">' +
+      '<div class="identity-trend-head"><div><h4>导入活跃趋势</h4><p>按导入发生时间统计 · ' + esc(data.period_label || '') + '</p></div>' +
+        '<div class="monitor-chart-legend"><span class="legend-timetable-import"><i></i>课表导入</span></div></div>' +
+      '<div class="monitor-chart-wrap"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="课表导入活跃趋势">' +
+        '<g class="monitor-grid">' + grid + '</g><g class="monitor-axis-labels">' + yLabels + xLabels + '</g>' +
+        '<path class="monitor-line monitor-line-timetable-import" d="' + _monitorLinePath(imports, width, height, left, top, right, bottom, maxValue) + '" />' +
+      '</svg></div></div>';
+  }
+
+  function _timetableImportUserList(items) {
+    if (!items || !items.length) return '<div class="monitor-data-card monitor-sub-empty">暂无课表导入记录</div>';
+    return '<div class="timetable-import-list">' + items.map(function(item) {
+      var avatar = '<span class="timetable-import-avatar">' + esc((item.nickname || '?').charAt(0).toUpperCase()) + '</span>';
+      var identity = [item.education, item.college, item.major].filter(Boolean).join(' · ');
+      var records = (item.records || []).map(function(record) {
+        return '<div class="timetable-import-event"><span>' + esc(record.created_at) + '</span><strong>' +
+          Number(record.course_count || 0) + ' 门课</strong></div>';
+      }).join('');
+      return '<details class="timetable-import-group" open>' +
+        '<summary>' +
+          '<button type="button" class="timetable-import-user" onclick="event.preventDefault();event.stopPropagation();showUserPublic(' + item.user_id + ')" title="查看公开主页">' + avatar +
+            '<span><strong>' + esc(item.nickname) + '</strong><small>' + esc(identity || '身份未填写') + '</small></span></button>' +
+          '<span class="timetable-import-summary"><strong>' + Number(item.import_count || 0) + ' 次导入</strong><time>' + esc(item.latest_import_at || '') + '</time></span>' +
+          '<span class="timetable-import-chevron" aria-hidden="true">⌄</span>' +
+        '</summary>' +
+        '<div class="timetable-import-events"><div class="timetable-import-events-head"><span>导入时间</span><span>课程数</span></div>' + records + '</div>' +
+      '</details>';
+    }).join('') + '</div>';
+  }
+
+  function renderAdminTimetableImports(content) {
+    if (!content) return;
+    content.innerHTML = '<div class="admin-loading">加载课表导入监测…</div>';
+    api('/api/admin/monitoring/?section=timetable&period=' + encodeURIComponent(_timetableImportPeriod)).then(function(data) {
+      var summary = data.summary || {};
+      content.innerHTML = '<div class="monitor-section-head"><div><h3>课表导入监测</h3>' +
+        '<p>仅统计用户主动导入教务课表的行为；手动编辑和跨设备同步不会重复计入。</p></div>' + _timetableImportPeriodButtons() + '</div>' +
+        '<div class="monitor-stats-grid">' +
+          _monitorStat(summary.import_count, '期间导入次数', 'tone-upload') +
+          _monitorStat(summary.unique_users, '期间使用用户', 'tone-download') +
+          _monitorStat(summary.timetable_users, '当前有课表用户') +
+          '<div class="monitor-stat-card"><div class="monitor-stat-value monitor-stat-value--text">' + esc(summary.last_import_at || '暂无') + '</div><div class="monitor-stat-label">最近一次导入</div></div>' +
+        '</div>' + _timetableImportChart(data) +
+        '<div class="monitor-section-head timetable-import-list-head"><div><h3>全部导入记录</h3><p>所选时间范围内完整显示，按同一用户合并；展开用户可查看每次导入。</p></div></div>' +
+        _timetableImportUserList(data.import_users || data.recent_imports || []);
+    }).catch(function(err) {
+      content.innerHTML = '<div class="admin-empty">课表导入监测加载失败：' + esc(err.message) + '</div>';
     });
   }
 

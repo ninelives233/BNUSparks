@@ -4,12 +4,34 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
-<link rel="stylesheet" href="/static/css/tokens.css?v=205">
-<link rel="stylesheet" href="/static/css/base.css?v=218">
-<link rel="stylesheet" href="/static/css/user.css?v=204">
-<link rel="stylesheet" href="/static/css/files.css?v=198">
-<link rel="stylesheet" href="/static/css/announcement.css?v=186">
-<link rel="stylesheet" href="/static/css/components.css?v=197">
+<script>
+  /* 在首个可绘制样式加载前恢复主题，避免暗色用户先看到暖色/浅色首屏。 */
+  try {
+    var bnuHasAuthToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var bnuAppearanceCache = bnuHasAuthToken && localStorage.getItem('bnusparks_user_id')
+      ? JSON.parse(localStorage.getItem('bnusparks_appearance_user_' + localStorage.getItem('bnusparks_user_id')) || '{}')
+      : {};
+    var bnuGuestAppearance = bnuHasAuthToken ? bnuAppearanceCache : JSON.parse(localStorage.getItem('bnusparks_appearance_guest') || '{}');
+    var bnuThemePreference = ['warm', 'cool', 'dark', 'system'].indexOf(bnuGuestAppearance.color_theme) >= 0 ? bnuGuestAppearance.color_theme : 'warm';
+    var bnuTheme = bnuThemePreference;
+    if (bnuThemePreference === 'system') {
+      bnuTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'warm';
+    }
+    var bnuLayout = ['loose', 'compact'].indexOf(bnuGuestAppearance.home_layout) >= 0 ? bnuGuestAppearance.home_layout : 'loose';
+    document.documentElement.dataset.bnuThemePreference = bnuThemePreference;
+    document.documentElement.dataset.bnuTheme = bnuTheme;
+    document.documentElement.dataset.bnuLayout = bnuLayout;
+  } catch (e) {
+    document.documentElement.dataset.bnuTheme = 'warm';
+    document.documentElement.dataset.bnuLayout = 'loose';
+  }
+</script>
+<link rel="stylesheet" href="/static/css/tokens.css?v=207">
+<link rel="stylesheet" href="/static/css/base.css?v=264">
+<link rel="stylesheet" href="/static/css/user.css?v=211">
+<link rel="stylesheet" href="/static/css/files.css?v=199">
+<link rel="stylesheet" href="/static/css/announcement.css?v=187">
+<link rel="stylesheet" href="/static/css/components.css?v=198">
 </head>
 <body>
 
@@ -62,7 +84,9 @@
     <symbol id="ni-qa" viewBox="0 0 24 24"><path class="ci-primary" d="M4 5h16v12h-9l-5 4v-4H4zM9 9.3c.3-1.2 1.3-1.8 3-1.8 1.8 0 3 1 3 2.4 0 1.8-2.8 2-2.8 4M12.2 16.5h.01"/></symbol>
     <symbol id="ni-rank" viewBox="0 0 24 24"><path class="ci-primary" d="M5 20v-6h3v6M10.5 20V9h3v11M16 20V4h3v16M3 20h18"/></symbol>
     <symbol id="ni-admin" viewBox="0 0 24 24"><path class="ci-primary" d="M4 6h16M4 12h16M4 18h16"/><circle class="ci-solid" cx="9" cy="6" r="2"/><circle class="ci-solid" cx="15" cy="12" r="2"/><circle class="ci-solid" cx="11" cy="18" r="2"/></symbol>
+    <symbol id="ni-more" viewBox="0 0 24 24"><circle class="ci-primary" cx="5" cy="12" r="1.2"/><circle class="ci-primary" cx="12" cy="12" r="1.2"/><circle class="ci-primary" cx="19" cy="12" r="1.2"/></symbol>
     <symbol id="ni-about" viewBox="0 0 24 24"><circle class="ci-primary" cx="12" cy="12" r="9"/><path class="ci-primary" d="M12 10v7M12 7h.01"/></symbol>
+    <symbol id="ni-profile" viewBox="0 0 24 24"><circle class="ci-primary" cx="12" cy="8" r="3.2"/><path class="ci-primary" d="M5.2 20c.7-3.7 3-5.6 6.8-5.6s6.1 1.9 6.8 5.6"/></symbol>
     <symbol id="ni-timetable" viewBox="0 0 24 24"><rect class="ci-primary" x="3.5" y="4.5" width="17" height="16" rx="2"/><path class="ci-primary" d="M3.5 9.5h17M8.5 2.8v3.4M15.5 2.8v3.4"/><rect class="ci-solid" x="7" y="12.5" width="3.4" height="3.4" rx=".7"/><rect class="ci-solid" x="13.6" y="12.5" width="3.4" height="3.4" rx=".7"/></symbol>
     <symbol id="home-announcement" viewBox="0 0 24 24"><path class="ci-soft" d="M6 16.5h12c-1.2-1.6-1.8-3.9-1.8-6.8A4.2 4.2 0 0 0 12 5.5a4.2 4.2 0 0 0-4.2 4.2c0 2.9-.6 5.2-1.8 6.8z"/><path class="ci-primary" d="M5 17h14M7.8 17c1.2-1.7 1.7-4.1 1.7-7.2A2.5 2.5 0 0 1 12 7.3a2.5 2.5 0 0 1 2.5 2.5c0 3.1.5 5.5 1.7 7.2M10.2 20h3.6"/></symbol>
   </defs>
@@ -72,51 +96,122 @@
 <header class="site-header" id="siteHeader">
   <div class="header-inner">
     <a href="/" class="header-logo-area" onclick="event.preventDefault();showHome()"><span class="hl-mark">✦</span><span class="hl-texts"><span class="hl-chinese">木铎星火</span><span class="hl-english">BNU Sparks</span></span></a>
-    <button type="button" class="menu-toggle" id="menuOpen" aria-label="打开菜单">☰</button>
+    <button type="button" class="hl-burger" id="hlBurger" aria-label="打开导航菜单" aria-expanded="false" onclick="openNavDrawer()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <span class="mobile-logo-placeholder" aria-hidden="true"><span class="mobile-logo-mark">✦</span></span>
     <div class="search-hero-wrap">
       <!-- Chrome 自动填充欺骗 -->
       <input type="text" style="display:none" aria-hidden="true" tabindex="-1">
       <input type="password" style="display:none" aria-hidden="true" tabindex="-1">
       <div class="search-box"><input type="text" aria-label="搜索课程、资料或课程代码" placeholder="搜索课程、资料、课程代码…" autocomplete="off"><button type="button" aria-label="搜索">→</button></div>
     </div>
+    <button type="button" id="guestAppearanceTrigger" class="guest-appearance-trigger" onclick="showGuestAppearance()" style="display:none">外观</button>
     <div class="header-login" id="headerLogin"></div>
   </div>
 </header>
-
-<!-- ═══ Mobile Drawer ═══ -->
-<div class="mobile-drawer" id="mobileDrawer">
-  <button type="button" class="close-btn" id="menuClose" aria-label="关闭菜单">✕</button>
-  <div class="drawer-brand">
-    <span class="db-mark">✦</span>
-    <span class="db-name">木铎星火</span>
-    <span class="db-sub">BNU Sparks</span>
-  </div>
-  <a href="#" data-view="home" class="active"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-home"></use></svg> 首页</a>
-  <a href="#" data-view="general"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-general"></use></svg> 通识课</a>
-  <a href="#" data-view="major"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-major"></use></svg> 专业课</a>
-  <a href="#" data-view="qa"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-qa"></use></svg> 问答区</a>
-  <a href="#" data-view="leaderboard"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-rank"></use></svg> 排行榜</a>
-  <a href="#" data-view="admin" id="mobAdminLink" style="display:none"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-admin"></use></svg> 管理后台</a>
-  <a href="#" data-view="timetable" id="mobTimetableLink" style="display:none"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-timetable"></use></svg> 我的课程</a>
-  <a href="#" data-view="about"><svg class="sidebar-icon" aria-hidden="true"><use href="#ni-about"></use></svg> 关于</a>
-</div>
 
 <div class="page-layout">
 
 <nav class="side-nav">
   <a href="#" class="active" data-view="home"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-home"></use></svg>首页</a>
-  <a href="#" data-view="general"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-general"></use></svg>通识课</a>
-  <a href="#" data-view="major"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-major"></use></svg>专业课</a>
+  <a href="#" data-view="timetable" id="sideTimetableLink" style="display:none"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-timetable"></use></svg>我的课程</a>
+  <a href="#" data-view="allCourses"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-general"></use></svg>全部课程</a>
   <a href="#" data-view="qa"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-qa"></use></svg>问答区</a>
   <a href="#" data-view="leaderboard"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-rank"></use></svg>排行榜</a>
   <a href="#" data-view="admin" id="sideAdminLink" style="display:none"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-admin"></use></svg>管理后台</a>
   <a href="#" data-view="about" class="sn-spacer" style="margin-top: auto; border-top: 1px solid var(--border-light); padding-top: 14px;"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-about"></use></svg>关于</a>
-  <a href="#" data-view="timetable" id="sideTimetableLink" style="display:none"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="#ni-timetable"></use></svg>我的课程</a>
 </nav>
 
 <main class="main-content" id="mainContent" tabindex="-1">
 
 <div class="view-section active" id="homeView">
+
+  <!-- ── 紧凑首页：沿用 docs/personal-home-prototype/v9.html 的 h8 结构；数据由 home.js 填充 ── -->
+  <section class="home-compact-layout" id="compactHomeLayout" aria-labelledby="compactHomeTitle">
+    <div class="container compact-home-container home-eight">
+      <header class="h8-heading">
+        <div>
+          <h1 id="compactHomeTitle">首页</h1>
+          <p>课程、资料与校园入口</p>
+        </div>
+        <div class="h8-scale" aria-label="平台规模">
+          <strong><span data-stat="total_files">—</span> <small>份共享资料</small></strong>
+          <span><span data-stat="college_with_data_count">—</span> 个学院 / 学部目录</span>
+          <span><span data-stat="general_with_data_count">—</span> 个通识分类</span>
+        </div>
+      </header>
+
+      <section class="h8-top" aria-label="公告与校园入口">
+        <div class="h8-notices compact-announcement-block">
+          <div class="h8-section-head">
+            <h2 id="compactAnnouncementTitle">公告</h2>
+            <a id="compactAnnouncementMore" class="text-btn" href="/announcements" onclick="event.preventDefault();showAnnouncements()">全部公告 →</a>
+          </div>
+          <div id="compactAnnouncement" class="compact-announcement-content"><span class="compact-loading">正在读取最新公告…</span></div>
+        </div>
+        <div class="h8-shortcuts compact-campus-block">
+          <div class="h8-section-head">
+            <h2 id="compactCampusTitle">校园入口</h2>
+            <span class="h8-head-actions">
+              <button type="button" id="campusManageButton" style="display:none" onclick="openCampusManager()">管理</button>
+              <button type="button" id="compactCampusMore" class="text-btn" data-campus-more aria-expanded="false" hidden>更多入口 →</button>
+            </span>
+          </div>
+          <nav id="compactCampusLinks" class="compact-campus-links" aria-label="校园外部入口"><span class="compact-loading">正在读取入口…</span></nav>
+        </div>
+      </section>
+
+      <section class="h8-recommend" aria-labelledby="compactRecommendationTitle">
+        <div class="h8-section-head">
+          <h2 id="compactRecommendationTitle">为你推荐</h2>
+        </div>
+        <div id="compactRecommendations" class="h8-cards"><span class="compact-loading">正在整理资料…</span></div>
+        <div class="h8-recommend-more">
+          <a id="compactRecommendationMore" class="text-btn compact-recommend-more" href="/recommendations" onclick="event.preventDefault();showRecommendations()">查看更多 →</a>
+        </div>
+      </section>
+
+      <div class="h8-bottom" aria-label="资料动态">
+        <section aria-labelledby="compactHotTitle">
+          <div class="h8-section-head">
+            <div><h2 id="compactHotTitle">热门资料</h2><p id="compactHotNote">按下载量排序</p></div>
+            <div class="h8-head-actions">
+              <div class="h8-rank-tabs" role="tablist" aria-label="热门资料排序">
+                <button type="button" role="tab" aria-selected="true" class="is-active" data-hot="download">下载榜</button>
+                <button type="button" role="tab" aria-selected="false" data-hot="favorite">收藏榜</button>
+              </div>
+              <a id="compactHotMore" class="text-btn" href="/rankings" data-ranking-type="download">查看下载榜 →</a>
+            </div>
+          </div>
+          <div id="compactHotList" class="h8-rank-list"><span class="compact-loading">正在读取资料…</span></div>
+        </section>
+        <section aria-labelledby="compactRecentTitle">
+          <div class="h8-section-head">
+            <div><h2 id="compactRecentTitle">最近上传</h2><p>全站已审核资料 · 按上传日期</p></div>
+            <a class="text-btn" href="/recent" onclick="event.preventDefault();showRecentAll()">更多 →</a>
+          </div>
+          <div id="compactRecentList" class="h8-rank-list"><span class="compact-loading">正在读取资料…</span></div>
+        </section>
+      </div>
+
+      <!-- 窄屏专属：下载榜 / 收藏榜 / 最近上传 三榜合并，桌面端由 .h8-bottom 双卡呈现 -->
+      <section class="compact-discovery-block" aria-labelledby="compactDiscoveryTitle">
+        <div class="h8-section-head">
+          <div><h2 id="compactDiscoveryTitle">资料动态</h2><p id="compactDiscoveryNote">按上传日期排列</p></div>
+          <a id="compactDiscoveryMore" class="text-btn" href="/recent">更多 →</a>
+        </div>
+        <div class="compact-discovery-tabs" role="tablist" aria-label="资料动态排序">
+          <button type="button" role="tab" aria-selected="true" class="is-active" data-discovery="recent">最近上传</button>
+          <button type="button" role="tab" aria-selected="false" data-discovery="download">下载榜</button>
+          <button type="button" role="tab" aria-selected="false" data-discovery="favorite">收藏榜</button>
+        </div>
+        <div id="compactDiscoveryList" class="compact-discovery-list"><span class="compact-loading">正在读取资料…</span></div>
+      </section>
+
+      <p class="compact-data-note" id="compactDataNote" role="status" aria-live="polite"></p>
+    </div>
+  </section>
 
 <div>
   <!-- ═══ Hero ═══ -->
@@ -220,13 +315,60 @@
 
 </div><!-- /homeView -->
 
+<!-- ═══ Recommendations View ═══ -->
+<div class="view-section" id="recommendationsView">
+  <div class="recommendations-page">
+    <div class="container recommendations-container">
+      <div class="breadcrumb">
+        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+        <span class="bc-sep"> / </span>
+        <span class="bc-current">为你推荐</span>
+      </div>
+      <header class="recommendations-header">
+        <div>
+          <span class="recommendations-kicker">资料索引</span>
+          <h1>为你推荐</h1>
+          <p id="recommendationsLead">从正在学习的课程里，先看这些资料。</p>
+        </div>
+        <div class="recommendations-count" aria-label="推荐资料数量">
+          <strong id="recommendationsCount">—</strong><span>份可查看</span>
+        </div>
+      </header>
+      <section class="recommendations-board" aria-labelledby="recommendationsBoardTitle">
+        <div class="recommendations-board-head">
+          <div>
+            <span class="recommendations-board-kicker">本页</span>
+            <h2 id="recommendationsBoardTitle">推荐资料</h2>
+          </div>
+          <div class="recommendations-board-tools">
+            <p id="recommendationsContext">正在整理</p>
+            <button type="button" id="recommendationsRefresh" class="recommendations-refresh" aria-label="刷新推荐">
+              <span class="recommendations-refresh-icon" aria-hidden="true">↻</span><span>刷新推荐</span>
+            </button>
+          </div>
+        </div>
+        <div id="recommendationsPageContent" class="recommendations-index" aria-live="polite">
+          <span class="compact-loading">正在整理资料…</span>
+        </div>
+        <p id="recommendationsStatus" class="recommendations-status" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Explorer View ═══ -->
 <div class="view-section" id="explorerView">
   <div class="explorer-view">
-    <div class="container">
-      <div class="breadcrumb" id="breadcrumb"></div>
+      <div class="container">
+      <div class="explorer-top-row">
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="explorer-compact-heading" id="explorerCompactHeading" aria-live="polite" hidden></div>
+        <div class="explorer-top-actions" id="explorerTopActions">
+          <div id="courseNavBar" class="course-nav-bar" aria-label="全部课程导航"></div>
+        </div>
+      </div>
       <div class="explorer-content" id="explorerContent"></div>
-    </div>
+      </div>
   </div>
 </div>
 
@@ -313,11 +455,17 @@
       <div class="breadcrumb">
         <a href="/" onclick="event.preventDefault();showHome()">首页</a>
         <span class="bc-sep"> / </span>
-        <span class="bc-current">下载排行榜</span>
+        <span class="bc-current" id="rankingsBreadcrumb">下载排行榜</span>
       </div>
-      <div class="about-header">
-        <h2 class="about-title">下载排行榜</h2>
-        <p class="about-subtitle">最受欢迎的资料</p>
+      <div class="about-header rankings-header">
+        <div class="rankings-heading">
+          <h2 class="about-title" id="rankingsTitle">下载排行榜</h2>
+          <p class="about-subtitle" id="rankingsSubtitle">最受欢迎的资料</p>
+        </div>
+        <div class="rankings-mode-tabs" id="rankingsModeTabs" role="tablist" aria-label="资料排行榜类型">
+          <button type="button" role="tab" aria-selected="true" class="is-active" data-ranking-type="download" onclick="showTopDownloaded(undefined, 'download')">下载榜</button>
+          <button type="button" role="tab" aria-selected="false" data-ranking-type="favorite" onclick="showTopDownloaded(undefined, 'favorite')">收藏榜</button>
+        </div>
       </div>
       <div class="rankings-content" id="rankingsContent"></div>
     </div>
@@ -431,6 +579,17 @@
   </div>
 </div>
 
+<!-- ═══ Nav Drawer (汉堡菜单：桌面侧边栏栏目的移动端入口，外观调整可切换) ═══ -->
+<div class="nav-drawer-overlay" id="navDrawer" style="display:none" onclick="closeNavDrawer(event)">
+  <nav class="nav-drawer" onclick="event.stopPropagation()" aria-label="导航菜单">
+    <div class="notif-drawer-header">
+      <span class="dm-eyebrow">导航</span>
+      <button class="notif-drawer-close" onclick="closeNavDrawer()" aria-label="关闭导航菜单">✕</button>
+    </div>
+    <div class="nav-drawer-body" id="navDrawerBody"></div>
+  </nav>
+</div>
+
 <!-- ═══ User Drawer (avatar menu + notifications as sub-view) ═══ -->
 <div class="notif-drawer-overlay" id="notifDrawer" style="display:none" onclick="closeNotifDrawer(event)">
   <div class="notif-drawer" onclick="event.stopPropagation()">
@@ -442,6 +601,16 @@
         <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
       </div>
       <div class="drawer-menu-body" id="drawerMenuBody"></div>
+    </div>
+
+    <!-- ─── Page: Appearance ─── -->
+    <div id="drawerAppearance" style="display:none">
+      <div class="notif-drawer-header">
+        <button class="notif-nav-back" onclick="showDrawerMenu()">← 返回</button>
+        <h3>外观调整</h3>
+        <button class="notif-drawer-close" onclick="closeNotifDrawer()">✕</button>
+      </div>
+      <div class="appearance-panel" id="appearancePanel"></div>
     </div>
 
     <!-- ─── Page: Notifications ─── -->
@@ -460,6 +629,23 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ═══ Other View（移动端「其他」聚合页）═══ -->
+<div class="view-section" id="otherView">
+  <div class="ov-wrap">
+    <header class="ov-head">
+      <p class="ov-kicker">BNU SPARKS</p>
+      <h1>其他</h1>
+      <p class="ov-sub">排行、指南与平台信息，一处汇集。</p>
+    </header>
+    <nav class="ov-list" aria-label="其他页面">
+      <button type="button" onclick="mobileNavTo('leaderboard')"><svg aria-hidden="true"><use href="#ni-rank"></use></svg><span>排行榜</span><em aria-hidden="true">→</em></button>
+      <button type="button" onclick="mobileNavTo('tutorial')"><svg aria-hidden="true"><use href="#ni-about"></use></svg><span>使用教程</span><em aria-hidden="true">→</em></button>
+      <button type="button" onclick="mobileNavTo('about')"><svg aria-hidden="true"><use href="#ni-about"></use></svg><span>关于木铎星火</span><em aria-hidden="true">→</em></button>
+      <button type="button" id="mobileOtherAdmin" style="display:none" onclick="mobileNavTo('admin')"><svg aria-hidden="true"><use href="#ni-admin"></use></svg><span>管理后台</span><em aria-hidden="true">→</em></button>
+    </nav>
   </div>
 </div>
 
@@ -991,6 +1177,15 @@
 </main><!-- /.main-content -->
 </div><!-- /.page-layout -->
 
+<!-- ═══ Mobile bottom navigation ═══ -->
+<nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="主导航">
+  <button type="button" data-mobile-view="home" aria-current="page" onclick="mobileNavTo('home')"><svg aria-hidden="true"><use href="#ni-home"></use></svg><span>首页</span></button>
+  <button type="button" data-mobile-view="allCourses" onclick="mobileNavTo('allCourses')"><svg aria-hidden="true"><use href="#ni-general"></use></svg><span>全部课程</span></button>
+  <button type="button" data-mobile-view="timetable" onclick="mobileNavTo('timetable')"><svg aria-hidden="true"><use href="#ni-timetable"></use></svg><span>我的课程</span></button>
+  <button type="button" data-mobile-view="qa" onclick="mobileNavTo('qa')"><svg aria-hidden="true"><use href="#ni-qa"></use></svg><span>问答</span></button>
+  <button type="button" data-mobile-view="other" onclick="mobileNavTo('other')"><svg aria-hidden="true"><use href="#ni-more"></use></svg><span>其他</span></button>
+</nav>
+
 <!-- ═══ Login Modal ═══ -->
 <div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle" style="display:none">
   <div class="modal-card">
@@ -1001,7 +1196,10 @@
         <label for="loginSid">学号</label>
         <div class="mf-email-wrap">
           <input type="text" id="loginSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
-          <span class="mf-email-suffix">@mail.bnu.edu.cn</span>
+          <select id="loginEmailSuffix" class="mf-email-suffix-select" aria-label="邮箱后缀">
+            <option value="@mail.bnu.edu.cn" selected>@mail.bnu.edu.cn</option>
+            <option value="@bnu.edu.cn">@bnu.edu.cn</option>
+          </select>
         </div>
       </div>
       <div class="mf-group">
@@ -1038,7 +1236,7 @@
             <option value="@bnu.edu.cn">@bnu.edu.cn</option>
           </select>
         </div>
-        <p class="mf-email-hint">新生可能暂时无法使用师大邮箱，建议关注即将推出的新生专区，无需登录也可浏览。可联系微信：Rsun1949进行人工核验，直接发放账号。</p>
+        <p class="mf-email-hint">学生邮箱可在数字京师首页直接进入</p>
         <div id="registerResendAction" class="register-resend register-resend-error" style="display:none">
           <p class="register-resend-note">已注册但未验证？填写学号并选择邮箱后缀即可重新发送，无需重填其他信息。</p>
           <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
@@ -1050,9 +1248,9 @@
         <input type="text" id="regNickname" class="mf-input" required placeholder="如：木铎新生">
       </div>
       <div class="mf-group">
-        <label>身份标签 <span class="label-required">必填</span><span class="mf-label-hint">（关于大类招生详见首页。）</span></label>
+        <label>身份标签 <span class="label-required">必填</span><span class="mf-label-hint">（大类招生请填目标专业，勿选“其他”）</span></label>
         <div class="mf-ident-row">
-          <select id="regEducation" class="mf-input" aria-label="培养层次" required>
+          <select id="regEducation" class="mf-input" aria-label="培养层次" required onchange="syncRegisterIdentityHint()">
             <option value="">培养层次</option>
             <option value="本科">本科</option>
             <option value="硕士">硕士</option>
@@ -1060,7 +1258,7 @@
             <option value="其他">其他</option>
           </select>
           <select id="regCollege" class="mf-input" aria-label="学院" required onchange="onRegCollegeChange()"></select>
-          <select id="regMajor" class="mf-input" aria-label="专业" required></select>
+          <select id="regMajor" class="mf-input" aria-label="专业" required onchange="syncRegisterIdentityHint()"></select>
         </div>
       </div>
       <div class="mf-group">
@@ -1219,17 +1417,19 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=217" defer></script>
-<script src="/static/js/auth.js?v=198" defer></script>
-<script src="/static/js/profile.js?v=217" defer></script>
-<script src="/static/js/notifications.js?v=200" defer></script>
+<script src="/static/js/utils.js?v=222" defer></script>
+<script src="/static/js/appearance.js?v=6" defer></script>
+<script src="/static/js/auth.js?v=244" defer></script>
+<script src="/static/js/profile.js?v=218" defer></script>
+<script src="/static/js/notifications.js?v=242" defer></script>
 <script src="/static/js/admin-core.js?v=195" defer></script>
-<script src="/static/js/views.js?v=232" defer></script>
-<script src="/static/js/explorer-core.js?v=218" defer></script>
+<script src="/static/js/views.js?v=251" defer></script>
+<script src="/static/js/explorer-core.js?v=222" defer></script>
 <script src="/static/js/explorer-file.js?v=187" defer></script>
 <script src="/static/js/explorer-preview.js?v=187" defer></script>
+<script src="/static/js/home.js?v=14" defer></script>
 <script src="/static/js/feature-loader.js?v=256" defer></script>
-<script src="/static/js/app.js?v=232" defer></script>
+<script src="/static/js/app.js?v=251" defer></script>
 
 </body>
 </html>

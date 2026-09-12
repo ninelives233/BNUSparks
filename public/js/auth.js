@@ -1,6 +1,29 @@
   var currentUser = null;
+  // 认证代次用于隔离登录、退出和账号切换期间仍在途的请求。
+  var _bnuAuthGeneration = Number(window._bnuAuthGeneration || 0);
+  window._bnuAuthGeneration = _bnuAuthGeneration;
   var _pendingVerificationEmail = '';
   var _verificationResendTimer = null;
+
+  function setAuthenticatedUser(user, options) {
+    options = options || {};
+    var previousId = currentUser && currentUser.id ? String(currentUser.id) : null;
+    var nextId = user && user.id ? String(user.id) : null;
+    var identityChanged = previousId !== nextId;
+    if (!options.preserveGeneration && identityChanged) {
+      _bnuAuthGeneration += 1;
+      window._bnuAuthGeneration = _bnuAuthGeneration;
+    }
+    currentUser = user || null;
+    if (!options.suppressEvent && identityChanged) {
+      window.dispatchEvent(new CustomEvent('bnuauthchange', {
+        detail: { userId: nextId, generation: _bnuAuthGeneration }
+      }));
+    }
+    updateAuthUI();
+    return currentUser;
+  }
+  window.setAuthenticatedUser = setAuthenticatedUser;
 
   function updateAuthUI() {
     const container = document.getElementById('headerLogin');
@@ -18,14 +41,20 @@
         '</button>';
     } else {
       container.innerHTML =
-        '<a href="#" class="login-btn" onclick="event.preventDefault();showLoginModal()">' +
+        '<a href="#" class="login-btn" aria-label="登录" onclick="event.preventDefault();showLoginModal()">' +
           '<span class="login-icon gi gi-login"></span><span class="login-text">登录</span>' +
         '</a>';
     }
-    // 侧边栏管理后台/我的课表入口显示/隐藏（平民模式隐藏一切）
+    var guestAppearance = document.getElementById('guestAppearanceTrigger');
+    if (guestAppearance) guestAppearance.style.display = currentUser ? 'none' : '';
+    // 管理后台受角色与平民模式控制；我的课程对所有已登录用户开放。
     var showAdmin = currentUser && currentUser.role !== 'user' && !_civilianMode;
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
+    var showTimetable = !!currentUser;
+    document.querySelectorAll('#sideAdminLink').forEach(function(link) {
       link.style.display = showAdmin ? '' : 'none';
+    });
+    document.querySelectorAll('#sideTimetableLink').forEach(function(link) {
+      link.style.display = showTimetable ? '' : 'none';
     });
   }
 
@@ -39,7 +68,7 @@
       var fresh = await api('/api/auth/me/');
       if (!fresh) return;
       var roleChanged = fresh.role !== currentUser.role;
-      currentUser = fresh;
+      setAuthenticatedUser(fresh, { preserveGeneration: true });
       if (roleChanged) {
         updateAuthUI();
         // 角色变化时刷新头像首字母
@@ -55,7 +84,7 @@
 
   // 点击页面其他地方关闭抽屉
   document.addEventListener('click', function(e) {
-    if (e.target.closest('#notifDrawer') || e.target.closest('#userAvatarTrigger')) return;
+    if (e.target.closest('#notifDrawer') || e.target.closest('#userAvatarTrigger') || e.target.closest('#guestAppearanceTrigger')) return;
     var drawer = document.getElementById('notifDrawer');
     if (drawer && drawer.style.display === 'flex') closeNotifDrawer();
   });
@@ -90,7 +119,7 @@
       _hideVerificationResendAction();
     }
     activateDialog(modal);
-    populateIdentitySelects('regCollege', 'regMajor', {});
+    populateIdentitySelects('regCollege', 'regMajor', {}).then(syncRegisterIdentityHint);
   }
   function showVerificationResend(message) {
     showRegister({ showResend: true, message: message });
@@ -192,7 +221,17 @@
   }
 
   function onRegCollegeChange() {
-    fillIdentityMajors('regCollege', 'regMajor', '');
+    return fillIdentityMajors('regCollege', 'regMajor', '').then(syncRegisterIdentityHint);
+  }
+
+  function syncRegisterIdentityHint() {
+    var education = document.getElementById('regEducation');
+    var major = document.getElementById('regMajor');
+    var hint = document.querySelector('#registerForm .mf-label-hint');
+    if (!education || !major || !hint) return false;
+    var warning = education.value === '本科' && major.value === '其他';
+    hint.classList.toggle('mf-label-hint--warning', warning);
+    return warning;
   }
 
   async function handleLogin(e) {
@@ -202,11 +241,14 @@
       var sid = document.getElementById('loginSid').value.trim();
       var remember = document.getElementById('loginRemember').checked;
       if (!sid) throw new Error('请输入学号');
-      // 发送纯学号，后端依次尝试 @mail.bnu.edu.cn 与 @bnu.edu.cn 两种后缀
+      var suffixEl = document.getElementById('loginEmailSuffix');
+      var suffix = suffixEl ? suffixEl.value : '@mail.bnu.edu.cn';
+      var email = sid + suffix;
+      // 前端按所选后缀组合完整邮箱，再交给后端认证。
       const data = await api('/api/auth/login/', { method: 'POST',
-        body: { username: sid, password: document.getElementById('loginPassword').value, remember: remember } });
+        body: { username: email, password: document.getElementById('loginPassword').value, remember: remember } });
       _persistToken(data.token, remember, data.user && data.user.id);
-      currentUser = data.user;
+      setAuthenticatedUser(data.user);
       var resumeQa = !!window._qaLoginPending;
       window._qaLoginPending = false;
       closeAuthModal(); updateAuthUI();
@@ -464,6 +506,7 @@
       if (password.length < 8) throw new Error('密码长度至少 8 位');
       if (password !== passwordConfirm) throw new Error('两次密码输入不一致');
       if (!education || !college || !major) throw new Error('请选择培养层次、学院和专业');
+      syncRegisterIdentityHint();
       await api('/api/auth/register/', { method: 'POST',
         body: { email: email,
                 nickname: document.getElementById('regNickname').value.trim(),
@@ -495,7 +538,8 @@
 
   function logout() {
     clearAuthToken();
-    currentUser = null;
+    if (typeof resetAppearanceToGuest === 'function') resetAppearanceToGuest();
+    setAuthenticatedUser(null);
     location.reload();
   }
 
@@ -511,7 +555,7 @@
 
   async function checkAuth() {
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    if (!token) { updateAuthUI(); return; }
+    if (!token) { setAuthenticatedUser(null, { preserveGeneration: true }); return; }
     // 从 localStorage 恢复 sessionStorage（页面刷新后）
     // 但仅在 localStorage 用户 ID 与当前 session 一致时才恢复
     if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
@@ -523,13 +567,12 @@
       }
     }
     try {
-      currentUser = await api('/api/auth/me/');
-      updateAuthUI();
+      setAuthenticatedUser(await api('/api/auth/me/'));
     }
     catch (err) {
       // 只有服务端明确拒绝认证时才清 token；断网/超时保留会话，避免误登出。
       if (err && (err.status === 401 || err.status === 403)) _clearStaleToken();
-      updateAuthUI();
+      setAuthenticatedUser(null, { preserveGeneration: true });
     }
   }
 

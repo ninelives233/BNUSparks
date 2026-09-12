@@ -54,9 +54,63 @@
   }
 
   function updateSidebar(viewName) {
+    var activeView = (viewName === 'general' || viewName === 'major' || viewName === 'explorer') ? 'allCourses' : viewName;
+    // 资源排行榜没有独立桌面入口，沿用“首页”侧栏；移动端则归入“其他”。
+    if (viewName === 'rankings' || viewName === 'recentAll' || viewName === 'recommendations') activeView = 'home';
     document.querySelectorAll('.side-nav a').forEach(a => a.classList.remove('active'));
-    const link = document.querySelector('.side-nav a[data-view="' + viewName + '"]');
+    const link = document.querySelector('.side-nav a[data-view="' + activeView + '"]');
     if (link) link.classList.add('active');
+    if (typeof updateMobileBottomNav === 'function') updateMobileBottomNav(viewName);
+  }
+
+  function updateMobileBottomNav(viewName) {
+    var activeView = viewName === 'general' || viewName === 'major' || viewName === 'explorer' ? 'allCourses' : viewName;
+    // 底栏的“我的课程”只承担个人课程/课表；其他个人页、排行、关于和管理入口从“其他”进入。
+    if (viewName === 'admin') activeView = 'other';
+    if (['profile', 'myuploads', 'mydownloads', 'myfavorites', 'notif', 'notifications',
+      'leaderboard', 'rankings', 'recentAll', 'about', 'tutorial', 'announcements', 'broad', 'userPublic']
+      .indexOf(viewName) !== -1) activeView = 'other';
+    if (viewName === 'recommendations') activeView = 'home';
+    document.querySelectorAll('#mobileBottomNav [data-mobile-view]').forEach(function (button) {
+      var active = button.getAttribute('data-mobile-view') === activeView;
+      button.classList.toggle('is-active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    var admin = document.getElementById('mobileOtherAdmin');
+    if (admin) admin.style.display = currentUser && currentUser.role !== 'user' && !isCivilianModeForNav() ? '' : 'none';
+  }
+
+  function isCivilianModeForNav() {
+    return localStorage.getItem('bnusparks_civilian') === '1';
+  }
+
+  function mobileNavTo(view) {
+    var activeButton = document.querySelector('#mobileBottomNav button.is-active');
+    if (activeButton && activeButton.getAttribute('data-mobile-view') === view) return;
+    if (view === 'home') return showHome();
+    if (view === 'allCourses') return showAllCourses();
+    if (view === 'timetable') {
+      if (!currentUser) return showLoginModal();
+      return ttNavTimetable();
+    }
+    if (view === 'profile') {
+      if (!currentUser) return showLoginModal();
+      return showProfile();
+    }
+    if (view === 'qa') return showQa();
+    if (view === 'leaderboard') return showLeaderboard();
+    if (view === 'about') return showAbout('introduction');
+    if (view === 'admin') return showAdminPanel();
+    if (view === 'tutorial') return showTutorial();
+    if (view === 'other') return showOther();
+  }
+
+  // 移动端「其他」聚合页：独立视图（v181 起替代底部弹层）
+  function showOther() {
+    pushViewState('other', {});
+    switchView('other');
+    updateSidebar('other');
   }
 
   // ── About Content Data (易编辑) ──
@@ -65,6 +119,7 @@
       title: '平台介绍',
       sections: [
         { heading: '🌟 我们的使命', text: '致力于贯彻开源精神，抹平信息差，让每一位北师大同学都能免费获取优质学习资源。' },
+        { heading: '⚠️ 免责声明', text: '木铎星火由学生自发创建和维护，与北京师范大学及其任何官方机构无关，也不代表学校立场。本站内容主要由用户贡献，仅供学习交流参考。' },
         { heading: '📚 平台内容', text: '课程笔记、复习资料、考试真题、学术论文、软件教程等一切对学习有帮助的资源。' },
         { heading: '🤝 贡献方式', text: '任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！' },
       ]
@@ -127,6 +182,7 @@
       sections: [
         { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享课程教材、笔记、讲义、PPT、试卷、论文和软件教程，也可以在问答区交流新生指南类问题。未登录时可以浏览课程、搜索资料、查看公告和排行榜；注册并验证北师大邮箱后，才能上传、下载、收藏、参与问答和使用个人中心。' },
         { heading: '🔑 注册与登录', text: '平台使用北师大校内邮箱注册：点击「注册」，填写 @bnu.edu.cn 或 @mail.bnu.edu.cn 邮箱、昵称和至少 8 位密码。提交后前往校园邮箱查收验证邮件，点击邮件链接激活账号。登录时可以输入完整邮箱或学号；勾选「记住我」可以延长登录状态。忘记密码时点击「忘记密码」，按邮件中的链接设置新密码；修改或重置密码后需要重新登录。' },
+        { heading: '🗓️ 我的课程', text: '注册并验证北师大邮箱、登录后，左侧导航栏会在「首页」下方显示「我的课程」；所有注册用户都可以使用。首次进入后可导入教务系统导出的「按列表方式显示」课程表，或手动添加课程；之后可在「课程列表」与「周课表」之间切换，课程代码匹配到平台课程时可直接查看资料。导入文件只在浏览器本地解析，解析出的课程数据会同步到本人账号，换设备登录同一账号即可查看。' },
         { heading: '🔍 搜索课程和资料', text: '顶部搜索框支持按课程名称、课程代码、资料标题、任课教师或资料描述搜索。点击课程结果进入课程目录，点击资料结果直接打开资料详情；记不清代码时直接搜索课程名即可，通识课代码通常以 GEN 开头。进入问答区后，搜索框会自动切换为搜索问题和回答。' },
         { heading: '📁 浏览课程', text: '从首页或左侧导航进入「通识课」或「专业课」，按课程树逐层展开：通识课通常是「通识分类 → 课程 → 资料」，专业课通常是「学院 → 专业/方向 → 课程 → 资料」。课程资料列表支持按资料类型筛选，并按上传时间、下载量、收藏量或任课教师排序；管理员置顶资料会优先显示。' },
         { heading: '📄 查看、预览和收藏', text: '点击资料行或文件名可查看标题、课程、文件大小、资料类型、教师、上传者、简介、下载量和收藏量。可在线预览 PDF、图片和常见文本/代码文件；ZIP 文件可以查看内部目录结构。PPT/PPTX 等暂不支持在线渲染，可直接下载。觉得资料有用时点击「收藏」，之后从右上角头像菜单 →「我的收藏」查看课程、资料和问答帖子。' },
@@ -186,12 +242,29 @@
   }
 
   // ── Rankings & Recent All Views ──
-  async function renderTopDownloaded(restoreScrollY) {
+  function updateMaterialRankingHeader(rankingType) {
+    var isFavoriteRanking = rankingType === 'favorite';
+    var title = document.getElementById('rankingsTitle');
+    var subtitle = document.getElementById('rankingsSubtitle');
+    var breadcrumb = document.getElementById('rankingsBreadcrumb');
+    if (title) title.textContent = isFavoriteRanking ? '收藏排行榜' : '下载排行榜';
+    if (subtitle) subtitle.textContent = isFavoriteRanking ? '最受欢迎的收藏资料' : '最受欢迎的资料';
+    if (breadcrumb) breadcrumb.textContent = isFavoriteRanking ? '收藏排行榜' : '下载排行榜';
+    document.querySelectorAll('#rankingsModeTabs [data-ranking-type]').forEach(function (tab) {
+      var active = tab.getAttribute('data-ranking-type') === (isFavoriteRanking ? 'favorite' : 'download');
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
+  async function renderTopDownloaded(restoreScrollY, rankingType) {
     const container = document.getElementById('rankingsContent');
+    updateMaterialRankingHeader(rankingType);
     container.innerHTML = '<div class="empty-state compact">加载中...</div>';
     try {
       const s = await api('/api/stats/?limit=100');
-      const allItems = s.top_downloaded || [];
+      const isFavoriteRanking = rankingType === 'favorite';
+      const allItems = isFavoriteRanking ? (s.top_favorited || []) : (s.top_downloaded || []);
 
       function renderList(filterCollege, filterType) {
         var filtered = allItems;
@@ -224,11 +297,11 @@
         } else {
           html += filtered.map(function(m, i){
             var idx = allItems.indexOf(m) + 1;
-            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'rankings\',scrollY:pageYOffset};navToCourse(\'' +
+            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'rankings\',scrollY:pageYOffset,rankingType:\'' + (isFavoriteRanking ? 'favorite' : 'download') + '\'};navToCourse(\'' +
                 (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + esc(m.course_code) + '\')">' +
               '<span class="ri-rank">#' + idx + '</span>' +
               '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + esc(m.course_name) + '</div></div>' +
-              '<span class="ri-stat">' + m.download_count + ' 次下载</span>' +
+              '<span class="ri-stat">' + (isFavoriteRanking ? (m.favorite_count || 0) + ' 次收藏' : (m.download_count || 0) + ' 次下载') + '</span>' +
             '</a>';
           }).join('');
         }
@@ -308,11 +381,11 @@
     }
   }
 
-  function showTopDownloaded(restoreScrollY) {
-    pushViewState('rankings', {});
+  function showTopDownloaded(restoreScrollY, rankingType) {
+    pushViewState('rankings', { rankingType: rankingType === 'favorite' ? 'favorite' : 'download' });
     switchView('rankings', !!restoreScrollY);
     updateSidebar('home');
-    renderTopDownloaded(restoreScrollY);
+    renderTopDownloaded(restoreScrollY, rankingType);
   }
 
   function showRecentAll(restoreScrollY) {
@@ -477,6 +550,41 @@
     renderUserPublic(_userPublicId, 1);
   }
 
+  // 总管理员在用户公开页展开该用户的只读课表；课表直接加载在管理视图下方，
+  // 不切换到独立的「我的课程」页面。
+  function showUserTimetable(userId) {
+    if (!currentUser || currentUser.role !== 'super_admin' ||
+        (typeof isMgmtActive === 'function' && !isMgmtActive())) return;
+    var uid = parseInt(userId, 10);
+    if (!uid) return;
+    var panel = document.getElementById('userPublicTimetablePanel');
+    var button = document.getElementById('userPublicTimetableBtn');
+    if (!panel) return;
+    var opening = panel.hidden;
+    panel.hidden = !opening;
+    if (button) {
+      button.textContent = opening ? '收起课表' : '查看课表';
+      button.classList.toggle('active', opening);
+      button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    }
+    if (!opening) {
+      if (typeof ttClearInlineAdminTimetable === 'function') ttClearInlineAdminTimetable();
+      return;
+    }
+    panel.dataset.userId = String(uid);
+    panel.innerHTML = '<div class="user-public-timetable-loading">加载课表…</div>';
+    var ready = typeof ensureFeature === 'function' ? ensureFeature('timetable') : Promise.resolve();
+    ready.then(function () {
+      if (panel.hidden || panel.dataset.userId !== String(uid)) return;
+      if (typeof ttRenderInlineAdminTimetable !== 'function') throw new Error('课表模块未就绪');
+      return ttRenderInlineAdminTimetable(panel, uid);
+    }).catch(function (err) {
+      if (!panel.hidden && panel.dataset.userId === String(uid)) {
+        panel.innerHTML = '<div class="user-public-timetable-empty">课表加载失败：' + esc(err && err.message || '请稍后重试') + '</div>';
+      }
+    });
+  }
+
   function renderAdminUserPublicDownloads(userId, page) {
     var target = document.getElementById('userPublicActivityContent');
     if (!target) return;
@@ -560,10 +668,12 @@
         '<div class="pc-seg" role="tablist" aria-label="用户行为记录">' +
           '<button class="pc-seg-btn' + (_userPublicDetailTab === 'uploads' ? ' active' : '') + '" onclick="switchUserPublicDetailTab(\'uploads\')">上传资料</button>' +
           '<button class="pc-seg-btn' + (_userPublicDetailTab === 'downloads' ? ' active' : '') + '" onclick="switchUserPublicDetailTab(\'downloads\')">访问记录</button>' +
+          '<button id="userPublicTimetableBtn" class="pc-seg-btn user-public-timetable-btn" aria-expanded="false" onclick="showUserTimetable(' + userId + ')">查看课表</button>' +
         '</div></div>';
     } else {
       _userPublicDetailTab = 'uploads';
     }
+    html += '<div id="userPublicTimetablePanel" class="user-public-timetable-panel" hidden></div>';
     html += '<div id="userPublicActivityContent">';
 
     if (canTraceDownloads && _userPublicDetailTab === 'downloads') {
@@ -635,14 +745,14 @@
      Iter 7: 公告系统
      ═══════════════════════════════════════════════════════════ */
 
-  function showAnnouncements() {
-    pushViewState('announcements', {});
+  function showAnnouncements(announcementId) {
+    pushViewState('announcements', announcementId ? { announcementId: announcementId } : {});
     switchView('announcements');
     updateSidebar('home');
-    loadAnnouncements();
+    loadAnnouncements(announcementId);
   }
 
-  async function loadAnnouncements() {
+  async function loadAnnouncements(announcementId) {
     var list = document.getElementById('announcementsList');
     if (!list) return;
     list.innerHTML = '<div class="empty-state compact">加载中...</div>';
@@ -668,7 +778,7 @@
           : '<span class="ai-avatar-placeholder" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">' + esc((a.publisher_name || '?').charAt(0).toUpperCase()) + '</span>';
         var canDelete = currentUser && (currentUser.id === a.publisher_id || currentUser.role === 'super_admin');
         var deleteBtn = canDelete ? '<button class="ai-delete" onclick="deleteAnnouncement(' + a.id + ')" title="删除公告">🗑</button>' : '';
-        html += '<div class="announcement-item">' +
+        html += '<div class="announcement-item" id="announcement-' + a.id + '">' +
           '<div class="ai-header">' +
             avatarHtml +
             '<span class="ai-title">' + esc(a.title) + '</span>' +
@@ -679,6 +789,10 @@
         '</div>';
       });
       list.innerHTML = html;
+      if (announcementId) {
+        var target = document.getElementById('announcement-' + announcementId);
+        if (target) requestAnimationFrame(function () { target.scrollIntoView({ block: 'center' }); });
+      }
     } catch(e) {
       list.innerHTML = '<div class="empty-state compact">加载失败</div>';
     }
@@ -874,15 +988,20 @@
     if (!returnState) return;
     const sv = returnState.scrollY;
     const view = returnState.view;
+    const rankingType = returnState.rankingType;
     returnState = null;
-    if (view === 'rankings') showTopDownloaded(sv);
+    if (view === 'rankings') showTopDownloaded(sv, rankingType);
     else if (view === 'recentAll') showRecentAll(sv);
     else showHome(sv);
   }
 
   function showHome(restoreScrollY) {
     // 首页统计不再阻塞视图展示；切回首页时复用 API 内存缓存/进行中的请求。
-    if (typeof loadStats === 'function') loadStats();
+    // 紧凑首页由 loadCompactHome 统一加载 limit=8 的统计，避免刷新时重复请求
+    // 默认统计接口；宽版首页仍保留原有统计加载。
+    var isCompactHome = document.body && document.body.dataset.homeLayout === 'compact';
+    if (!isCompactHome && typeof loadStats === 'function') loadStats();
+    if (typeof loadCompactHome === 'function') loadCompactHome();
     pushViewState('home', {}, _initialNav);
     _initialNav = false;
     returnState = null;
@@ -895,12 +1014,13 @@
     updateSidebar('home');
   }
 
-  function showExplorer(type) {
-    pushViewState('explorer', { expPath: [type] });
+  function showExplorerPath(path) {
+    var nextPath = Array.isArray(path) && path.length ? path.slice() : ['通识课'];
+    pushViewState('explorer', { expPath: nextPath });
     switchView('explorer');
-    updateSidebar(type === '通识课' ? 'general' : 'major');
+    updateSidebar('allCourses');
     var render = function() {
-      expPath = [type];
+      expPath = nextPath.slice();
       renderExplorer();
       if (currentUser && typeof loadCourseFavorites === 'function') {
         loadCourseFavorites().then(function() {
@@ -929,58 +1049,73 @@
     });
   }
 
-  // 我的课表：timetable.js 为懒加载模块，这里统一做「认证 → 激活视图 → 确保加载」
-  // 先激活路由再等懒加载，避免手机首次从汉堡菜单进入时看起来没有响应。
+  function showExplorer(type) {
+    return showExplorerPath([type || '通识课']);
+  }
+
+  function showAllCourses(type) {
+    var root = type === '通识课' || type === '专业课' ? type : null;
+    if (root) return showExplorerPath([root]);
+    if (typeof expPath !== 'undefined' && Array.isArray(expPath) && expPath.length) return showExplorerPath(expPath);
+    return showExplorerPath(['通识课']);
+  }
+
+  // 我的课程：timetable.js 为懒加载模块，这里统一做「认证 → 激活视图 → 确保加载」
+  // 先激活路由再等懒加载，避免手机首次从底栏进入时看起来没有响应。
   var _ttNavPromise = null;
 
-  function ttActivateRoute(writeHistory) {
+  function ttActivateRoute(writeHistory, targetUserId) {
     if (typeof switchView === 'function') switchView('timetable');
     if (typeof updateSidebar === 'function') updateSidebar('timetable');
-    if (writeHistory && typeof pushViewState === 'function') pushViewState('timetable', {});
+    if (writeHistory && typeof pushViewState === 'function') {
+      pushViewState('timetable', targetUserId ? { userId: targetUserId } : {});
+    }
     if (typeof _updateFooterVisibility === 'function') _updateFooterVisibility('timetable');
   }
 
-  function ttShowModuleError() {
-    ttActivateRoute(false);
+  function ttShowModuleError(targetUserId) {
+    ttActivateRoute(false, targetUserId);
     var shell = document.getElementById('ttShell');
     if (shell) shell.innerHTML = '<div class="empty-state compact">课表模块加载失败，请刷新重试。</div>';
   }
 
-  function ttEnterTimetableModule() {
+  function ttEnterTimetableModule(targetUserId) {
     if (typeof showTimetable === 'function') {
-      showTimetable();
+      showTimetable(false, targetUserId || null);
       return Promise.resolve(true);
     }
-    ttActivateRoute(true);
+    ttActivateRoute(true, targetUserId);
     if (typeof ensureFeature !== 'function') {
-      ttShowModuleError();
+      ttShowModuleError(targetUserId);
       return Promise.resolve(false);
     }
     return ensureFeature('timetable').then(function () {
       if (typeof showTimetable === 'function') {
         // 路由已经在懒加载开始时写入，避免重复压入一条 timetable 历史记录。
-        showTimetable(true);
+        showTimetable(true, targetUserId || null);
         return true;
       }
-      ttShowModuleError();
+      ttShowModuleError(targetUserId);
       return false;
     }).catch(function () {
-      ttShowModuleError();
+      ttShowModuleError(targetUserId);
       return false;
     });
   }
 
-  function ttNavTimetable() {
+  function ttNavTimetable(targetUserId) {
     var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
     var authReady = window._bnusparksAuthReady;
     if (!currentUser && hasToken && authReady) {
       if (!_ttNavPromise) {
-        _ttNavPromise = Promise.resolve(authReady).then(ttEnterTimetableModule);
+        _ttNavPromise = Promise.resolve(authReady).then(function () {
+          return ttEnterTimetableModule(targetUserId);
+        });
         _ttNavPromise.then(function () { _ttNavPromise = null; }, function () { _ttNavPromise = null; });
       }
       return _ttNavPromise;
     }
-    return ttEnterTimetableModule();
+    return ttEnterTimetableModule(targetUserId);
   }
 
   // ── Sidebar ──
@@ -991,7 +1126,7 @@
       e.preventDefault();
       if (view === 'home') showHome();
       else if (view === 'general') showExplorer('通识课');
-      else if (view === 'major') showExplorer('专业课');
+      else if (view === 'major' || view === 'allCourses') showAllCourses();
       else if (view === 'qa') showQa();
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();
@@ -1008,7 +1143,7 @@
       e.preventDefault();
       if (view === 'home') showHome();
       else if (view === 'general') showExplorer('通识课');
-      else if (view === 'major') showExplorer('专业课');
+      else if (view === 'major' || view === 'allCourses') showAllCourses();
       else if (view === 'qa') showQa();
       else if (view === 'about') showAbout('introduction');
       else if (view === 'admin') showAdminPanel();

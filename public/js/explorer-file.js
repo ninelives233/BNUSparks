@@ -424,7 +424,7 @@
     }
     var meta1 = document.querySelector('.fd-meta1');
     if (meta1) {
-      var fileNameHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.file + '</span> ' + esc(file.file_name || '') + '</span>';
+      var fileNameHtml = '<span class="fd-meta-item fd-meta-file" title="' + esc(file.file_name || '') + '"><span class="fd-meta-icon">' + FD_ICONS.file + '</span><span class="fd-meta-file-text">' + esc(file.file_name || '') + '</span></span>';
       var typeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.tag + '</span> ' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span>';
       var dateHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.calendar + '</span> ' + esc(file.created_at || '') + '</span>';
       var sizeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.storage + '</span> ' + formatSize(file.file_size) + '</span>';

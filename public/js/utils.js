@@ -203,7 +203,7 @@
     var dialog = _activeDialog;
     if (!dialog || !dialog.isConnected || getComputedStyle(dialog).display === 'none') return;
     if (event.key === 'Escape') {
-      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close');
+      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close');
       if (close) { event.preventDefault(); close.click(); }
       return;
     }
@@ -273,7 +273,7 @@
   // drawer 是叠在当前视图上的浮层，不占 URL。
   var VIEW_ROUTES = { home: '/', about: '/about', tutorial: '/tutorial',
     announcements: '/announcements', broad: '/broad', rankings: '/rankings',
-    recentAll: '/recent', leaderboard: '/leaderboard', profile: '/profile',
+    recentAll: '/recent', recommendations: '/recommendations', leaderboard: '/leaderboard', profile: '/profile',
     myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
     admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa',
     qaCompose: '/qa/compose', timetable: '/timetable' };
@@ -285,6 +285,7 @@
       return p.length ? '/explorer/' + p.map(encodeURIComponent).join('/') : '/explorer';
     }
     if (view === 'userPublic') return state && state.userId ? '/user/' + state.userId : null;
+    if (view === 'timetable' && state && state.userId) return '/timetable/user/' + state.userId;
     if (view === 'fileDetail') return state && state.fileId ? '/file/' + state.fileId : null;
     if (view === 'drawer') return null;
     // qaCompose 动态子路径：/qa/compose[/<type>[/<action>[/<id>]]]，可分享/可刷新（v175）
@@ -300,6 +301,7 @@
       }
       return qp;
     }
+    if (view === 'rankings' && state && state.rankingType === 'favorite') return '/rankings?type=favorite';
     return VIEW_ROUTES[view] || null;
   }
 
@@ -317,6 +319,10 @@
     if (head === 'file') {
       var fid = parseInt(segs[1], 10);
       return fid ? { view: 'fileDetail', fileId: fid } : null;
+    }
+    if (head === 'timetable' && segs[1] === 'user') {
+      var timetableUid = parseInt(segs[2], 10);
+      return timetableUid ? { view: 'timetable', userId: timetableUid } : null;
     }
     // /qa/compose 必须在通用 VIEW_ROUTES 查找前处理，否则被 /qa 吃掉（v175）
     if (head === 'qa' && segs[1] === 'compose') {

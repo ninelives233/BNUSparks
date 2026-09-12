@@ -76,6 +76,15 @@ urlpatterns = [
     path("announcements/", views.api_announcements, name="api_announcements"),
     path("announcements/<int:aid>/", views.api_announcement_delete, name="api_announcement_delete"),
 
+    # 全站校园快捷入口（读取公开；写入仅总管理员）
+    path("campus-links/", views.api_campus_links, name="api_campus_links"),
+    path("campus-links/create/", views.api_campus_link_create, name="api_campus_link_create"),
+    path("campus-links/<int:link_id>/", views.api_campus_link_update, name="api_campus_link_update"),
+    path("campus-links/reorder/", views.api_campus_links_reorder, name="api_campus_links_reorder"),
+
+    # 首页资料推荐（候选和理由均由服务端真实数据计算）
+    path("recommendations/", views.api_recommendations, name="api_recommendations"),
+
     # 搜索 & 统计
     path("search/", views.api_search, name="api_search"),
     path("stats/", views.api_stats, name="api_stats"),
@@ -150,6 +159,7 @@ urlpatterns = [
     path("admin/users/", views.api_admin_users, name="api_admin_users"),
     path("admin/monitoring/", views.api_admin_monitoring, name="api_admin_monitoring"),
     path("admin/users/<int:uid>/downloads/", views.api_admin_user_downloads, name="api_admin_user_downloads"),
+    path("admin/users/<int:uid>/timetable/", views.api_admin_user_timetable, name="api_admin_user_timetable"),
     path("admin/users/<int:uid>/role/", views.api_admin_set_role, name="api_admin_set_role"),
     path("admin/sections/", views.api_admin_sections, name="api_admin_sections"),
     path("admin/users/<int:uid>/auto-approve/", views.api_admin_auto_approve_toggle, name="api_admin_auto_approve_toggle"),

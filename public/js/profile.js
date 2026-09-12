@@ -7,7 +7,7 @@
     // 显示个人资料
     var pv = document.getElementById('profileView');
     if (pv) { pv.style.display = 'block'; pv.classList.add('active'); }
-    updateSidebar(null);
+    updateSidebar('profile');
     window.scrollTo({ top: 0 });
     pushViewState('profile', {});
     // 加载数据
@@ -228,7 +228,7 @@
     });
     var v = document.getElementById('myUploadsView');
     if (v) { v.style.display = 'block'; v.classList.add('active'); }
-    updateSidebar(null);
+    updateSidebar('profile');
     window.scrollTo({ top: 0 });
     pushViewState('myuploads', {});
     renderMyUploadsPage();
@@ -366,7 +366,7 @@
     });
     var v = document.getElementById('myDownloadsView');
     if (v) { v.style.display = 'block'; v.classList.add('active'); }
-    updateSidebar(null);
+    updateSidebar('profile');
     window.scrollTo({ top: 0 });
     pushViewState('mydownloads', {});
     renderMyDownloadsPage();
@@ -408,7 +408,7 @@
     });
     var v = document.getElementById('myFavoritesView');
     if (v) { v.style.display = 'block'; v.classList.add('active'); }
-    updateSidebar(null);
+    updateSidebar('profile');
     window.scrollTo({ top: 0 });
     pushViewState('myfavorites', {});
     renderMyFavoritesPage();

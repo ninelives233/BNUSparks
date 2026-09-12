@@ -463,6 +463,13 @@ def api_verify_email(request):
             "identity_college": profile.identity_college or "",
             "identity_major": profile.identity_major or "",
             "identity_can_edit": _identity_can_edit(profile),
+            "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+            "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
+            "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
+            "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+            "appearance_configured": bool(
+                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+            ),
         },
     })
 
@@ -547,6 +554,13 @@ def api_login(request):
             "identity_college": profile.identity_college or "",
             "identity_major": profile.identity_major or "",
             "identity_can_edit": _identity_can_edit(profile),
+            "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+            "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
+            "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
+            "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+            "appearance_configured": bool(
+                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+            ),
         },
     })
 
@@ -592,6 +606,13 @@ def api_me(request):
         "show_college_public": profile.show_college_public,
         "show_major_public": profile.show_major_public,
         "identity_can_edit": _identity_can_edit(profile),
+        "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+        "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
+        "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
+        "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+        "appearance_configured": bool(
+            profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+        ),
     })
 
 

@@ -308,3 +308,11 @@
   color: var(--primary-dark);
 }
 
+html[data-bnu-theme="dark"] .fa-filter-btn:hover,
+html[data-bnu-theme="dark"] .filter-dd-item:hover {
+  background: var(--primary-surface);
+}
+html[data-bnu-theme="dark"] .filter-dd-item.filter-dd-active {
+  background: var(--primary-surface);
+  color: var(--primary);
+}

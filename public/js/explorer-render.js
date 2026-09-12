@@ -1,8 +1,8 @@
 /* BNU Sparks · explorer-render.js —— 渲染器+文件列表。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
   function renderGrid(items) {
     const parent = document.getElementById('explorerContent');
-    // 所有大类/学院卡片统一进同一个 folder-grid，由 CSS flex-wrap + clamp 自适应列数
-    // （不再有「第三行特排」：国际视野与文明对话/数学类/实用文件 与其余通识大类一起排布）。
+    // 所有大类/学院卡片统一进同一个 folder-grid，由布局 CSS 负责响应式列数与顺序。
+    // （不再有「第三行特排」：国际视野与文明对话/数学类/实用文件 与其余通识大类一起排布。）
     const regularItems = items.filter(i => !i.divider);
     // v183：专业课顶层——本人学院卡片置顶（仅重排顺序，不改任何样式）
     let gridItems = regularItems;
@@ -25,16 +25,47 @@
         if (e.target.closest('.fc-card-menu-btn, .fc-card-menu')) return;
         navIn(el.dataset.n);
       });
+      if (document.documentElement.dataset.bnuLayout === 'compact') {
+        el.addEventListener('keydown', function(e) {
+          if (e.target.closest('.fc-card-menu-btn, .fc-card-menu')) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          navIn(el.dataset.n);
+        });
+      }
     });
   }
+
+  // 外观抽屉切换布局时同步重绘当前目录，让紧凑专属标题、焦点属性和卡片结构立即更新。
+  window.addEventListener('bnuappearancechange', function(event) {
+    const detail = event && event.detail || {};
+    if (!detail.previous || detail.home_layout === detail.previous.home_layout) return;
+    const explorer = document.getElementById('explorerView');
+    if (explorer && explorer.classList.contains('active') && typeof renderExplorer === 'function') renderExplorer();
+  });
 
   function _cardHtml(item, mgmt) {
     const canMgmt = mgmt && item.id &&
       (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1));
-    return '<div class="folder-card" data-n="' + esc(item.name) + '">' +
+    const isMajorIndex = expPath.length === 1 && expPath[0] === '专业课';
+    // 专业课学院卡片统计直接子节点（专业）；通识课仍统计有效课程分区。
+    const count = item.children
+      ? (isMajorIndex ? item.children.filter(child => !child.divider).length : getEffectiveChildCount(item))
+      : 0;
+    const countUnit = isMajorIndex ? '专业' : '课程分区';
+    const isCompactLayout = document.documentElement.dataset.bnuLayout === 'compact';
+    const countMeta = item.children && (isCompactLayout || count)
+      ? '<div class="fc-count">' + count + ' 个' + countUnit + '</div>'
+      : '';
+    const compactA11y = isCompactLayout
+      ? ' role="link" tabindex="0" aria-label="打开' + esc(item.name) + '"'
+      : '';
+    return '<div class="folder-card"' + compactA11y + ' data-n="' + esc(item.name) + '">' +
+      '<span class="fc-spine" aria-hidden="true"></span>' +
       '<div class="fc-icon">' + cardIconHtml(item) + '</div>' +
-      '<div class="fc-name">' + esc(item.name) + '</div>' +
-      '<div class="fc-count">' + (item.children ? getEffectiveChildCount(item) + ' 项' : '') + '</div>' +
+      '<div class="fc-copy"><div class="fc-name">' + esc(item.name) + '</div>' +
+      countMeta + '</div>' +
+      '<span class="fc-disclosure" aria-hidden="true">›</span>' +
       (canMgmt ? _mgmtCardMenuHtml(item) : '') +
     '</div>';
   }

@@ -316,6 +316,12 @@
 .admin-pending-card .pc-actions .admin-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 .admin-pending-card .pc-actions .admin-btn { gap: 6px; }
 
+/* 共享分段控件随主题变化，避免暗色/冷色仍露出浅色硬编码底。 */
+.pc-seg { background: var(--surface) !important; border-color: var(--border-light) !important; }
+.pc-seg-btn:hover { background: var(--border-light) !important; color: var(--ink) !important; }
+.pc-seg-btn.active { background: var(--raised) !important; color: var(--ink) !important; box-shadow: 0 1px 2px oklch(0 0 0 / 0.08); }
+.pc-seg-count { background: var(--border-light) !important; color: var(--ink-faint) !important; }
+
 /* ── 键盘焦点：覆盖各家族历史遗留的 outline:none，仅在 focus-visible 出现 ── */
 :where(a[href], button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--primary) !important;
@@ -353,3 +359,18 @@
   min-width: 44px;
   min-height: 44px;
 }
+
+/* 暗色主题兜底：跨页面弹窗与分段控件不得沿用浅色实底。 */
+html[data-bnu-theme="dark"] .admin-reject-dialog {
+  background: var(--raised);
+  color: var(--ink);
+}
+html[data-bnu-theme="dark"] .admin-reject-dialog textarea {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .pc-seg { background: var(--surface); }
+html[data-bnu-theme="dark"] .pc-seg-btn:hover { background: var(--primary-surface); }
+html[data-bnu-theme="dark"] .pc-seg-count { background: var(--raised); }
+html[data-bnu-theme="dark"] .pc-seg-btn.active .pc-seg-count { background: var(--primary-surface); }

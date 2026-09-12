@@ -86,10 +86,21 @@ from .admin import (
     api_admin_users, api_admin_set_role,
     api_admin_sections, api_admin_auto_approve_toggle,
 )
-from .admin_monitoring import api_admin_monitoring, api_admin_user_downloads
+from .admin_monitoring import (
+    api_admin_monitoring, api_admin_user_downloads, api_admin_user_timetable,
+)
 
 # 公告
 from .announcements import api_announcements, api_announcement_delete
+
+# 校园快捷入口
+from .campus_links import (
+    api_campus_links, api_campus_link_create,
+    api_campus_link_update, api_campus_links_reorder,
+)
+
+# 可解释资料推荐
+from .recommendations import api_recommendations
 
 # 问答区（新生指南，Phase 1 + Phase 2 v183）
 from .qa import (

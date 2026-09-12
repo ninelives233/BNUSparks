@@ -22,7 +22,16 @@ def api_announcements(request):
     """GET /api/announcements/ — 公告列表
        POST /api/announcements/ — 发布公告（MODERATOR+）"""
     if request.method == "GET":
-        qs = Announcement.objects.filter(is_published=True).order_by("-created_at")
+        qs = Announcement.objects.filter(is_published=True).select_related(
+            "publisher", "publisher__profile"
+        ).order_by("-created_at")
+        raw_limit = request.GET.get("limit")
+        if raw_limit:
+            try:
+                limit = max(1, min(int(raw_limit), 100))
+                qs = qs[:limit]
+            except (TypeError, ValueError):
+                pass
         user = _get_user(request)
         is_admin = False
         if user:
