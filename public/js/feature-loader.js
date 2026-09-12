@@ -1,6 +1,7 @@
 /* BNU Sparks · feature-loader.js —— 按视图懒加载非核心前端模块 */
 (function() {
-  var VERSION = '256';
+  // v257：修复 v256 曾被缓存的损坏 timetable bundle，懒加载资源必须整体换键。
+  var VERSION = '257';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
