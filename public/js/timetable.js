@@ -1252,6 +1252,8 @@ function ttResolveCourseLinks() {
   var map = {};
   ttState.links = map;
   if (!ttState.data) return map;
+  // 非本科身份：渲染层同样不链接（含历史已导入的课表，一律置为未链接）
+  if (!ttIsUndergrad()) return map;
   // 先用轻量摘要渲染资料数；完整课程树仅在点击课程、编辑或导入时加载。
   if (!ttTreeReady()) {
     ttState.data.courses.forEach(function (c) {
@@ -1307,6 +1309,20 @@ function ttCourseNameByCode(code) {
   return c ? c.name : code;
 }
 
+// 硕博板块筹备中：非本科身份（含未设置）导入课表一律不链接资料目录、不提交建课，后续再适配
+function ttIsUndergrad() {
+  return !!(typeof currentUser !== 'undefined' && currentUser &&
+    currentUser.identity_education === '本科');
+}
+
+// 非本科身份：无链接/建课可确认，跳过弹窗直接纯导入，并告知目录暂不可用
+if (!ttIsUndergrad()) {
+  parsed.keepManual = true;
+  if (!parsed.pendingCodes || typeof parsed.pendingCodes !== 'object') parsed.pendingCodes = {};
+  ttApplyImport(parsed, []);
+  ttToast('硕、博板块正在筹备中，暂无资料目录');
+  return;
+}
 // ── 确认弹窗（汇总 + 课程清单 + 未建课位置选择） ──
 function ttShowConfirmModal(parsed) {
   // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入。
