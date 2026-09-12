@@ -27,6 +27,19 @@ from .utils import (
 )
 
 
+def _appearance_payload(profile):
+    """序列化外观偏好；空值回退默认，同时保留是否主动设置的事实。"""
+    return {
+        "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+        "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
+        "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
+        "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+        "appearance_configured": bool(
+            profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+        ),
+    }
+
+
 # ═══════════════════════════════════════════════════════════════
 # 个人资料
 # ═══════════════════════════════════════════════════════════════
@@ -86,6 +99,7 @@ def _profile_payload(request, profile):
         "show_college_public": profile.show_college_public,
         "show_major_public": profile.show_major_public,
         "identity_can_edit": _identity_can_edit(profile),
+        **_appearance_payload(profile),
         "sections_display": sections_display,
         "upload_count": Material.objects.filter(uploader=request.user).count(),
         "download_count": DownloadRecord.objects.filter(
@@ -113,6 +127,23 @@ def api_profile(request):
         profile = _get_or_create_profile(request.user)
         changed = []
         allowed_fields = {"contact_email", "contact_way", "bio"}
+
+        # 外观偏好与个人资料同属当前用户资源；严格白名单、校验枚举，
+        # 不接受任意 profile 字段写入。
+        appearance_values = {
+            "home_layout": set(UserProfile.HomeLayout.values),
+            "color_theme": set(UserProfile.ColorTheme.values),
+            "mobile_nav": set(UserProfile.MobileNav.values),
+            "default_view": set(UserProfile.DefaultView.values),
+        }
+        for field, valid_values in appearance_values.items():
+            if field in body:
+                value = body.get(field)
+                if value not in valid_values:
+                    return _err("外观设置无效", 400)
+                if value != getattr(profile, field):
+                    setattr(profile, field, value)
+                    changed.append(field)
 
         if "nickname" in body and isinstance(body["nickname"], str):
             val = body["nickname"].strip()

@@ -81,6 +81,7 @@
 .qa-tag-desc { margin-top: var(--space-xs); font-size: 0.78rem; color: var(--ink-faint); padding-left: 3.5em; }
 
 .qa-list { display: flex; flex-direction: column; gap: var(--space-sm); }
+
 .qa-card {
   background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
   padding: var(--space-md) var(--space-lg); cursor: pointer;
@@ -235,7 +236,7 @@
 .qa-pinned-section {
   margin-bottom: var(--space-lg);
   padding: var(--space-md) var(--space-lg) var(--space-lg);
-  background: oklch(0.98 0.02 75);
+  background: var(--star-light);
   border: 1px solid var(--star-border);
   border-radius: var(--radius-lg);
 }
@@ -264,6 +265,25 @@
 .qa-pin-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
 .qa-pin-badges { display: inline-flex; gap: 6px; }
 .qa-pin-meta { display: flex; align-items: center; gap: 12px; }
+
+/* 移动端列表收紧：压内边距与字号、缩间距，提高单屏信息密度 */
+@media (max-width: 640px) {
+  .qa-list { gap: 8px; }
+  .qa-card { padding: 10px 13px; border-radius: var(--radius-md); }
+  .qa-card-head { gap: 6px; margin-bottom: 3px; }
+  .qa-card-date { font-size: 0.68rem; }
+  .qa-card-title { font-size: 0.95rem; margin-bottom: 2px; }
+  .qa-card-preview { font-size: 0.78rem; margin-bottom: 4px; }
+  .qa-card-foot { gap: 8px; }
+  .qa-card-author { font-size: 0.7rem; }
+  .qa-card-meta { gap: 10px; font-size: 0.68rem; }
+  .qa-badge { padding: 1px 8px; font-size: 0.66rem; }
+  .qa-pinned-section { margin-bottom: var(--space-md); padding: 10px 12px 12px; }
+  .qa-pin-card { gap: 10px; padding: 8px 10px; }
+  .qa-pin-title { font-size: 0.9rem; }
+  .qa-pin-preview { font-size: 0.74rem; }
+  .qa-pin-meta { gap: 8px; }
+}
 
 /* 详情卡标签行 + 发布回答入口 */
 .qa-q-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: var(--space-xs) 0 var(--space-sm); }
@@ -295,6 +315,15 @@
 .qa-pill-l1:hover { border-color: var(--accent); color: var(--accent); }
 .qa-pill-l1.on { background: var(--accent-hover); border-color: var(--accent-hover); }
 .qa-pill-l2.on { background: var(--primary-surface); border-color: var(--primary-light); }
+
+/* 暗色主题下不保留浅色主题的精选底板与高亮标签，避免局部“闪光弹”。 */
+html[data-bnu-theme="dark"] .qa-pinned-section { background: var(--star-light); }
+html[data-bnu-theme="dark"] .qa-pill-l1.on,
+html[data-bnu-theme="dark"] .qa-l1-chip.on {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 @media (max-width: 640px) {
   .qa-pin-card { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
@@ -411,6 +440,22 @@
 .qe-pin-row input { accent-color: var(--accent-hover); }
 .qc-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: var(--space-lg); }
 .qc-submit { width: auto; min-width: 120px; }
+
+/* 移动端编辑页收紧：卡片留白让位内容，标签更小更贴、圆角调小，正文框加高 */
+@media (max-width: 640px) {
+  .qa-compose-card { padding: var(--space-md) var(--space-md); }
+  .qc-tag-label { font-size: 0.8rem; margin-bottom: 6px; }
+  .qc-hint { margin-left: 6px; }
+  .qa-compose-l1 { gap: 5px; }
+  .qa-l1-chip { padding: 3px 10px; font-size: 0.75rem; border-radius: 7px; }
+  .qa-compose-l2 { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 6px; }
+  .qa-theme-card { padding: 5px 9px; font-size: 0.78rem; border-radius: 7px; }
+  .qa-theme-desc { font-size: 0.64rem; }
+  .qc-tag-summary { padding: 4px 10px; font-size: 0.75rem; }
+  .qe-btn { min-width: 26px; height: 28px; padding: 0 6px; }
+  .qe-sep { margin: 0 3px; }
+  .qa-editor-content { min-height: 260px; max-height: 65vh; }
+}
 
 /* 插图小弹窗（编辑器工具栏） */
 .qe-img-card { max-width: 400px; }

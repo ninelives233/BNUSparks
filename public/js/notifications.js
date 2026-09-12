@@ -70,6 +70,8 @@
   function showDrawerMenu() {
     document.getElementById('drawerMenu').style.display = '';
     document.getElementById('drawerNotif').style.display = 'none';
+    var appearance = document.getElementById('drawerAppearance');
+    if (appearance) appearance.style.display = 'none';
     // 重置标题和动作栏（可能被 showDrawerDownloads 修改过）
     var header = document.querySelector('#drawerNotif .notif-drawer-header h3');
     if (header) header.textContent = '通知';
@@ -154,6 +156,7 @@
       '</div>' +
       '<div class="dm-divider"></div>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span class="dm-ico dm-ico-user">' + DM_ICONS.user + '</span>个人中心</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerAppearance()"><span class="dm-ico dm-ico-user">✦</span>外观调整</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span class="dm-ico dm-ico-bell">' + DM_ICONS.bell + '</span>通知中心' + notifBadgeHtml + '</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyUploadsPage()"><span class="dm-ico dm-ico-upload">' + DM_ICONS.upload + '</span>我的上传</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyDownloadsPage()"><span class="dm-ico dm-ico-download">' + DM_ICONS.download + '</span>我的下载</a>' +
@@ -183,8 +186,8 @@
     // 如果当前在 explorer 视图，立刻刷新
     var exp = document.getElementById('explorerView');
     if (exp && exp.style.display !== 'none') renderExplorer();
-    // 平民模式：显示侧边栏管理入口
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
+    // 管理模式只影响管理后台入口；我的课程对所有已登录用户开放。
+    document.querySelectorAll('#sideAdminLink').forEach(function(link) {
       link.style.display = (currentUser && currentUser.role !== 'user') ? '' : 'none';
     });
     // 文件详情页/弹窗即时反馈
@@ -204,8 +207,8 @@
     localStorage.setItem('bnusparks_civilian', _civilianMode ? '1' : '0');
     document.body.classList.toggle('mgmt-active', isMgmtActive());
     renderDrawerMenu();
-    // 平民模式：隐藏侧边栏管理入口
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
+    // 平民模式只隐藏管理后台入口，不影响个人课程。
+    document.querySelectorAll('#sideAdminLink').forEach(function(link) {
       link.style.display = (_civilianMode || !currentUser || currentUser.role === 'user') ? 'none' : '';
     });
     // 文件详情页/弹窗即时反馈

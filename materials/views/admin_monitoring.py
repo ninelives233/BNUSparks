@@ -18,6 +18,7 @@ from .utils import (
     _err, _ok, _safe_int, require_role,
     DownloadRecord, Material, UserProfile,
 )
+from ..models import TimetableImportRecord, UserTimetable
 
 
 def _month_start(value):
@@ -252,6 +253,100 @@ def _identity_payload(period="month"):
     }
 
 
+def _import_period_buckets(period):
+    """按课表导入时间返回时间桶；全部时间按自然月聚合。"""
+    now = _local()
+    if period == "day":
+        end = now.replace(minute=0, second=0, microsecond=0)
+        buckets = [end - timedelta(hours=i) for i in range(23, -1, -1)]
+        return buckets[0], "hour", buckets, "近 24 小时"
+    if period == "week":
+        end = now.date()
+        buckets = [end - timedelta(days=i) for i in range(6, -1, -1)]
+        return _day_start(buckets[0]), "day", buckets, "近 7 天"
+    if period == "month":
+        end = now.date()
+        buckets = [end - timedelta(days=i) for i in range(29, -1, -1)]
+        return _day_start(buckets[0]), "day", buckets, "近 30 天"
+
+    first_import = TimetableImportRecord.objects.filter(
+        user__is_active=True,
+    ).aggregate(value=Min("created_at"))["value"]
+    start = _month_start(_local(first_import)) if first_import else _month_start(now)
+    end = _month_start(now)
+    buckets = []
+    cursor = start
+    while cursor <= end:
+        buckets.append(cursor)
+        cursor = _next_month(cursor)
+    return start, "month", buckets, "全部时间"
+
+
+def _timetable_import_payload(period):
+    start, bucket_type, buckets, period_label = _import_period_buckets(period)
+    active_filter = Q(user__is_active=True)
+    import_counts = _group_counts(TimetableImportRecord, start, bucket_type, active_filter)
+    import_values = [import_counts.get(_bucket_key(bucket, bucket_type), 0) for bucket in buckets]
+    period_qs = TimetableImportRecord.objects.filter(
+        created_at__gte=start,
+        user__is_active=True,
+    )
+    active_records = TimetableImportRecord.objects.filter(user__is_active=True)
+    last_import = active_records.order_by("-created_at").first()
+    # 导入记录不截断：管理者需要能够追溯所选时间范围内的完整行为。
+    # 先按用户聚合，再把同一用户的所有导入事件放进 records，避免同一用户
+    # 在列表里连续占据多行，同时保留每一次导入的时间与课程数。
+    grouped = {}
+    period_records = period_qs.select_related("user", "user__profile").order_by("-created_at", "-id")
+    for record in period_records:
+        profile = _profile_of(record.user)
+        local_created = _local(record.created_at)
+        group = grouped.get(record.user_id)
+        if group is None:
+            group = {
+                "user_id": record.user_id,
+                "nickname": record.user.first_name or record.user.username,
+                "email": record.user.email,
+                "education": profile.identity_education if profile else "",
+                "college": profile.identity_college if profile else "",
+                "major": profile.identity_major if profile else "",
+                "import_count": 0,
+                "latest_import_at": local_created.strftime("%Y-%m-%d %H:%M"),
+                "latest_course_count": record.course_count,
+                # 兼容旧版监测列表字段；新前端使用 records 展开明细。
+                "course_count": record.course_count,
+                "created_at": local_created.strftime("%Y-%m-%d %H:%M"),
+                "records": [],
+            }
+            grouped[record.user_id] = group
+        group["import_count"] += 1
+        group["records"].append({
+            "id": record.id,
+            "course_count": record.course_count,
+            "created_at": local_created.strftime("%Y-%m-%d %H:%M"),
+        })
+    import_users = sorted(
+        grouped.values(),
+        key=lambda item: (item["latest_import_at"], item["user_id"]),
+        reverse=True,
+    )
+    return {
+        "period": period,
+        "period_label": period_label,
+        "labels": [_bucket_label(bucket, bucket_type) for bucket in buckets],
+        "imports": import_values,
+        "summary": {
+            "import_count": sum(import_values),
+            "unique_users": period_qs.values("user_id").distinct().count(),
+            "timetable_users": UserTimetable.objects.filter(user__is_active=True).count(),
+            "last_import_at": _format_activity(last_import.created_at if last_import else None),
+        },
+        "import_users": import_users,
+        # 保留旧键，便于旧版前端平滑升级；新前端使用 import_users。
+        "recent_imports": import_users,
+    }
+
+
 def _profile_of(user):
     try:
         return user.profile
@@ -367,7 +462,7 @@ def _health_payload():
 
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_monitoring(request):
-    """GET /api/admin/monitoring/?section=trend|identity|downloads|health。"""
+    """GET /api/admin/monitoring/?section=trend|identity|timetable|downloads|health。"""
     if request.method != "GET":
         return _err("仅支持 GET", 405)
     section = (request.GET.get("section") or "trend").strip()
@@ -381,6 +476,11 @@ def api_admin_monitoring(request):
         if period not in {"day", "week", "month", "all"}:
             return _err("无效的时间范围")
         return _ok(_identity_payload(period))
+    if section == "timetable":
+        period = (request.GET.get("period") or "month").strip()
+        if period not in {"day", "week", "month", "all"}:
+            return _err("无效的时间范围")
+        return _ok(_timetable_import_payload(period))
     if section == "downloads":
         return _ok(_downloads_payload(request))
     if section == "health":
@@ -399,3 +499,24 @@ def api_admin_user_downloads(request, uid):
     payload = _download_page(qs, page, 20)
     payload["user"] = {"id": user.id, "nickname": user.first_name or user.username}
     return _ok(payload)
+
+
+@require_role(UserProfile.Role.SUPER_ADMIN)
+def api_admin_user_timetable(request, uid):
+    """GET /api/admin/users/<uid>/timetable/ — 总管理员查看用户课表。"""
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    user = get_object_or_404(User, id=uid, is_active=True)
+    profile = _profile_of(user)
+    row = UserTimetable.objects.filter(user=user).first()
+    return _ok({
+        "user": {
+            "id": user.id,
+            "nickname": user.first_name or user.username,
+            "education": profile.identity_education if profile else "",
+            "college": profile.identity_college if profile else "",
+            "major": profile.identity_major if profile else "",
+        },
+        "data": row.data if row else None,
+        "updated_at": _format_activity(row.updated_at if row else None),
+    })

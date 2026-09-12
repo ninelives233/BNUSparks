@@ -17,6 +17,24 @@ class UserProfile(models.Model):
         DOCTOR = "博士", "博士"
         OTHER = "其他", "其他"
 
+    class HomeLayout(models.TextChoices):
+        LOOSE = "loose", "松散首页"
+        COMPACT = "compact", "紧凑首页"
+
+    class ColorTheme(models.TextChoices):
+        WARM = "warm", "暖色"
+        COOL = "cool", "冷色"
+        DARK = "dark", "暗色"
+        SYSTEM = "system", "跟随系统"
+
+    class MobileNav(models.TextChoices):
+        BOTTOM = "bottom", "底部导航"
+        BURGER = "burger", "汉堡菜单"
+
+    class DefaultView(models.TextChoices):
+        HOME = "home", "首页"
+        TIMETABLE = "timetable", "我的课程"
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.USER)
     moderated_sections = models.ManyToManyField(
@@ -65,6 +83,24 @@ class UserProfile(models.Model):
         "公开资料显示专业", default=True, help_text="默认公开，用户可手动关闭"
     )
     identity_updated_at = models.DateTimeField("身份最近修改时间", null=True, blank=True)
+
+    # 空值表示历史用户尚未主动设置，接口层回退到松散首页＋暖色＋首页入口。
+    home_layout = models.CharField(
+        "首页布局", max_length=10, choices=HomeLayout.choices,
+        blank=True, default="",
+    )
+    color_theme = models.CharField(
+        "色彩主题", max_length=10, choices=ColorTheme.choices,
+        blank=True, default="",
+    )
+    mobile_nav = models.CharField(
+        "移动端导航方式", max_length=10, choices=MobileNav.choices,
+        blank=True, default="",
+    )
+    default_view = models.CharField(
+        "打开时进入", max_length=10, choices=DefaultView.choices,
+        blank=True, default="",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -394,6 +430,25 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class CampusLink(models.Model):
+    """全站共享的校园外部快捷入口，由总管理员维护。"""
+
+    name = models.CharField("入口名称", max_length=40)
+    url = models.URLField("网址", max_length=500)
+    order = models.PositiveIntegerField("排序", default=0)
+    is_enabled = models.BooleanField("启用", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "校园快捷入口"
+        verbose_name_plural = "校园快捷入口"
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.name
 
 
 class Favorite(models.Model):
@@ -1039,3 +1094,30 @@ class UserTimetable(models.Model):
 
     def __str__(self):
         return f"课表 of {self.user_id} @ {self.updated_at:%Y-%m-%d %H:%M}"
+
+
+class TimetableImportRecord(models.Model):
+    """用户主动导入教务课表的幂等留痕，用于总管理员监测。"""
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="timetable_imports",
+        verbose_name="用户",
+    )
+    event_id = models.CharField("导入事件编号", max_length=64)
+    course_count = models.PositiveIntegerField("导入课程数", default=0)
+    created_at = models.DateTimeField("导入时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "课表导入记录"
+        verbose_name_plural = "课表导入记录"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["created_at"], name="ttimport_created"),
+            models.Index(fields=["user", "created_at"], name="ttimport_user_created"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "event_id"], name="uniq_ttimport_user_event"),
+        ]
+
+    def __str__(self):
+        return f"课表导入 {self.user_id} @ {self.created_at:%Y-%m-%d %H:%M}"

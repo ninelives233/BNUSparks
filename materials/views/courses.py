@@ -353,7 +353,8 @@ def api_stats(request):
     ).distinct().count()
 
     popular = Material.objects.filter(review_status="approved") \
-        .order_by("-download_count") \
+        .annotate(favorite_count=Count("favorited_by", distinct=True)) \
+        .order_by("-download_count", "-created_at", "id") \
         .select_related("course", "course__college")[:limit]
     top_downloaded = [{
         "id": m.id,
@@ -362,8 +363,24 @@ def api_stats(request):
         "course_name": m.course.name if m.course_id else "",
         "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
         "download_count": m.download_count,
+        "favorite_count": m.favorite_count,
         "file_type": m.file_type,
     } for m in popular]
+
+    favorited = Material.objects.filter(review_status="approved") \
+        .annotate(favorite_count=Count("favorited_by", distinct=True)) \
+        .order_by("-favorite_count", "-download_count", "-created_at", "id") \
+        .select_related("course", "course__college")[:limit]
+    top_favorited = [{
+        "id": m.id,
+        "title": m.title,
+        "course_code": m.course.code if m.course_id else "",
+        "course_name": m.course.name if m.course_id else "",
+        "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
+        "download_count": m.download_count,
+        "favorite_count": m.favorite_count,
+        "file_type": m.file_type,
+    } for m in favorited]
 
     recent = Material.objects.filter(review_status="approved") \
         .order_by("-created_at") \
@@ -388,6 +405,7 @@ def api_stats(request):
         "major_with_data_count": major_with_data_count,
         "material_count": total_materials,
         "top_downloaded": top_downloaded,
+        "top_favorited": top_favorited,
         "recent_uploads": recent_uploads,
     }
     cache.set(CACHE_KEY, result, 120)

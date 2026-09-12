@@ -109,3 +109,7 @@ data/.pdf_cache/
 docs/*
 !docs/PROJECT_MAP.md
 !docs/GITHUB_REPO_AGENT_GUIDE.md
+
+# 工具本地产物
+.zcode/
+output/

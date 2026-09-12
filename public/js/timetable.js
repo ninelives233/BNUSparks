@@ -54,8 +54,17 @@ var TT_ROW_OF_PERIOD = [2, 3, 4, 5, 7, 8, 9, 10, 12, 13, 14, 15];
 var ttState = {
   data: null, week: 1, maxWeek: 20, start: '', scheme: 'zhongguo', view: 'grid',
   editing: false, links: {}, counts: {}, _countKey: '', _countError: false,
-  _treeError: false, cloudUpdatedAt: null, cloudSynced: false
+  _treeError: false, cloudUpdatedAt: null, cloudSynced: false,
+  viewerMode: false, viewerUserName: '', _renderRoot: null, _inlineBody: null
 };
+
+// 课表既可以渲染在独立页面，也可以嵌入管理员用户主页。
+// 嵌入模式下所有课表内部节点都从当前 shell 查找，避免与隐藏的主课表视图串台。
+function ttScopedElement(id) {
+  var root = ttState._renderRoot;
+  if (root && root.querySelector) return root.querySelector('#' + id);
+  return document.getElementById(id);
+}
 
 // ── 解析：字节 → 文本（教务文件是 GBK；UTF-8 优先探测） ──
 function ttDecodeBuffer(buffer) {
@@ -345,7 +354,6 @@ function ttCurrentSlotName() {
   return hit ? hit.name : ((d.meta && d.meta.semester) || '我的课表');
 }
 
-
 // ── 学期第一周周一推断：秋季→9月起第一个周一；春季→次年2/22起第一个周一 ──
 function ttGuessSemesterStart(semester) {
   var m = String(semester || '').match(/((?:19|20)\d{2})[^0-9]*(?:19|20)\d{2}学年(秋季|春季|第[12一二]学期)?/);
@@ -475,6 +483,7 @@ function ttLoadCourseCounts() {
 // 冲突规则：本地与云端按 importedAt 取较新者；仅一方有时直接采用并补齐另一方
 var ttSyncUploadPromise = null;
 var ttSyncUploadQueued = false;
+var ttSyncPendingEvent = null;
 var ttSyncMutationVersion = 0;
 var ttSyncPullPromise = null;
 var ttSyncGeneration = 0;
@@ -485,6 +494,7 @@ function ttResetSyncState() {
   ttSyncGeneration++;
   ttSyncUploadPromise = null;
   ttSyncUploadQueued = false;
+  ttSyncPendingEvent = null;
   ttSyncPullPromise = null;
   ttState.cloudUpdatedAt = null;
   ttState.cloudSynced = false;
@@ -506,8 +516,9 @@ function ttAdoptCloudTimetable(cloud) {
   return true;
 }
 
-function ttSyncUpload() {
+function ttSyncUpload(event) {
   if (!ttState.data || typeof api !== 'function') return Promise.resolve(false);
+  if (event && event.type === 'import' && event.id) ttSyncPendingEvent = event;
   ttSyncMutationVersion++;
   ttSyncUploadQueued = true;
   ttState.cloudSynced = false;
@@ -523,7 +534,9 @@ function ttSyncUpload() {
     var sentVersion = ttSyncMutationVersion;
     var snapshot = JSON.parse(JSON.stringify(ttState.data));
     var snapshotAt = Number(snapshot.importedAt) || 0;
-    return api('/api/user/timetable/', { method: 'PUT', body: { data: snapshot } })
+    var sentEvent = ttSyncPendingEvent;
+    ttSyncPendingEvent = null;
+    return api('/api/user/timetable/', { method: 'PUT', body: { data: snapshot, event: sentEvent } })
       .then(function (res) {
         if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return false;
         if (res && res.updated_at) ttState.cloudUpdatedAt = res.updated_at;
@@ -547,6 +560,7 @@ function ttSyncUpload() {
       })
       .catch(function () {
         if (generation === ttSyncGeneration && ttState.uid === uidAtCall) {
+          if (sentEvent) ttSyncPendingEvent = sentEvent;
           ttState.cloudSynced = false;
           ttToast('课表云端同步失败，本次改动仅保存在本机');
         }
@@ -611,7 +625,7 @@ function ttSyncPull() {
 
 function ttSyncIsActive() {
   var view = document.getElementById('timetableView');
-  return !!(currentUser && view && view.classList.contains('active'));
+  return !!(currentUser && !ttState.viewerMode && view && view.classList.contains('active'));
 }
 
 function ttStartSyncWatchers() {
@@ -629,38 +643,48 @@ function ttStartSyncWatchers() {
   });
 }
 
-// ── 视图入口（供导航/恢复调用；仅对管理员开放，与侧边栏入口同条件） ──
-function showTimetable(skipHistory) {
-  if (!currentUser || currentUser.role === 'user') { if (!currentUser) showLoginModal(); return; }
+// ── 视图入口（供导航/恢复调用；所有已登录用户可用） ──
+function showTimetable(skipHistory, viewerUserId) {
+  if (!currentUser) { showLoginModal(); return; }
   var view = document.getElementById('timetableView');
   if (!view) return;
+  if (viewerUserId && (currentUser.role !== 'super_admin' ||
+      (typeof isMgmtActive === 'function' && !isMgmtActive()))) return;
+  ttState.viewerMode = !!viewerUserId;
+  ttState.viewerUid = viewerUserId ? Number(viewerUserId) : null;
   document.querySelectorAll('.view-section').forEach(function (v) { v.style.display = ''; v.classList.remove('active'); });
   view.classList.add('active');
   updateSidebar('timetable');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (!skipHistory) pushViewState('timetable', {});
+  if (!skipHistory) pushViewState('timetable', viewerUserId ? { userId: Number(viewerUserId) } : {});
   _updateFooterVisibility('timetable');
-  ttInitShell();
+  ttInitShell(viewerUserId || null);
 }
 
-function ttInitShell() {
+function ttInitShell(viewerUserId) {
   var shell = document.getElementById('ttShell');
   if (!shell) return;
   ttStartSyncWatchers();
+  var desiredMode = viewerUserId ? 'viewer' : 'self';
+  var desiredUid = viewerUserId ? Number(viewerUserId) : (currentUser ? currentUser.id : null);
   if (shell.dataset.ready) {
-    // 同一页面内切换账号（登出再登录）：按新账号重载数据与配色
-    if (ttState.uid !== (currentUser ? currentUser.id : null)) ttLoadUserData();
-    else {
-      ttMigrateLegacyStore();
-      ttRenderAll();
-      if (ttState.data && ttState._countError) ttLoadCourseCounts();
+    // 同一页面内在自己的课表、不同用户课表之间切换时重新载入数据。
+    if (ttState.mode !== desiredMode || ttState.uid !== desiredUid) {
+      if (desiredMode === 'viewer') ttLoadAdminUserData(desiredUid);
+      else ttLoadUserData();
     }
+    else {
+      if (!ttState.viewerMode) ttMigrateLegacyStore();
+      ttRenderAll();
+      if (!ttState.viewerMode && ttState.data && ttState._countError) ttLoadCourseCounts();
+    }
+    ttApplyViewerMode();
     return;
   }
   shell.dataset.ready = '1';
   shell.innerHTML =
     '<div class="tt-top">' +
-      '<div class="tt-title">我的课程<small id="ttSubTitle"></small></div>' +
+    '<div class="tt-title" id="ttTitle">我的课程<small id="ttSubTitle"></small></div>' +
       '<div class="tt-actions">' +
         '<button type="button" class="tt-btn" id="ttManageBtn" aria-haspopup="true" aria-expanded="false">管理</button>' +
       '</div>' +
@@ -687,11 +711,17 @@ function ttInitShell() {
   });
   document.getElementById('ttFileInput').addEventListener('change', ttOnFilePicked);
 
-  ttLoadUserData();
+  if (desiredMode === 'viewer') ttLoadAdminUserData(desiredUid);
+  else ttLoadUserData();
 }
 
 // 按当前账号载入课表数据与配色（账号切换时重新调用）
 function ttLoadUserData() {
+  ttState._renderRoot = null;
+  ttState._inlineBody = null;
+  ttState.mode = 'self';
+  ttState.viewerMode = false;
+  ttState.viewerUserName = '';
   ttState.uid = currentUser ? currentUser.id : null;
   ttResetSyncState();
   ttResetCourseCounts();
@@ -724,6 +754,126 @@ function ttLoadUserData() {
   }
   // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
   ttSyncPull();
+}
+
+function ttLoadAdminUserData(userId) {
+  ttState._renderRoot = null;
+  ttState._inlineBody = null;
+  ttState.mode = 'viewer';
+  ttState.viewerMode = true;
+  ttState.uid = Number(userId);
+  ttState.viewerUid = Number(userId);
+  ttState.viewerUserName = '';
+  ttState.data = null;
+  ttState.cloudUpdatedAt = null;
+  ttState.cloudSynced = false;
+  ttState.editing = false;
+  ttResetCourseCounts();
+  ttApplyViewerMode();
+  ttRenderAll();
+  api('/api/admin/users/' + encodeURIComponent(userId) + '/timetable/').then(function (res) {
+    if (!ttState.viewerMode || ttState.uid !== Number(userId)) return;
+    ttState.viewerUserName = res.user && res.user.nickname ? res.user.nickname : '用户课表';
+    ttState.data = res.data && Array.isArray(res.data.courses) ? ttNormalizeMeetings(res.data) : null;
+    if (ttState.data && !ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
+    if (ttState.data) ttComputeWeek();
+    ttApplyViewerMode();
+    ttRenderAll();
+    if (ttState.data) ttLoadCourseCounts();
+  }).catch(function (err) {
+    if (!ttState.viewerMode || ttState.uid !== Number(userId)) return;
+    var body = document.getElementById('ttBody');
+    if (body) body.innerHTML = '<div class="tt-empty"><div class="glyph">阅</div><h2>课表暂时无法查看</h2><p>' + esc(err.message || '请稍后重试。') + '</p></div>';
+  });
+}
+
+// 在总管理员的用户主页内嵌只读课表。这里复用课程列表/周课表渲染器，
+// 但把查找范围限定在传入的 panel，避免影响隐藏的「我的课程」页面。
+function ttRenderInlineAdminTimetable(panel, userId) {
+  if (!panel || !userId) return Promise.reject(new Error('缺少用户信息'));
+  var uid = Number(userId);
+  ttState.mode = 'viewer-inline';
+  ttState.viewerMode = true;
+  ttState.uid = uid;
+  ttState.viewerUid = uid;
+  ttState.viewerUserName = '';
+  ttState.data = null;
+  ttState.cloudUpdatedAt = null;
+  ttState.cloudSynced = false;
+  ttState.editing = false;
+  ttState.view = 'list';
+  ttState.links = {};
+  ttState._renderRoot = panel;
+  ttState._inlineBody = panel;
+  ttResetCourseCounts();
+  panel.innerHTML =
+    '<div class="tt-shell tt-admin-viewer tt-inline-shell">' +
+      '<div class="tt-inline-head">' +
+        '<div class="tt-inline-title"><strong>用户课表</strong><small id="ttSubTitle"></small></div>' +
+        '<div class="tt-viewbar tt-inline-viewbar">' +
+          '<div class="pc-seg" id="ttInlineViewSeg" role="tablist" aria-label="课表视图切换">' +
+            '<button type="button" class="pc-seg-btn active" data-view="list" aria-pressed="true">课程列表</button>' +
+            '<button type="button" class="pc-seg-btn" data-view="grid" aria-pressed="false">周课表</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="ttBody"></div>' +
+    '</div>';
+
+  var seg = panel.querySelector('#ttInlineViewSeg');
+  if (seg) seg.addEventListener('click', function (event) {
+    var btn = event.target.closest('[data-view]');
+    if (!btn) return;
+    var view = btn.getAttribute('data-view');
+    if (view !== 'grid' && view !== 'list') return;
+    ttState.view = view;
+    seg.querySelectorAll('[data-view]').forEach(function (item) {
+      var active = item.getAttribute('data-view') === view;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    ttRenderAll();
+  });
+
+  return api('/api/admin/users/' + encodeURIComponent(uid) + '/timetable/').then(function (res) {
+    if (!ttState.viewerMode || ttState.uid !== uid || ttState._renderRoot !== panel) return res;
+    ttState.viewerUserName = res.user && res.user.nickname ? res.user.nickname : '用户';
+    var title = panel.querySelector('.tt-inline-title strong');
+    if (title) title.textContent = '用户课表 · ' + ttState.viewerUserName;
+    ttState.data = res.data && Array.isArray(res.data.courses) ? ttNormalizeMeetings(res.data) : null;
+    if (ttState.data && !ttState.data.start) {
+      ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
+    }
+    if (ttState.data) ttComputeWeek();
+    ttRenderAll();
+    if (ttState.data) ttLoadCourseCounts();
+    return res;
+  });
+}
+
+function ttClearInlineAdminTimetable() {
+  if (ttState.mode !== 'viewer-inline') return;
+  ttState._renderRoot = null;
+  ttState._inlineBody = null;
+  ttState.viewerMode = false;
+  ttState.viewerUid = null;
+  ttState.uid = currentUser ? currentUser.id : null;
+  ttState.data = null;
+  ttResetCourseCounts();
+}
+
+function ttApplyViewerMode() {
+  var shell = document.getElementById('ttShell');
+  var title = document.getElementById('ttTitle');
+  var manage = document.getElementById('ttManageBtn');
+  var file = document.getElementById('ttFileInput');
+  if (shell) shell.classList.toggle('tt-admin-viewer', !!ttState.viewerMode);
+  if (title) {
+    var label = ttState.viewerMode ? (ttState.viewerUserName || '用户课表') : '我的课程';
+    title.childNodes[0].nodeValue = label;
+  }
+  if (manage) manage.style.display = ttState.viewerMode ? 'none' : '';
+  if (file) file.disabled = !!ttState.viewerMode;
 }
 
 function ttApplyScheme() {
@@ -787,6 +937,10 @@ function ttNewId() {
   return 'ttc' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
 }
 
+function ttNewImportEventId() {
+  return 'tti' + Date.now().toString(36) + Math.floor(Math.random() * 1679616).toString(36);
+}
+
 function ttEnsureIds() {
   var data = ttState.data;
   if (!data) return false;
@@ -803,7 +957,7 @@ function ttToneOf(course) {
   return (course && course.color) ? course.color : ttCourseTone(course ? course.name : '');
 }
 
-// 「管理」菜单：低频操作（重新导入 / 配色）收进一处，日常只留视图切换与编辑
+// 「管理」菜单：按重要度分三层——课表（内容操作）、外观、帮助；日常编辑在编辑态走「完成」
 function ttToggleManagePop() {
   var actions = document.querySelector('#ttShell .tt-actions');
   var exist = document.getElementById('ttManagePop');
@@ -816,7 +970,7 @@ function ttToggleManagePop() {
     '<div class="tt-mg-sec" role="group" aria-label="课表">' +
       '<div class="tt-mg-label">课表</div>' +
       '<button type="button" class="tt-mg-opt is-key" data-mg="reimport">重新导入课表' +
-        '<span class="tt-mg-sub">用教务导出文件替换教务课程</span></button>' +
+        '<span class="tt-mg-sub">用教务文件一键生成课表</span></button>' +
       '<button type="button" class="tt-mg-opt" data-mg="slots">切换课表' +
         '<span class="tt-mg-sub">当前：' + esc(ttCurrentSlotName()) + '</span></button>' +
       '<button type="button" class="tt-mg-opt" data-mg="edit">编辑课程' +
@@ -832,7 +986,7 @@ function ttToggleManagePop() {
       '<button type="button" class="tt-mg-opt" data-mg="tutorial">导入教程' +
         '<span class="tt-mg-sub">如何从教务系统导出可导入的课表</span></button>' +
       '<button type="button" class="tt-mg-opt" data-mg="feedback">意见反馈' +
-        '<span class="tt-mg-sub">直达总管理员的消息中心</span></button>' +
+        '<span class="tt-mg-sub">意见直达开发者</span></button>' +
     '</div>';
   actions.appendChild(pop);
   pop.addEventListener('click', function (e) {
@@ -1044,10 +1198,11 @@ function ttDeleteSlot(sid, btn) {
 }
 
 function ttRenderAll() {
-  var body = document.getElementById('ttBody');
+  var body = ttScopedElement('ttBody');
   if (!body) return;
   if (!ttState.data || !ttState.data.courses.length) {
-    if (ttState.editing) ttRenderEditEmpty(body);
+    if (ttState.viewerMode) ttRenderAdminEmpty(body);
+    else if (ttState.editing) ttRenderEditEmpty(body);
     else ttRenderEmpty(body);
     return;
   }
@@ -1055,9 +1210,23 @@ function ttRenderAll() {
   else ttRenderGrid(body);
 }
 
+function ttRenderAdminEmpty(body) {
+  var sub = ttScopedElement('ttSubTitle');
+  if (sub) {
+    sub.textContent = '';
+    sub.style.display = 'none';
+  }
+  body.innerHTML =
+    '<div class="tt-empty tt-admin-empty">' +
+      '<div class="glyph">课</div>' +
+      '<h2>该用户还没有课表</h2>' +
+      '<p>用户导入课表后，总管理员可以从这里查看其课程安排。</p>' +
+    '</div>';
+}
+
 // 编辑模式下的空课表：不推导入，改推手动建课（课表本质是课程列表）
 function ttRenderEditEmpty(body) {
-  var sub = document.getElementById('ttSubTitle');
+  var sub = ttScopedElement('ttSubTitle');
   if (sub) sub.textContent = '';
   body.innerHTML =
     '<div class="tt-empty">' +
@@ -1067,13 +1236,13 @@ function ttRenderEditEmpty(body) {
       '<button type="button" class="tt-btn primary" id="ttManualAddBtn">＋ 添加课程</button>' +
       '<button type="button" class="tt-btn" id="ttTutorialBtn2" style="margin-left:8px">改用教务导入</button>' +
     '</div>';
-  document.getElementById('ttManualAddBtn').addEventListener('click', function () { ttOpenCourseEditor(null); });
-  document.getElementById('ttTutorialBtn2').addEventListener('click', ttShowTutorial);
+  ttScopedElement('ttManualAddBtn').addEventListener('click', function () { ttOpenCourseEditor(null); });
+  ttScopedElement('ttTutorialBtn2').addEventListener('click', ttShowTutorial);
 }
 
 // ── 空状态：导入引导 ──
 function ttRenderEmpty(body) {
-  var sub = document.getElementById('ttSubTitle');
+  var sub = ttScopedElement('ttSubTitle');
   if (sub) sub.textContent = '';
   body.innerHTML =
     '<div class="tt-empty">' +
@@ -1090,11 +1259,11 @@ function ttRenderEmpty(body) {
       '<button type="button" class="tt-btn" id="ttTutorialBtn" style="margin-left:8px">使用教程</button>' +
       '<div class="tt-error" id="ttError" role="alert"></div>' +
     '</div>';
-  document.getElementById('ttImportBtn').addEventListener('click', function () {
-    document.getElementById('ttFileInput').click();
+  ttScopedElement('ttImportBtn').addEventListener('click', function () {
+    ttScopedElement('ttFileInput').click();
   });
-  document.getElementById('ttManualEmptyBtn').addEventListener('click', function () { ttOpenCourseEditor(null); });
-  document.getElementById('ttTutorialBtn').addEventListener('click', ttShowTutorial);
+  ttScopedElement('ttManualEmptyBtn').addEventListener('click', function () { ttOpenCourseEditor(null); });
+  ttScopedElement('ttTutorialBtn').addEventListener('click', ttShowTutorial);
 }
 
 // ── 文件选择 → 解析 → 确认弹窗 ──
@@ -1210,9 +1379,11 @@ function ttInRange(rangeId, code) {
   return n >= a && n <= b;
 }
 
-// 课表专用目录查找：精确代码 → 区段代码 → 「形势与政策」系列名称特例
-// （凡课名以「形势与政策」开头，不论代码尾号，统一指向同名目录）。
-// 多个匹配时与搜索一致：本人专业 → 本人学院 → 默认首条。
+// 课表专用目录查找：精确代码 → 区段代码 → 「形势与政策」系列名称特例。
+// 形势与政策各分册的教务代码五花八门，凡课名以「形势与政策」开头，
+// 不论代码是什么，一律按名字指向思政大类的同名目录（仅认叶子条目），
+// 此时有意跳过代码匹配，避免被无关代码带偏。
+// 其余课程：多个匹配时与搜索一致，本人专业 → 本人学院 → 默认首条。
 function ttFindPathByCode(code, courseName) {
   if (!courseTree) return null;
   var matches = [];
@@ -1309,22 +1480,31 @@ function ttCourseNameByCode(code) {
   return c ? c.name : code;
 }
 
+// 学号存放在注册邮箱的 @ 前；兼容账号接口直接返回学号的情况。
+function ttIs2026Student() {
+  if (typeof currentUser === 'undefined' || !currentUser) return false;
+  return [currentUser.username, currentUser.email].some(function (value) {
+    var studentId = String(value || '').trim().split('@')[0];
+    return /^2026/.test(studentId);
+  });
+}
+
 // 硕博板块筹备中：非本科身份（含未设置）导入课表一律不链接资料目录、不提交建课，后续再适配
 function ttIsUndergrad() {
   return !!(typeof currentUser !== 'undefined' && currentUser &&
     currentUser.identity_education === '本科');
 }
 
-// 非本科身份：无链接/建课可确认，跳过弹窗直接纯导入，并告知目录暂不可用
-if (!ttIsUndergrad()) {
-  parsed.keepManual = true;
-  if (!parsed.pendingCodes || typeof parsed.pendingCodes !== 'object') parsed.pendingCodes = {};
-  ttApplyImport(parsed, []);
-  ttToast('硕、博板块正在筹备中，暂无资料目录');
-  return;
-}
 // ── 确认弹窗（汇总 + 课程清单 + 未建课位置选择） ──
 function ttShowConfirmModal(parsed) {
+  // 非本科身份：无链接/建课可确认，跳过弹窗直接纯导入，并告知目录暂不可用
+  if (!ttIsUndergrad()) {
+    parsed.keepManual = true;
+    if (!parsed.pendingCodes || typeof parsed.pendingCodes !== 'object') parsed.pendingCodes = {};
+    ttApplyImport(parsed, []);
+    ttToast('硕、博板块正在筹备中，暂无资料目录');
+    return;
+  }
   // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入。
   // 先清 api() 内存缓存（树 TTL 10 分钟），保证已建课判定是新鲜的
   if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
@@ -1349,6 +1529,7 @@ function ttRenderConfirmModal(parsed) {
   var genCount = missing.filter(function (c) { return /^GEN/i.test(c.code); }).length;
   // 有非 GEN 的待建课 → 顶部提醒可手动归入通识课（见下方「通识课」学院选项）
   var majorMissing = missing.some(function (c) { return !/^GEN/i.test(c.code); });
+  var showAdmissionReminder = ttIs2026Student() && missing.length > 0;
 
   var locRendered = {};
   var rows = courses.map(function (c) {
@@ -1378,6 +1559,9 @@ function ttRenderConfirmModal(parsed) {
       '<div class="tt-mbody">' +
         (majorMissing
           ? '<div class="tt-code-note" role="note"><span class="tt-code-note-mark">!</span><div><strong>「公共选修课」中的非 GEN 课程请归入通识课</strong><p>有些在“公共选修课”中选中的课程，虽编码不为 GEN，但不在任何培养方案里，仍要归入通识课中。请在「学院」一栏手动选择「通识课」，将其归入对应的通识课分类，谢谢配合。</p></div></div>'
+          : '') +
+        (showAdmissionReminder
+          ? '<div class="tt-code-note is-danger is-admission" role="alert"><span class="tt-code-note-mark">!</span><div><strong>2026 级特别提醒：请先确认新建课程位置</strong><p>若为大类招生，请明确新建课程的位置与培养方案对应，<b>请勿参考大类招生的培养方案，以目标专业的培养方案为准</b>。</p></div></div>'
           : '') +
         '<div class="tt-msummary">' +
           (meta.studentName ? '<span><b>' + esc(meta.studentName) + '</b>' + (meta.className ? ' · ' + esc(meta.className) : '') + '</span>' : '') +
@@ -1690,6 +1874,7 @@ function ttApplyImport(parsed, requests) {
     parsed.slots = carried.slice(0, TT_SLOT_MAX - 1).concat([newSlot]);
     parsed.activeId = newSlot.id;
   }
+  var importEvent = { type: 'import', id: ttNewImportEventId() };
   ttSaveStore(parsed);
   ttState.data = parsed;
   ttResetCourseCounts();
@@ -1697,6 +1882,7 @@ function ttApplyImport(parsed, requests) {
   ttCloseModal();
   ttRenderAll();
   ttLoadCourseCounts();
+  ttSyncUpload(importEvent);
   if (!requests.length) return;
   var direct = 0, sent = 0, failed = 0, mergedN = 0, treeDirty = false;
   var jobs = requests.map(function (r) {
@@ -2189,12 +2375,15 @@ function ttMeetingInWeek(mt, week) {
 function ttRenderGrid(body) {
   var data = ttState.data;
   var meta = data.meta || {};
-  var sub = document.getElementById('ttSubTitle');
+  var sub = ttScopedElement('ttSubTitle');
   if (sub) {
     sub.textContent = meta.semester || '';
     sub.style.display = meta.semester ? '' : 'none';
   }
 
+  var startControl = ttState.viewerMode
+    ? '<span class="tt-start-readonly">第一周周一 ' + esc(ttState.start || '未设置') + '</span>'
+    : '<label class="tt-start-edit">第一周周一 <input type="date" id="ttStartDate" value="' + esc(ttState.start) + '" /></label>';
   body.innerHTML =
     '<div class="tt-weekbar">' +
       '<div class="tt-weeknav">' +
@@ -2203,18 +2392,19 @@ function ttRenderGrid(body) {
         '<button type="button" class="tt-wbtn" id="ttNextW" aria-label="下一周">›</button>' +
         '<button type="button" class="tt-now-btn" id="ttNowBtn">回到本周</button>' +
       '</div>' +
-      '<label class="tt-start-edit">第一周周一 <input type="date" id="ttStartDate" value="' + esc(ttState.start) + '" /></label>' +
+      startControl +
     '</div>' +
     '<div class="tt-scroll"><div class="tt-grid" id="ttGrid"></div></div>' +
     '<div class="tt-foot" id="ttFoot"></div>';
 
-  document.getElementById('ttPrevW').addEventListener('click', function () { ttStepWeek(-1); });
-  document.getElementById('ttNextW').addEventListener('click', function () { ttStepWeek(1); });
-  document.getElementById('ttNowBtn').addEventListener('click', function () {
+  ttScopedElement('ttPrevW').addEventListener('click', function () { ttStepWeek(-1); });
+  ttScopedElement('ttNextW').addEventListener('click', function () { ttStepWeek(1); });
+  ttScopedElement('ttNowBtn').addEventListener('click', function () {
     ttComputeWeek();
     ttRenderGrid(body);
   });
-  document.getElementById('ttStartDate').addEventListener('change', function (e) {
+  var startDate = ttScopedElement('ttStartDate');
+  if (startDate) startDate.addEventListener('change', function (e) {
     var v = e.target.value;
     if (!v) return;
     ttState.start = v;
@@ -2239,9 +2429,9 @@ function ttStepWeek(d) {
 function ttRepaintCurrent() {
   if (!ttState.data) return;
   if (ttState.view === 'list') {
-    var body = document.getElementById('ttBody');
-    if (body && document.getElementById('ttList')) ttRenderList(body);
-  } else if (document.getElementById('ttGrid')) {
+    var body = ttScopedElement('ttBody');
+    if (body && ttScopedElement('ttList')) ttRenderList(body);
+  } else if (ttScopedElement('ttGrid')) {
     ttPaintGrid();
   }
 }
@@ -2255,7 +2445,7 @@ function ttRichClass(fileCount) {
 }
 
 function ttPaintGrid() {
-  var grid = document.getElementById('ttGrid');
+  var grid = ttScopedElement('ttGrid');
   var week = ttState.week;
   if (!grid) return;
 
@@ -2391,13 +2581,13 @@ function ttPaintGrid() {
   };
 
   // 周标签 + 统计 + 图例
-  var label = document.getElementById('ttWeekLabel');
+  var label = ttScopedElement('ttWeekLabel');
   if (label) label.textContent = '第 ' + week + ' 周';
-  var prev = document.getElementById('ttPrevW');
-  var next = document.getElementById('ttNextW');
+  var prev = ttScopedElement('ttPrevW');
+  var next = ttScopedElement('ttNextW');
   if (prev) prev.disabled = week <= 1;
   if (next) next.disabled = week >= ttState.maxWeek;
-  var foot = document.getElementById('ttFoot');
+  var foot = ttScopedElement('ttFoot');
   if (foot) {
     var noTime = ttState.data.courses.filter(function (c) { return !c.meetings.length; }).length;
     foot.innerHTML = '<span>本周 ' + weekCourseCount + ' 门课 · ' + weekPeriodCount + ' 节</span>' +
@@ -2420,23 +2610,31 @@ function ttFmtMeeting(mt) {
   return TT_DAY_NAMES[mt.day - 1] + '[' + sec + ']节 ' + wk + (mt.room ? ' · ' + mt.room : '');
 }
 
-// 课程列表辅助行的紧凑安排：去重到「周X 节次」，周次/教室细节留在悬停提示里
+// 课程列表辅助行的紧凑安排：去重到「周X 节次 + 教室」，仅周次细节留在悬停提示里
 function ttCompactSched(c) {
   var parts = [];
   (c.meetings || []).forEach(function (mt) {
-    parts.push({ day: mt.day, ps: mt.ps, pe: mt.pe });
+    parts.push({ day: mt.day, ps: mt.ps, pe: mt.pe, rooms: mt.room ? [mt.room] : [] });
   });
   parts.sort(function (a, b) { return (a.day - b.day) || (a.ps - b.ps); });
-  var seen = {}, out = [];
+  // 段已按星期/节次有序，同段（同学期同时段多教室）必然相邻，收敛进同一间
+  var out = [];
   parts.forEach(function (p) {
-    var key = p.day + ':' + p.ps + '-' + p.pe;
-    if (seen[key]) return;
-    seen[key] = true;
-    out.push(TT_DAY_NAMES[p.day - 1] + ' ' + (p.ps === p.pe ? p.ps : p.ps + '-' + p.pe) + '节');
+    var prev = out.length ? out[out.length - 1] : null;
+    if (prev && prev.day === p.day && prev.ps === p.ps && prev.pe === p.pe) {
+      p.rooms.forEach(function (r) { if (prev.rooms.indexOf(r) < 0) prev.rooms.push(r); });
+      return;
+    }
+    out.push(p);
   });
   if (!out.length) return '';
-  if (out.length > 3) out = out.slice(0, 3).concat(['等 ' + out.length + ' 段']);
-  return out.join(' · ');
+  var texts = out.map(function (p) {
+    var seg = TT_DAY_NAMES[p.day - 1] + ' ' + (p.ps === p.pe ? p.ps : p.ps + '-' + p.pe) + '节';
+    if (p.rooms.length) seg += ' ' + ttCompactRooms(p.rooms);
+    return seg;
+  });
+  if (texts.length > 3) texts = texts.slice(0, 3).concat(['等 ' + out.length + ' 段']);
+  return texts.join(' · ');
 }
 
 // 资料状态签：与课表卡同一冷暖语言（无=冷、有=暖、丰富=更深）
@@ -2473,7 +2671,7 @@ function ttStatusTag(link, code) {
 function ttRenderList(body) {
   var data = ttState.data;
   ttResolveCourseLinks();
-  var sub = document.getElementById('ttSubTitle');
+  var sub = ttScopedElement('ttSubTitle');
   if (sub) {
     sub.textContent = (data.meta && data.meta.semester) || '';
     sub.style.display = sub.textContent ? '' : 'none';
@@ -2530,11 +2728,11 @@ function ttRenderList(body) {
     '<div class="tt-foot" id="ttFoot"><span>共 ' + data.courses.length + ' 门课程</span>' +
       (noTimeCount ? '<span class="tt-foot-hint">' + noTimeCount + ' 门自学/补修课程无排课，仅显示在列表，不出现在周课表</span>' : '') +
       '<span class="tt-legend"><i class="lg2"></i> 资料丰富 <i class="lg1"></i> 有资料 <i class="lg0"></i> 暂无资料</span>' +
-      '<button type="button" class="tt-btn is-ghost tt-add-course" id="ttAddCourseBtn">＋ 添加课程</button></div>';
+      (ttState.viewerMode ? '' : '<button type="button" class="tt-btn is-ghost tt-add-course" id="ttAddCourseBtn">＋ 添加课程</button>') + '</div>';
   body.innerHTML = html;
-  var list = document.getElementById('ttList');
+  var list = ttScopedElement('ttList');
   if (!list) return;
-  var addBtn = document.getElementById('ttAddCourseBtn');
+  var addBtn = ttScopedElement('ttAddCourseBtn');
   if (addBtn) addBtn.addEventListener('click', function () { ttOpenCourseEditor(null); });
 
   // 行点击（事件委托）：普通模式=跳转/提示；编辑模式=编辑课程
@@ -2576,7 +2774,7 @@ function ttRenderList(body) {
 function ttShowTutorial(reason) {
   var existing = ttModalOverlay();
   var img = function (n, alt) {
-    return '<img src="/static/tt_tutorial/step' + n + '.webp" alt="' + alt + '" loading="lazy" />';
+    return '<img src="/static/tt_tutorial/step' + n + '.webp?v=254" alt="' + alt + '" loading="lazy" />';
   };
   existing.innerHTML =
     '<div class="tt-modal tt-tut" role="dialog" aria-modal="true" aria-label="课表导入教程">' +

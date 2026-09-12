@@ -75,7 +75,7 @@
       switchView('explorer');
       renderExplorer();
       if (typeof updateSidebar === 'function') {
-        updateSidebar(path[0] === '通识课' ? 'general' : 'major');
+        updateSidebar('allCourses');
       }
     };
     // explorer-render 是懒加载模块；课程树也只在进入 explorer 时按需加载。
@@ -530,23 +530,126 @@
 
   // ── Breadcrumb ──
   function renderBC() {
+    renderCourseNav();
     const el = document.getElementById('breadcrumb');
-    _renderBreadcrumb(el, expPath, { onNavigate: function(depth) { navTo(depth); } });
-    // 管理模式：在面包屑同一行最右侧加「新建」按钮
+    _renderBreadcrumb(el, expPath, {
+      onNavigate: function(depth) { navTo(depth); },
+      lastStatic: expPath.length ? expPath[expPath.length - 1] : ''
+    });
+    // 根目录名称已经由面包屑表达；头部只保留紧凑的操作组，避免标题、切换器和新建按钮互相挤压。
+    const topRow = el.closest('.explorer-top-row') || el.parentElement;
+    const compactHeading = document.getElementById('explorerCompactHeading');
+    if (compactHeading) {
+      compactHeading.hidden = true;
+      compactHeading.innerHTML = '';
+    }
+    topRow.classList.remove('has-compact-heading');
+    const actionGroup = document.getElementById('explorerTopActions') || topRow;
+    const courseNavHost = document.getElementById('courseNavBar');
+    if (actionGroup && courseNavHost) actionGroup.hidden = !courseNavHost.childElementCount;
+    const oldBtn = actionGroup.querySelector(':scope > .mgmt-new-btn');
+    if (oldBtn) oldBtn.remove();
+    topRow.classList.remove('has-mgmt-new');
     if (isMgmtActive()) {
-      var node = getNode(expPath);
-      var showNewBtn = true;
+      const node = getNode(expPath);
+      let showNewBtn = true;
       // 最后一层（有course关联的节点）不显示
       if (node && node.courseId) showNewBtn = false;
       // 管辖范围外不显示
       if (showNewBtn && currentUser && !_userInScope(expPath)) showNewBtn = false;
       if (showNewBtn) {
-        var newBtn = document.createElement('button');
+        const newBtn = document.createElement('button');
         newBtn.className = 'mgmt-new-btn';
         newBtn.textContent = '＋ 新建';
         newBtn.onclick = function(e) { e.stopPropagation(); showNewFolderDialog(node && node.id); };
-        el.appendChild(newBtn);
+        actionGroup.appendChild(newBtn);
+        actionGroup.hidden = false;
+        topRow.classList.add('has-mgmt-new');
       }
+    }
+  }
+
+  function renderCourseNav() {
+    var host = document.getElementById('courseNavBar');
+    if (!host) return;
+    var root = expPath[0] === '专业课' ? '专业课' : '通识课';
+    if (expPath.length > 1) {
+      host.innerHTML = '';
+      return;
+    }
+    host.innerHTML = '<div class="course-root-tabs" role="tablist" aria-label="课程类型">' +
+      '<button type="button" role="tab" data-course-root="通识课" aria-selected="' + (root === '通识课') + '" class="course-root-tab' + (root === '通识课' ? ' is-active' : '') + '">通识课</button>' +
+      '<button type="button" role="tab" data-course-root="专业课" aria-selected="' + (root === '专业课') + '" class="course-root-tab' + (root === '专业课' ? ' is-active' : '') + '">专业课</button>' +
+    '</div>';
+    host.querySelectorAll('[data-course-root]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (typeof showAllCourses === 'function') showAllCourses(button.getAttribute('data-course-root'));
+        else showExplorer(button.getAttribute('data-course-root'));
+      });
+    });
+  }
+
+  function openCourseSwitchPanel() {
+    if (!courseTree) return;
+    var old = document.querySelector('.course-switch-overlay');
+    if (old) closeCourseSwitchPanel();
+    var overlay = document.createElement('div');
+    overlay.className = 'course-switch-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '切换课程分类');
+    var activeRoot = expPath[0] === '专业课' ? '专业课' : '通识课';
+    function renderPanel(root) {
+      var node = courseTree[root] || {};
+      var children = (node.children || []).filter(function (item) { return !item.divider; });
+      overlay.querySelector('.course-switch-dialog').innerHTML =
+        '<div class="course-switch-head"><div><span class="appearance-kicker">课程目录</span><h3>切换分类</h3></div><button type="button" class="course-switch-close" aria-label="关闭" onclick="closeCourseSwitchPanel()">✕</button></div>' +
+        '<div class="course-switch-tabs" role="tablist" aria-label="课程类型">' +
+          ['通识课', '专业课'].map(function (item) { return '<button type="button" role="tab" class="course-switch-tab' + (item === root ? ' is-active' : '') + '" aria-selected="' + (item === root ? 'true' : 'false') + '" data-switch-root="' + item + '">' + item + '</button>'; }).join('') +
+        '</div>' +
+        '<p class="course-switch-current">选择一个目录后才会离开当前页面；也可以直接查看全部' + esc(root) + '。</p>' +
+        '<section class="course-switch-section"><h4>' + esc(root) + '</h4><div class="course-switch-grid">' +
+          children.map(function (item) { return '<button type="button" data-root="' + esc(root) + '" data-category="' + esc(item.name) + '">' + esc(item.name) + '</button>'; }).join('') +
+        '</div></section>' +
+        '<button type="button" class="course-switch-all" data-root="' + esc(root) + '" data-category="">查看全部' + esc(root) + '</button>';
+      overlay.querySelectorAll('[data-switch-root]').forEach(function (button) {
+        button.addEventListener('click', function () { activeRoot = button.getAttribute('data-switch-root'); renderPanel(activeRoot); });
+      });
+    }
+    overlay.innerHTML = '<div class="course-switch-dialog"></div>';
+    renderPanel(activeRoot);
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closeCourseSwitchPanel();
+      var button = event.target.closest('button[data-root]');
+      if (!button) return;
+      var targetRoot = button.getAttribute('data-root');
+      var targetCategory = button.getAttribute('data-category');
+      expPath = targetCategory ? [targetRoot, targetCategory] : [targetRoot];
+      pushViewState('explorer', { expPath: expPath.slice() });
+      switchView('explorer');
+      updateSidebar('allCourses');
+      closeCourseSwitchPanel();
+      renderExplorer();
+    });
+    document.body.appendChild(overlay);
+    var anchor = document.querySelector('[data-course-switch]');
+    if (anchor) {
+      var rect = anchor.getBoundingClientRect();
+      overlay.style.setProperty('--switch-top', Math.round(rect.bottom + 8) + 'px');
+      overlay.style.setProperty('--switch-left', Math.round(rect.left) + 'px');
+    }
+    lockScroll();
+    if (typeof _pushModalHistory === 'function') _pushModalHistory(overlay);
+    var closeButton = overlay.querySelector('.course-switch-close');
+    if (closeButton) closeButton.focus();
+  }
+
+  function closeCourseSwitchPanel() {
+    var overlay = document.querySelector('.course-switch-overlay');
+    if (overlay) {
+      overlay.remove();
+      unlockScroll();
+      if (typeof _popModalHistory === 'function') _popModalHistory(overlay);
     }
   }
 

@@ -48,6 +48,13 @@
   --tt-gutter: oklch(0.965 0.008 70);
 }
 
+/* 总管理员查看他人课表时保持同一套课程画布，但去掉编辑入口，明确只读语义。 */
+.tt-shell.tt-admin-viewer .tt-actions { visibility: hidden; pointer-events: none; }
+.tt-start-readonly {
+  flex: none; color: var(--ink-faint); font-size: var(--fs-2xs); white-space: nowrap;
+}
+.tt-admin-empty p { max-width: 32rem; margin-inline: auto; }
+
 /* ── 配色方案（暖色系为主体，各自搭配一个冷色相做「无资料」对比） ── */
 .tt-sch-nuan {
   --ttp1-h: 355; --ttp2-h: 20;  --ttp3-h: 40;  --ttp4-h: 5;
@@ -196,7 +203,6 @@
 .tt-slot-new:disabled { opacity: 0.45; cursor: not-allowed; }
 .tt-slot-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-slot-capnote { margin-top: 6px; font-size: var(--fs-2xs); color: var(--ink-faint); text-align: center; }
-
 
 /* 课程编辑弹层：无排课课程（自学/补修）提示 */
 .tt-seg-note { margin: 8px 0 0; font-size: var(--fs-2xs); color: var(--ink-faint); line-height: 1.55; }
@@ -547,6 +553,8 @@
   border-left-color: var(--danger);
 }
 .tt-code-note.is-danger .tt-code-note-mark { color: var(--danger-dark); border-color: var(--danger-border); }
+.tt-code-note.is-admission strong,
+.tt-code-note.is-admission b { color: var(--danger-dark); font-weight: 750; }
 .tt-mlist { border-top: 1px solid var(--border-light); }
 .tt-mrow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-light); font-size: var(--fs-xs); flex-wrap: wrap; }
 .tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(0.925 0.042 var(--th)); }
@@ -722,8 +730,12 @@
   /* 字号随可视高度缩放（1cqh = .tt-scroll 高度的 1%） */
   .tt-scroll { border-radius: 10px; }
   .tt-card { padding: 3px 5px; border-radius: 6px; box-shadow: none; }
-  .tt-card-name { font-size: clamp(8.5px, 2.1cqh, 11px); line-height: 1.25; -webkit-line-clamp: 3; }
-  .tt-card-meta { display: none; } /* 细节移步列表视图 */
+  /* 课程名可收缩（line-clamp 截断），把高度让给底部教室小字 */
+  .tt-card-name { flex: 1 1 auto; min-height: 0; font-size: clamp(8.5px, 2.1cqh, 11px); line-height: 1.25; -webkit-line-clamp: 3; }
+  /* 底部小字保留教室；教师移步列表视图 */
+  .tt-card-meta { display: block; flex: none; padding-top: 2px; font-size: clamp(7.5px, 1.7cqh, 9px); line-height: 1.3; }
+  .tt-card-meta .r { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tt-card-meta .t { display: none; }
   .tt-time b { font-size: clamp(10px, 2.4cqh, 14px); }
   .tt-time span { display: none; }
   .tt-day { padding: 2px; gap: 0; }
@@ -833,3 +845,11 @@
   .tt-card, .tt-card:hover, .tt-modal, .tt-scheme-pop, .tt-manage-pop, .tt-slot-pop { animation: none; transition: none; transform: none; }
   .tt-grid.swap .tt-card, .tt-list.swap .tt-lrow { animation: none; }
 }
+
+/* 课表网格使用站点 token，暗色时保持分层石墨表面和可读文字。 */
+.tt-shell { --tt-gutter: var(--surface); --tt-line-soft: var(--border-light); }
+.tt-shell .tt-gutter, .tt-shell .tt-line-soft { background-color: var(--tt-gutter); border-color: var(--tt-line-soft); }
+.tt-shell .tt-card, .tt-shell .tt-panel, .tt-shell .tt-weekbar { color: var(--ink); }
+.tt-toast { background: var(--ink) !important; color: var(--raised) !important; }
+html[data-bnu-theme="dark"] .tt-shell { --tt-gutter: oklch(0.24 0.015 250); --tt-line-soft: oklch(0.34 0.018 250); }
+html[data-bnu-theme="dark"] .tt-shell .tt-card { background: oklch(0.27 0.018 250); color: var(--ink); }

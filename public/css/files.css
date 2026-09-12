@@ -449,6 +449,10 @@
   user-select: none;
 }
 
+/* 超长文件名截断：省略号收口，完整名悬停/长按 title 可见 */
+.fd-meta-file { min-width: 0; max-width: 100%; }
+.fd-meta-file .fd-meta-file-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* 类型下拉（管理模式） */
 .fd-type-dropdown-wrap {
   display: inline-block;
@@ -848,3 +852,42 @@
   width: 60px;
   text-align: center;
 }
+
+/* 暗色主题：文件高亮行、预览与举报弹窗统一使用语义表面。 */
+html[data-bnu-theme="dark"] .file-pinned td { background: var(--star-light); }
+html[data-bnu-theme="dark"] .file-pinned:hover td { background: var(--star-light); }
+html[data-bnu-theme="dark"] .fd-btn-secondary:hover { background: var(--primary-surface); }
+html[data-bnu-theme="dark"] .fd-btn-report:hover,
+html[data-bnu-theme="dark"] .fd-btn-report.reported,
+html[data-bnu-theme="dark"] .fd-btn-report.reported:hover {
+  background: var(--surface);
+  border-color: var(--border-light);
+  color: var(--ink-faint);
+}
+html[data-bnu-theme="dark"] .report-dialog {
+  background: var(--raised);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .rd-head,
+html[data-bnu-theme="dark"] .rd-actions {
+  border-color: var(--border-light);
+}
+html[data-bnu-theme="dark"] .report-group {
+  background: var(--surface);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .report-option {
+  border-color: var(--border-light);
+}
+html[data-bnu-theme="dark"] .report-option:hover { background: var(--primary-surface); }
+html[data-bnu-theme="dark"] .report-option.selected { background: var(--accent-light); }
+html[data-bnu-theme="dark"] .ro-cb,
+html[data-bnu-theme="dark"] .rd-detail-group textarea,
+html[data-bnu-theme="dark"] .rd-check,
+html[data-bnu-theme="dark"] .fd-preview-area,
+html[data-bnu-theme="dark"] .mgmt-type-select {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border);
+}
+html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface); }

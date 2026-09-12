@@ -1,5 +1,5 @@
 // ── 未登录权限收紧（v=164）────────────────────────────
-// 未登录用户仅能观看网站外壳：tab 栏 / 登录按钮与认证弹窗 / 移动抽屉开关 / Footer 备案外链 /
+// 未登录用户仅能观看网站外壳：tab 栏 / 登录按钮与认证弹窗 / 移动底栏 / Footer 备案外链 /
 // Logo / 首页卡片（教程·公告·关于）与「更多 →」直达可点；其余任何点击都唤起登录弹窗。
 // 登录用户（currentUser 非空）完全不受影响。capture 阶段拦截，优先于各视图的冒泡 handler。
 document.addEventListener('click', function(e) {
@@ -7,20 +7,16 @@ document.addEventListener('click', function(e) {
   var lm = document.getElementById('loginModal');
   if (lm && lm.style.display === 'flex') return; // 登录弹窗已开：不重复拦截其交互
   var t = e.target;
-  if (t.closest('.side-nav a, #mobileDrawer, #menuOpen, #menuClose, .login-btn, '
+  if (t.closest('.side-nav a, .login-btn, '
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
-      + '.header-logo-area, .home-nav-card, .hc-more, #qaView')) return;
+      + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
+      + '.guest-appearance-trigger, .compact-campus-link, .compact-campus-more, .compact-announcement-link, '
+      + '.compact-recommend-more, .recommendations-page')) return;
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
   showLoginModal();
 }, true);
-
-// ── Mobile Drawer ──
-var drawer = document.getElementById('mobileDrawer');
-document.getElementById('menuOpen').addEventListener('click', () => drawer.classList.add('open'));
-document.getElementById('menuClose').addEventListener('click', () => drawer.classList.remove('open'));
-drawer.addEventListener('click', (e) => { if (e.target === drawer) drawer.classList.remove('open'); });
 
 // ── Header scroll shadow ──
 var header = document.getElementById('siteHeader');
@@ -59,9 +55,12 @@ window.addEventListener('popstate', async function(e) {
     return;
   }
   // 搜索覆层 / 驳回覆层 / 公告编辑器
-  var dynOverlay = document.querySelector('.search-overlay, .admin-reject-overlay, .announcement-editor-overlay');
+  var dynOverlay = document.querySelector('.search-overlay, .admin-reject-overlay, .announcement-editor-overlay, .course-switch-overlay, .campus-manager-overlay, .campus-more-overlay');
   if (dynOverlay) {
-    _removeOverlay(dynOverlay);
+    if (dynOverlay.classList.contains('course-switch-overlay') && typeof closeCourseSwitchPanel === 'function') closeCourseSwitchPanel();
+    else if (dynOverlay.classList.contains('campus-manager-overlay') && typeof closeCampusManager === 'function') closeCampusManager();
+    else if (dynOverlay.classList.contains('campus-more-overlay') && typeof closeCampusLinksPanel === 'function') closeCampusLinksPanel();
+    else _removeOverlay(dynOverlay);
     return;
   }
   // 登录/注册/忘记密码/重置密码弹窗
@@ -81,10 +80,33 @@ window.addEventListener('popstate', async function(e) {
     return;
   }
 
+  // ── 汉堡导航抽屉：开启状态下后退先关抽屉；回到该状态则重开 ──
+  var _nv = document.getElementById('navDrawer');
+  if (_nv && _nv.style.display === 'flex' && (!state || state.view !== 'navDrawer')) {
+    closeNavDrawer();
+    return;
+  }
+  if (state && state.view === 'navDrawer') {
+    if (_nv && _nv.style.display !== 'flex') {
+      // popstate 内重开不能走 openNavDrawer（其会 push 新历史条目）
+      switchView('home');
+      updateSidebar('home');
+      renderNavDrawer();
+      _nv.style.display = 'flex';
+      lockScroll();
+      var _nb = document.getElementById('hlBurger');
+      if (_nb) _nb.setAttribute('aria-expanded', 'true');
+    } else {
+      closeNavDrawer();
+    }
+    return;
+  }
+
   // ── 抽屉状态：智能判断层级 ──
   if (state && state.view === 'drawer') {
     var _dc = document.getElementById('notifDrawer');
     var _ne = document.getElementById('drawerNotif');
+    var _ae = document.getElementById('drawerAppearance');
 
     // 抽屉已关闭（从二级页面返回）→ 打开抽屉回到首页
     if (_dc && _dc.style.display !== 'flex') {
@@ -98,8 +120,12 @@ window.addEventListener('popstate', async function(e) {
       return;
     }
 
-    // 抽屉处于通知子视图 → 回到菜单
-    if (_ne && _ne.style.display !== 'none' && _ne.style.display !== '') {
+    // 抽屉处于通知/外观子视图 → 回到菜单
+    if (_ne && getComputedStyle(_ne).display !== 'none') {
+      showDrawerMenu();
+      return;
+    }
+    if (_ae && getComputedStyle(_ae).display !== 'none') {
       showDrawerMenu();
       return;
     }
@@ -112,10 +138,15 @@ window.addEventListener('popstate', async function(e) {
   // ── 导航到非抽屉状态时，关闭打开的抽屉 ──
   var _dc2 = document.getElementById('notifDrawer');
   if (_dc2 && _dc2.style.display === 'flex') closeNotifDrawer();
+  var _nd2 = document.getElementById('navDrawer');
+  if (_nd2 && _nd2.style.display === 'flex') closeNavDrawer();
 
   // ── 正常视图切换 + 恢复内部状态 ──
   if (state && state.view && typeof switchView === 'function') {
     switchView(state.view, true);
+    if (state.view === 'rankings' && typeof renderTopDownloaded === 'function') renderTopDownloaded(state.scrollY, state.rankingType);
+    if (state.view === 'recentAll' && typeof renderRecentAll === 'function') renderRecentAll(state.scrollY);
+    if (state.view === 'recommendations' && typeof loadRecommendationsPage === 'function') loadRecommendationsPage();
     // 课程浏览器：恢复导航路径
     if (state.view === 'explorer' && state.expPath && Array.isArray(state.expPath)) {
       // 关闭上传等弹窗后 popstate 回到同一视图：expPath 未变且视图已激活 → 跳过冗余重渲染
@@ -130,7 +161,7 @@ window.addEventListener('popstate', async function(e) {
       }
       // 恢复侧边栏高亮：侧边栏无 data-view="explorer"，需映射到 通识课/专业课
       if (typeof updateSidebar === 'function') {
-        updateSidebar(state.expPath[0] === '通识课' ? 'general' : 'major');
+        updateSidebar('allCourses');
       }
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
@@ -163,6 +194,9 @@ window.addEventListener('popstate', async function(e) {
       renderQaCompose();
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
+    if (state.view === 'timetable' && typeof ttNavTimetable === 'function') {
+      ttNavTimetable(state.userId || null);
+    }
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
@@ -183,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 先确定要恢复的视图。公共页面不再等待认证、统计或课程树。
   var saved = null;
   var route = parseRoute(location.pathname);
+  if (route && route.view === 'rankings' && new URLSearchParams(location.search).get('type') === 'favorite') route.rankingType = 'favorite';
   if (route) {
     // 保留动态路由的全部参数（尤其 qaCompose 的 type/action/qid/aid）。
     saved = Object.assign({ _bnusparks: true }, route);
@@ -192,6 +227,10 @@ document.addEventListener('DOMContentLoaded', () => {
   var initialView = saved && saved._bnusparks ? saved.view : 'home';
   var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose', 'timetable'];
   var needsAuth = authViews.indexOf(initialView) !== -1;
+  var isRootLanding = location.pathname === '/';
+  var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+  // 根路径是“打开网站”的默认入口；有会话时等认证完成，才能按账号偏好决定首页或我的课程。
+  var needsLandingAuth = isRootLanding && !!hasToken;
 
   var viewFeaturePromise = Promise.resolve();
   if (initialView === 'explorer' || initialView === 'newCourse' || initialView === 'fileDetail') {
@@ -231,14 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (explorer && explorer.classList.contains('active')) renderExplorer();
     }
   });
-  // 受保护视图入口（尤其移动端汉堡菜单）可能早于认证请求完成；
+  // 受保护视图入口（尤其移动端底栏）可能早于认证请求完成；
   // 暴露同一条认证 Promise，让入口等待“认证中”而不是误判为未登录。
   window._bnusparksAuthReady = authPromise;
 
-  // Admin 侧栏链接基于 token 存储立即显示，不等待 auth API
-  var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+  // 有 token 时先显示两个受保护入口，避免认证请求完成前侧栏没有响应；
+  // 最终的管理员角色判断仍由 updateAuthUI 完成。
   if (hasToken) {
-    document.querySelectorAll('#sideAdminLink, #mobAdminLink, #sideTimetableLink, #mobTimetableLink').forEach(function(link) {
+    document.querySelectorAll('#sideAdminLink').forEach(function(link) {
+      link.style.display = '';
+    });
+    document.querySelectorAll('#sideTimetableLink').forEach(function(link) {
       link.style.display = '';
     });
   }
@@ -255,7 +297,8 @@ document.addEventListener('DOMContentLoaded', () => {
           .then(function(data) {
             if (data.token) {
               _persistToken(data.token, false, data.user && data.user.id);
-              currentUser = data.user;
+              if (typeof setAuthenticatedUser === 'function') setAuthenticatedUser(data.user);
+              else currentUser = data.user;
             }
             history.replaceState(null, '', '/');
             alert('✅ ' + (data.message || '邮箱验证成功！'));
@@ -283,27 +326,38 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSearch();
 
   function renderInitialView() {
+    function showDefaultLanding(restoreScrollY) {
+      var appearance = typeof getBnuAppearance === 'function' ? getBnuAppearance() : null;
+      if (isRootLanding && currentUser && appearance && appearance.default_view === 'timetable' &&
+          typeof ttNavTimetable === 'function') {
+        return ttNavTimetable();
+      }
+      return showHome(restoreScrollY);
+    }
+
     // 恢复刷新前的视图：URL 路由优先（可分享深链直达），sessionStorage 兜底（旧逻辑）
     if (saved && saved._bnusparks) {
       _suppressingPushState = true;
       // 兜底恢复时顺带把地址栏写成对应路径，让 URL 与视图一致
       history.replaceState(saved, '', routeToPath(saved.view, saved) || '');
       switch (saved.view) {
-        case 'home': showHome(saved.scrollY); break;
+        case 'home': showDefaultLanding(saved.scrollY); break;
         case 'explorer':
           expPath = saved.expPath || ['专业课'];
           renderExplorer();
           switchView('explorer', true);
-          updateSidebar(expPath[0] === '通识课' ? 'general' : 'major');
+          updateSidebar('allCourses');
           if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
           break;
         // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
         // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
-        case 'rankings': showTopDownloaded(); break;
+        case 'rankings': showTopDownloaded(undefined, saved.rankingType); break;
         case 'qa': showQa(); break;
         case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
         case 'leaderboard': showLeaderboard(); break;
+        case 'other': showOther(); break;
         case 'recentAll': showRecentAll(); break;
+        case 'recommendations': showRecommendations(); break;
         case 'profile': showProfile(); break;
         case 'notif': showNotifFull(); break;
         case 'admin': showAdminPanel(); break;
@@ -326,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
           break;
         case 'userPublic': showUserPublic(saved.userId); break;
         case 'newCourse': renderNewCourseView(); break;
-        case 'timetable': ttNavTimetable(); break;
+        case 'timetable': ttNavTimetable(saved.userId || null); break;
         default: showHome();
       }
       _suppressingPushState = false;
@@ -337,11 +391,11 @@ document.addEventListener('DOMContentLoaded', () => {
       history.replaceState(null, '', '/');
     }
     // 默认首页
-    showHome();
+    showDefaultLanding();
   }
 
   // 只有课程树或受保护视图需要等待；首页/静态页在此之前即可交互。
-  Promise.all([treePromise, needsAuth ? authPromise : Promise.resolve()])
+  Promise.all([treePromise, (needsAuth || needsLandingAuth) ? authPromise : Promise.resolve()])
     .then(renderInitialView)
     .catch(function() { renderInitialView(); });
 
@@ -356,3 +410,56 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentUser) loadNotifCount();
   });
 });
+
+// ── 汉堡导航抽屉：栏目与桌面侧边栏保持同一份事实源（可见性/高亮随侧栏联动） ──
+function renderNavDrawer() {
+  var body = document.getElementById('navDrawerBody');
+  if (!body) return;
+  body.innerHTML = '';
+  document.querySelectorAll('.side-nav a').forEach(function (a) {
+    var view = a.getAttribute('data-view');
+    if (!view) return;
+    // 隐藏的侧栏入口（未登录的「我的课程」/非管理员的「管理后台」）不同步进抽屉
+    if (a.style.display === 'none' || getComputedStyle(a).display === 'none') return;
+    var use = a.querySelector('use');
+    // 复用 dm-item 类：与用户抽屉条目在任意设备上渲染完全一致
+    var item = document.createElement('a');
+    item.href = 'javascript:void(0)';
+    item.className = 'dm-item' + (a.classList.contains('active') ? ' is-active' : '');
+    item.setAttribute('data-view', view);
+    item.innerHTML = '<span class="dm-ico"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="' +
+      (use ? use.getAttribute('href') : '') + '"></use></svg></span><span>' + a.textContent.trim() + '</span>';
+    item.addEventListener('click', function () {
+      closeNavDrawer();
+      if (view === 'home') showHome();
+      else if (view === 'allCourses') showAllCourses();
+      else if (view === 'qa') showQa();
+      else if (view === 'about') showAbout('introduction');
+      else if (view === 'admin') showAdminPanel();
+      else if (view === 'leaderboard') showLeaderboard();
+      else if (view === 'timetable') ttNavTimetable();
+    });
+    body.appendChild(item);
+  });
+}
+
+function openNavDrawer() {
+  var drawer = document.getElementById('navDrawer');
+  if (!drawer) return;
+  renderNavDrawer();
+  drawer.style.display = 'flex';
+  lockScroll();
+  var burger = document.getElementById('hlBurger');
+  if (burger) burger.setAttribute('aria-expanded', 'true');
+  if (typeof pushViewState === 'function') pushViewState('navDrawer', {});
+}
+
+function closeNavDrawer(e) {
+  if (e && e.target !== e.currentTarget) return;
+  var drawer = document.getElementById('navDrawer');
+  if (!drawer || drawer.style.display !== 'flex') return;
+  drawer.style.display = 'none';
+  unlockScroll();
+  var burger = document.getElementById('hlBurger');
+  if (burger) burger.setAttribute('aria-expanded', 'false');
+}

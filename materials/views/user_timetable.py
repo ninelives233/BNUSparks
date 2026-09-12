@@ -5,7 +5,7 @@ BNU Sparks · 木铎星火 — 我的课表同步 API
 按用户的云端存储以支持跨设备同步；数据互相隔离，仅本人可读写。
 
 GET    /api/user/timetable/   读取（未导入时 data=null）
-PUT    /api/user/timetable/   保存/覆盖（body: {"data": {...}}）
+PUT    /api/user/timetable/   保存/覆盖（body: {"data": {...}, "event": {"type": "import", "id": "..."}}）
 DELETE /api/user/timetable/   清除云端课表
 """
 
@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .utils import _err, _ok, require_login
-from ..models import UserTimetable
+from ..models import TimetableImportRecord, UserTimetable
 
 # 课表 JSON 体积很小（12 门课约 4KB）；上限仅防滥用
 _MAX_BYTES = 200 * 1024
@@ -70,22 +70,32 @@ def api_user_timetable(request):
             return _err("课表数据格式不正确")
         if len(json.dumps(data, ensure_ascii=False)) > _MAX_BYTES:
             return _err("课表数据过大")
+        event = body.get("event") if isinstance(body.get("event"), dict) else {}
+        event_id = str(event.get("id") or "").strip()
+        is_import = event.get("type") == "import" and 0 < len(event_id) <= 64
         # 上传请求可能因网络重试/跨端同时保存而乱序到达；较旧的导入版本
         # 不能覆盖更新的课表。锁住单用户行，保持“比较版本→写入”原子化。
         with transaction.atomic():
+            if is_import:
+                TimetableImportRecord.objects.get_or_create(
+                    user=request.user,
+                    event_id=event_id,
+                    defaults={"course_count": len(data["courses"])},
+                )
             row = UserTimetable.objects.select_for_update().filter(user=request.user).first()
             if row and _imported_at(row.data) > _imported_at(data):
                 return _ok({
                     "updated_at": _updated_at_value(row),
                     "accepted": False,
                     "data": row.data,
+                    "import_recorded": is_import,
                 })
             if row:
                 row.data = data
                 row.save(update_fields=["data", "updated_at"])
             else:
                 row = UserTimetable.objects.create(user=request.user, data=data)
-        return _ok({"updated_at": _updated_at_value(row), "accepted": True})
+        return _ok({"updated_at": _updated_at_value(row), "accepted": True, "import_recorded": is_import})
 
     if request.method == "DELETE":
         deleted, _ = UserTimetable.objects.filter(user=request.user).delete()
