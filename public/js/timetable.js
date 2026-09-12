@@ -287,6 +287,8 @@ function ttNormalizeMeetings(data) {
   if (!data || !Array.isArray(data.courses)) return data;
   data.courses.forEach(function (c) {
     if (Array.isArray(c.meetings)) c.meetings = ttMergeMeetings(c.meetings);
+    // 存量数据可能缺 teachers（列表渲染直接 .length 会崩），在此统一兜底
+    if (!Array.isArray(c.teachers)) c.teachers = c.teachers ? [String(c.teachers)] : [];
   });
   return data;
 }
@@ -755,16 +757,25 @@ function ttToggleManagePop() {
   pop.id = 'ttManagePop';
   pop.className = 'tt-manage-pop';
   pop.innerHTML =
-    '<button type="button" class="tt-mg-opt" data-mg="edit">编辑课程' +
-      '<span class="tt-mg-sub">行内编辑、手动建课、调整颜色</span></button>' +
-    '<button type="button" class="tt-mg-opt" data-mg="reimport">重新导入课表' +
-      '<span class="tt-mg-sub">用教务导出文件替换教务课程</span></button>' +
-    '<button type="button" class="tt-mg-opt" data-mg="scheme">课程配色' +
-      '<span class="tt-mg-sub">当前：' + esc(curScheme ? curScheme.name : '中国色') + '</span></button>' +
-    '<button type="button" class="tt-mg-opt" data-mg="tutorial">导入教程' +
-      '<span class="tt-mg-sub">如何从教务系统导出可导入的课表</span></button>' +
-    '<button type="button" class="tt-mg-opt" data-mg="feedback">意见反馈' +
-      '<span class="tt-mg-sub">直达总管理员的消息中心</span></button>';
+    '<div class="tt-mg-sec" role="group" aria-label="课表">' +
+      '<div class="tt-mg-label">课表</div>' +
+      '<button type="button" class="tt-mg-opt is-key" data-mg="reimport">重新导入课表' +
+        '<span class="tt-mg-sub">用教务导出文件替换教务课程</span></button>' +
+      '<button type="button" class="tt-mg-opt" data-mg="edit">编辑课程' +
+        '<span class="tt-mg-sub">行内编辑、手动建课、调整颜色</span></button>' +
+    '</div>' +
+    '<div class="tt-mg-sec" role="group" aria-label="外观">' +
+      '<div class="tt-mg-label">外观</div>' +
+      '<button type="button" class="tt-mg-opt" data-mg="scheme">课程配色' +
+        '<span class="tt-mg-sub">当前：' + esc(curScheme ? curScheme.name : '中国色') + '</span></button>' +
+    '</div>' +
+    '<div class="tt-mg-sec" role="group" aria-label="帮助">' +
+      '<div class="tt-mg-label">帮助</div>' +
+      '<button type="button" class="tt-mg-opt" data-mg="tutorial">导入教程' +
+        '<span class="tt-mg-sub">如何从教务系统导出可导入的课表</span></button>' +
+      '<button type="button" class="tt-mg-opt" data-mg="feedback">意见反馈' +
+        '<span class="tt-mg-sub">直达总管理员的消息中心</span></button>' +
+    '</div>';
   actions.appendChild(pop);
   pop.addEventListener('click', function (e) {
     var opt = e.target.closest('[data-mg]');
