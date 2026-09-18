@@ -11,8 +11,60 @@
     targetPath: '',     // 目标路径字符串
   };
   var _ncColleges = [];   // 学院列表缓存
+  var _ncRequestStatusSeq = { G: 0, M: 0 };
 
   function _ncEl(id) { return document.getElementById(id); }
+
+  function _ncRequestCode(code) {
+    return String(code || '').trim().toUpperCase().replace(/[\-*]/g, '');
+  }
+
+  function _ncRejectionEl(prefix) {
+    return _ncEl(prefix === 'G' ? 'ncGeneralRejection' : 'ncMajorRejection');
+  }
+
+  function _ncHideRejection(prefix) {
+    var el = _ncRejectionEl(prefix);
+    if (!el) return;
+    el.style.display = 'none';
+    el.innerHTML = '';
+  }
+
+  function _ncShowRejection(prefix, item, code) {
+    var el = _ncRejectionEl(prefix);
+    if (!el || !item || item.status !== 'rejected') return;
+    var nameEl = _ncEl(prefix === 'G' ? 'ncGeneralName' : 'ncMName');
+    var name = (nameEl && nameEl.value || '').trim() || item.course_name || code;
+    var reason = String(item.review_notes || item.reviewNotes || '').trim() || '未填写';
+    el.innerHTML = '<span class="nc-rejection-mark">!</span><div>' +
+      '<strong>上次申请已被驳回，请先查看原因</strong>' +
+      '<p class="nc-rejection-course">课程：「' + esc(name) + '」</p>' +
+      '<p><b>驳回原因：</b>' + esc(reason) + '</p>' +
+      '<p>请根据原因调整课程信息和所属位置后，再提交新的申请。</p>' +
+      '</div>';
+    el.style.display = '';
+  }
+
+  async function _ncRefreshRejection(prefix) {
+    var codeEl = _ncEl(prefix === 'G' ? 'ncGeneralCode' : 'ncMCode');
+    var code = _ncRequestCode(codeEl && codeEl.value);
+    var seq = ++_ncRequestStatusSeq[prefix];
+    if (!code || typeof api !== 'function') {
+      _ncHideRejection(prefix);
+      return;
+    }
+    try {
+      var res = await api('/api/courses/request/status/?codes=' + encodeURIComponent(code));
+      var currentCode = _ncRequestCode(codeEl && codeEl.value);
+      if (seq !== _ncRequestStatusSeq[prefix] || currentCode !== code) return;
+      var items = res && res.items && typeof res.items === 'object' ? res.items : {};
+      var item = items[code];
+      if (item && item.status === 'rejected') _ncShowRejection(prefix, item, code);
+      else _ncHideRejection(prefix);
+    } catch (e) {
+      if (seq === _ncRequestStatusSeq[prefix]) _ncHideRejection(prefix);
+    }
+  }
 
   // 复位所有提交按钮（v=147：修复「提交中…」卡死——成功/失败后重进视图按钮一直是禁用态）
   function _resetNewCourseSubmitButtons() {
@@ -49,6 +101,10 @@
       var el = _ncEl(id);
       if (el) { el.style.display = 'none'; el.textContent = ''; }
     });
+    _ncRequestStatusSeq.G++;
+    _ncRequestStatusSeq.M++;
+    _ncHideRejection('G');
+    _ncHideRejection('M');
     _resetNewCourseSubmitButtons();
   }
 
@@ -93,6 +149,7 @@
     _populateMaterialTypeSelect(_ncEl('ncMMaterialType'));
     if (isGeneral) _populateGeneralCategories();
     else _populateColleges();
+    _ncRefreshRejection(isGeneral ? 'G' : 'M');
   }
 
   // ── 通识课：课程类型下拉（10 类 + 数学类）──
@@ -358,7 +415,10 @@
 
   function scheduleCourseCheck(prefix) {
     if (_ncCheckTimers[prefix]) clearTimeout(_ncCheckTimers[prefix]);
-    _ncCheckTimers[prefix] = setTimeout(function() { runCourseCheck(prefix); }, 400);
+    _ncCheckTimers[prefix] = setTimeout(function() {
+      runCourseCheck(prefix);
+      _ncRefreshRejection(prefix);
+    }, 400);
   }
 
   async function runCourseCheck(prefix) {

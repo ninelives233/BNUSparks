@@ -47,6 +47,11 @@
     const headers = { ...opts.headers };
     if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     if (_cachedToken) headers['Authorization'] = 'Bearer ' + _cachedToken;
+    // 事件采集使用每日轮换的匿名标识；服务端只在监测事件接口对其做 HMAC，
+    // 其它业务接口不会保存该 header。
+    if (window.BnuMonitoring && typeof window.BnuMonitoring.visitorId === 'function') {
+      headers['X-BNU-Visitor'] = window.BnuMonitoring.visitorId();
+    }
     if (opts.body && !(opts.body instanceof FormData)) opts.body = JSON.stringify(opts.body);
 
     // 超时控制（默认 10 秒）
@@ -606,6 +611,12 @@
   async function searchQuery(q) {
     try {
       const results = await api('/api/search/?q=' + encodeURIComponent(q));
+      if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
+        window.BnuMonitoring.track('search.execute');
+        if (!(results.courses || []).length && !(results.materials || []).length) {
+          window.BnuMonitoring.track('search.no_result');
+        }
+      }
       const overlay = document.createElement('div');
       overlay.className = 'search-overlay';
 

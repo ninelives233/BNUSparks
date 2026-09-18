@@ -4,6 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BNUSparks · 资料共享</title>
+<meta name="description" content="给学习以秩序，让经验被看见。木铎星火是北京师范大学同学共建的课程资料库，按学院与课程整理讲义、笔记、试卷等资料，支持搜索、分享与交流。">
+<link rel="canonical" href="https://bnusparks.cn/">
+<meta property="og:site_name" content="木铎星火">
+<meta property="og:type" content="website">
+<meta property="og:title" content="木铎星火｜北京师范大学课程资料共享">
+<meta property="og:description" content="给学习以秩序，让经验被看见。">
+<meta property="og:url" content="https://bnusparks.cn/">
+<meta property="og:locale" content="zh_CN">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": "https://bnusparks.cn/#website",
+  "url": "https://bnusparks.cn/",
+  "name": "木铎星火",
+  "alternateName": "BNU Sparks",
+  "description": "北京师范大学同学共建的课程资料库。",
+  "inLanguage": "zh-CN"
+}
+</script>
 <script>
   /* 在首个可绘制样式加载前恢复主题，避免暗色用户先看到暖色/浅色首屏。 */
   try {
@@ -17,19 +37,26 @@
     if (bnuThemePreference === 'system') {
       bnuTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'warm';
     }
-    var bnuLayout = ['loose', 'compact'].indexOf(bnuGuestAppearance.home_layout) >= 0 ? bnuGuestAppearance.home_layout : 'loose';
+    var bnuLayout = ['loose', 'compact'].indexOf(bnuGuestAppearance.home_layout) >= 0 ? bnuGuestAppearance.home_layout : 'compact';
+    var bnuNav = ['bottom', 'burger'].indexOf(bnuGuestAppearance.mobile_nav) >= 0 ? bnuGuestAppearance.mobile_nav : 'burger';
+    var bnuTimetableTextAlign = ['left', 'center', 'right'].indexOf(bnuGuestAppearance.timetable_text_align) >= 0
+      ? bnuGuestAppearance.timetable_text_align : 'left';
     document.documentElement.dataset.bnuThemePreference = bnuThemePreference;
     document.documentElement.dataset.bnuTheme = bnuTheme;
     document.documentElement.dataset.bnuLayout = bnuLayout;
+    document.documentElement.dataset.bnuNav = bnuNav;
+    document.documentElement.dataset.bnuTimetableTextAlign = bnuTimetableTextAlign;
   } catch (e) {
     document.documentElement.dataset.bnuTheme = 'warm';
-    document.documentElement.dataset.bnuLayout = 'loose';
+    document.documentElement.dataset.bnuLayout = 'compact';
+    document.documentElement.dataset.bnuNav = 'burger';
+    document.documentElement.dataset.bnuTimetableTextAlign = 'left';
   }
 </script>
 <link rel="stylesheet" href="/static/css/tokens.css?v=207">
-<link rel="stylesheet" href="/static/css/base.css?v=264">
-<link rel="stylesheet" href="/static/css/user.css?v=211">
-<link rel="stylesheet" href="/static/css/files.css?v=199">
+<link rel="stylesheet" href="/static/css/base.css?v=274">
+<link rel="stylesheet" href="/static/css/user.css?v=212">
+<link rel="stylesheet" href="/static/css/files.css?v=200">
 <link rel="stylesheet" href="/static/css/announcement.css?v=187">
 <link rel="stylesheet" href="/static/css/components.css?v=198">
 </head>
@@ -135,14 +162,20 @@
           <h1 id="compactHomeTitle">首页</h1>
           <p>课程、资料与校园入口</p>
         </div>
-        <div class="h8-scale" aria-label="平台规模">
-          <strong><span data-stat="total_files">—</span> <small>份共享资料</small></strong>
-          <span><span data-stat="college_with_data_count">—</span> 个学院 / 学部目录</span>
-          <span><span data-stat="general_with_data_count">—</span> 个通识分类</span>
+        <div class="h8-heading-tools">
+          <button type="button" class="h8-upload-btn" onclick="openCourseSearchUpload()" aria-label="上传文件">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg>
+            <span>上传文件</span>
+          </button>
+          <div class="h8-scale" aria-label="平台规模" data-nosnippet>
+            <strong><span data-stat="total_files">—</span> <small>份共享资料</small></strong>
+            <span><span data-stat="college_with_data_count">—</span> 个学院 / 学部目录</span>
+            <span><span data-stat="general_with_data_count">—</span> 个通识分类</span>
+          </div>
         </div>
       </header>
 
-      <section class="h8-top" aria-label="公告与校园入口">
+      <section class="h8-top" id="compactTopPanel" data-expanded="false" aria-label="公告与校园入口">
         <div class="h8-notices compact-announcement-block">
           <div class="h8-section-head">
             <h2 id="compactAnnouncementTitle">公告</h2>
@@ -155,7 +188,7 @@
             <h2 id="compactCampusTitle">校园入口</h2>
             <span class="h8-head-actions">
               <button type="button" id="campusManageButton" style="display:none" onclick="openCampusManager()">管理</button>
-              <button type="button" id="compactCampusMore" class="text-btn" data-campus-more aria-expanded="false" hidden>更多入口 →</button>
+              <button type="button" id="compactCampusMore" class="text-btn compact-campus-more" data-campus-more aria-controls="compactAnnouncement compactCampusLinks" aria-expanded="false" hidden>展开入口 →</button>
             </span>
           </div>
           <nav id="compactCampusLinks" class="compact-campus-links" aria-label="校园外部入口"><span class="compact-loading">正在读取入口…</span></nav>
@@ -181,7 +214,7 @@
                 <button type="button" role="tab" aria-selected="true" class="is-active" data-hot="download">下载榜</button>
                 <button type="button" role="tab" aria-selected="false" data-hot="favorite">收藏榜</button>
               </div>
-              <a id="compactHotMore" class="text-btn" href="/rankings" data-ranking-type="download">查看下载榜 →</a>
+              <a id="compactHotMore" class="text-btn" href="/rankings" data-ranking-type="download">完整榜单 →</a>
             </div>
           </div>
           <div id="compactHotList" class="h8-rank-list"><span class="compact-loading">正在读取资料…</span></div>
@@ -385,6 +418,7 @@
           <button type="button" role="tab" aria-selected="true" class="about-tab active" onclick="showAbout('introduction')">平台介绍</button>
           <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('help')">使用帮助</button>
           <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('contact')">联系我们</button>
+          <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('agreement')">用户协议</button>
           <button type="button" role="tab" aria-selected="false" class="about-tab" onclick="showAbout('privacy')">隐私政策</button>
         </div>
         <div id="aboutSectionContent"></div>
@@ -580,10 +614,10 @@
 </div>
 
 <!-- ═══ Nav Drawer (汉堡菜单：桌面侧边栏栏目的移动端入口，外观调整可切换) ═══ -->
-<div class="nav-drawer-overlay" id="navDrawer" style="display:none" onclick="closeNavDrawer(event)">
+<div class="nav-drawer-overlay" id="navDrawer" role="dialog" aria-modal="true" aria-labelledby="navDrawerTitle" aria-hidden="true" style="display:none" onclick="closeNavDrawer(event)">
   <nav class="nav-drawer" onclick="event.stopPropagation()" aria-label="导航菜单">
     <div class="notif-drawer-header">
-      <span class="dm-eyebrow">导航</span>
+      <span class="dm-eyebrow" id="navDrawerTitle">导航</span>
       <button class="notif-drawer-close" onclick="closeNavDrawer()" aria-label="关闭导航菜单">✕</button>
     </div>
     <div class="nav-drawer-body" id="navDrawerBody"></div>
@@ -756,7 +790,7 @@
           <div class="profile-edit-dialog">
             <h3>编辑身份标签</h3>
             <div class="mf-ident-row" style="margin-bottom:10px">
-              <select id="_idnEducation" class="mf-input" aria-label="培养层次" required>
+              <select id="_idnEducation" class="mf-input" aria-label="培养层次" required onchange="onIdentityEducationChange()">
                 <option value="">培养层次</option>
                 <option value="本科">本科</option>
                 <option value="硕士">硕士</option>
@@ -1160,7 +1194,8 @@
         <a href="/about" onclick="event.preventDefault();showAbout('introduction')">平台介绍</a>
         <a href="/about" onclick="event.preventDefault();showAbout('help')">使用帮助</a>
         <a href="mailto:bnusparks@163.com">联系我们</a>
-        <a href="/about" onclick="event.preventDefault();showAbout('privacy')">隐私政策</a>
+        <a href="/static/legal/user-agreement.html?v=291" target="_blank" rel="noopener">用户协议</a>
+        <a href="/static/legal/privacy-policy.html?v=291" target="_blank" rel="noopener">隐私政策</a>
       </div>
     </div>
     <div class="footer-bottom">
@@ -1208,7 +1243,16 @@
         <label for="loginPassword">密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="loginPassword" class="mf-input mf-pwd-input" required placeholder="输入密码" autocomplete="current-password">
-          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('loginPassword',this)" aria-label="显示密码">👁️</button>
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('loginPassword',this)" aria-label="显示密码" aria-pressed="false">
+            <svg class="pwd-icon pwd-icon--eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M2.25 12s3.75-5.25 9.75-5.25S21.75 12 21.75 12 18 17.25 12 17.25 2.25 12 2.25 12Z"></path>
+              <circle cx="12" cy="12" r="2.35"></circle>
+            </svg>
+            <svg class="pwd-icon pwd-icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.55 6.9A11.8 11.8 0 0 1 12 6.75c6 0 9.75 5.25 9.75 5.25a18.2 18.2 0 0 1-3.1 3.35M6.55 6.55C3.8 8.25 2.25 12 2.25 12S6 17.25 12 17.25c.75 0 1.45-.08 2.1-.22"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <label class="mf-remember"><input type="checkbox" id="loginRemember"> <span>记住我（30天免登录）</span></label>
@@ -1233,7 +1277,7 @@
         <label for="regSid">北师大邮箱</label>
         <div class="mf-email-wrap">
           <input type="text" id="regSid" class="mf-input mf-email-prefix" required placeholder="请输入学号" autocomplete="username">
-          <select id="regEmailSuffix" class="mf-email-suffix-select" aria-label="邮箱后缀">
+          <select id="regEmailSuffix" class="mf-email-suffix-select" aria-label="邮箱后缀" onchange="onRegisterEmailSuffixChange()">
             <option value="@mail.bnu.edu.cn" selected>@mail.bnu.edu.cn</option>
             <option value="@bnu.edu.cn">@bnu.edu.cn</option>
           </select>
@@ -1252,7 +1296,7 @@
       <div class="mf-group">
         <label>身份标签 <span class="label-required">必填</span><span class="mf-label-hint">（大类招生请填目标专业，勿选“其他”）</span></label>
         <div class="mf-ident-row">
-          <select id="regEducation" class="mf-input" aria-label="培养层次" required onchange="syncRegisterIdentityHint()">
+          <select id="regEducation" class="mf-input" aria-label="培养层次" required onchange="onRegEducationChange()">
             <option value="">培养层次</option>
             <option value="本科">本科</option>
             <option value="硕士">硕士</option>
@@ -1267,16 +1311,38 @@
         <label for="regPassword">密码（至少 8 位）</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="regPassword" class="mf-input mf-pwd-input" required minlength="8" placeholder="设置你的登录密码" autocomplete="new-password">
-          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPassword',this)" aria-label="显示密码">👁️</button>
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPassword',this)" aria-label="显示密码" aria-pressed="false">
+            <svg class="pwd-icon pwd-icon--eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M2.25 12s3.75-5.25 9.75-5.25S21.75 12 21.75 12 18 17.25 12 17.25 2.25 12 2.25 12Z"></path>
+              <circle cx="12" cy="12" r="2.35"></circle>
+            </svg>
+            <svg class="pwd-icon pwd-icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.55 6.9A11.8 11.8 0 0 1 12 6.75c6 0 9.75 5.25 9.75 5.25a18.2 18.2 0 0 1-3.1 3.35M6.55 6.55C3.8 8.25 2.25 12 2.25 12S6 17.25 12 17.25c.75 0 1.45-.08 2.1-.22"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <div class="mf-group">
         <label for="regPasswordConfirm">确认密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="regPasswordConfirm" class="mf-input mf-pwd-input" required placeholder="再次输入密码" autocomplete="new-password">
-          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPasswordConfirm',this)" aria-label="显示密码">👁️</button>
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('regPasswordConfirm',this)" aria-label="显示密码" aria-pressed="false">
+            <svg class="pwd-icon pwd-icon--eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M2.25 12s3.75-5.25 9.75-5.25S21.75 12 21.75 12 18 17.25 12 17.25 2.25 12 2.25 12Z"></path>
+              <circle cx="12" cy="12" r="2.35"></circle>
+            </svg>
+            <svg class="pwd-icon pwd-icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.55 6.9A11.8 11.8 0 0 1 12 6.75c6 0 9.75 5.25 9.75 5.25a18.2 18.2 0 0 1-3.1 3.35M6.55 6.55C3.8 8.25 2.25 12 2.25 12S6 17.25 12 17.25c.75 0 1.45-.08 2.1-.22"></path>
+            </svg>
+          </button>
         </div>
       </div>
+      <label class="mf-remember register-legal-consent">
+        <input type="checkbox" id="regLegalConsent" checked required>
+        <span>我已阅读并同意 <a href="/static/legal/user-agreement.html?v=291" target="_blank" rel="noopener">用户协议</a> 与 <a href="/static/legal/privacy-policy.html?v=291" target="_blank" rel="noopener">隐私政策</a></span>
+      </label>
       <button type="submit" class="mf-btn">注册</button>
       <p class="mf-switch">已有账号？<a href="#" onclick="showLogin();return false">登录</a></p>
     </form>
@@ -1337,14 +1403,32 @@
         <label for="resetNewPwd">新密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="resetNewPwd" class="mf-input mf-pwd-input" required minlength="8" placeholder="至少 8 位">
-          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetNewPwd',this)" aria-label="显示密码">👁️</button>
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetNewPwd',this)" aria-label="显示密码" aria-pressed="false">
+            <svg class="pwd-icon pwd-icon--eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M2.25 12s3.75-5.25 9.75-5.25S21.75 12 21.75 12 18 17.25 12 17.25 2.25 12 2.25 12Z"></path>
+              <circle cx="12" cy="12" r="2.35"></circle>
+            </svg>
+            <svg class="pwd-icon pwd-icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.55 6.9A11.8 11.8 0 0 1 12 6.75c6 0 9.75 5.25 9.75 5.25a18.2 18.2 0 0 1-3.1 3.35M6.55 6.55C3.8 8.25 2.25 12 2.25 12S6 17.25 12 17.25c.75 0 1.45-.08 2.1-.22"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <div class="mf-group">
         <label for="resetConfirmPwd">确认新密码</label>
         <div class="mf-pwd-wrap">
           <input type="password" id="resetConfirmPwd" class="mf-input mf-pwd-input" required minlength="8" placeholder="再次输入新密码">
-          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetConfirmPwd',this)" aria-label="显示密码">👁️</button>
+          <button type="button" class="mf-pwd-toggle" onclick="togglePwdVisibility('resetConfirmPwd',this)" aria-label="显示密码" aria-pressed="false">
+            <svg class="pwd-icon pwd-icon--eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M2.25 12s3.75-5.25 9.75-5.25S21.75 12 21.75 12 18 17.25 12 17.25 2.25 12 2.25 12Z"></path>
+              <circle cx="12" cy="12" r="2.35"></circle>
+            </svg>
+            <svg class="pwd-icon pwd-icon--off" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 3l18 18"></path>
+              <path d="M10.55 6.9A11.8 11.8 0 0 1 12 6.75c6 0 9.75 5.25 9.75 5.25a18.2 18.2 0 0 1-3.1 3.35M6.55 6.55C3.8 8.25 2.25 12 2.25 12S6 17.25 12 17.25c.75 0 1.45-.08 2.1-.22"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <button type="submit" class="mf-btn">重置密码</button>
@@ -1419,19 +1503,20 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=222" defer></script>
-<script src="/static/js/appearance.js?v=6" defer></script>
-<script src="/static/js/auth.js?v=244" defer></script>
-<script src="/static/js/profile.js?v=218" defer></script>
-<script src="/static/js/notifications.js?v=242" defer></script>
-<script src="/static/js/admin-core.js?v=195" defer></script>
-<script src="/static/js/views.js?v=251" defer></script>
-<script src="/static/js/explorer-core.js?v=222" defer></script>
-<script src="/static/js/explorer-file.js?v=187" defer></script>
+<script src="/static/js/utils.js?v=300" defer></script>
+<script src="/static/js/monitoring-events.js?v=300" defer></script>
+<script src="/static/js/appearance.js?v=10" defer></script>
+<script src="/static/js/auth.js?v=248" defer></script>
+<script src="/static/js/profile.js?v=220" defer></script>
+<script src="/static/js/notifications.js?v=243" defer></script>
+<script src="/static/js/admin-core.js?v=300" defer></script>
+<script src="/static/js/views.js?v=300" defer></script>
+<script src="/static/js/explorer-core.js?v=224" defer></script>
+<script src="/static/js/explorer-file.js?v=188" defer></script>
 <script src="/static/js/explorer-preview.js?v=187" defer></script>
-<script src="/static/js/home.js?v=14" defer></script>
-<script src="/static/js/feature-loader.js?v=258" defer></script>
-<script src="/static/js/app.js?v=251" defer></script>
+<script src="/static/js/home.js?v=18" defer></script>
+<script src="/static/js/feature-loader.js?v=301" defer></script>
+<script src="/static/js/app.js?v=253" defer></script>
 
 </body>
 </html>

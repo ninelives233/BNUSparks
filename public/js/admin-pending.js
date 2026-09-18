@@ -5,7 +5,15 @@
   var _pendingHidePeerApproved = true;
   var _highlightDisputeMaterialId = null;
   var _pendingItems = {}; // {id: 原始待审核项} — 详情弹窗直接取原始数据（file_size 为字节）
+  var _pendingTypes = ['file', 'course', 'forum', 'report'];
   var _pendingType = 'file'; // 审核类型分段控制器：'file' 文件上传 | 'course' 课程创建 | 'forum' 论坛管理 | 'report' 举报受理
+  (function() {
+    var state = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
+    var fromState = state && state.view === 'admin' ? state.pendingType : null;
+    var fromStorage = sessionStorage.getItem('bnusparks_admin_pending_type');
+    var remembered = _pendingTypes.indexOf(fromState) !== -1 ? fromState : fromStorage;
+    if (_pendingTypes.indexOf(remembered) !== -1) _pendingType = remembered;
+  })();
   var _pendingPage = { file: 1, course: 1 }; // 客户端分页（每类独立页码）
 
   // 待审核卡片「上传者 pill」：26px 头像 + 名字，点击跳用户主页
@@ -40,7 +48,10 @@
   }
 
   function switchPendingType(type) {
+    if (_pendingTypes.indexOf(type) === -1) type = 'file';
     _pendingType = type;
+    sessionStorage.setItem('bnusparks_admin_pending_type', type);
+    if (typeof patchViewState === 'function') patchViewState({ adminTab: 'pending', pendingType: type });
     renderAdminPending(document.getElementById('adminContent'));
   }
 
@@ -62,6 +73,25 @@
     if (_pendingIncludeSub) reqUrl += '?include_subordinate=1';
     // 论坛管理待审仅问答区版主/超管拉取（非问答区版主访问该端点会 403，故不加入请求）
     var canQA = currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa);
+    if (!canQA && _pendingType === 'forum') {
+      _pendingType = 'file';
+      sessionStorage.setItem('bnusparks_admin_pending_type', _pendingType);
+      if (typeof patchViewState === 'function') patchViewState({ pendingType: _pendingType });
+    }
+    // 论坛分段才需要问答管理脚本；普通文件/课程审核不应为此阻塞首屏。
+    if (canQA && _pendingType === 'forum' && typeof ensureFeature === 'function' &&
+        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady['admin-qa'])) {
+      content.innerHTML = '<div class="admin-loading">论坛审核模块加载中…</div>';
+      ensureFeature('admin-qa').then(function() {
+        var activeTab = document.querySelector('.admin-tab.active');
+        if (activeTab && activeTab.getAttribute('data-tab') === 'pending' && _pendingType === 'forum') {
+          renderAdminPending(content);
+        }
+      }).catch(function() {
+        content.innerHTML = '<div class="admin-empty">论坛审核模块加载失败，请刷新重试。</div>';
+      });
+      return;
+    }
     var forumIdx = -1;
     var configIdx = -1;
     var requests = [
@@ -242,7 +272,7 @@
             html += '<div class="pc-actions">' +
               '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">' + (window.ICONS ? ICONS.file : '') + '<span>详情</span></button>' +
               '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件进行审核">⬇ 下载</button>' +
-              '<button class="admin-btn admin-btn-approve" onclick="quickApprove(' + m.id + ')">✓ 通过</button>' +
+              '<button class="admin-btn admin-btn-approve" onclick="quickApprove(' + m.id + ', this)">✓ 通过</button>' +
               '<button class="admin-btn admin-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>' +
               (isMod ? '<button class="admin-btn admin-btn-secondary" onclick="showReassignDialog(' + m.id + ')" title="手动指派审核人">↗ 指派</button>' : '') +
             '</div>';
@@ -316,10 +346,10 @@
       var rowBtns = '<button class="cr-file-btn cr-file-btn-detail" onclick="event.stopPropagation();showPendingFileDetail(' + m.id + ')" title="查看文件详情">详情</button>' +
         '<button class="cr-file-btn cr-file-btn-dl" onclick="event.stopPropagation();doDirectDownload(' + m.id + ')" title="下载文件">下载</button>';
       if (req.is_waiting_files && m.review_status === 'pending') {
-        rowBtns += '<button class="cr-file-btn cr-file-btn-approve" onclick="quickApprove(' + m.id + ')">✓ 通过</button>' +
+        rowBtns += '<button class="cr-file-btn cr-file-btn-approve" onclick="quickApprove(' + m.id + ', this)">✓ 通过</button>' +
           '<button class="cr-file-btn cr-file-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>';
       }
-      return '<div class="cr-file">' +
+      return '<div class="cr-file" data-material-id="' + m.id + '">' +
         '<span class="cr-file-icon">' + (typeof _fileGlyph === 'function' ? _fileGlyph(m.file_name) : '<span class="pc-glyph pc-glyph-other">FILE</span>') + '</span>' +
         '<span class="cr-file-name">' + esc(m.title) + (size ? ' <span class="cr-file-size">' + size + '</span>' : '') + '</span>' +
         '<span class="cr-file-actions">' +
@@ -360,7 +390,7 @@
       ? '<span class="cr-link-tag" title="批准后不会新建独立文件夹，树节点将指向既有课程目录">🔗 将链接到既有课程「' + esc(req.existing_course_name || '') + '」</span>'
       : '';
 
-    return '<div class="admin-pending-card cr-card' + (req.is_waiting_files ? ' cr-waiting-card' : '') + '">' +
+    return '<div class="admin-pending-card cr-card' + (req.is_waiting_files ? ' cr-waiting-card' : '') + '" data-request-id="' + req.id + '">' +
       '<div class="cr-head">' +
         '<span class="cr-tag ' + (isGeneral ? 'cr-tag-general' : 'cr-tag-major') + '">' + (isGeneral ? '通识课' : '专业课') + '</span>' +
         '<span class="cr-title">' + esc(req.course_name) + '</span>' +
@@ -374,14 +404,121 @@
     '</div>';
   }
 
+  function _setPendingActionProcessing(btn, label) {
+    if (!btn) return;
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = label || '处理中…';
+  }
+
+  function _restorePendingAction(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    if (btn.dataset.originalText) {
+      btn.textContent = btn.dataset.originalText;
+      delete btn.dataset.originalText;
+    }
+  }
+
+  function _updatePendingSegmentCount(type, deltaOrCount, isAbsolute) {
+    var button = document.querySelector('.pc-seg-btn[data-type="' + type + '"] .pc-seg-count');
+    if (!button) return;
+    var current = parseInt(button.textContent, 10) || 0;
+    var next = isAbsolute ? Number(deltaOrCount) : current + Number(deltaOrCount);
+    button.textContent = String(Math.max(0, next));
+  }
+
+  function _removePendingCard(card, type) {
+    if (!card) return;
+    var materialId = card.id && card.id.indexOf('pc-') === 0 ? card.id.slice(3) : null;
+    if (type === 'file' && materialId && _pendingItems[materialId]) delete _pendingItems[materialId];
+    var list = card.parentElement;
+    card.remove();
+    if (type === 'file') {
+      _updatePendingSegmentCount('file', Object.keys(_pendingItems).length, true);
+    } else if (type === 'course') {
+      _updatePendingSegmentCount('course', -1, false);
+    }
+    if (list && list.classList.contains('admin-pending-list') && !list.querySelector('.admin-pending-card')) {
+      list.innerHTML = '<div class="admin-empty">🎉 没有待审核的内容</div>';
+    }
+  }
+
+  function _applyApprovedMaterial(id, button) {
+    var row = button && button.closest ? button.closest('.cr-file[data-material-id]') : null;
+    if (row) {
+      var status = row.querySelector('.cr-file-status');
+      if (status) {
+        status.classList.remove('cr-st-pending', 'cr-st-rejected');
+        status.classList.add('cr-st-approved');
+        status.textContent = '已通过';
+      }
+      row.querySelectorAll('.cr-file-btn-approve, .cr-file-btn-reject').forEach(function(action) { action.remove(); });
+      var requestCard = row.closest('.cr-card');
+      if (requestCard && !requestCard.querySelector('.cr-file-status.cr-st-pending')) {
+        _removePendingCard(requestCard, 'course');
+      }
+      return;
+    }
+    _removePendingCard(document.getElementById('pc-' + id), 'file');
+  }
+
+  function _addWaitingFileActions(card) {
+    if (!card) return;
+    card.querySelectorAll('.cr-file[data-material-id]').forEach(function(row) {
+      var status = row.querySelector('.cr-file-status.cr-st-pending');
+      var actions = row.querySelector('.cr-file-actions');
+      if (!status || !actions || actions.querySelector('.cr-file-btn-approve')) return;
+      var id = row.getAttribute('data-material-id');
+      actions.insertAdjacentHTML('beforeend',
+        '<button class="cr-file-btn cr-file-btn-approve" onclick="quickApprove(' + id + ', this)">✓ 通过</button>' +
+        '<button class="cr-file-btn cr-file-btn-reject" onclick="showRejectDialog(' + id + ')">✗ 驳回</button>');
+    });
+  }
+
+  function _applyRejectedMaterial(id) {
+    var row = document.querySelector('.cr-file[data-material-id="' + id + '"]');
+    if (row) {
+      var status = row.querySelector('.cr-file-status');
+      if (status) {
+        status.classList.remove('cr-st-pending', 'cr-st-approved');
+        status.classList.add('cr-st-rejected');
+        status.textContent = '已驳回';
+      }
+      row.querySelectorAll('.cr-file-btn-approve, .cr-file-btn-reject').forEach(function(action) { action.remove(); });
+      var requestCard = row.closest('.cr-card');
+      if (requestCard && !requestCard.querySelector('.cr-file-status.cr-st-pending')) {
+        _removePendingCard(requestCard, 'course');
+      }
+      return;
+    }
+    _removePendingCard(document.getElementById('pc-' + id), 'file');
+  }
+
+  function _applyApprovedCourseRequest(card) {
+    if (!card) return;
+    if (card.querySelector('.cr-file-status.cr-st-pending')) {
+      card.classList.add('cr-waiting-card');
+      _addWaitingFileActions(card);
+      var actions = card.querySelector('.pc-actions');
+      if (actions) {
+        actions.className = 'cr-waiting';
+        actions.textContent = '⏳ 申请已批准，课程文件夹已创建；待随附文件全部审核通过后本申请自动消失';
+      }
+      return;
+    }
+    _removePendingCard(card, 'course');
+  }
+
   function approveCourseRequest(id, btn) {
-    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    _setPendingActionProcessing(btn);
+    var card = btn && btn.closest ? btn.closest('.cr-card') : document.querySelector('.cr-card[data-request-id="' + id + '"]');
     api('/api/moderation/course-requests/' + id + '/approve/', { method: 'POST' }).then(function() {
+      _applyApprovedCourseRequest(card);
       if (typeof refreshCourseTree === 'function') refreshCourseTree();
-      renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
+      _restorePendingAction(btn);
       alert('操作失败：' + (err && err.message));
-      renderAdminPending(document.getElementById('adminContent'));
     });
   }
 
@@ -414,20 +551,25 @@
     api('/api/moderation/course-requests/' + id + '/reject/', { method: 'POST', body: { notes: notes } }).then(function() {
       var overlay = document.querySelector('.admin-reject-overlay');
       _removeOverlay(overlay);
-      renderAdminPending(document.getElementById('adminContent'));
+      _removePendingCard(document.querySelector('.cr-card[data-request-id="' + id + '"]'), 'course');
     }).catch(function(err) {
       alert('操作失败：' + err.message);
     });
   }
 
   function batchApproveCourseRequests(btn) {
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ 处理中…'; }
+    _setPendingActionProcessing(btn, '⏳ 处理中…');
+    var cards = Array.from(document.querySelectorAll('#adminContent .cr-card')).filter(function(card) {
+      return !!card.querySelector('.pc-actions .admin-btn-approve');
+    });
     api('/api/moderation/course-requests/batch-approve/', { method: 'POST' }).then(function() {
+      cards.forEach(_applyApprovedCourseRequest);
+      var batchBar = btn && btn.closest ? btn.closest('.cr-batch-bar') : null;
+      if (batchBar) batchBar.remove();
       if (typeof refreshCourseTree === 'function') refreshCourseTree();
-      renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
+      _restorePendingAction(btn);
       alert('批量过审失败：' + err.message);
-      renderAdminPending(document.getElementById('adminContent'));
     });
   }
 
@@ -442,23 +584,35 @@
   }
 
   function batchApprovePending(btn) {
-    if (btn) { btn.textContent = '⏳ 处理中…'; btn.disabled = true; }
+    _setPendingActionProcessing(btn, '⏳ 处理中…');
     api('/api/moderation/batch-approve/', { method: 'POST' }).then(function(result) {
+      Object.keys(_pendingItems).forEach(function(id) {
+        if (!_pendingItems[id].is_peer_approved) delete _pendingItems[id];
+      });
+      document.querySelectorAll('#adminContent .admin-pending-card:not(.pc-peer-approved)').forEach(function(card) {
+        card.remove();
+      });
+      _updatePendingSegmentCount('file', Object.keys(_pendingItems).length, true);
+      var list = document.querySelector('#adminContent .admin-pending-list');
+      if (list && !list.querySelector('.admin-pending-card')) {
+        list.innerHTML = '<div class="admin-empty">🎉 没有待审核的内容</div>';
+      }
+      var toolbar = btn && btn.closest ? btn.closest('.pc-toolbar') : null;
+      if (toolbar) toolbar.remove();
       if (typeof refreshCourseTree === 'function') refreshCourseTree();
-      renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
+      _restorePendingAction(btn);
       alert('批量过审失败：' + err.message);
-      renderAdminPending(document.getElementById('adminContent'));
     });
   }
 
-  function quickApprove(id) {
+  function quickApprove(id, btn) {
+    _setPendingActionProcessing(btn);
     api('/api/moderation/' + id + '/approve/', { method: 'POST', body: {} }).then(function() {
-      var card = document.getElementById('pc-' + id);
-      if (card) card.style.opacity = '0.3';
+      _applyApprovedMaterial(id, btn);
       if (typeof refreshCourseTree === 'function') refreshCourseTree();
-      renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
+      _restorePendingAction(btn);
       alert('操作失败：' + err.message);
     });
   }
@@ -524,7 +678,7 @@
       var overlay = document.querySelector('.admin-reject-overlay');
       _removeOverlay(overlay);
       if (typeof refreshCourseTree === 'function') refreshCourseTree();
-      renderAdminPending(document.getElementById('adminContent'));
+      _applyRejectedMaterial(id);
     }).catch(function(err) {
       alert('操作失败：' + err.message);
     });

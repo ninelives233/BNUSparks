@@ -51,6 +51,9 @@
     }
     // Iter 7: Footer 仅在首页显示
     _updateFooterVisibility(name);
+    if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
+      window.BnuMonitoring.track('view.open', { view_name: name });
+    }
   }
 
   function updateSidebar(viewName) {
@@ -140,12 +143,21 @@
         { heading: '💬 意见反馈', text: '任何问题或建议都可以通过邮箱或 GitHub 告诉我们。' },
       ]
     },
+    agreement: {
+      title: '用户协议',
+      sections: [
+        { heading: '📜 适用范围', text: '本站是学生或个人自发维护的学习交流平台，与北京师范大学及其官方机构无关。访问、注册或使用本站，即表示用户同意遵守用户协议与隐私政策。' },
+        { heading: '📚 资料与问答', text: '用户应只上传有权分享或依法可以使用的内容，不得发布侵权、违法、泄露他人个人信息或危害网络安全的内容。资料仅供学习交流参考。' },
+        { heading: '🔗 查看完整文本', text: '<a href="/static/legal/user-agreement.html?v=291" target="_blank" rel="noopener">在新页面阅读完整《用户协议》 →</a>' },
+      ]
+    },
     privacy: {
       title: '隐私政策',
       sections: [
-        { heading: '🔒 信息收集', text: '我们仅收集必要的账号信息（校内邮箱、昵称）用于平台身份识别。' },
-        { heading: '🛡️ 信息使用', text: '收集的信息仅用于平台功能（如资料上传身份标识），不会分享给任何第三方。' },
-        { heading: '🗑️ 数据删除', text: '如你需要删除账号数据，请通过邮箱联系我们，我们将在 7 个工作日内处理。' },
+        { heading: '🔒 收集范围', text: '本站只处理提供服务所需的校园邮箱、昵称、身份标签、资料/问答内容、下载与预览记录、收藏、课表数据，以及根据 IP 地址判断的所在地区信息。' },
+        { heading: '🛡️ 谁能看到', text: '公开发布的资料、问答和个人主页信息可能被其他用户看到；课表默认仅用户本人可见，但授权总管理员可能为运维、安全或服务治理目的只读查看。本站使用网易 163 SMTP 发送验证和找回密码邮件。' },
+        { heading: '🗑️ 行使权利', text: '用户可以修改个人资料、关闭身份公开、清除课表、删除有权限删除的内容，或通过 <a href="mailto:bnusparks@163.com">bnusparks@163.com</a> 申请查阅、更正、删除、注销账号等。' },
+        { heading: '📖 查看完整文本', text: '<a href="/static/legal/privacy-policy.html?v=291" target="_blank" rel="noopener">在新页面阅读完整《隐私政策》 →</a>' },
       ]
     }
   };
@@ -408,19 +420,28 @@
   var _IC_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
   var _IC_ID = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4M7 13h4M15 9h2M15 13h2"/></svg>';
 
-  function showLeaderboard() {
-    pushViewState('leaderboard', {});
+  function showLeaderboard(initialType) {
+    var types = ['upload', 'download', 'collection'];
+    if (types.indexOf(initialType) === -1) initialType = types.indexOf(_lbType) !== -1 ? _lbType : 'upload';
+    _lbType = initialType;
+    pushViewState('leaderboard', { leaderboardType: _lbType });
     switchView('leaderboard');
     updateSidebar('leaderboard');
-    _lbType = 'upload';
     _lbPage = 1;
-    renderLeaderboard('upload', 1);
+    renderLeaderboard(_lbType, 1);
   }
 
   function showQa() {
-    pushViewState('qa', {});
+    var initialQuestionId = arguments.length ? arguments[0] : null;
+    pushViewState('qa', initialQuestionId ? { qaId: initialQuestionId } : {});
     switchView('qa');
     updateSidebar('qa');
+    // 这是用户重新主动进入问答区，应重新允许访客看到登录提示。
+    window._qaLoginPromptDismissed = false;
+    if (initialQuestionId && typeof renderQaDetail === 'function') {
+      renderQaDetail(initialQuestionId);
+      return;
+    }
     if (typeof renderQaView === 'function') {
       renderQaView();
       return;
@@ -430,7 +451,10 @@
     if (typeof ensureFeature === 'function') {
       ensureFeature('qa').then(function() {
         var qaView = document.getElementById('qaView');
-        if (qaView && qaView.classList.contains('active')) renderQaView();
+        if (qaView && qaView.classList.contains('active')) {
+          if (initialQuestionId && typeof renderQaDetail === 'function') renderQaDetail(initialQuestionId);
+          else renderQaView();
+        }
       }).catch(function() {
         if (content) content.innerHTML = '<div class="empty-state compact">问答模块加载失败，请刷新重试。</div>';
       });
@@ -438,8 +462,10 @@
   }
 
   function switchLeaderboardTab(type) {
+    if (['upload', 'download', 'collection'].indexOf(type) === -1) return;
     _lbType = type;
     _lbPage = 1;
+    if (typeof patchViewState === 'function') patchViewState({ leaderboardType: type });
     document.querySelectorAll('.lb-tab').forEach(function(t) { t.classList.remove('active'); });
     var tab = document.querySelector('.lb-tab[data-type="' + type + '"]');
     if (tab) tab.classList.add('active');
@@ -944,6 +970,10 @@
       var data = await api('/api/search/?q=' + encodeURIComponent(q));
       if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
       var courses = data.courses || [];
+      if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
+        window.BnuMonitoring.track('search.execute');
+        if (!courses.length) window.BnuMonitoring.track('search.no_result');
+      }
       if (!courses.length) {
         resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">🔍</div><div class="so-empty-text">未找到相关课程，试试其他关键词</div></div>';
         return;
@@ -1002,7 +1032,8 @@
     var isCompactHome = document.body && document.body.dataset.homeLayout === 'compact';
     if (!isCompactHome && typeof loadStats === 'function') loadStats();
     if (typeof loadCompactHome === 'function') loadCompactHome();
-    pushViewState('home', {}, _initialNav);
+    var homeState = typeof getCompactHomeViewState === 'function' ? getCompactHomeViewState() : {};
+    pushViewState('home', homeState, _initialNav);
     _initialNav = false;
     returnState = null;
     if (restoreScrollY) {

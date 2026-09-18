@@ -93,9 +93,11 @@ window.addEventListener('popstate', async function(e) {
       updateSidebar('home');
       renderNavDrawer();
       _nv.style.display = 'flex';
+      _nv.setAttribute('aria-hidden', 'false');
       lockScroll();
       var _nb = document.getElementById('hlBurger');
       if (_nb) _nb.setAttribute('aria-expanded', 'true');
+      if (typeof activateDialog === 'function') activateDialog(_nv);
     } else {
       closeNavDrawer();
     }
@@ -216,13 +218,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 先确定要恢复的视图。公共页面不再等待认证、统计或课程树。
   var saved = null;
+  var stored = null;
+  try { stored = JSON.parse(sessionStorage.getItem('bnusparks_view')); } catch(e) {}
   var route = parseRoute(location.pathname);
   if (route && route.view === 'rankings' && new URLSearchParams(location.search).get('type') === 'favorite') route.rankingType = 'favorite';
   if (route) {
-    // 保留动态路由的全部参数（尤其 qaCompose 的 type/action/qid/aid）。
+    // URL 决定视图层级；同一路由下的 session 状态补充内部 Tab/筛选器。
+    // 动态路由的参数不能被旧 session 覆盖（尤其 qaCompose 的 type/action/qid/aid）。
     saved = Object.assign({ _bnusparks: true }, route);
+    var dynamicRouteViews = ['explorer', 'userPublic', 'fileDetail', 'timetable', 'qaCompose'];
+    if (stored && stored._bnusparks && stored.view === route.view && dynamicRouteViews.indexOf(route.view) === -1) {
+      saved = Object.assign({}, stored, route);
+    }
   } else {
-    try { saved = JSON.parse(sessionStorage.getItem('bnusparks_view')); } catch(e) {}
+    saved = stored;
   }
   var initialView = saved && saved._bnusparks ? saved.view : 'home';
   var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose', 'timetable'];
@@ -326,9 +335,12 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSearch();
 
   function renderInitialView() {
+    // 根路径本身只能说明“当前地址是首页”，不能覆盖用户刚刚明确选择的首页。
+    // 只有没有可恢复的首页状态时，才应用账号的默认打开页。
+    var hasRestoredHomeState = !!(isRootLanding && stored && stored._bnusparks && stored.view === 'home');
     function showDefaultLanding(restoreScrollY) {
       var appearance = typeof getBnuAppearance === 'function' ? getBnuAppearance() : null;
-      if (isRootLanding && currentUser && appearance && appearance.default_view === 'timetable' &&
+      if (isRootLanding && !hasRestoredHomeState && currentUser && appearance && appearance.default_view === 'timetable' &&
           typeof ttNavTimetable === 'function') {
         return ttNavTimetable();
       }
@@ -352,9 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
         // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
         case 'rankings': showTopDownloaded(undefined, saved.rankingType); break;
-        case 'qa': showQa(); break;
+        case 'qa': showQa(saved.qaId); break;
         case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
-        case 'leaderboard': showLeaderboard(); break;
+        case 'leaderboard': showLeaderboard(saved.leaderboardType); break;
         case 'other': showOther(); break;
         case 'recentAll': showRecentAll(); break;
         case 'recommendations': showRecommendations(); break;
@@ -363,11 +375,11 @@ document.addEventListener('DOMContentLoaded', () => {
         case 'admin': showAdminPanel(); break;
         case 'about': showAbout(saved.aboutSection || 'introduction'); break;
         case 'tutorial': showTutorial(); break;
-        case 'announcements': showAnnouncements(); break;
+        case 'announcements': showAnnouncements(saved.announcementId); break;
         case 'broad': showBroad(); break;
-        case 'myuploads': showMyUploadsPage(); break;
+        case 'myuploads': showMyUploadsPage(saved.myUploadTab); break;
         case 'mydownloads': showMyDownloadsPage(); break;
-        case 'myfavorites': showMyFavoritesPage(); break;
+        case 'myfavorites': showMyFavoritesPage(saved.myFavoriteTab); break;
         case 'fileDetail':
           // 尝试从文件缓存恢复，否则从 API 获取
           if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
@@ -412,6 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── 汉堡导航抽屉：栏目与桌面侧边栏保持同一份事实源（可见性/高亮随侧栏联动） ──
+var _navDrawerOpener = null;
+
 function renderNavDrawer() {
   var body = document.getElementById('navDrawerBody');
   if (!body) return;
@@ -445,12 +459,15 @@ function renderNavDrawer() {
 
 function openNavDrawer() {
   var drawer = document.getElementById('navDrawer');
-  if (!drawer) return;
+  if (!drawer || drawer.style.display === 'flex') return;
+  _navDrawerOpener = document.activeElement;
   renderNavDrawer();
   drawer.style.display = 'flex';
+  drawer.setAttribute('aria-hidden', 'false');
   lockScroll();
   var burger = document.getElementById('hlBurger');
   if (burger) burger.setAttribute('aria-expanded', 'true');
+  if (typeof activateDialog === 'function') activateDialog(drawer);
   if (typeof pushViewState === 'function') pushViewState('navDrawer', {});
 }
 
@@ -459,7 +476,13 @@ function closeNavDrawer(e) {
   var drawer = document.getElementById('navDrawer');
   if (!drawer || drawer.style.display !== 'flex') return;
   drawer.style.display = 'none';
+  drawer.setAttribute('aria-hidden', 'true');
   unlockScroll();
   var burger = document.getElementById('hlBurger');
   if (burger) burger.setAttribute('aria-expanded', 'false');
+  if (typeof deactivateDialog === 'function') deactivateDialog(drawer);
+  if (_navDrawerOpener && _navDrawerOpener.isConnected && typeof _navDrawerOpener.focus === 'function' && document.activeElement !== _navDrawerOpener) {
+    _navDrawerOpener.focus();
+  }
+  _navDrawerOpener = null;
 }

@@ -7,6 +7,7 @@ download-token, X-Accel 文件服务, download
 import os
 import re
 import mimetypes
+import hashlib
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
@@ -36,6 +37,7 @@ from .utils import (
     require_login,
     Material, DownloadRecord,
 )
+from ..monitoring_events import record_request_event
 
 
 @require_login
@@ -173,12 +175,37 @@ def _increment_download(user, material, file_id):
     )
 
 
+def _download_event_id(kind, request_id=None):
+    """下载令牌带 request_id 时，事件 ID 与重试共享；普通请求各记一次。"""
+    if not request_id:
+        return None
+    digest = hashlib.sha256(str(request_id).encode("utf-8")).hexdigest()[:40]
+    return f"material-{kind}-{digest}"[:80]
+
+
+def _record_download_result(request, *, preview, success, request_id=None, quota_denied=False):
+    if quota_denied and not preview:
+        event_name = "material.download.quota_denied"
+        kind = "quota"
+    elif quota_denied:
+        event_name = "material.preview.failure"
+        kind = "preview-quota"
+    elif preview:
+        event_name = "material.preview.success" if success else "material.preview.failure"
+        kind = "preview-success" if success else "preview-failure"
+    else:
+        event_name = "material.download.success" if success else "material.download.failure"
+        kind = "download-success" if success else "download-failure"
+    record_request_event(request, event_name, event_id=_download_event_id(kind, request_id))
+
+
 def api_file_download(request, file_id):
     """GET /api/files/<id>/download — 支持 ?preview=1 内联预览（X-Accel）"""
     material = get_object_or_404(Material, id=file_id)
     file_path = Path(settings.MEDIA_ROOT) / material.file_path
 
     if not file_path.exists():
+        _record_download_result(request, preview=request.GET.get("preview") == "1", success=False)
         return _err("文件不存在", 404)
 
     user = _get_user(request)
@@ -227,8 +254,11 @@ def api_file_download(request, file_id):
                         user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
                         activity_request_id,
                     )
-                    return _serve_file_response(request, cache_path,
-                                                display_filename=display, inline=True, preview_cache=True)
+                    response = _serve_file_response(request, cache_path,
+                                                    display_filename=display, inline=True, preview_cache=True)
+                    _record_download_result(request, preview=True, success=getattr(response, "status_code", 500) < 400,
+                                            request_id=activity_request_id)
+                    return response
                 reader = PdfReader(file_path)
                 writer = PdfWriter()
                 page_count = min(n, len(reader.pages))
@@ -248,8 +278,11 @@ def api_file_download(request, file_id):
                             user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
                             activity_request_id,
                         )
-                        return _serve_file_response(request, cache_path,
-                                                    display_filename=display, inline=True, preview_cache=True)
+                        response = _serve_file_response(request, cache_path,
+                                                        display_filename=display, inline=True, preview_cache=True)
+                        _record_download_result(request, preview=True, success=getattr(response, "status_code", 500) < 400,
+                                                request_id=activity_request_id)
+                        return response
                     except OSError:
                         pass  # 缓存写入失败 → 降级为完整文件预览（计入配额）
             except Exception:
@@ -258,21 +291,29 @@ def api_file_download(request, file_id):
         # 但只记为“预览”，不再膨胀正式下载量。
         allowed, remaining, msg = _check_download_quota(user, material)
         if not allowed:
+            _record_download_result(request, preview=True, success=False, request_id=activity_request_id, quota_denied=True)
             return _err(msg, 429)
         _record_file_activity(
             user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
             activity_request_id,
         )
-        return _serve_file_response(request, file_path,
-                                    display_filename=display, inline=True, preview_cache=False)
+        response = _serve_file_response(request, file_path,
+                                        display_filename=display, inline=True, preview_cache=False)
+        _record_download_result(request, preview=True, success=getattr(response, "status_code", 500) < 400,
+                                request_id=activity_request_id)
+        return response
 
     # 正式下载：配额 + 计数后交给 nginx 直接送文件
     allowed, remaining, msg = _check_download_quota(user, material)
     if not allowed:
+        _record_download_result(request, preview=False, success=False, request_id=activity_request_id, quota_denied=True)
         return _err(msg, 429)
     _record_file_activity(
         user, material, file_id, DownloadRecord.ActivityType.DOWNLOAD,
         activity_request_id,
     )
-    return _serve_file_response(request, file_path,
-                                display_filename=display, inline=False, preview_cache=False)
+    response = _serve_file_response(request, file_path,
+                                    display_filename=display, inline=False, preview_cache=False)
+    _record_download_result(request, preview=False, success=getattr(response, "status_code", 500) < 400,
+                            request_id=activity_request_id)
+    return response

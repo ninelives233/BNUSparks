@@ -1,5 +1,13 @@
 /* BNU Sparks · admin-core.js —— 管理后台框架：showAdminPanel/loadAdminPanel/switchAdminTab + 概览 renderAdminOverview。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
   // ── 管理后台（Iter 3） ──
+  function adminFeatureForTab(tab) {
+    if (tab === 'users') return 'admin-users';
+    if (tab === 'pending' || tab === 'history') return 'admin-pending';
+    if (tab === 'deletions' || tab === 'operations' || tab === 'report-history') return 'admin-records';
+    if (tab === 'qa-records') return 'admin-qa';
+    return null;
+  }
+
   function showAdminPanel() {
     if (!currentUser || (currentUser.role !== 'moderator' && currentUser.role !== 'super_admin' && currentUser.role !== 'sub_moderator')) {
       if (currentUser) alert('权限不足');
@@ -13,9 +21,35 @@
     if (av) av.style.display = 'block';
     updateSidebar('admin');
     window.scrollTo({ top: 0 });
-    pushViewState('admin', {});
-    loadAdminPanel();
+    var persisted = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
+    var rememberedTab = (persisted && persisted.view === 'admin' && persisted.adminTab) ||
+      sessionStorage.getItem('bnusparks_admin_tab') || 'overview';
+    var adminState = { adminTab: rememberedTab };
+    // 进入后台时不要只重写顶层 Tab，把当前后台的内层分区/筛选一起带上；
+    // 否则从后台离开再返回，或启动阶段重写路由时，会抹掉可恢复的子状态。
+    if (persisted && persisted.view === 'admin') {
+      ['adminUserSection', 'pendingType', 'adminMonitorPeriod', 'adminIdentityPeriod',
+        'adminIdentityEducation', 'adminTimetablePeriod', 'adminDownloadActivity',
+        'adminHealthPeriod', 'adminHealthAutoRefresh', 'adminEventsPeriod', 'adminEventsDate'].forEach(function(key) {
+        if (Object.prototype.hasOwnProperty.call(persisted, key)) adminState[key] = persisted[key];
+      });
+    }
+    pushViewState('admin', adminState);
     _updateFooterVisibility('admin');
+    if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
+      window.BnuMonitoring.track('view.open', { view_name: 'admin' });
+    }
+    // 从首页首次进入后台时，先补齐后台公共样式，再加载当前 Tab 的脚本。
+    if (typeof ensureFeature === 'function' &&
+        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady.admin)) {
+      var adminContent = document.getElementById('adminContent');
+      if (adminContent) adminContent.innerHTML = '<div class="admin-loading">管理后台加载中…</div>';
+      ensureFeature('admin').then(loadAdminPanel).catch(function() {
+        if (adminContent) adminContent.innerHTML = '<div class="admin-empty">管理后台加载失败，请刷新重试。</div>';
+      });
+      return;
+    }
+    loadAdminPanel();
   }
 
   function loadAdminPanel() {
@@ -44,25 +78,35 @@
         tab.classList.add('active');
         var tabName = tab.getAttribute('data-tab');
         sessionStorage.setItem('bnusparks_admin_tab', tabName);
+        if (typeof patchViewState === 'function') patchViewState({ adminTab: tabName });
         switchAdminTab(tabName);
       };
     });
     // 从 sessionStorage 恢复上次的 tab
-    var savedTab = sessionStorage.getItem('bnusparks_admin_tab') || 'overview';
+    var persistedState = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
+    var savedTab = (persistedState && persistedState.view === 'admin' && persistedState.adminTab) ||
+      sessionStorage.getItem('bnusparks_admin_tab') || 'overview';
+    var validTabs = ['overview', 'pending', 'history', 'deletions', 'operations', 'report-history', 'qa-records', 'users'];
+    if (validTabs.indexOf(savedTab) === -1) savedTab = 'overview';
     document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
     var tabBtn = document.querySelector('.admin-tab[data-tab="' + savedTab + '"]');
+    if (!tabBtn || tabBtn.style.display === 'none') savedTab = 'overview';
+    tabBtn = document.querySelector('.admin-tab[data-tab="' + savedTab + '"]');
     if (tabBtn) tabBtn.classList.add('active');
+    sessionStorage.setItem('bnusparks_admin_tab', savedTab);
+    if (typeof patchViewState === 'function') patchViewState({ adminTab: savedTab });
     switchAdminTab(savedTab);
   }
 
   function switchAdminTab(tab) {
     var content = document.getElementById('adminContent');
     if (!content) return;
-    // 管理端的重模块按需加载；重复调用会复用 feature-loader 的 Promise。
-    if (typeof ensureFeature === 'function' &&
-        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady.admin)) {
+    // 管理端按 Tab 加载模块；用户管理不再等待待审/问答/记录脚本。
+    var feature = adminFeatureForTab(tab);
+    if (feature && typeof ensureFeature === 'function' &&
+        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady[feature])) {
       content.innerHTML = '<div class="admin-loading">管理模块加载中…</div>';
-      ensureFeature('admin').then(function() {
+      ensureFeature(feature).then(function() {
         switchAdminTab(tab);
       }).catch(function() {
         content.innerHTML = '<div class="admin-empty">管理模块加载失败，请刷新重试。</div>';

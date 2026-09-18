@@ -1,23 +1,30 @@
 /* ═══════════════════════════════════════════════════════════════
    我的课表 · timetable.css
    方向：「纸墨 × 中国色」—— 站点纸白墨蓝学术底 + 传统色课程卡片。
-   4 套配色方案（.tt-sch-*）× 资料丰度冷暖对比（.tt-rich-0/1/2：
-   无资料=冷色（8 冷色轮转）、有资料=暖色（8 暖色轮转）、
-   越多越深越浓），课程卡颜色全部由
+   8 套配色方案（.tt-sch-*，暖组×冷组成对设计、切换时一起换）×
+   资料丰度冷暖对比（.tt-rich-0/1/2：无资料=冷色（8 冷色轮转）、
+   有资料=暖色（8 暖色轮转）、越多越深越浓），课程卡颜色全部由
    oklch(L C H) 从色相变量实时计算。
+   硕博 / 珠海 noLink 课表无丰度语义：色调类扩到 .ttp1-16，
+   冷暖两组 16 色并作一池按名哈希随机取色（见 timetable.js ttToneOf）。
    签名元素：今日列头琥珀「今」签 + 角格宋体大数码周次。
+   网格 12 节连续无分隔行（v276）：时段间隔靠时间列数字自明，
+   与主流课表 App 一致；移动端满屏一屏放下全部（cqh 字体缩放）。
    依赖 tokens.css 全局变量；仅作用于 #timetableView。
    ═══════════════════════════════════════════════════════════════ */
 
 .tt-shell {
-  /* 色相：8 个暖色（按方案覆盖 H，卡片色实时计算） */
-  --ttp1-h: 28;   /* 柿 */
-  --ttp2-h: 48;   /* 缃 */
-  --ttp3-h: 68;   /* 秋香 */
-  --ttp4-h: 98;   /* 官青 */
-  --ttp5-h: 15;   /* 檀 */
-  --ttp6-h: 40;   /* 杏 */
-  --ttp7-h: 85;   /* 苍绿 */
+  /* 色相：8 个暖色（按方案覆盖 H，卡片色实时计算）。
+     冷暖安全区：暖组 ∈ [322,85]（品红~黄）、冷组 ∈ [158,305]（青~紫），
+     组间色相间隔 ≥76°，保证「有资料=暖 / 无资料=冷」一眼可辨；
+     组内区分度交给水洗阶梯（--tdl/--tdc），色相弧不必硬拉 */
+  --ttp1-h: 15;   /* 柿 */
+  --ttp2-h: 45;   /* 缃 */
+  --ttp3-h: 65;   /* 秋香 */
+  --ttp4-h: 82;   /* 官青 */
+  --ttp5-h: 355;  /* 檀 */
+  --ttp6-h: 55;   /* 杏 */
+  --ttp7-h: 25;   /* 浅赭 */
   --ttp8-h: 335;  /* 海棠 */
 
   /* 资料丰度基准（所有配色方案均由此衍生）——冷暖对比：
@@ -27,15 +34,19 @@
   --tt-bl: 0.80; --tt-bc: 0.07;
   /* 冷色（无资料）：8 个传统冷色按课程哈希轮转，同档也有差异 */
   --tt-l0: 0.90; --tt-c0: 0.05; --tt-ic0: 0.07; --tt-bl0: 0.82; --tt-bc0: 0.055;
-  --ttp1-h0: 230;  /* 绀青 */
-  --ttp2-h0: 200;  /* 青碧 */
-  --ttp3-h0: 170;  /* 松绿 */
+  --ttp1-h0: 225;  /* 绀青 */
+  --ttp2-h0: 195;  /* 青碧 */
+  --ttp3-h0: 165;  /* 松绿 */
   --ttp4-h0: 250;  /* 群青 */
-  --ttp5-h0: 260;  /* 靛 */
-  --ttp6-h0: 215;  /* 黛蓝 */
+  --ttp5-h0: 275;  /* 靛 */
+  --ttp6-h0: 210;  /* 黛蓝 */
   --ttp7-h0: 185;  /* 青绿 */
-  --ttp8-h0: 280;  /* 紫棠 */
+  --ttp8-h0: 300;  /* 紫棠 */
   --tt-l2: 0.835; --tt-c2: 0.105;
+
+  /* 水洗阶梯（叠加在丰度基准之上）：同组八档明度/彩度各不相同，
+     低饱和下色相差不可感，靠「洗了几道」的深浅差区分同组课程 */
+  --tdl: 0; --tdc: 0;
 
   --tt-today: var(--accent);
   --tt-panel: var(--raised);
@@ -55,18 +66,52 @@
 }
 .tt-admin-empty p { max-width: 32rem; margin-inline: auto; }
 
-/* ── 配色方案（暖色系为主体，各自搭配一个冷色相做「无资料」对比） ── */
-.tt-sch-nuan {
-  --ttp1-h: 355; --ttp2-h: 20;  --ttp3-h: 40;  --ttp4-h: 5;
-  --ttp5-h: 50;  --ttp6-h: 350; --ttp7-h: 30;  --ttp8-h: 60;
+/* ── 配色方案（每套 = 暖组「有资料」× 冷组「无资料」成对设计，切换时一起换）──
+   命名取传统色意象。所有方案遵守冷暖安全区：暖组 ∈ [322,85]、冷组 ∈ [158,305]，
+   组间间隔 ≥76°；组内区分度由 .ttpN 的八档水洗阶梯承担，色相只做辅助。
+   JS 侧 TT_SCHEMES 存有同一份色相表（供弹层预览色点），两处需同步维护。 */
+/* 暖秋（默认，基础变量即本方案）：柿杏缃官青 × 绀青靛紫青碧 */
+.tt-sch-danqing {  /* 丹青：朱砂橙赭洋红 × 石青靛紫（互补对撞） */
+  --ttp1-h: 5;   --ttp2-h: 28;  --ttp3-h: 350; --ttp4-h: 45;
+  --ttp5-h: 325; --ttp6-h: 12;  --ttp7-h: 55;  --ttp8-h: 335;
+  --ttp1-h0: 200; --ttp2-h0: 230; --ttp3-h0: 172; --ttp4-h0: 255;
+  --ttp5-h0: 185; --ttp6-h0: 245; --ttp7-h0: 215; --ttp8-h0: 285;
 }
-.tt-sch-qing {
-  --ttp1-h: 55;  --ttp2-h: 75;  --ttp3-h: 95;  --ttp4-h: 40;
-  --ttp5-h: 65;  --ttp6-h: 85;  --ttp7-h: 108; --ttp8-h: 35;
+.tt-sch-nuan {     /* 海棠：海棠红橘黄 × 紫棠青紫 */
+  --ttp1-h: 350; --ttp2-h: 15;  --ttp3-h: 45;  --ttp4-h: 340;
+  --ttp5-h: 55;  --ttp6-h: 322; --ttp7-h: 25;  --ttp8-h: 70;
+  --ttp1-h0: 268; --ttp2-h0: 292; --ttp3-h0: 246; --ttp4-h0: 300;
+  --ttp5-h0: 254; --ttp6-h0: 280; --ttp7-h0: 238; --ttp8-h0: 286;
 }
-.tt-sch-zi {
-  --ttp1-h: 0;   --ttp2-h: 18;  --ttp3-h: 340; --ttp4-h: 8;
-  --ttp5-h: 28;  --ttp6-h: 350; --ttp7-h: 22;  --ttp8-h: 45;
+.tt-sch-zi {       /* 绛纱：绛红洋红深赭 × 靛蓝紫 */
+  --ttp1-h: 355; --ttp2-h: 20;  --ttp3-h: 335; --ttp4-h: 10;
+  --ttp5-h: 40;  --ttp6-h: 322; --ttp7-h: 30;  --ttp8-h: 50;
+  --ttp1-h0: 245; --ttp2-h0: 270; --ttp3-h0: 230; --ttp4-h0: 290;
+  --ttp5-h0: 238; --ttp6-h0: 300; --ttp7-h0: 222; --ttp8-h0: 255;
+}
+.tt-sch-jusong {   /* 橘颂：橙黄朱橘 × 青碧沧澜（屈原《橘颂》后皇嘉树） */
+  --ttp1-h: 28;  --ttp2-h: 55;  --ttp3-h: 8;   --ttp4-h: 45;
+  --ttp5-h: 35;  --ttp6-h: 355; --ttp7-h: 62;  --ttp8-h: 15;
+  --ttp1-h0: 178; --ttp2-h0: 202; --ttp3-h0: 162; --ttp4-h0: 216;
+  --ttp5-h0: 170; --ttp6-h0: 230; --ttp7-h0: 158; --ttp8-h0: 192;
+}
+.tt-sch-qing {     /* 蜜茶：蜜黄缃杏 × 青碧松绿 */
+  --ttp1-h: 54;  --ttp2-h: 68;  --ttp3-h: 38;  --ttp4-h: 75;
+  --ttp5-h: 58;  --ttp6-h: 25;  --ttp7-h: 44;  --ttp8-h: 15;
+  --ttp1-h0: 165; --ttp2-h0: 192; --ttp3-h0: 178; --ttp4-h0: 212;
+  --ttp5-h0: 185; --ttp6-h0: 232; --ttp7-h0: 200; --ttp8-h0: 172;
+}
+.tt-sch-zhuqing {  /* 竹青：嫩竹黄绿（不越青线） × 沧蓝群青 */
+  --ttp1-h: 82;  --ttp2-h: 48;  --ttp3-h: 66;  --ttp4-h: 36;
+  --ttp5-h: 58;  --ttp6-h: 30;  --ttp7-h: 72;  --ttp8-h: 42;
+  --ttp1-h0: 200; --ttp2-h0: 225; --ttp3-h0: 185; --ttp4-h0: 245;
+  --ttp5-h0: 195; --ttp6-h0: 265; --ttp7-h0: 175; --ttp8-h0: 210;
+}
+.tt-sch-qingjin {  /* 青金：鎏金（琥珀到金） × 青金石蓝（金嵌青金石） */
+  --ttp1-h: 52;  --ttp2-h: 72;  --ttp3-h: 36;  --ttp4-h: 82;
+  --ttp5-h: 20;  --ttp6-h: 44;  --ttp7-h: 62;  --ttp8-h: 28;
+  --ttp1-h0: 245; --ttp2-h0: 265; --ttp3-h0: 230; --ttp4-h0: 285;
+  --ttp5-h0: 238; --ttp6-h0: 220; --ttp7-h0: 300; --ttp8-h0: 252;
 }
 
 /* ── 顶部：标题 + 操作 ─────────────────────────────── */
@@ -86,6 +131,11 @@
 .tt-viewbar { display: flex; align-items: center; margin: 0 0 var(--space-sm); }
 .tt-viewbar .pc-seg { background: var(--tt-gutter); }
 .tt-viewbar .pc-seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* 分段按钮双标签：桌面显示全称（.seg-l），≤480px 换短词（.seg-s） */
+.tt-shell .seg-s { display: none; }
+/* 周次导航顶栏镜像（移动端与视图分段同排）：桌面隐藏，位置互换见 480px 媒体查询。
+   加 .tt-shell 提高权重——基础 .tt-weeknav 的 display:flex 在文件更后处，会盖掉同权重规则。 */
+.tt-shell .tt-weeknav-top { display: none; }
 
 .tt-btn {
   appearance: none; border: 1px solid var(--tt-line); background: var(--tt-panel);
@@ -108,7 +158,7 @@
 .tt-scheme-pop {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
   background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg); padding: 6px; min-width: 168px;
+  box-shadow: var(--shadow-lg); padding: 6px; min-width: 200px;
   animation: ttPop 0.14s ease-out both;
 }
 .tt-sch-opt {
@@ -143,6 +193,61 @@
 .tt-mg-opt:hover { background: var(--surface); }
 .tt-mg-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .tt-mg-sub { display: block; margin-top: 2px; font-size: var(--fs-2xs); color: var(--ink-faint); font-weight: 400; }
+.tt-mg-align {
+  margin: 2px 4px 2px;
+  padding: 8px 6px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.tt-mg-align-title {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  color: var(--ink); font-size: var(--fs-xs); font-weight: 600;
+}
+.tt-mg-align-title span { color: var(--ink-faint); font-size: var(--fs-2xs); font-weight: 400; }
+.tt-mg-align-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.tt-mg-align-opt {
+  min-width: 0; padding: 5px 4px; border: 1px solid var(--border-light); border-radius: var(--radius-xs);
+  background: var(--raised); color: var(--ink-soft); font: 500 var(--fs-2xs)/1.2 var(--sans); cursor: pointer;
+}
+.tt-mg-align-opt[data-mg-align="left"] { text-align: left; }
+.tt-mg-align-opt[data-mg-align="center"] { text-align: center; }
+.tt-mg-align-opt[data-mg-align="right"] { text-align: right; }
+.tt-mg-align-opt:hover { border-color: var(--primary-light); background: var(--primary-surface); color: var(--primary-dark); }
+.tt-mg-align-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* 移动端收紧「管理」弹层：限宽、缩距、降字号、限高内部滚动，
+   别让设置面板占掉大半张课表 */
+@media (max-width: 480px) {
+  .tt-manage-pop {
+    min-width: 0;
+    width: min(236px, calc(100vw - 20px));
+    max-height: 72vh; overflow-y: auto;
+    padding: 4px;
+  }
+  .tt-mg-opt { padding: 6px 8px; font-size: var(--fs-xs); }
+  .tt-mg-sub { margin-top: 1px; font-size: 10px; }
+  .tt-mg-label { padding: 2px 8px 3px; }
+  .tt-mg-sec + .tt-mg-sec { margin-top: 3px; padding-top: 4px; }
+  .tt-mg-align { margin: 2px; padding: 6px 5px 5px; }
+  .tt-mg-align-options { margin-top: 4px; }
+  .tt-mg-align-opt { padding: 4px 3px; }
+  .tt-mg-date { padding: 6px 8px; }
+  .tt-mg-date input { min-height: 28px; }
+}
+.tt-mg-align-opt.is-active { border-color: var(--primary); background: var(--primary-surface); color: var(--primary-dark); font-weight: 650; }
+/* 管理菜单里的「学期」日期行（仅移动端渲染）：与菜单选项同一套行内语言 */
+.tt-mg-date {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 8px 10px; border-radius: var(--radius-sm);
+  font-family: var(--sans); font-size: var(--fs-sm); color: var(--ink); cursor: pointer;
+}
+.tt-mg-date:hover { background: var(--surface); }
+.tt-mg-date input {
+  appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  color-scheme: light; font-family: var(--sans); font-size: var(--fs-xs);
+  min-height: 30px; padding: 4px 8px; border-radius: var(--radius-sm);
+}
+.tt-mg-date input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* 切换课表弹层：学期槽列表，与管理/配色弹层同一套语言 */
 .tt-slot-pop {
@@ -253,7 +358,7 @@
 .tt-grid {
   display: grid;
   grid-template-columns: 64px repeat(7, minmax(96px, 1fr));
-  grid-template-rows: 68px repeat(4, 74px) 16px repeat(4, 74px) 16px repeat(4, 74px);
+  grid-template-rows: 68px repeat(12, 74px);
   min-width: 800px;
 }
 /* 学期内无周末课 → 收掉周六/周日空列，工作日行更宽 */
@@ -290,12 +395,6 @@
 .tt-time b { font-family: var(--serif); font-size: var(--fs-md); font-weight: 700; line-height: 1.1; color: var(--tt-head); }
 .tt-time span { font-size: 10px; color: var(--tt-time); font-variant-numeric: tabular-nums; line-height: 1.3; text-align: center; }
 
-.tt-break {
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--tt-line-soft);
-  background: var(--tt-gutter);
-}
-
 /* 今日列淡染 */
 .tt-cell.is-today-col { background: oklch(from var(--tt-today) l c h / 0.045); }
 
@@ -306,9 +405,11 @@
   flex: 1; min-height: 0; min-width: 0;
   display: flex; flex-direction: column; padding: 7px 9px;
   border-radius: 8px;
-  border: 1px solid oklch(var(--tt-bl) var(--tt-bc) var(--th));
-  background: oklch(var(--tt-l) var(--tt-c) var(--th));
-  color: oklch(var(--tt-il) var(--tt-ic) var(--th));
+  /* 边框半透明：色块从「贴纸描边」退成「纸上水洗色」，笔触仍在但不抢戏；
+     tdl/tdc 为色调水洗阶梯偏移，负值=更深更浓（var 兜底 0 防无色调类场景失效） */
+  border: 1px solid oklch(calc(var(--tt-bl, 0.8) + var(--tdl, 0)) calc(var(--tt-bc, 0.07) + var(--tdc, 0)) var(--th) / 0.55);
+  background: oklch(calc(var(--tt-l, 0.91) + var(--tdl, 0)) calc(var(--tt-c, 0.06) + var(--tdc, 0)) var(--th));
+  color: oklch(calc(var(--tt-il, 0.4) + var(--tdl, 0)) calc(var(--tt-ic, 0.09) + var(--tdc, 0)) var(--th));
   overflow: hidden;
   box-shadow: var(--shadow-xs);
   transition: transform var(--t-fast), box-shadow var(--t-fast);
@@ -317,7 +418,20 @@
 /* 有目录的课程可点击跳转：hover 浮起示意，不用下划线 */
 .tt-card.is-link { cursor: pointer; }
 .tt-card.is-link:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+/* noLink 课表的卡片改为详情入口；沿用资料卡的轻浮起反馈，但不改变北京本科链接卡。 */
+.tt-card.is-detail { cursor: pointer; }
+.tt-card.is-detail:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--accent); }
+.tt-card.is-detail:focus-visible { outline: none; box-shadow: var(--focus-ring), var(--shadow-lg); }
 .tt-card.is-pending { cursor: help; }
+.tt-card.is-rejected { border-style: dashed; }
+.tt-card-status {
+  appearance: none; align-self: flex-start; margin-top: 4px; padding: 3px 7px;
+  border: 1px solid oklch(from var(--danger) l c h / 0.35);
+  border-radius: var(--radius-xs); background: oklch(from var(--danger) l c h / 0.08);
+  color: var(--danger); font: 600 var(--fs-2xs)/1 var(--sans); white-space: nowrap; cursor: pointer;
+}
+.tt-card-status:hover { background: oklch(from var(--danger) l c h / 0.14); }
+.tt-card-status:focus-visible, .tt-reapply-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* 资料丰度：冷色（无）→ 暖色（有）→ 更深更浓（丰富）；
    两条都用 .tt-card 前缀提高优先级，确保冷色相覆盖 .ttpN 的暖色相 */
 .tt-card.tt-rich-0 { --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); --tt-ic: var(--tt-ic0); --tt-bl: var(--tt-bl0); --tt-bc: var(--tt-bc0); }
@@ -339,15 +453,34 @@
 .tt-card-meta { margin-top: auto; padding-top: 4px; font-size: var(--fs-2xs); line-height: 1.45; opacity: 0.88; overflow: hidden; }
 .tt-card-meta .r { display: block; }
 .tt-card-meta .t { display: block; }
+.tt-shell.tt-align-center .tt-card-name,
+.tt-shell.tt-align-center .tt-card-meta { text-align: center; }
+.tt-shell.tt-align-center .tt-card-status { align-self: center; }
+.tt-shell.tt-align-right .tt-card-name,
+.tt-shell.tt-align-right .tt-card-meta { text-align: right; }
+.tt-shell.tt-align-right .tt-card-status { align-self: flex-end; }
 
-.ttp1 { --th: var(--ttp1-h); }
-.ttp2 { --th: var(--ttp2-h); }
-.ttp3 { --th: var(--ttp3-h); }
-.ttp4 { --th: var(--ttp4-h); }
-.ttp5 { --th: var(--ttp5-h); }
-.ttp6 { --th: var(--ttp6-h); }
-.ttp7 { --th: var(--ttp7-h); }
-.ttp8 { --th: var(--ttp8-h); }
+/* 水洗阶梯：tdl/tdc 叠加在丰度基准（--tt-l/c 与 --tt-l0/c0）之上，
+   八档 (L,C) 互不相同——低饱和同组色靠深浅差区分，跨丰度档仍可组合。
+   9-16 打乱阶梯顺序，自由池取色不与明暗相关。 */
+.ttp1 { --th: var(--ttp1-h); --tdl: 0.010;  --tdc: -0.012; }
+.ttp2 { --th: var(--ttp2-h); --tdl: -0.018; --tdc: 0.022; }
+.ttp3 { --th: var(--ttp3-h); --tdl: -0.004; --tdc: 0.006; }
+.ttp4 { --th: var(--ttp4-h); --tdl: -0.042; --tdc: 0.052; }
+.ttp5 { --th: var(--ttp5-h); --tdl: 0.014;  --tdc: -0.016; }
+.ttp6 { --th: var(--ttp6-h); --tdl: -0.032; --tdc: 0.038; }
+.ttp7 { --th: var(--ttp7-h); --tdl: 0.002;  --tdc: 0; }
+.ttp8 { --th: var(--ttp8-h); --tdl: -0.026; --tdc: 0.030; }
+/* 自由池 9-16：映射到冷组色相。仅硕博/珠海 noLink 课表使用（JS 在无丰度
+   语义时按名哈希把色调摊到 1-16，冷暖两组并作一池随机取色） */
+.ttp9  { --th: var(--ttp1-h0); --tdl: -0.018; --tdc: 0.022; }
+.ttp10 { --th: var(--ttp2-h0); --tdl: 0.010;  --tdc: -0.012; }
+.ttp11 { --th: var(--ttp3-h0); --tdl: -0.032; --tdc: 0.038; }
+.ttp12 { --th: var(--ttp4-h0); --tdl: -0.004; --tdc: 0.006; }
+.ttp13 { --th: var(--ttp5-h0); --tdl: -0.042; --tdc: 0.052; }
+.ttp14 { --th: var(--ttp6-h0); --tdl: 0.002;  --tdc: 0; }
+.ttp15 { --th: var(--ttp7-h0); --tdl: -0.026; --tdc: 0.030; }
+.ttp16 { --th: var(--ttp8-h0); --tdl: 0.014;  --tdc: -0.016; }
 
 /* 周次切换 / 首次渲染的入场动效 */
 @keyframes ttPop {
@@ -358,11 +491,12 @@
 
 /* ── 底部统计 / 图例 ────────────────────────────────── */
 .tt-foot { margin-top: var(--space-xs); display: flex; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--tt-time); }
-.tt-legend { display: inline-flex; align-items: center; gap: 6px; --th: 45; }
+/* 图例色相随方案走：JS 渲染时注入 --lgw（暖组样本）/ --lgc（冷组样本） */
+.tt-legend { display: inline-flex; align-items: center; gap: 6px; --th: var(--lgw, 45); }
 .tt-legend i { width: 11px; height: 11px; border-radius: 3px; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(var(--tt-l) var(--tt-c) var(--th)); }
 .tt-legend .lg1 { --tt-l: 0.91; --tt-c: 0.06; }
 .tt-legend .lg2 { --tt-l: var(--tt-l2); --tt-c: var(--tt-c2); }
-.tt-legend .lg0 { --th: 230; --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
+.tt-legend .lg0 { --th: var(--lgc, 230); --tt-l: var(--tt-l0); --tt-c: var(--tt-c0); }
 
 /* ── 列表视图：整学期课程一览 ─────────────────────────
    网格扫一眼，列表查细节：纸面行 + 左缘课程色条（色即身份），
@@ -383,7 +517,7 @@
 .tt-lrow::before {
   content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
   border-radius: 0 2px 2px 0;
-  background: oklch(0.78 0.075 var(--th));
+  background: oklch(calc(0.78 + var(--tdl, 0)) calc(0.075 + var(--tdc, 0)) var(--th));
 }
 .tt-lhead { display: flex; align-items: flex-start; gap: 10px; min-width: 0; grid-area: head; }
 .tt-lrow .nm {
@@ -394,9 +528,28 @@
 .tt-tag {
   margin-left: auto; flex: none; font-size: var(--fs-2xs); line-height: 1;
   padding: 4px 9px; border-radius: var(--radius-full); letter-spacing: 0.05em;
-  border: 1px solid oklch(var(--tt-bl) var(--tt-bc) var(--th));
-  background: oklch(var(--tt-l) var(--tt-c) var(--th));
-  color: oklch(var(--tt-il) var(--tt-ic) var(--th));
+  border: 1px solid oklch(calc(var(--tt-bl, 0.8) + var(--tdl, 0)) calc(var(--tt-bc, 0.07) + var(--tdc, 0)) var(--th));
+  background: oklch(calc(var(--tt-l, 0.91) + var(--tdl, 0)) calc(var(--tt-c, 0.06) + var(--tdc, 0)) var(--th));
+  color: oklch(calc(var(--tt-il, 0.4) + var(--tdl, 0)) calc(var(--tt-ic, 0.09) + var(--tdc, 0)) var(--th));
+}
+.tt-request-status { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.tt-tag.tt-tag-rejected {
+  border-color: oklch(from var(--danger) l c h / 0.35);
+  background: oklch(from var(--danger) l c h / 0.08); color: var(--danger);
+}
+.tt-reapply-btn {
+  appearance: none; min-height: 28px; padding: 4px 8px; border-radius: var(--radius-sm);
+  border: 1px solid oklch(from var(--primary) l c h / 0.35);
+  background: var(--primary-surface); color: var(--primary-dark);
+  font: 600 var(--fs-2xs)/1 var(--sans); white-space: nowrap; cursor: pointer;
+}
+.tt-reapply-btn:hover { background: var(--primary); color: var(--on-primary, white); }
+.tt-request-pending, .tt-request-rejected {
+  flex: none; font-size: var(--fs-2xs); color: var(--ink-faint); white-space: nowrap;
+}
+.tt-request-rejected {
+  flex-basis: 100%; color: var(--danger); white-space: pre-wrap;
+  overflow-wrap: anywhere; line-height: 1.45;
 }
 .tt-tree-retry { appearance: none; cursor: pointer; font-family: var(--sans); font-weight: 600; }
 .tt-tree-retry:hover { filter: brightness(0.97); }
@@ -420,7 +573,15 @@
 .tt-lrow.is-link { cursor: pointer; }
 .tt-lrow.is-link:hover { background: var(--tt-panel); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
 .tt-lrow.is-link:hover::before { top: 7px; bottom: 7px; background: oklch(0.68 0.1 var(--th)); }
+/* noLink 课表的列表行打开课程详情；保留与资料链接相同的可点击反馈。 */
+.tt-lrow.is-detail { cursor: pointer; }
+.tt-lrow.is-detail:hover { background: var(--tt-panel); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.tt-lrow.is-detail:hover::before { top: 7px; bottom: 7px; background: var(--accent); }
+.tt-lrow.is-detail:focus-visible { outline: none; box-shadow: var(--focus-ring), var(--shadow-sm); }
 .tt-lrow.is-pending { cursor: help; }
+.tt-lrow.is-rejected::before { background: var(--danger); }
+.tt-request-note { display: block; color: var(--danger); font-size: var(--fs-2xs); line-height: 1.45; }
+.tt-request-extra { color: var(--ink-soft); }
 .tt-list.swap .tt-lrow { animation: ttPop 0.18s ease-out both; animation-delay: calc(var(--li) * 16ms); }
 
 /* ── 编辑模式（编辑态网格 + 课程编辑弹层） ─────────────
@@ -492,7 +653,14 @@
   cursor: pointer; font-size: var(--fs-sm); padding: 2px 5px; border-radius: var(--radius-xs);
 }
 .tt-ico:hover { color: var(--ink); background: var(--tt-gutter); }
-.tt-add-seg { margin-top: 10px; width: 100%; border-style: dashed; }
+/* 添加时间段：低调的幽灵文字按钮——无框无底，悬停才现淡底色 */
+.tt-add-seg {
+  margin-top: 10px; width: 100%; min-height: 30px;
+  border: none; background: none;
+  color: var(--ink-faint); font-size: var(--fs-sm); font-weight: 400;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.tt-add-seg:hover { color: var(--primary-dark); background: var(--tt-gutter); }
 .tt-modal footer .tt-foot-left { margin-right: auto; display: inline-flex; gap: 6px; }
 
 /* ── 空状态（导入引导） ─────────────────────────────── */
@@ -529,6 +697,42 @@
 .tt-modal header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-md) var(--space-md) 0; }
 .tt-modal header h3 { font-family: var(--serif); font-size: var(--fs-lg); letter-spacing: 0.04em; }
 .tt-modal .tt-mbody { padding: var(--space-sm) var(--space-md); overflow-y: auto; }
+.tt-overlay.tt-detail-overlay { background: oklch(0.16 0.02 55 / 0.52); }
+.tt-modal.tt-detail { width: min(560px, 100%); max-height: min(78vh, 680px); }
+.tt-detail-header { align-items: flex-start !important; gap: var(--space-sm); }
+.tt-detail-header > div { min-width: 0; }
+.tt-detail-kicker {
+  display: block; margin-bottom: 4px; color: var(--accent);
+  font: 700 var(--fs-2xs)/1.2 var(--sans); letter-spacing: 0.14em;
+}
+.tt-detail-header h3 { line-height: 1.35; overflow-wrap: anywhere; }
+.tt-detail-sub { margin-top: 5px; color: var(--ink-faint); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.tt-detail-facts { border-top: 1px solid var(--border-light); }
+.tt-detail-fact {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: var(--space-sm);
+  align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--border-light);
+  font-size: var(--fs-sm);
+}
+.tt-detail-fact > span, .tt-detail-section-label { color: var(--ink-faint); font-size: var(--fs-xs); }
+.tt-detail-fact strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.tt-detail-schedule { margin-top: var(--space-md); }
+.tt-detail-section-label { margin-bottom: 7px; font-weight: 650; }
+.tt-detail-meeting {
+  padding: 10px 12px; border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.tt-detail-meeting + .tt-detail-meeting { margin-top: 7px; }
+.tt-detail-meeting-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tt-detail-meeting-head strong { font-family: var(--serif); font-size: var(--fs-md); letter-spacing: 0.02em; }
+.tt-detail-meeting-head span { color: var(--ink); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.tt-detail-meeting-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 5px; color: var(--ink-faint); font-size: var(--fs-xs); }
+.tt-detail-empty { padding: 12px; border: 1px dashed var(--border-light); border-radius: var(--radius-sm); color: var(--ink-faint); font-size: var(--fs-sm); }
+.tt-detail-note { margin: var(--space-md) 0 0; color: var(--ink-faint); font-size: var(--fs-xs); line-height: 1.6; }
+.tt-detail footer { justify-content: space-between; }
+@keyframes ttDetailSlideUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .tt-msummary { display: flex; gap: var(--space-md); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--ink-soft); margin-bottom: var(--space-sm); }
 .tt-msummary b { color: var(--ink); font-weight: 600; }
 .tt-privacy-note { font-size: var(--fs-xs); color: var(--ink-faint); background: var(--surface); border: 1px dashed var(--border-light); border-radius: var(--radius-sm); padding: 6px 10px; margin-bottom: var(--space-sm); }
@@ -555,9 +759,13 @@
 .tt-code-note.is-danger .tt-code-note-mark { color: var(--danger-dark); border-color: var(--danger-border); }
 .tt-code-note.is-admission strong,
 .tt-code-note.is-admission b { color: var(--danger-dark); font-weight: 750; }
+.tt-reapply-banner { margin-bottom: var(--space-md); }
+.tt-reapply-reasons { margin: 4px 0 0; padding-left: 1.2em; }
+.tt-reapply-reasons li { margin: 2px 0; overflow-wrap: anywhere; }
+.tt-reapply-reasons b { color: var(--ink); font-weight: 650; }
 .tt-mlist { border-top: 1px solid var(--border-light); }
 .tt-mrow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-light); font-size: var(--fs-xs); flex-wrap: wrap; }
-.tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(0.925 0.042 var(--th)); }
+.tt-mrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; align-self: center; border: 1px solid oklch(0.84 0.04 var(--th)); background: oklch(calc(0.925 + var(--tdl, 0)) calc(0.042 + var(--tdc, 0)) var(--th)); }
 .tt-mrow .nm { font-weight: 600; font-family: var(--serif); font-size: var(--fs-sm); letter-spacing: 0.02em; }
 .tt-mrow .tm { color: var(--ink-faint); margin-left: auto; text-align: right; }
 .tt-mrow .loc { flex-basis: 100%; display: flex; gap: 6px; align-items: center; color: var(--ink-faint); }
@@ -596,6 +804,24 @@
 .tt-lp-empty { padding: var(--space-lg); text-align: center; color: var(--ink-faint); font-size: var(--fs-sm); }
 
 .tt-modal footer { display: flex; justify-content: flex-end; gap: var(--space-xs); padding: var(--space-sm) var(--space-md) var(--space-md); }
+/* ── 驳回重申确认弹层：原因必须在正文直接可读，不能依赖 title 悬停 ── */
+.tt-modal.tt-reapply { width: min(500px, 100%); }
+.tt-reapply .tt-mbody { padding-top: var(--space-md); }
+.tt-reapply-course {
+  margin: 0 0 var(--space-sm); font-family: var(--serif); font-size: var(--fs-lg);
+  font-weight: 650; line-height: 1.45; overflow-wrap: anywhere;
+}
+.tt-reapply-reason {
+  padding: 11px 13px; border: 1px solid var(--danger-border);
+  border-left: 3px solid var(--danger); border-radius: var(--radius-sm);
+  background: var(--danger-light); color: var(--ink-soft); font-size: var(--fs-sm); line-height: 1.65;
+}
+.tt-reapply-reason strong { display: block; color: var(--danger-dark); font-weight: 700; }
+.tt-reapply-reason-label { display: block; margin-top: 3px; color: var(--danger-dark); font-size: var(--fs-xs); font-weight: 650; }
+.tt-reapply-reason p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tt-reapply-note {
+  margin: var(--space-sm) 0 0; color: var(--ink-faint); font-size: var(--fs-xs); line-height: 1.65;
+}
 /* 意见反馈弹层：textarea + 字数计，footer 末尾是邮箱链接（右下角，窄屏换行） */
 .tt-fb .tt-mbody textarea {
   width: 100%; resize: vertical; min-height: 120px;
@@ -640,6 +866,15 @@
 
 /* ── 移动端 ─────────────────────────────────────────── */
 @media (max-width: 700px) {
+  .tt-overlay.tt-detail-overlay { align-items: flex-end; padding: 0; }
+  .tt-modal.tt-detail {
+    width: 100%; max-width: none; max-height: 88dvh;
+    border-radius: 20px 20px 0 0;
+    animation: ttDetailSlideUp 0.24s cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+  .tt-detail-header { padding: 18px 18px 0 !important; }
+  .tt-detail .tt-mbody { padding: 10px 18px 4px; }
+  .tt-detail footer { padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); }
   .tt-top {
     display: flex; align-items: center; gap: 10px; margin: 12px 0 10px;
   }
@@ -692,7 +927,7 @@
     .tt-start-edit input { width: 108px; }
   }
 
-  /* 网格视图满屏：一屏内完整看完一周课表，不做垂直滚动；
+  /* 网格视图满屏：一屏内完整看完一周 12 节，不做垂直滚动（实用性优先）；
      列表视图保持常规文档流 */
   #ttShell.tt-shell:not(.tt-mode-list) {
     display: flex; flex-direction: column;
@@ -711,14 +946,25 @@
     flex: 1; min-height: 0; overflow: hidden;
     container-type: size; /* 供 cqh 字体随可视高度缩放 */
   }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-foot { flex: none; margin-top: 6px; }
+  /* 统计/图例是次级信息：绝对定位挂在满屏画布正下方（视口外），
+     下滑一小段才能看到；画布因此独占整屏高度。
+     top 补上 shell 高度里扣掉的 --space-md，确保完全压在 fold 之外 */
+  #ttShell.tt-shell:not(.tt-mode-list) {
+    position: relative;
+  }
+  #ttShell.tt-shell:not(.tt-mode-list) .tt-foot {
+    position: absolute; top: calc(100% + var(--space-md)); left: 0; right: 0;
+    margin: 6px 0 0;
+  }
   /* 满屏模式下收紧视图底部留白，整页无需滚动 */
-  #timetableView .about-page { padding-bottom: var(--space-md); }
+  /* 悬挂的统计/图例（绝对定位在画布下方 ~56px）需要实体留白接住，
+     否则会叠到全局站点页脚上——这里预留其高度 */
+  #timetableView .about-page { padding-bottom: calc(var(--space-md) + 64px); }
 
   .tt-grid {
     height: 100%; min-width: 0;
     grid-template-columns: 30px repeat(7, minmax(0, 1fr));
-    grid-template-rows: 56fr repeat(4, 75fr) 16fr repeat(4, 75fr) 16fr repeat(4, 75fr);
+    grid-template-rows: 56fr repeat(12, 75fr);
   }
   /* .tt-w5 的桌面 min-width:544px 优先级高于 .tt-grid，必须在移动端显式清零；
      否则 overflow:hidden 会把工作日网格裁成前 3 列左右（Edge 等浏览器尤明显）。 */
@@ -730,14 +976,29 @@
   /* 字号随可视高度缩放（1cqh = .tt-scroll 高度的 1%） */
   .tt-scroll { border-radius: 10px; }
   .tt-card { padding: 3px 5px; border-radius: 6px; box-shadow: none; }
-  /* 课程名可收缩（line-clamp 截断），把高度让给底部教室小字 */
-  .tt-card-name { flex: 1 1 auto; min-height: 0; font-size: clamp(8.5px, 2.1cqh, 11px); line-height: 1.25; -webkit-line-clamp: 3; }
+  /* 课程名可收缩（line-clamp 截断），把高度让给底部教室小字；
+     窄屏上限 10px：7 列平分后每列 ~50px，字再大一行只装 2 字反而更碎 */
+  /* 课名不设行数钳制（-webkit-line-clamp 在部分内核下会渲染出假省略号，
+     且把连堂大卡的空间浪费掉）：自然换行占满卡片可用高度，
+     超长时由卡片 overflow 裁切，无省略号 */
+  .tt-card-name {
+    flex: 1 1 auto; min-height: 0;
+    display: block; overflow: visible; -webkit-line-clamp: unset;
+    font-size: clamp(8.5px, 1.9cqh, 10px); line-height: 1.25;
+  }
   /* 底部小字保留教室；教师移步列表视图 */
   .tt-card-meta { display: block; flex: none; padding-top: 2px; font-size: clamp(7.5px, 1.7cqh, 9px); line-height: 1.3; }
   .tt-card-meta .r { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tt-card-meta .t { display: none; }
-  .tt-time b { font-size: clamp(10px, 2.4cqh, 14px); }
-  .tt-time span { display: none; }
+  /* 时间列 30px：节数字下恢复起止时间小字（对齐主流课表 App），
+     7 列每列仅让出 <1px，课名换行不受影响 */
+  .tt-time b { font-size: clamp(10px, 2.2cqh, 12px); }
+  .tt-time span { font-size: clamp(7px, 1.3cqh, 8px); line-height: 1.25; }
+  /* 节次时间开关（管理菜单·外观，≤480 出现）：
+     关=隐藏时间小字并把时间列收窄回 24px，把宽度还给课程列 */
+  .tt-shell.tt-time-off .tt-time span { display: none; }
+  .tt-shell.tt-time-off .tt-grid { grid-template-columns: 24px repeat(7, minmax(0, 1fr)); }
+  .tt-shell.tt-time-off .tt-grid.tt-w5 { grid-template-columns: 24px repeat(5, minmax(0, 1fr)); }
   .tt-day { padding: 2px; gap: 0; }
   .tt-day .dt { display: none; }
   .tt-day .d { font-size: clamp(10px, 2.6cqh, 14px); }
@@ -760,6 +1021,8 @@
     font-size: var(--fs-md); line-height: 1.3; font-weight: 650;
   }
   .tt-tag { margin-top: 1px; padding: 4px 8px; }
+  .tt-request-status { gap: 4px; }
+  .tt-reapply-btn { min-height: 26px; padding: 4px 7px; }
   .tt-lmeta { margin-top: 3px; font-size: var(--fs-2xs); line-height: 1.35; }
   .tt-lmeta .tt-lsched {
     display: block; width: 100%; margin-top: 7px; padding: 6px 0 0;
@@ -769,8 +1032,12 @@
   }
   .tt-lmeta .tt-lsched::before { content: none; }
 
-  /* 网格课程卡在窄屏内缩进一点，保留格线呼吸感，避免整块铺满单元格。 */
-  .tt-card { margin: 2px; padding: 2px 4px; border-radius: 5px; }
+  /* 网格课程卡在窄屏内缩进一点，保留格线呼吸感，避免整块铺满单元格；
+     边距逐项收紧（cell 3→2、卡 margin 2→1、水平 padding 4→3）：
+     每列多抢回 ~6px，一行可容纳字数 2→4，是七列可读性的关键。 */
+  .tt-cell { padding: 2px; }
+  .tt-card { margin: 1px; padding: 2px 3px; border-radius: 5px; }
+  .tt-card-status { padding: 3px 5px; font-size: clamp(7px, 1.6cqh, 8.5px); }
 
   /* 编辑弹层：表单控件在窄屏下保持可点面积 */
   .tt-fld > span { width: 58px; }
@@ -814,14 +1081,28 @@
   #ttShell .tt-actions .tt-btn + .tt-btn { border-left: 1px solid var(--tt-line); }
   #ttShell .tt-actions .tt-btn:hover { background: var(--tt-gutter); }
 
-  /* 分段切换与 max-width:700px 共用桌面端灰底分段控件。 */
+  /* 分段切换与 max-width:700px 共用桌面端灰底分段控件；≤480 换短词标签。 */
+  #ttShell .seg-l { display: none; }
+  #ttShell .seg-s { display: inline; }
   #ttShell .tt-viewbar {
     grid-column: 1; grid-row: 1; align-self: center;
-    width: max-content; margin: 0; border-bottom: 0;
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; min-width: 0; margin: 0; border-bottom: 0;
   }
-  #ttShell .tt-viewbar .pc-seg {
-    width: auto;
+  #ttShell .tt-viewbar .pc-seg { width: auto; flex: none; }
+  /* 周次导航上移到视图行（与 列表/课表、管理 同排），周条整行隐藏、
+     第一周日期收进「管理」菜单——把两行工具栏压成一行，画布上移一整行。 */
+  #ttShell .tt-weekbar { display: none; }
+  #ttShell .tt-weeknav-top {
+    display: flex; align-items: center; gap: 2px;
+    flex: 1; min-width: 0; margin-left: 2px;
   }
+  #ttShell .tt-weeknav-top .tt-wbtn { width: 30px; height: 30px; flex: none; }
+  #ttShell .tt-weeknav-top .tt-week-label { flex: 1; min-width: 0; text-align: center; font-size: var(--fs-xs); }
+  #ttShell .tt-weeknav-top .tt-now-btn { flex: none; min-height: 30px; padding: 6px 2px; }
+  /* 列表视图不分周次、空课表无周可切：顶栏导航一并隐藏 */
+  #ttShell.tt-mode-list .tt-weeknav-top,
+  #ttShell.tt-no-tt .tt-weeknav-top { display: none; }
   #ttShell .tt-viewbar .pc-seg-btn {
     min-width: 0;
   }

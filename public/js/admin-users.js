@@ -2,12 +2,30 @@
   // ── 用户管理（仅 super_admin） ──
   var _userPage = 1;
   var _userRoleFilter = ''; // '' | 'admin' | 'user'
+  var _adminUserSections = ['trend', 'identity', 'timetable', 'downloads', 'health', 'users'];
   var _adminUserSection = 'trend';
+  (function() {
+    var state = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
+    var fromState = state && state.view === 'admin' ? state.adminUserSection : null;
+    var fromStorage = sessionStorage.getItem('bnusparks_admin_user_section');
+    var remembered = _adminUserSections.indexOf(fromState) !== -1 ? fromState : fromStorage;
+    if (_adminUserSections.indexOf(remembered) !== -1) _adminUserSection = remembered;
+  })();
   var _monitorPeriod = 'week';
   var _identityPeriod = 'month';
+  var _identityEducation = ''; // '' = 全部层次；否则按培养层次筛选学院/专业分布
   var _timetableImportPeriod = 'month';
   var _downloadActivity = 'all';
   var _identityMonitorData = null;
+  (function() {
+    var state = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
+    if (!state || state.view !== 'admin') return;
+    if (['day', 'week', 'month', 'all'].indexOf(state.adminMonitorPeriod) !== -1) _monitorPeriod = state.adminMonitorPeriod;
+    if (['day', 'week', 'month', 'all'].indexOf(state.adminIdentityPeriod) !== -1) _identityPeriod = state.adminIdentityPeriod;
+    if (typeof state.adminIdentityEducation === 'string') _identityEducation = state.adminIdentityEducation;
+    if (['day', 'week', 'month', 'all'].indexOf(state.adminTimetablePeriod) !== -1) _timetableImportPeriod = state.adminTimetablePeriod;
+    if (['all', 'download', 'preview', 'legacy'].indexOf(state.adminDownloadActivity) !== -1) _downloadActivity = state.adminDownloadActivity;
+  })();
 
   function _adminUserSectionButton(section, label) {
     return '<button class="pc-seg-btn' + (_adminUserSection === section ? ' active' : '') + '" ' +
@@ -23,7 +41,7 @@
           _adminUserSectionButton('trend', '活动趋势') +
           _adminUserSectionButton('identity', '身份分布') +
           _adminUserSectionButton('timetable', '课表导入') +
-          _adminUserSectionButton('downloads', '访问流水') +
+          _adminUserSectionButton('downloads', '访问记录') +
           _adminUserSectionButton('health', '运行状态') +
           _adminUserSectionButton('users', '用户名单') +
         '</div>' +
@@ -39,19 +57,24 @@
   }
 
   function switchAdminUserSection(section) {
+    if (_adminUserSections.indexOf(section) === -1) section = 'trend';
     _adminUserSection = section;
+    sessionStorage.setItem('bnusparks_admin_user_section', section);
+    if (typeof patchViewState === 'function') patchViewState({ adminTab: 'users', adminUserSection: section });
     renderAdminUsers(document.getElementById('adminContent'), '', 1);
   }
 
   function setMonitoringPeriod(period) {
+    if (['day', 'week', 'month', 'all'].indexOf(period) === -1) return;
     _monitorPeriod = period;
+    if (typeof patchViewState === 'function') patchViewState({ adminMonitorPeriod: period });
     renderAdminMonitoringTrend(document.getElementById('adminUserSectionContent'));
   }
 
   function _monitorPeriodButtons() {
     var periods = [
       ['day', '近 24 小时'], ['week', '近 7 天'],
-      ['month', '近 30 天'], ['all', '全部时间']
+      ['month', '近 30 天'], ['all', '从开始记录']
     ];
     return '<div class="pc-seg monitor-period-seg" role="tablist" aria-label="趋势时间范围">' + periods.map(function(p) {
       return '<button class="pc-seg-btn' + (_monitorPeriod === p[0] ? ' active' : '') + '" role="tab" ' +
@@ -110,13 +133,13 @@
     content.innerHTML = '<div class="admin-loading">加载活动趋势…</div>';
     api('/api/admin/monitoring/?section=trend&period=' + encodeURIComponent(_monitorPeriod)).then(function(data) {
       var summary = data.summary || {};
-      content.innerHTML = '<div class="monitor-section-head"><div><h3>文件流动趋势</h3>' +
-        '<p>下载曲线仅统计正式下载；文件预览单独计数，不再抬高下载量。</p></div>' + _monitorPeriodButtons() + '</div>' +
+      content.innerHTML = '<div class="monitor-section-head"><div><h3>资料上传和下载变化</h3>' +
+        '<p>下载只算真正拿到资料的次数；只打开预览会单独统计，不会重复算进下载。</p></div>' + _monitorPeriodButtons() + '</div>' +
         '<div class="monitor-stats-grid">' +
-          _monitorStat(summary.upload_count, '期间上传', 'tone-upload') +
-          _monitorStat(summary.download_count, '正式下载', 'tone-download') +
-          _monitorStat(summary.preview_count, '文件预览') +
-          _monitorStat(summary.unique_downloaders, '下载用户') +
+          _monitorStat(summary.upload_count, '上传资料', 'tone-upload') +
+          _monitorStat(summary.download_count, '下载资料', 'tone-download') +
+          _monitorStat(summary.preview_count, '打开预览') +
+          _monitorStat(summary.unique_downloaders, '下载过资料的人') +
         '</div>' + _monitorTrendChart(data);
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">活动趋势加载失败：' + esc(err.message) + '</div>';
@@ -155,8 +178,19 @@
     }
   }
 
+  function selectIdentityEducation(index) {
+    var levels = (_identityMonitorData && _identityMonitorData.education_levels) || [];
+    var name = levels[index] ? levels[index].name : '';
+    // 再次点击同一层次 = 取消筛选，回到全部口径
+    _identityEducation = (_identityEducation === name) ? '' : name;
+    if (typeof patchViewState === 'function') patchViewState({ adminIdentityEducation: _identityEducation });
+    renderAdminIdentityDistribution(document.getElementById('adminUserSectionContent'));
+  }
+
   function setIdentityPeriod(period) {
+    if (['day', 'week', 'month', 'all'].indexOf(period) === -1) return;
     _identityPeriod = period;
+    if (typeof patchViewState === 'function') patchViewState({ adminIdentityPeriod: period });
     renderAdminIdentityDistribution(document.getElementById('adminUserSectionContent'));
   }
 
@@ -202,23 +236,59 @@
       '</svg></div></div>';
   }
 
+  function _campusDonutChart(rows) {
+    // 校区环形图：北京=主色蓝、珠海=强调橙、未判定=中性灰；配色取自 tokens
+    var palette = { beijing: 'var(--primary)', zhuhai: 'var(--accent)', unknown: 'var(--ink-faint)' };
+    rows = (rows || []).filter(function(row) { return row && row.count > 0; });
+    var total = rows.reduce(function(sum, row) { return sum + (row.count || 0); }, 0);
+    if (!total) return '<div class="monitor-sub-empty">暂无可统计的校区数据</div>';
+    var radius = 44, circumference = 2 * Math.PI * radius;
+    var cursor = 0, segments = '';
+    rows.forEach(function(row) {
+      var fraction = (row.count || 0) / total;
+      var arc = Math.max(fraction * circumference - (rows.length > 1 ? 2 : 0), 0.5);
+      segments += '<circle class="campus-donut-seg" cx="60" cy="60" r="' + radius + '" style="stroke:' + (palette[row.key] || 'var(--ink-faint)') +
+        ';stroke-dasharray:' + arc.toFixed(2) + ' ' + (circumference - arc).toFixed(2) +
+        ';stroke-dashoffset:' + (-cursor).toFixed(2) + '"></circle>';
+      cursor += fraction * circumference;
+    });
+    var legend = rows.map(function(row) {
+      var percent = Math.round((row.count || 0) / total * 100);
+      return '<span class="campus-legend-item"><i style="background:' + (palette[row.key] || 'var(--ink-faint)') + '"></i>' +
+        esc(row.name) + ' <strong>' + (row.count || 0) + '</strong>（' + percent + '%）</span>';
+    }).join('');
+    return '<div class="campus-donut-wrap"><svg viewBox="0 0 120 120" role="img" aria-label="校区分布环形图">' +
+        '<circle class="campus-donut-track" cx="60" cy="60" r="' + radius + '"></circle>' + segments +
+        '<text class="campus-donut-total" x="60" y="57">' + total + '</text>' +
+        '<text class="campus-donut-label" x="60" y="72">人</text>' +
+      '</svg><div class="campus-legend">' + legend + '</div></div>';
+  }
+
   function renderAdminIdentityDistribution(content) {
     if (!content) return;
     content.innerHTML = '<div class="admin-loading">加载身份分布…</div>';
-    api('/api/admin/monitoring/?section=identity&period=' + encodeURIComponent(_identityPeriod)).then(function(data) {
+    var eduParam = _identityEducation ? '&education=' + encodeURIComponent(_identityEducation) : '';
+    api('/api/admin/monitoring/?section=identity&period=' + encodeURIComponent(_identityPeriod) + eduParam).then(function(data) {
       data.selectedIndex = data.colleges && data.colleges.length ? 0 : -1;
       _identityMonitorData = data;
       var coverage = data.total_users ? Math.round(data.tagged_users / data.total_users * 100) : 0;
+      var eduSelectedIndex = -1;
+      (data.education_levels || []).forEach(function(row, index) {
+        if (row.name === _identityEducation) eduSelectedIndex = index;
+      });
+      var filterNote = _identityEducation ? ' · 筛选：' + esc(_identityEducation) : '';
       content.innerHTML = '<div class="monitor-section-head"><div><h3>入站身份分布</h3>' +
-        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。</p></div>' + _identityPeriodButtons() + '</div>' +
+        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院与专业分布' + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
         '<div class="monitor-stats-grid monitor-stats-grid--three">' +
-          _monitorStat(data.total_users, '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
+          _monitorStat(data.total_users, _identityEducation ? _identityEducation + '用户' : '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
           _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
         _identityUserTrendChart(data.user_trend || {}) +
+        '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>校区分布</h4><span>依据课表上课地点自动判定</span></div>' +
+          _campusDonutChart(data.campus_distribution || []) + '</div>' +
         '<div class="identity-monitor-grid">' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (data.untagged_users || 0) + ' 人未补全</span></div>' +
-            _distributionBars(data.education_levels || [], -1, '') + '</section>' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>学院分布</h4><span>' + (data.untagged_users || 0) + ' 人未填写</span></div><div id="identityCollegeBars">' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (data.untagged_users || 0) + ' 人未补全') + '</span></div>' +
+            _distributionBars(data.education_levels || [], eduSelectedIndex, 'selectIdentityEducation') + '</section>' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4><span>' + (data.untagged_users || 0) + ' 人未填写</span></div><div id="identityCollegeBars">' +
             _distributionBars(data.colleges || [], data.selectedIndex, 'selectIdentityCollege') + '</div></section>' +
           '<section class="monitor-data-card" id="identityMajorPanel"></section></div>';
       selectIdentityCollege(data.selectedIndex);
@@ -228,7 +298,9 @@
   }
 
   function setTimetableImportPeriod(period) {
+    if (['day', 'week', 'month', 'all'].indexOf(period) === -1) return;
     _timetableImportPeriod = period;
+    if (typeof patchViewState === 'function') patchViewState({ adminTimetablePeriod: period });
     renderAdminTimetableImports(document.getElementById('adminUserSectionContent'));
   }
 
@@ -326,12 +398,14 @@
   }
 
   function setDownloadActivity(activity) {
+    if (['all', 'download', 'preview', 'legacy'].indexOf(activity) === -1) return;
     _downloadActivity = activity;
+    if (typeof patchViewState === 'function') patchViewState({ adminDownloadActivity: activity });
     renderAdminDownloadStream(document.getElementById('adminUserSectionContent'), 1);
   }
 
   function _downloadActivityButtons() {
-    var options = [['all', '全部'], ['download', '正式下载'], ['preview', '预览'], ['legacy', '旧记录']];
+    var options = [['all', '全部类型'], ['download', '下载资料'], ['preview', '打开预览'], ['legacy', '较早的记录']];
     return '<div class="pc-seg download-activity-seg" role="tablist" aria-label="文件访问行为类型">' + options.map(function(option) {
       return '<button class="pc-seg-btn' + (_downloadActivity === option[0] ? ' active' : '') + '" role="tab" aria-selected="' +
         (_downloadActivity === option[0] ? 'true' : 'false') + '" onclick="setDownloadActivity(\'' + option[0] + '\')">' + option[1] + '</button>';
@@ -340,11 +414,11 @@
 
   function renderAdminDownloadStream(content, page) {
     if (!content) return;
-    content.innerHTML = '<div class="admin-loading">加载访问流水…</div>';
+    content.innerHTML = '<div class="admin-loading">加载访问记录…</div>';
     api('/api/admin/monitoring/?section=downloads&page=' + (page || 1) + '&activity=' + encodeURIComponent(_downloadActivity)).then(function(data) {
       var items = data.items || [];
-      var html = '<div class="monitor-section-head"><div><h3>文件访问流水</h3>' +
-        '<p>预览与正式下载分别留痕；旧记录因历史口径无法再反推类型。</p></div><div class="monitor-stream-tools">' +
+      var html = '<div class="monitor-section-head"><div><h3>资料访问记录</h3>' +
+        '<p>打开预览和下载资料分开统计；较早的记录无法再判断具体类型。</p></div><div class="monitor-stream-tools">' +
         _downloadActivityButtons() + '<span class="monitor-total-note">共 ' + (data.total || 0) + ' 条</span></div></div>';
       if (!items.length) {
         content.innerHTML = html + '<div class="admin-empty">当前筛选下暂无文件访问行为</div>';
@@ -374,47 +448,7 @@
       html += '</div>' + _monitorPagination(data.page, data.total_pages, 'monitorDownloadPage');
       content.innerHTML = html;
     }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">访问流水加载失败：' + esc(err.message) + '</div>';
-    });
-  }
-
-  function _healthStatusLabel(status) {
-    if (status === 'healthy') return '运行正常';
-    if (status === 'warning') return '需要关注';
-    return '存在异常';
-  }
-
-  function _formatStorageSize(bytes) {
-    var value = Number(bytes || 0);
-    if (!Number.isFinite(value) || value <= 0) return '0 B';
-    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var unitIndex = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-    var scaled = value / Math.pow(1024, unitIndex);
-    var decimals = unitIndex >= 3 ? 1 : (scaled < 10 && unitIndex > 0 ? 1 : 0);
-    return scaled.toFixed(decimals) + ' ' + units[unitIndex];
-  }
-
-  function renderAdminSiteHealth(content) {
-    if (!content) return;
-    content.innerHTML = '<div class="admin-loading">检查网站运行状态…</div>';
-    api('/api/admin/monitoring/?section=health').then(function(data) {
-      var db = data.database || {}, storage = data.storage || {}, activity = data.activity || {};
-      var used = Math.max(0, Math.min(100, Number(storage.used_percent || 0)));
-      content.innerHTML = '<div class="monitor-section-head"><div><h3>网站运行状态</h3><p>实时检查当前请求所在服务进程、数据库与资料存储。</p></div>' +
-        '<button class="admin-btn admin-btn-secondary" onclick="renderAdminSiteHealth(document.getElementById(\'adminUserSectionContent\'))">刷新状态</button></div>' +
-        '<div class="health-overall health-' + esc(data.overall) + '"><span class="health-dot"></span><div><strong>' + _healthStatusLabel(data.overall) + '</strong>' +
-          '<small>检查于 ' + esc(data.checked_at) + '</small></div></div>' +
-        '<div class="health-grid">' +
-          '<section class="health-card"><div class="health-card-title"><span class="health-dot is-ok"></span>应用服务</div><strong>响应正常</strong><small>监测接口已成功完成本次请求</small></section>' +
-          '<section class="health-card"><div class="health-card-title"><span class="health-dot ' + (db.ok ? 'is-ok' : 'is-bad') + '"></span>数据库</div><strong>' + (db.ok ? '连接正常' : '连接异常') + '</strong><small>' + esc((db.vendor || 'database').toUpperCase()) + ' · ' + (db.latency_ms == null ? '延迟未知' : db.latency_ms + ' ms') + ' · ' + _formatStorageSize(db.size_bytes || 0) + '</small></section>' +
-          '<section class="health-card health-card--wide"><div class="health-card-title"><span class="health-dot ' + (storage.ok ? 'is-ok' : 'is-bad') + '"></span>资料存储</div>' +
-            '<strong>' + (storage.ok ? '目录可写' : '目录不可用') + '</strong><small>剩余 ' + _formatStorageSize(storage.free_bytes || 0) + ' / ' + _formatStorageSize(storage.total_bytes || 0) + '</small>' +
-            '<div class="storage-meter"><span style="width:' + used + '%"></span></div><small>已使用 ' + used + '%</small></section>' +
-          '<section class="health-card health-card--wide"><div class="health-card-title"><span class="health-dot is-neutral"></span>最近活动</div>' +
-            '<div class="health-activity"><span>最近上传<strong>' + esc(activity.last_upload_at || '暂无') + '</strong></span><span>最近下载<strong>' + esc(activity.last_download_at || '暂无') + '</strong></span></div></section>' +
-        '</div>';
-    }).catch(function(err) {
-      content.innerHTML = '<div class="admin-empty">运行状态检查失败：' + esc(err.message) + '</div>';
+      content.innerHTML = '<div class="admin-empty">访问记录加载失败：' + esc(err.message) + '</div>';
     });
   }
 

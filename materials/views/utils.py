@@ -22,7 +22,9 @@ from .utils_security import (
 from .utils_auth import (
     _err, _generate_download_token, _generate_portable_download_token,
     _get_or_create_profile, _get_user,
-    _identity_can_edit, _jwt_decode, _jwt_encode, _normalize_identity, _ok,
+    _default_view_for_profile, _identity_can_edit, _jwt_decode, _jwt_encode,
+    _mobile_nav_for_profile,
+    _normalize_identity, _ok,
     _request_client_ip, _verify_download_token, _verify_portable_download_token,
     require_login, require_role,
 )
@@ -32,6 +34,7 @@ from .utils_course_tree import (
     _find_nodes_containing_course, _get_category_preload,
     _get_courses_in_category, _get_courses_in_category_preloaded,
     _merged_codes_map, _node_contains_course, _node_under, _thread_local,
+    _normalize_course_code, _normalized_course_code_expression,
     _unique_college_names,
 )
 from .utils_trash import (

@@ -8,7 +8,7 @@ from time import perf_counter
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.db import connection
+from django.db import DatabaseError, connection
 from django.db.models import Count, Min, Q
 from django.db.models.functions import TruncDate, TruncHour, TruncMonth
 from django.shortcuts import get_object_or_404
@@ -18,7 +18,19 @@ from .utils import (
     _err, _ok, _safe_int, require_role,
     DownloadRecord, Material, UserProfile,
 )
-from ..models import TimetableImportRecord, UserTimetable
+from ..models import (
+    CourseCreationRequest,
+    Report,
+    TimetableImportRecord,
+    UserTimetable,
+)
+from ..monitoring_events import monitoring_events_payload
+
+
+# 监测接口只服务于管理员诊断，不允许请求参数把 SQLite 查询或 Python
+# 序列化扩张成无界操作。页码上限保留足够的人工追溯空间，同时避免深 OFFSET。
+MONITOR_MAX_PAGE = 100
+MONITOR_TIMETABLE_RECORD_LIMIT = 1000
 
 
 def _month_start(value):
@@ -117,8 +129,11 @@ def _trend_payload(period):
         DownloadRecord.ActivityType.DOWNLOAD,
     ))
     download_counts = _group_counts(DownloadRecord, start, bucket_type, formal_filter)
+    preview_filter = Q(activity_type=DownloadRecord.ActivityType.PREVIEW)
+    preview_counts = _group_counts(DownloadRecord, start, bucket_type, preview_filter)
     upload_values = [upload_counts.get(_bucket_key(b, bucket_type), 0) for b in buckets]
     download_values = [download_counts.get(_bucket_key(b, bucket_type), 0) for b in buckets]
+    preview_values = [preview_counts.get(_bucket_key(b, bucket_type), 0) for b in buckets]
     uploads = Material.objects.filter(created_at__gte=start)
     downloads = DownloadRecord.objects.filter(created_at__gte=start).filter(formal_filter)
     previews = DownloadRecord.objects.filter(
@@ -130,6 +145,7 @@ def _trend_payload(period):
         "labels": [_bucket_label(b, bucket_type) for b in buckets],
         "uploads": upload_values,
         "downloads": download_values,
+        "previews": preview_values,
         "summary": {
             "upload_count": sum(upload_values),
             "download_count": sum(download_values),
@@ -202,13 +218,18 @@ def _user_trend_payload(period):
     }
 
 
-def _identity_payload(period="month"):
+def _identity_payload(period="month", education=None):
     profiles = UserProfile.objects.filter(user__is_active=True)
     total = profiles.count()
+    if education:
+        # 培养层次筛选：只影响学院/专业/覆盖统计；层次卡片与用户趋势保持全局口径。
+        profiles = profiles.filter(identity_education=education)
     complete = profiles.exclude(identity_education="").exclude(identity_college="").exclude(identity_major="")
     tagged = complete.count()
+    # 层次分布始终全局统计，保证筛选后仍可切换其他层次。
     education_rows = list(
-        profiles.exclude(identity_education="")
+        UserProfile.objects.filter(user__is_active=True)
+        .exclude(identity_education="")
         .exclude(identity_education__in=("其他", "其它"))
         .values("identity_education")
         .annotate(count=Count("id"))
@@ -237,10 +258,24 @@ def _identity_payload(period="month"):
             "name": row["identity_major"] or "专业未填写",
             "count": row["count"],
         })
+    # 校区分布始终全局统计（口径同培养层次），不受培养层次筛选影响。
+    campus_labels = dict(UserProfile.Campus.choices)
+    campus_rows = (
+        UserProfile.objects.filter(user__is_active=True)
+        .values("campus")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+    campus_distribution = [
+        {"key": row["campus"], "name": campus_labels.get(row["campus"], row["campus"]), "count": row["count"]}
+        for row in campus_rows
+    ]
     return {
         "total_users": total,
+        "education_filter": education or "",
         "tagged_users": tagged,
         "untagged_users": max(0, total - tagged),
+        "campus_distribution": campus_distribution,
         "user_trend": _user_trend_payload(period),
         "education_levels": [
             {"name": row["identity_education"], "count": row["count"]}
@@ -291,13 +326,19 @@ def _timetable_import_payload(period):
         created_at__gte=start,
         user__is_active=True,
     )
+    period_record_total = period_qs.count()
     active_records = TimetableImportRecord.objects.filter(user__is_active=True)
     last_import = active_records.order_by("-created_at").first()
-    # 导入记录不截断：管理者需要能够追溯所选时间范围内的完整行为。
-    # 先按用户聚合，再把同一用户的所有导入事件放进 records，避免同一用户
-    # 在列表里连续占据多行，同时保留每一次导入的时间与课程数。
+    # 记录明细必须在 SQL 层限量；统计总数仍来自数据库聚合，避免「全部时间」
+    # 把任意数量的行装入 Python 内存。后续 UI 可用 metadata 提示管理员继续
+    # 缩小时间范围，而不是默默伪装成完整列表。
+    period_records = list(
+        period_qs.select_related("user", "user__profile")
+        .order_by("-created_at", "-id")[:MONITOR_TIMETABLE_RECORD_LIMIT]
+    )
+    # 先按用户聚合，再把同一用户的导入事件放进 records，避免同一用户在列表
+    # 里连续占据多行，同时保留每一次导入的时间与课程数。
     grouped = {}
-    period_records = period_qs.select_related("user", "user__profile").order_by("-created_at", "-id")
     for record in period_records:
         profile = _profile_of(record.user)
         local_created = _local(record.created_at)
@@ -342,6 +383,12 @@ def _timetable_import_payload(period):
             "last_import_at": _format_activity(last_import.created_at if last_import else None),
         },
         "import_users": import_users,
+        "records_meta": {
+            "total": period_record_total,
+            "returned": len(period_records),
+            "limit": MONITOR_TIMETABLE_RECORD_LIMIT,
+            "truncated": period_record_total > MONITOR_TIMETABLE_RECORD_LIMIT,
+        },
         # 保留旧键，便于旧版前端平滑升级；新前端使用 import_users。
         "recent_imports": import_users,
     }
@@ -357,7 +404,8 @@ def _profile_of(user):
 def _download_page(qs, page, per_page):
     total = qs.count()
     total_pages = max(1, (total + per_page - 1) // per_page)
-    page = max(1, min(page, total_pages))
+    visible_total_pages = min(total_pages, MONITOR_MAX_PAGE)
+    page = max(1, min(page, visible_total_pages))
     items = []
     for record in qs[(page - 1) * per_page:page * per_page]:
         profile = _profile_of(record.user)
@@ -385,11 +433,18 @@ def _download_page(qs, page, per_page):
                 DownloadRecord.ActivityType.LEGACY: "访问了",
             }.get(record.activity_type, "访问了"),
         })
-    return {"items": items, "total": total, "page": page, "total_pages": total_pages}
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "total_pages": visible_total_pages,
+        "page_limit": MONITOR_MAX_PAGE,
+        "truncated": total_pages > MONITOR_MAX_PAGE,
+    }
 
 
 def _downloads_payload(request):
-    page = _safe_int(request.GET.get("page"), 1, lo=1)
+    page = _safe_int(request.GET.get("page"), 1, lo=1, hi=MONITOR_MAX_PAGE)
     qs = DownloadRecord.objects.select_related("user", "user__profile").order_by("-created_at", "-id")
     activity = (request.GET.get("activity") or "all").strip()
     if activity not in {"all", "download", "preview", "legacy"}:
@@ -405,9 +460,10 @@ def _format_activity(value):
     return _local(value).strftime("%Y-%m-%d %H:%M") if value else "暂无"
 
 
-def _health_payload():
+def _health_payload(period="week"):
     db_ok = False
     db_latency_ms = None
+    activity_ok = False
     started = perf_counter()
     try:
         with connection.cursor() as cursor:
@@ -416,6 +472,8 @@ def _health_payload():
         db_latency_ms = round((perf_counter() - started) * 1000, 1)
     except Exception:
         db_ok = False
+
+    activity_ok = db_ok
 
     media_root = Path(settings.MEDIA_ROOT)
     storage_exists = media_root.exists()
@@ -437,17 +495,155 @@ def _health_payload():
 
     db_name = settings.DATABASES["default"].get("NAME")
     db_path = Path(str(db_name)) if db_name and str(db_name) != ":memory:" else None
-    db_size = db_path.stat().st_size if db_path and db_path.exists() else 0
-    last_upload = Material.objects.order_by("-created_at").values_list("created_at", flat=True).first()
-    last_download = DownloadRecord.objects.filter(activity_type__in=(
-        DownloadRecord.ActivityType.LEGACY,
-        DownloadRecord.ActivityType.DOWNLOAD,
-    )).order_by("-created_at").values_list("created_at", flat=True).first()
+    try:
+        db_size = db_path.stat().st_size if db_path and db_path.exists() else 0
+    except OSError:
+        db_size = 0
+
+    # SELECT 1 失败时不能继续做 ORM 查询，否则健康接口会在报告故障前再次 500。
+    # 即使探针成功，最近活动查询也单独兜底，避免锁等待/损坏数据影响诊断入口。
+    last_upload = None
+    last_preview = None
+    last_download = None
+    last_timetable_import = None
+    trend = None
+    timetable = None
+    recorded_user_ids = set()
+    backlog = {
+        "pending_materials": 0,
+        "pending_reports": 0,
+        "pending_course_requests": 0,
+        "oldest_pending_at": None,
+        "oldest_pending_seconds": None,
+    }
+    if db_ok:
+        try:
+            last_upload = Material.objects.order_by("-created_at").values_list("created_at", flat=True).first()
+            last_preview = DownloadRecord.objects.filter(
+                activity_type=DownloadRecord.ActivityType.PREVIEW,
+            ).order_by("-created_at").values_list("created_at", flat=True).first()
+            last_timetable_import = TimetableImportRecord.objects.order_by(
+                "-created_at",
+            ).values_list("created_at", flat=True).first()
+        except Exception:
+            activity_ok = False
+        try:
+            last_download = DownloadRecord.objects.filter(activity_type__in=(
+                DownloadRecord.ActivityType.LEGACY,
+                DownloadRecord.ActivityType.DOWNLOAD,
+            )).order_by("-created_at").values_list("created_at", flat=True).first()
+        except Exception:
+            activity_ok = False
+        try:
+            trend = _trend_payload(period)
+            trend_start, _, _, _ = _period_buckets(period)
+            timetable_start, timetable_bucket, timetable_buckets, timetable_label = _import_period_buckets(period)
+            # 「全部时间」的起点分别按行为表计算；去重用户时取两者较早值，
+            # 避免仅有课表导入、没有上传/下载的账号被错误排除。
+            recorded_start = min(trend_start, timetable_start)
+            timetable_counts = _group_counts(
+                TimetableImportRecord,
+                timetable_start,
+                timetable_bucket,
+                Q(user__is_active=True),
+            )
+            timetable_values = [
+                timetable_counts.get(_bucket_key(bucket, timetable_bucket), 0)
+                for bucket in timetable_buckets
+            ]
+            timetable = {
+                "period": period,
+                "period_label": timetable_label,
+                "labels": [_bucket_label(bucket, timetable_bucket) for bucket in timetable_buckets],
+                "imports": timetable_values,
+                "summary": {
+                    "import_count": sum(timetable_values),
+                    "unique_users": TimetableImportRecord.objects.filter(
+                        created_at__gte=timetable_start,
+                        user__is_active=True,
+                    ).values("user_id").distinct().count(),
+                    "last_import_at": _format_activity(last_timetable_import),
+                },
+            }
+            upload_users = Material.objects.filter(
+                created_at__gte=recorded_start,
+                uploader_id__isnull=False,
+                uploader__is_active=True,
+            ).values_list("uploader_id", flat=True).distinct()
+            activity_users = DownloadRecord.objects.filter(
+                created_at__gte=recorded_start,
+                user__is_active=True,
+            ).values_list("user_id", flat=True).distinct()
+            timetable_users = TimetableImportRecord.objects.filter(
+                created_at__gte=recorded_start,
+                user__is_active=True,
+            ).values_list("user_id", flat=True).distinct()
+            recorded_user_ids.update(upload_users)
+            recorded_user_ids.update(activity_users)
+            recorded_user_ids.update(timetable_users)
+        except Exception:
+            activity_ok = False
+        try:
+            pending_materials = Material.objects.filter(review_status="pending")
+            pending_reports = Report.objects.filter(status=Report.Status.PENDING)
+            pending_course_requests = CourseCreationRequest.objects.filter(
+                status=CourseCreationRequest.Status.PENDING,
+            )
+            pending_times = [
+                value for value in (
+                    pending_materials.aggregate(value=Min("created_at"))["value"],
+                    pending_reports.aggregate(value=Min("created_at"))["value"],
+                    pending_course_requests.aggregate(value=Min("created_at"))["value"],
+                ) if value
+            ]
+            oldest_pending = min(pending_times) if pending_times else None
+            backlog.update({
+                "pending_materials": pending_materials.count(),
+                "pending_reports": pending_reports.count(),
+                "pending_course_requests": pending_course_requests.count(),
+                "oldest_pending_at": _format_activity(oldest_pending) if oldest_pending else None,
+                "oldest_pending_seconds": max(
+                    0,
+                    int((timezone.now() - oldest_pending).total_seconds()),
+                ) if oldest_pending else None,
+            })
+        except Exception:
+            activity_ok = False
+
+    if db_ok and not activity_ok:
+        overall = "warning"
+    if trend is None:
+        trend = {
+            "period": period,
+            "period_label": "",
+            "labels": [],
+            "uploads": [],
+            "downloads": [],
+            "previews": [],
+            "summary": {},
+        }
+    if timetable is None:
+        timetable = {
+            "period": period,
+            "period_label": "",
+            "labels": [],
+            "imports": [],
+            "summary": {},
+        }
+    recorded_users = len(recorded_user_ids)
+    recorded_status = "available" if recorded_users else "empty"
     return {
         "overall": overall,
         "checked_at": _local().strftime("%Y-%m-%d %H:%M:%S"),
+        "period": period,
         "application": {"ok": True},
-        "database": {"ok": db_ok, "vendor": connection.vendor, "latency_ms": db_latency_ms, "size_bytes": db_size},
+        "database": {
+            "ok": db_ok,
+            "query_ok": activity_ok,
+            "vendor": connection.vendor,
+            "latency_ms": db_latency_ms,
+            "size_bytes": db_size,
+        },
         "storage": {
             "ok": storage_exists and storage_writable,
             "exists": storage_exists,
@@ -456,35 +652,66 @@ def _health_payload():
             "free_bytes": free_bytes,
             "used_percent": used_percent,
         },
-        "activity": {"last_upload_at": _format_activity(last_upload), "last_download_at": _format_activity(last_download)},
+        "activity": {
+            "ok": activity_ok,
+            "last_upload_at": _format_activity(last_upload),
+            "last_preview_at": _format_activity(last_preview),
+            "last_download_at": _format_activity(last_download),
+            "last_timetable_import_at": _format_activity(last_timetable_import),
+            "recorded_users": recorded_users,
+            "recorded_users_status": recorded_status if db_ok else "unavailable",
+        },
+        "trend": trend,
+        "timetable": timetable,
+        "backlog": backlog,
     }
 
 
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_monitoring(request):
-    """GET /api/admin/monitoring/?section=trend|identity|timetable|downloads|health。"""
+    """GET /api/admin/monitoring/?section=trend|identity|timetable|downloads|health|events。"""
     if request.method != "GET":
         return _err("仅支持 GET", 405)
     section = (request.GET.get("section") or "trend").strip()
-    if section == "trend":
-        period = (request.GET.get("period") or "week").strip()
-        if period not in {"day", "week", "month", "all"}:
-            return _err("无效的时间范围")
-        return _ok(_trend_payload(period))
-    if section == "identity":
-        period = (request.GET.get("period") or "month").strip()
-        if period not in {"day", "week", "month", "all"}:
-            return _err("无效的时间范围")
-        return _ok(_identity_payload(period))
-    if section == "timetable":
-        period = (request.GET.get("period") or "month").strip()
-        if period not in {"day", "week", "month", "all"}:
-            return _err("无效的时间范围")
-        return _ok(_timetable_import_payload(period))
-    if section == "downloads":
-        return _ok(_downloads_payload(request))
-    if section == "health":
-        return _ok(_health_payload())
+    try:
+        if section == "trend":
+            period = (request.GET.get("period") or "week").strip()
+            if period not in {"day", "week", "month", "all"}:
+                return _err("无效的时间范围")
+            return _ok(_trend_payload(period))
+        if section == "identity":
+            period = (request.GET.get("period") or "month").strip()
+            if period not in {"day", "week", "month", "all"}:
+                return _err("无效的时间范围")
+            education = (request.GET.get("education") or "").strip()
+            return _ok(_identity_payload(period, education=education or None))
+        if section == "timetable":
+            period = (request.GET.get("period") or "month").strip()
+            if period not in {"day", "week", "month", "all"}:
+                return _err("无效的时间范围")
+            return _ok(_timetable_import_payload(period))
+        if section == "downloads":
+            return _ok(_downloads_payload(request))
+        if section == "health":
+            period = (request.GET.get("period") or "week").strip()
+            if period not in {"day", "week", "month", "all"}:
+                return _err("无效的时间范围")
+            return _ok(_health_payload(period))
+        if section == "events":
+            period = (request.GET.get("period") or "week").strip()
+            if period not in {"day", "week", "month", "all"}:
+                return _err("无效的时间范围")
+            selected_raw = (request.GET.get("date") or "").strip()
+            selected_date = None
+            if selected_raw:
+                try:
+                    selected_date = datetime.strptime(selected_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    return _err("无效的日期")
+            return _ok(monitoring_events_payload(period, selected_date=selected_date))
+    except DatabaseError:
+        # SQLite 锁等待/连接故障只返回可识别的服务不可用，不把异常堆栈泄露给前端。
+        return _err("监测数据暂时不可用，请稍后重试", 503)
     return _err("无效的监测分区")
 
 
@@ -493,10 +720,13 @@ def api_admin_user_downloads(request, uid):
     """GET /api/admin/users/<uid>/downloads/ — 总管理员追溯单个用户下载记录。"""
     if request.method != "GET":
         return _err("仅支持 GET", 405)
-    user = get_object_or_404(User, id=uid, is_active=True)
-    page = _safe_int(request.GET.get("page"), 1, lo=1)
-    qs = DownloadRecord.objects.filter(user=user).select_related("user", "user__profile").order_by("-created_at", "-id")
-    payload = _download_page(qs, page, 20)
+    try:
+        user = get_object_or_404(User, id=uid, is_active=True)
+        page = _safe_int(request.GET.get("page"), 1, lo=1, hi=MONITOR_MAX_PAGE)
+        qs = DownloadRecord.objects.filter(user=user).select_related("user", "user__profile").order_by("-created_at", "-id")
+        payload = _download_page(qs, page, 20)
+    except DatabaseError:
+        return _err("访问流水暂时不可用，请稍后重试", 503)
     payload["user"] = {"id": user.id, "nickname": user.first_name or user.username}
     return _ok(payload)
 
@@ -506,9 +736,12 @@ def api_admin_user_timetable(request, uid):
     """GET /api/admin/users/<uid>/timetable/ — 总管理员查看用户课表。"""
     if request.method != "GET":
         return _err("仅支持 GET", 405)
-    user = get_object_or_404(User, id=uid, is_active=True)
-    profile = _profile_of(user)
-    row = UserTimetable.objects.filter(user=user).first()
+    try:
+        user = get_object_or_404(User, id=uid, is_active=True)
+        profile = _profile_of(user)
+        row = UserTimetable.objects.filter(user=user).first()
+    except DatabaseError:
+        return _err("用户课表暂时不可用，请稍后重试", 503)
     return _ok({
         "user": {
             "id": user.id,

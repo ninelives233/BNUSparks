@@ -4,7 +4,25 @@ BNU Sparks · 木铎星火 — 课程树辅助（存在性收敛、壳节点去�
 
 import threading
 
+from django.db.models import F, Value
+from django.db.models.functions import Replace, Upper
+
 from ..models import Course, CourseCategory, Material
+
+
+def _normalize_course_code(value):
+    """课程代码统一口径：忽略大小写、连字符和历史通配符。"""
+    return str(value or "").strip().upper().replace("*", "").replace("-", "")
+
+
+def _normalized_course_code_expression(field_name="code"):
+    """返回可用于数据库查询的课程代码归一化表达式。"""
+    return Upper(
+        Replace(
+            Replace(F(field_name), Value("*"), Value("")),
+            Value("-"), Value(""),
+        )
+    )
 
 # ── 课程存在性收敛 / 壳节点去重（v=165） ──
 # 同一课程代码在历史种子中可能有多条 Course 行（每学院一条）。文件按 code
@@ -17,9 +35,12 @@ def _find_existing_course(code, college_id=None):
 
     同名合并别名课程跟随到主课程（资料目录统一归属主课程）。
     """
-    if not code:
+    normalized_code = _normalize_course_code(code)
+    if not normalized_code:
         return None
-    qs = Course.objects.filter(code=code)
+    qs = Course.objects.annotate(
+        _normalized_code=_normalized_course_code_expression()
+    ).filter(_normalized_code=normalized_code)
     if college_id:
         hit = qs.filter(college_id=college_id).first()
         if hit:
@@ -42,8 +63,9 @@ def _follow_merge(course):
 def _merged_codes_map(courses=None):
     """{主课程 id: [(别名 id, 别名代码)]} —— 同名同位合并显示用。
 
-    别名带 id 是因为双代码标注是位置级的：只有别名叶子与主叶子
-    同层共现的目录才标注 courseCodes，避免跨学院/专业串台。
+    别名带 id 供隐藏同层别名叶子等场景使用；v271 起主课程叶子在
+    任何位置都标注全部别名代码（资料目录/上传/搜索本就全局跟随主课程，
+    v165 自动合并只建别名 Course 不建别名叶子，同层共现判断永远不成立）。
     """
     out = {}
     qs = (courses if courses is not None
@@ -199,16 +221,18 @@ def _build_tree_node(qs, *, preload=None):
             if course.merged_into_id:
                 # 别名叶子单独出现（主课程叶子不在本层）：只显示自己的单码，
                 # 资料目录仍跟随主课程（files/上传接口会 _follow_merge）。
-                # 双代码标注仅限同层共现位置，不同学院/专业的同名合并不串台。
                 node["courseId"] = course.code
             else:
                 node["courseId"] = course.code
-                alias_here = [
-                    a_code for a_id, a_code in merged_codes.get(course.id, [])
-                    if a_id in course_ids_here and a_code != course.code
+                # v271 起主叶子标注全部别名代码（不再要求别名叶子同层共现）：
+                # v165 自动合并只建别名 Course 不建别名叶子，同层判断永远不
+                # 成立；资料/上传/搜索均全局跟随主课程，标注内容不会失真。
+                alias_codes = [
+                    a_code for _a_id, a_code in merged_codes.get(course.id, [])
+                    if a_code and a_code != course.code
                 ]
-                if alias_here:
-                    node["courseCodes"] = list(dict.fromkeys([course.code] + alias_here))
+                if alias_codes:
+                    node["courseCodes"] = list(dict.fromkeys([course.code] + alias_codes))
             count_code = primary.code if primary is not None else course.code
             if material_counts is not None:
                 node["fileCount"] = material_counts.get(count_code, 0)
@@ -350,5 +374,4 @@ def _unique_college_names(colleges):
             seen.add(c.name)
             result.append({"id": c.id, "name": c.short_name or c.name})
     return result
-
 

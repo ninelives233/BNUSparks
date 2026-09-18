@@ -238,6 +238,23 @@ def _identity_can_edit(profile):
     return profile.identity_updated_at.date() != timezone.now().date()
 
 
+def _default_view_for_profile(profile):
+    """未主动设置打开位置时，硕士/博士优先进入我的课程。"""
+    if profile.default_view:
+        return profile.default_view
+    if profile.identity_education in (
+        UserProfile.EducationLevel.MASTER,
+        UserProfile.EducationLevel.DOCTOR,
+    ):
+        return UserProfile.DefaultView.TIMETABLE
+    return UserProfile.DefaultView.HOME
+
+
+def _mobile_nav_for_profile(profile):
+    """未主动设置移动端导航时，默认使用汉堡菜单。"""
+    return profile.mobile_nav or UserProfile.MobileNav.BURGER
+
+
 def require_role(*roles):
     """限制视图仅允许指定角色的用户访问（叠加 require_login）"""
     def decorator(view):
@@ -261,4 +278,3 @@ def _ok(data=None, status=200):
 
 def _err(msg, status=400):
     return JsonResponse({"ok": False, "error": msg}, status=status)
-

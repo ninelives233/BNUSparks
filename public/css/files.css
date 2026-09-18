@@ -443,6 +443,10 @@
   opacity: 0.7;
 }
 
+.fd-meta-view .fd-meta-icon {
+  color: var(--primary);
+}
+
 .fd-meta-sep {
   color: var(--ink-faint);
   margin: 0 2px;

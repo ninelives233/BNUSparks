@@ -22,7 +22,7 @@ from .files_download import (
 
 # 文件删除 / 详情
 from .files_delete import (
-    api_file_delete, api_file_detail,
+    api_file_delete, api_file_detail, api_file_view,
     _scope_matched_moderators,
 )
 

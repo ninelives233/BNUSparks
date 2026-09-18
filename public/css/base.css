@@ -50,9 +50,11 @@
     display: none; align-items: center; justify-content: center;
     width: 44px; height: var(--header-height); flex-shrink: 0;
     border: 0; background: transparent; color: var(--ink); cursor: pointer;
+    touch-action: manipulation;
   }
   .hl-burger svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
   .hl-burger:hover { color: var(--primary); }
+  .hl-burger:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary); }
   .header-logo-area:hover .hl-mark { border-radius: var(--radius-md); transform: scale(1.05); }
   .header-logo-area .hl-texts { display: flex; flex-direction: column; }
   .header-logo-area .hl-chinese {
@@ -1145,7 +1147,11 @@
   .folder-list-item:hover .fli-icon { background: oklch(from var(--primary) l c h / 0.12); }
   .fli-info { flex: 1; min-width: 0; }
   .fli-name { font-size: 0.88rem; font-weight: 500; color: var(--ink); }
-  .fli-meta { font-size: 0.72rem; color: var(--ink-faint); margin-top: 2px; }
+  /* 同名合并叶子行可能并列多个课程代码：超长省略号截断，完整列表在 title 悬停 */
+  .fli-meta {
+    font-size: 0.72rem; color: var(--ink-faint); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .fli-badge {
     font-size: 0.64rem; font-weight: 600;
     padding: 3px 12px; border-radius: var(--radius-full); flex-shrink: 0;
@@ -1286,6 +1292,14 @@
     transition: background 0.15s; opacity: 0.5;
   }
   .mf-pwd-toggle:hover { background: var(--surface); opacity: 1; }
+  .mf-pwd-toggle .pwd-icon {
+    width: 18px; height: 18px; display: block;
+    fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .mf-pwd-toggle .pwd-icon--off { display: none; }
+  .mf-pwd-toggle.is-visible .pwd-icon--eye { display: none; }
+  .mf-pwd-toggle.is-visible .pwd-icon--off { display: block; }
   .mf-input {
     width: 100%; padding: 9px 14px;
     border: 1.5px solid var(--border); border-radius: var(--radius-sm);
@@ -1456,6 +1470,12 @@
     color: var(--ink-faint); cursor: pointer;
   }
   .mf-remember input { width: 15px; height: 15px; accent-color: var(--primary); }
+  .register-legal-consent {
+    align-items: flex-start; line-height: 1.55;
+  }
+  .register-legal-consent input { flex: 0 0 auto; margin-top: 2px; }
+  .register-legal-consent span { flex: 1; }
+  .register-legal-consent a { color: var(--primary); }
 
   .mf-btn {
     width: 100%; margin-top: var(--space-sm);
@@ -2780,14 +2800,14 @@
   .h8-section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 32px; margin-bottom: 12px; }
   .h8-section-head h2 { color: var(--ink); font-family: var(--serif); font-size: 19px; font-weight: 650; letter-spacing: -0.3px; }
   .h8-section-head p { margin-top: 6px; color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
-  .h8-section-head > .text-btn { min-height: 40px; padding: 0; color: var(--primary); font-size: 12px; }
+  .h8-section-head > .text-btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0; color: var(--primary); font-size: 12px; }
   .h8-notice-main { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; }
   .h8-notice-main strong { display: block; margin: 5px 0 6px; color: var(--ink); font-family: var(--serif); font-size: 21px; font-weight: 650; letter-spacing: -0.3px; line-height: 1.45; }
   .h8-notice-main > span:last-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; }
   .h8-shortcuts { padding: 12px 18px 8px; border: 1px solid var(--v9-border); border-radius: var(--radius-md); background: var(--raised); }
   .h8-shortcuts .h8-section-head { margin-bottom: 2px; }
   .h8-head-actions { display: flex; align-items: center; gap: 14px; }
-  .h8-head-actions .text-btn, .h8-head-actions button { min-height: 40px; padding: 0; border: 0; background: transparent; color: var(--primary); font: inherit; font-size: 12px; cursor: pointer; }
+  .h8-head-actions .text-btn, .h8-head-actions button { display: inline-flex; align-items: center; min-height: 40px; padding: 0; border: 0; background: transparent; color: var(--primary); font: inherit; font-size: 12px; cursor: pointer; }
   /* 入口一行两个：行间发丝线分隔，列间加竖向发丝线；卡片高度随 .h8-top 拉伸与公告对齐 */
   .h8-shortcuts nav { display: grid; grid-template-columns: 1fr 1fr; }
   .h8-shortcuts nav a, .h8-shortcuts nav button { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 40px; padding: 0 12px 0 0; border: 0; border-bottom: 1px solid var(--border-light); background: transparent; color: var(--ink); font: inherit; font-size: 13px; text-align: left; }
@@ -2814,11 +2834,14 @@
   .compact-material-favorite svg { width: 18px; height: 18px; }
   .h8-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   .h8-bottom > section { min-width: 0; padding: 18px 24px 8px; border: 1px solid var(--v9-border); border-radius: var(--radius-md); background: var(--raised); }
-  .h8-bottom .h8-section-head { padding-bottom: 12px; margin-bottom: 0; border-bottom: 1px solid var(--border-light); }
-  .h8-rank-tabs { display: flex; flex-shrink: 0; gap: 14px; }
-  .h8-rank-tabs button { position: relative; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--ink-faint); font: inherit; font-size: 12px; cursor: pointer; }
+  .h8-bottom .h8-section-head { align-items: stretch; padding-bottom: 12px; margin-bottom: 0; border-bottom: 1px solid var(--border-light); }
+  /* 榜单页签纵向拉伸贴合卡头，与右侧「完整榜单」动作之间用竖向发丝线区分状态与跳转；
+     激活下划线沉到卡头分隔线上：bottom -13px = 头部 padding-bottom 12px + 1px 边框，两处需同步改 */
+  .h8-rank-tabs { display: flex; flex-shrink: 0; align-self: stretch; gap: 14px; padding-right: 14px; border-right: 1px solid var(--border-light); }
+  .h8-rank-tabs button { position: relative; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--ink-faint); font: inherit; font-size: 12px; cursor: pointer; transition: color 160ms ease-out; }
+  .h8-rank-tabs button:hover { color: var(--ink-soft); }
   .h8-rank-tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; }
-  .h8-rank-tabs button[aria-selected="true"]::after { position: absolute; right: 0; bottom: 2px; left: 0; height: 2px; background: var(--primary); content: ''; }
+  .h8-rank-tabs button[aria-selected="true"]::after { position: absolute; right: 0; bottom: -13px; left: 0; height: 2px; background: var(--primary); content: ''; }
   .h8-rank-list { display: grid; }
   .h8-rank-row { display: flex; align-items: center; gap: 15px; min-height: 66px; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
   .h8-rank-row:last-child { border-bottom: 0; }
@@ -2842,7 +2865,7 @@
     .h8-scale { justify-content: flex-start; }
     .h8-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .h8-bottom > section { padding-right: 18px; padding-left: 18px; }
-    .h8-bottom .h8-section-head { align-items: flex-start; flex-wrap: wrap; gap: 3px; }
+    .h8-bottom .h8-section-head { flex-wrap: wrap; gap: 3px; }
   }
 
   @media (max-width: 700px) {
@@ -3257,6 +3280,7 @@
   position: fixed; inset: 0; z-index: 999;
   background: oklch(0 0 0 / 0.18);
   animation: overlayFadeIn 0.22s ease-out;
+  overscroll-behavior: contain;
 }
 .nav-drawer {
   position: fixed; top: 0; left: 0;
@@ -3266,6 +3290,7 @@
   border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
   box-shadow: 12px 0 32px oklch(0.45 0.01 55 / 0.14), 1px 0 0 oklch(from var(--primary) l c h / 0.10);
   animation: navDrawerIn 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  overscroll-behavior: contain;
 }
 html[data-bnu-theme="dark"] .nav-drawer {
   background: var(--raised);
@@ -3279,10 +3304,13 @@ html[data-bnu-theme="dark"] .nav-drawer {
   flex: 1; min-height: 0;
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 10px 12px 14px;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 /* 条目直接复用 .dm-item（与用户抽屉逐字节同渲染，避免任何设备上的色差），
    仅补导航所需宽度与激活态；.nd-item 类名让位给通知抽屉既有条目 */
 .nav-drawer .dm-item { width: 100%; }
+.nav-drawer .dm-item, .nav-drawer .notif-drawer-close { touch-action: manipulation; }
 .nav-drawer .dm-item.is-active {
   background: var(--primary-surface); color: var(--primary); font-weight: 650;
   box-shadow: inset -3px 0 0 var(--primary);
@@ -3354,6 +3382,316 @@ html[data-bnu-theme="dark"] .home-eight {
 .home-eight .h8-recommend::before {
   display: none;
   content: none;
+}
+
+/* ═══ 紧凑首页 v18：公告 × 入口联动卡片 ═══════════════════════
+   顶部保留两张独立卡片：收起时公告一条、入口最多六个，展开时公告最多三条
+   并与入口同步展开；两张卡片始终共享同一高度。 */
+.home-eight .h8-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.home-eight .h8-top > .h8-notices,
+.home-eight .h8-top > .h8-shortcuts {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--h8-outline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+
+.home-eight .h8-top > .h8-notices {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px 18px;
+  background: var(--raised);
+}
+
+.home-eight .h8-top > .h8-shortcuts {
+  padding: 16px 22px 14px;
+  border-color: color-mix(in oklab, var(--primary) 24%, var(--h8-outline));
+  background: var(--h8-campus-surface);
+}
+
+.home-eight .h8-top.is-expanded > .h8-notices,
+.home-eight .h8-top.is-expanded > .h8-shortcuts {
+  border-color: color-mix(in oklab, var(--primary) 26%, var(--h8-outline));
+}
+
+.home-eight .h8-top .h8-section-head {
+  margin-bottom: 8px;
+}
+
+.home-eight .h8-top .h8-head-actions {
+  gap: 11px;
+}
+
+.home-eight #compactAnnouncement {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0;
+  min-height: 0;
+}
+
+.home-eight .h8-top .h8-notice-main {
+  display: flex;
+  flex: 1;
+  min-height: 96px;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 10px 14px 12px;
+  border-left: 2px solid var(--accent);
+  background: color-mix(in oklab, var(--accent-light) 22%, var(--raised));
+  transition: background-color 180ms ease-out, transform 180ms ease-out;
+}
+
+.home-eight #compactTopPanel.is-expanded .h8-notice-main {
+  min-height: 138px;
+  justify-content: center;
+  padding-block: 18px;
+}
+
+.home-eight #compactTopPanel.is-expanded .h8-notice-main strong {
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+.home-eight #compactTopPanel.is-expanded .h8-notice-main > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: normal;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main {
+  flex: 0 1 auto;
+  min-height: 0;
+  justify-content: flex-start;
+  padding: 10px 14px 11px;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main + .h8-notice-main {
+  border-top: 1px solid var(--border-light);
+  padding-top: 11px;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:first-child {
+  min-height: 84px;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:not(:first-child) {
+  min-height: 56px;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:first-child strong {
+  font-size: 22px;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:not(:first-child) strong {
+  font-size: 16px;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:first-child > span:last-child {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:not(:first-child) > span:last-child {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-eight .h8-top .h8-shortcuts nav {
+  align-content: start;
+}
+
+.home-eight .h8-top .h8-shortcuts nav a,
+.home-eight .h8-top .h8-shortcuts nav button {
+  min-height: 37px;
+  transition: background-color 180ms ease-out, color 180ms ease-out, transform 180ms ease-out;
+}
+
+.home-eight .h8-top .h8-shortcuts nav span:last-child {
+  transition: color 180ms ease-out, transform 180ms ease-out;
+}
+
+.home-eight .h8-top .h8-section-head > .text-btn,
+.home-eight .h8-top .h8-head-actions button {
+  transition: color 180ms ease-out, transform 180ms ease-out;
+}
+
+.home-eight .h8-top .h8-head-actions button[hidden] {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .home-eight .h8-top .h8-notice-main:hover {
+    background: color-mix(in oklab, var(--accent-light) 36%, var(--raised));
+    transform: translateX(2px);
+  }
+
+  .home-eight .h8-top .h8-shortcuts nav a:hover,
+  .home-eight .h8-top .h8-shortcuts nav button:hover {
+    background: color-mix(in oklab, var(--primary-surface) 46%, transparent);
+    color: var(--primary);
+    transform: translateX(2px);
+  }
+
+  .home-eight .h8-top .h8-shortcuts nav a:hover span:last-child,
+  .home-eight .h8-top .h8-shortcuts nav button:hover span:last-child {
+    color: var(--primary);
+    transform: translateX(3px);
+  }
+
+  .home-eight .h8-top .h8-section-head > .text-btn:hover,
+  .home-eight .h8-top .h8-head-actions button:hover {
+    transform: translateX(2px);
+  }
+
+  .home-eight .h8-card {
+    cursor: pointer;
+    transition: border-color 180ms ease-out, background-color 180ms ease-out, box-shadow 180ms ease-out, transform 180ms ease-out;
+  }
+
+  .home-eight .h8-card:hover {
+    border-color: var(--border);
+    background: var(--raised);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+  }
+
+  .home-eight .h8-rank-row {
+    transition: background-color 160ms ease-out;
+  }
+
+  .home-eight .h8-rank-row:hover {
+    background: color-mix(in oklab, var(--primary-surface) 32%, transparent);
+  }
+
+  .home-eight .compact-material-favorite {
+    transition: color 160ms ease-out, transform 160ms ease-out;
+  }
+
+  .home-eight .compact-material-favorite:hover {
+    transform: scale(1.06);
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 701px) {
+  .home-eight .h8-top > .h8-notices {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .home-eight .h8-top > .h8-shortcuts {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
+
+@media (max-width: 700px) {
+  .home-eight .h8-top {
+    display: block;
+    overflow: hidden;
+    padding: 0 16px;
+    border: 1px solid var(--h8-outline);
+    border-radius: var(--radius-md);
+    background: var(--raised);
+  }
+
+  .home-eight .h8-top > .h8-notices {
+    padding: 12px 0 10px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .home-eight .h8-top > .h8-shortcuts {
+    padding: 10px 0 8px;
+    border-top: 1px solid var(--border-light);
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .home-eight #compactAnnouncement {
+    display: block;
+  }
+
+  .home-eight .h8-top .h8-notice-main,
+  .home-eight #compactTopPanel.is-expanded .h8-notice-main {
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 5px 0 6px 10px;
+  }
+
+  .home-eight #compactTopPanel.is-expanded .h8-notice-main strong {
+    font-size: 16px;
+    line-height: 1.4;
+  }
+
+  .home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main {
+    padding: 5px 0 6px 10px;
+  }
+
+  .home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:first-child,
+  .home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:not(:first-child) {
+    min-height: 0;
+  }
+
+  .home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:first-child strong,
+  .home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main:not(:first-child) strong {
+    font-size: 16px;
+  }
+
+  .home-eight #compactTopPanel.is-expanded .h8-notice-main > span:last-child,
+  .home-eight #compactTopPanel.is-expanded #compactAnnouncement .h8-notice-main > span:last-child {
+    display: none;
+  }
+
+  .home-eight .h8-top .h8-shortcuts nav a,
+  .home-eight .h8-top .h8-shortcuts nav button {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-eight .h8-top .h8-notice-main,
+  .home-eight .h8-top .h8-shortcuts nav a,
+  .home-eight .h8-top .h8-shortcuts nav button,
+  .home-eight .h8-top .h8-section-head > .text-btn,
+  .home-eight .h8-top .h8-head-actions button,
+  .home-eight .h8-card,
+  .home-eight .h8-rank-row,
+  .home-eight .compact-material-favorite {
+    transition: none;
+  }
+
+  .home-eight .h8-top .h8-notice-main:hover,
+  .home-eight .h8-top .h8-shortcuts nav a:hover,
+  .home-eight .h8-top .h8-shortcuts nav button:hover,
+  .home-eight .h8-top .h8-section-head > .text-btn:hover,
+  .home-eight .h8-top .h8-head-actions button:hover,
+  .home-eight .h8-card:hover,
+  .home-eight .compact-material-favorite:hover {
+    transform: none;
+  }
 }
 
 /* ═══ 紧凑首页 v17：推荐索引独立页 + 窄屏入口下移 ═══════════
@@ -3847,4 +4185,152 @@ html[data-bnu-theme="warm"] .home-eight {
 .home-eight .h8-recommend::before {
   display: none;
   content: none;
+}
+
+/* ═══ 紧凑首页 v19：统计条单行 + 公告纸面留白 ════════════════
+   统计项是同一组平台规模信息，窄屏只收缩字号和间距，不拆成多行；
+   公告内容回到卡片纸面，不再铺一块抢视觉的暖色底。 */
+.home-eight .h8-scale {
+  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.home-eight .h8-scale > strong,
+.home-eight .h8-scale > span {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.home-eight .h8-top .h8-notice-main,
+.home-eight .h8-top .h8-notice-main:hover {
+  background: transparent;
+}
+
+@media (max-width: 700px) {
+  .home-eight .h8-heading {
+    min-width: 0;
+  }
+
+  .home-eight .h8-scale {
+    flex: 0 1 auto;
+    gap: clamp(4px, 2vw, 10px);
+    overflow: hidden;
+    font-size: clamp(7px, 2.15vw, 10px);
+    letter-spacing: -0.02em;
+  }
+
+  .home-eight .h8-scale strong {
+    flex-shrink: 1;
+    font-size: clamp(18px, 5.7vw, 24px);
+    letter-spacing: -0.06em;
+  }
+
+  .home-eight .h8-scale strong small {
+    font-size: clamp(7px, 2.15vw, 10px);
+  }
+
+  .home-eight .h8-scale > span {
+    flex-shrink: 1;
+  }
+}
+
+/* ═══ 紧凑首页 v20：移动端入口回到同一张纸面 ═══════════════
+   入口仍与公告分区呈现，但不再铺独立色块；只用一条发丝线和行间距完成分层。 */
+@media (max-width: 700px) {
+  .home-eight .h8-top > .h8-shortcuts {
+    background: transparent;
+  }
+}
+
+/* ═══ 紧凑首页 v21：上传入口并入平台规模栏 ═══════════════════
+   复用松散首页的课程搜索上传流程；紧凑首页只换成轻量描边按钮，
+   宽屏位于统计数字左侧，窄屏继续保持同一行并收紧尺寸。 */
+.home-eight .h8-heading-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.home-eight .h8-upload-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in oklab, var(--primary) 42%, var(--v9-border));
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--primary);
+  font: 600 12px/1 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, box-shadow 160ms ease-out, transform 160ms ease-out;
+}
+
+.home-eight .h8-upload-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.home-eight .h8-upload-btn:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary-surface) 52%, transparent);
+  box-shadow: var(--shadow-xs);
+  transform: translateY(-1px);
+}
+
+.home-eight .h8-upload-btn:active {
+  transform: translateY(0);
+}
+
+.home-eight .h8-upload-btn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .home-eight .h8-heading-tools {
+    width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .home-eight .h8-heading-tools {
+    width: 100%;
+    gap: clamp(6px, 2.5vw, 12px);
+    justify-content: space-between;
+  }
+
+  .home-eight .h8-upload-btn {
+    min-height: 28px;
+    gap: 5px;
+    padding: 0 clamp(8px, 2.3vw, 10px);
+    font-size: clamp(10px, 2.9vw, 12px);
+  }
+
+  .home-eight .h8-upload-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .home-eight .h8-scale {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-eight .h8-upload-btn {
+    transition: none;
+  }
+
+  .home-eight .h8-upload-btn:hover,
+  .home-eight .h8-upload-btn:active {
+    transform: none;
+  }
 }

@@ -30,6 +30,8 @@ var _QA_IC_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 window._qaUserOpen = false;
 // 未登录进入问答区时，登录成功后恢复问答列表
 window._qaLoginPending = false;
+// 用户主动关闭登录弹窗后，避免回退重绘问答区时立即再次打开
+window._qaLoginPromptDismissed = false;
 // 当前详情问题 id（采纳/删除后重渲用）
 var _qaCurrentDetailId = null;
 
@@ -76,11 +78,16 @@ function _initQaPlaceholder() {
 async function renderQaView() {
   _initQaPlaceholder();
   if (!currentUser) {
+    if (window._qaLoginPromptDismissed) {
+      window._qaLoginPromptDismissed = false;
+      return;
+    }
     window._qaLoginPending = true;
     showLoginModal();
     return;
   }
   window._qaLoginPending = false;
+  window._qaLoginPromptDismissed = false;
   // v183：拉站点开关（普通用户提问/回答开放状态），失败默认关闭
   api('/api/qa/config/').then(function(cfg) {
     window._qaUserOpen = !!(cfg && cfg.user_open);

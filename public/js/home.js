@@ -27,6 +27,26 @@
     return { userId: user && user.id ? String(user.id) : null, generation: Number(window._bnuAuthGeneration || 0) };
   }
 
+  function restoreCompactViewState() {
+    var state = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
+    if (!state || state.view !== 'home') return;
+    if (state.homeDiscoveryKind === 'recent' || state.homeDiscoveryKind === 'download' || state.homeDiscoveryKind === 'favorite') {
+      _compactData.discoveryKind = state.homeDiscoveryKind;
+    }
+    if (state.homeHotKind === 'download' || state.homeHotKind === 'favorite') {
+      _compactData.hotKind = state.homeHotKind;
+    }
+    if (typeof state.homeCampusExpanded === 'boolean') _compactData.campusExpanded = state.homeCampusExpanded;
+  }
+
+  window.getCompactHomeViewState = function () {
+    return {
+      homeDiscoveryKind: _compactData.discoveryKind,
+      homeHotKind: _compactData.hotKind,
+      homeCampusExpanded: !!_compactData.campusExpanded,
+    };
+  };
+
   function contextKey(context) {
     return (context.userId || 'guest') + ':' + context.generation;
   }
@@ -106,6 +126,28 @@
     if (helper) helper.hidden = !!(announcement && announcement.hidden && campus && campus.hidden);
   }
 
+  function syncCompactTopState() {
+    var top = document.getElementById('compactTopPanel');
+    var moreLink = document.getElementById('compactCampusMore');
+    var expanded = !!_compactData.campusExpanded;
+    if (top) {
+      top.classList.toggle('is-expanded', expanded);
+      top.dataset.expanded = expanded ? 'true' : 'false';
+    }
+    if (moreLink && !moreLink.hidden) {
+      moreLink.textContent = expanded ? '收起入口 →' : '展开入口 →';
+      moreLink.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+  }
+
+  function setCompactTopExpanded(expanded) {
+    _compactData.campusExpanded = !!expanded;
+    if (typeof patchViewState === 'function') patchViewState({ homeCampusExpanded: _compactData.campusExpanded });
+    syncCompactTopState();
+    renderCompactAnnouncement({ value: { items: _compactData.announcements }, error: null });
+    renderCompactCampus({ value: _compactData.campusPayload || { items: _compactData.campus }, error: null });
+  }
+
   function renderCompactAnnouncement(result) {
     var host = document.getElementById('compactAnnouncement');
     var block = document.querySelector('.compact-announcement-block');
@@ -124,8 +166,12 @@
       updateHelperVisibility();
       return;
     }
-    var first = items[0];
-    host.innerHTML = '<a href="/announcements#announcement-' + Number(first.id || 0) + '" data-announcement-id="' + Number(first.id || 0) + '" class="h8-notice-main compact-announcement-link"><span class="h8-label">' + htmlEscape(String(first.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(first.title) + '</strong><span>' + htmlEscape(plainText(first.content).slice(0, 100)) + '</span></a>';
+    var visibleItems = _compactData.campusExpanded ? items.slice(0, 3) : items.slice(0, 1);
+    host.innerHTML = visibleItems.map(function (item, index) {
+      var id = Number(item.id || 0);
+      var className = 'h8-notice-main compact-announcement-link' + (index ? ' h8-notice-secondary' : '');
+      return '<a href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '" class="' + className + '"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span>' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>';
+    }).join('');
     updateHelperVisibility();
   }
 
@@ -164,21 +210,18 @@
       return;
     }
     if (block) block.hidden = false;
-    var visibleItems = _compactData.campusExpanded ? items : items.slice(0, 4);
+    var visibleItems = _compactData.campusExpanded ? items : items.slice(0, 6);
     host.innerHTML = items.length
       ? visibleItems.map(function (item) {
           return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
         }).join('')
       : '<p class="h8-shortcut-note">还没有配置校园入口。</p>';
-    // 「更多入口」收进区块头部，不再占用一整行。
+    // 「展开入口」收进区块头部，并与公告面板共享同一个展开状态。
     if (moreLink) {
-      var hasMore = items.length > 4;
+      var hasMore = items.length > 6 || _compactData.announcements.length > 1;
       moreLink.hidden = !hasMore;
-      if (hasMore) {
-        moreLink.textContent = _compactData.campusExpanded ? '收起 →' : '更多入口 →';
-        moreLink.setAttribute('aria-expanded', _compactData.campusExpanded ? 'true' : 'false');
-      }
     }
+    syncCompactTopState();
     updateHelperVisibility();
   }
 
@@ -355,17 +398,14 @@
     var key = kind === 'favorite' ? 'top_favorited' : 'top_downloaded';
     var items = Array.isArray(stats[key]) ? stats[key].slice(0, 8) : [];
     _compactData.hotKind = kind === 'favorite' ? 'favorite' : 'download';
+    if (typeof patchViewState === 'function') patchViewState({ homeHotKind: _compactData.hotKind });
     document.querySelectorAll('.h8-rank-tabs [data-hot]').forEach(function (tab) {
       var active = tab.getAttribute('data-hot') === _compactData.hotKind;
       tab.classList.toggle('is-active', active);
       tab.setAttribute('aria-selected', active ? 'true' : 'false');
     });
     if (note) note.textContent = _compactData.hotKind === 'favorite' ? '按收藏量排序' : '按下载量排序';
-    if (more) {
-      more.textContent = _compactData.hotKind === 'favorite' ? '查看收藏榜 →' : '查看下载榜 →';
-      more.setAttribute('href', '/rankings');
-      more.dataset.rankingType = _compactData.hotKind;
-    }
+    if (more) more.dataset.rankingType = _compactData.hotKind;
     if (!items.length) {
       host.innerHTML = '<p class="compact-empty">暂无可展示的真实资料</p>';
       return;
@@ -419,6 +459,7 @@
     var key = kind === 'download' ? 'top_downloaded' : kind === 'favorite' ? 'top_favorited' : 'recent_uploads';
     var items = Array.isArray(stats[key]) ? stats[key].slice(0, 8) : [];
     _compactData.discoveryKind = kind;
+    if (typeof patchViewState === 'function') patchViewState({ homeDiscoveryKind: _compactData.discoveryKind });
     if (note) note.textContent = kind === 'download' ? '按累计下载量排列' : kind === 'favorite' ? '按累计收藏数排列' : '按上传日期排列';
     document.querySelectorAll('.compact-discovery-tabs [data-discovery]').forEach(function (tab) {
       var active = tab.getAttribute('data-discovery') === kind;
@@ -446,6 +487,7 @@
     _compactData.campus = [];
     _compactData.campusPayload = null;
     _compactData.campusExpanded = false;
+    syncCompactTopState();
     _compactData.recommendations = [];
     _compactData.recommendationMeta = null;
     _compactData.recommendationPageMeta = null;
@@ -466,6 +508,7 @@
   function loadCompactHome() {
     var layout = document.body && document.body.dataset.homeLayout;
     if (layout !== 'compact') return Promise.resolve(false);
+    restoreCompactViewState();
     var context = currentContext();
     var key = contextKey(context);
     // 没有可靠的后端身份字段时保守隐藏 2026 新生入口，不根据用户名猜测。
@@ -474,7 +517,7 @@
     if (_compactRequest && _compactRequest.key === key) return _compactRequest.promise;
     // 先完成首屏刚需数据，推荐列表单独异步加载，避免一个慢接口阻塞首页的全部内容。
     var criticalPromise = Promise.all([
-      requestPart('/api/stats/?limit=8'), requestPart('/api/announcements/?limit=1'),
+      requestPart('/api/stats/?limit=8'), requestPart('/api/announcements/?limit=3'),
       requestPart('/api/campus-links/'),
     ]).then(function (result) {
       if (!isCurrent(context) || (document.body && document.body.dataset.homeLayout !== 'compact')) return false;
@@ -711,8 +754,7 @@
         if (isMobileHome()) {
           openCampusLinksPanel();
         } else {
-          _compactData.campusExpanded = !_compactData.campusExpanded;
-          renderCompactCampus({ value: _compactData.campusPayload || { items: _compactData.campus }, error: null });
+          setCompactTopExpanded(!_compactData.campusExpanded);
         }
         return;
       }

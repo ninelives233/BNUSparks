@@ -22,6 +22,7 @@ urlpatterns = [
     path("courses/timetable-summary/", views.api_course_timetable_summary, name="api_course_timetable_summary"),
     path("courses/request/", views.api_course_request_create, name="api_course_request_create"),
     path("courses/request/check/", views.api_course_request_check, name="api_course_request_check"),
+    path("courses/request/status/", views.api_course_request_status, name="api_course_request_status"),
     path("courses/request/<int:request_id>/files/", views.api_course_request_upload_file, name="api_course_request_upload_file"),
     path("courses/request/<int:request_id>/", views.api_course_request_delete, name="api_course_request_delete"),
     path("courses/<str:course_code>/files/", views.api_course_files, name="api_course_files"),
@@ -42,6 +43,7 @@ urlpatterns = [
 
     # 收藏
     path("files/<int:file_id>/", views.api_file_detail, name="api_file_detail"),
+    path("files/<int:file_id>/view/", views.api_file_view, name="api_file_view"),
     path("files/<int:file_id>/favorite/", views.api_favorite_toggle, name="api_favorite_toggle"),
     path("files/<int:file_id>/zip-structure/", views.api_zip_structure, name="api_zip_structure"),
     path("files/<int:file_id>/favorite-status/", views.api_favorite_status, name="api_favorite_status"),
@@ -89,6 +91,10 @@ urlpatterns = [
     path("search/", views.api_search, name="api_search"),
     path("stats/", views.api_stats, name="api_stats"),
     path("colleges/", views.api_colleges, name="api_colleges"),
+    path("monitoring/events/", views.api_monitoring_events, name="api_monitoring_events"),
+
+    # 专业目录（身份标签三级联动：层次→学院→学硕/专硕；v259）
+    path("majors/", views.api_majors, name="api_majors"),
 
     # 审核（Iter 3）
     path("moderation/pending/", views.api_moderation_pending, name="api_moderation_pending"),

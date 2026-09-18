@@ -104,7 +104,13 @@
     } else if (hasSub) {
       badge = '<span class="fli-badge has-data">' + getEffectiveChildCount(item) + ' 项</span>';
     }
-    const meta = cId ? '课程代码 ' + cId : (hasSub ? getEffectiveChildCount(item) + ' 项' : '');
+    // 同名合并：叶子行并列展示全部代码（主代码 / 别名代码），超长由 CSS 省略号截断，
+    // 完整列表放 title 悬停可查
+    const codes = (cId && item.courseCodes && item.courseCodes.length > 1) ? item.courseCodes : null;
+    const meta = cId
+      ? '课程代码 ' + (codes ? codes.join(' / ') : cId)
+      : (hasSub ? getEffectiveChildCount(item) + ' 项' : '');
+    const metaTitle = cId ? ' title="' + esc(meta) + '"' : '';
     // 收藏课程星星：仅叶子课程节点（有真实课程代码，非通配符）
     let favStar = '';
     if (cId && cId.indexOf('*') === -1) {
@@ -115,7 +121,7 @@
     }
     return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
-      '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta">' + meta + '</div></div>' +
+      '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta"' + metaTitle + '>' + meta + '</div></div>' +
       badge + favStar +
       (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') + '</div>';
   }
@@ -242,8 +248,13 @@
         sameNameGroups[e.courseId].programs.push(e.program);
       }
     });
-    // 同名合并显示：课程名下并列展示全部代码（主代码 + 别名代码）
-    const mergeCodes = (course.courseCodes && course.courseCodes.length > 1)
+    // 同名合并显示：课程名下并列展示全部代码（主代码 + 别名代码）。
+    // 「实践教育（思政）」例外：各学院教务代码各异且已全量并入同一目录，
+    // 不渲染具体代码，显示「通用」。
+    const isPracticeIdeology = (course.name || '').replace(/[（）]/g, c => c === '（' ? '(' : ')').trim() === '实践教育(思政)';
+    const mergeCodes = isPracticeIdeology
+      ? '<span class="fa-codes">通用</span>'
+      : (course.courseCodes && course.courseCodes.length > 1)
       ? '<span class="fa-codes">' + course.courseCodes.map(c => esc(c)).join(' · ') + '</span>'
       : '';
 

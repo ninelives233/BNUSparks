@@ -12,7 +12,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Count, Max, Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
@@ -21,7 +21,9 @@ from .utils import (
     _get_category_preload, require_login, require_role,
     _sanitize_filename_part, _safe_dir_name, _blocked_upload_ext,
     _find_existing_course, _find_leaf_under_parent, _follow_merge,
+    _normalize_course_code, _normalized_course_code_expression,
 )
+from ..monitoring_events import record_request_event
 from .operations import _can_create_under
 from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
 from ..models import (
@@ -44,11 +46,74 @@ def _category_path(cat):
     return " / ".join(reversed(parts))
 
 
+def _normalize_request_code(value):
+    """统一课程申请使用的代码格式，和创建接口保持一致。"""
+    return _normalize_course_code(value)
+
+
+def _linked_course_code_details(codes):
+    """返回已真正挂入课程树的代码详情，供申请状态自动收敛使用。
+
+    申请记录可能仍保留 rejected，但管理员随后可以通过管理模式把同码课程
+    建到正确目录。只要代码对应的 CourseCategory 已存在，就说明该课程已经
+    可访问，不应再把旧驳回记录继续暴露为「重新申请」。
+    """
+    normalized_codes = {
+        _normalize_request_code(code) for code in (codes or [])
+        if _normalize_request_code(code)
+    }
+    if not normalized_codes:
+        return {}
+
+    rows = list(
+        Course.objects.annotate(
+            _normalized_code=_normalized_course_code_expression(),
+            _approved_file_count=Count(
+                "materials", filter=Q(materials__is_approved=True)
+            ),
+        ).filter(
+            _normalized_code__in=normalized_codes,
+        ).values(
+            "id", "_normalized_code", "course_type", "_approved_file_count",
+        )
+    )
+    if not rows:
+        return {}
+
+    linked_ids = set(
+        CourseCategory.objects.filter(
+            course_id__in=[row["id"] for row in rows]
+        ).values_list("course_id", flat=True)
+    )
+    details = {}
+    for row in rows:
+        if row["id"] not in linked_ids:
+            continue
+        code = row["_normalized_code"]
+        detail = details.setdefault(code, {
+            "course_type": row["course_type"],
+            "file_count": 0,
+        })
+        detail["file_count"] = max(
+            detail["file_count"], row["_approved_file_count"] or 0
+        )
+    return details
+
+
 # ── v=165 新建课程前查重：课程代码已存在时判定「本专业树已有入口」vs「仅在他处」 ──
 
 def _matching_course_ids(code):
     """该课程代码对应的全部 Course id 集合（同码多行收敛）。"""
-    return set(Course.objects.filter(code=code).values_list("id", flat=True))
+    normalized_code = _normalize_request_code(code)
+    if not normalized_code:
+        return set()
+    return set(
+        Course.objects.annotate(
+            _normalized_code=_normalized_course_code_expression()
+        ).filter(
+            _normalized_code=normalized_code
+        ).values_list("id", flat=True)
+    )
 
 
 def _code_matches_wildcard(leaf_course_text, code):
@@ -56,8 +121,9 @@ def _code_matches_wildcard(leaf_course_text, code):
 
     与 _get_courses_in_category 同口径：去 * 与 - 后前缀匹配。
     """
-    cleaned = (leaf_course_text or "").replace("*", "").replace("-", "")
-    return bool(cleaned) and bool(code) and code.startswith(cleaned)
+    cleaned = _normalize_request_code(leaf_course_text)
+    normalized_code = _normalize_request_code(code)
+    return bool(cleaned) and bool(normalized_code) and normalized_code.startswith(cleaned)
 
 
 def _leaf_under_parent(leaf, parent):
@@ -291,18 +357,80 @@ def api_course_request_check(request):
       in_target  该代码已有入口落在所选目标层级下 → 应引导直接上传
       locations  该代码在课程树中的全部叶子路径（面包屑）
     """
-    code = (request.GET.get("course_code") or "").strip().replace("*", "").replace("-", "")
+    code = _normalize_request_code(request.GET.get("course_code"))
     target_id = request.GET.get("target_category_id") or request.GET.get("general_category_id")
     if not code:
         return _ok({"exists": False, "in_target": False, "locations": []})
     parent = CourseCategory.objects.filter(id=target_id).first() if target_id else None
     locations, in_target = _course_locations(code, parent)
-    exists = Course.objects.filter(code=code).exists() or bool(locations)
+    exists = bool(_matching_course_ids(code)) or bool(locations)
     return _ok({
         "exists": exists,
         "in_target": in_target,
         "locations": locations,
     })
+
+
+@require_login
+def api_course_request_status(request):
+    """GET /api/courses/request/status/?codes=... — 返回本人各课程代码的最新申请状态。
+
+    课表需要知道「待审核」和「已驳回」的区别，但不能把他人的申请状态暴露给
+    前端。只返回当前用户每个代码的最新一条申请，并带回原申请位置，便于驳回后
+    在课表中快捷重新申请；若驳回后管理员已把同码课程挂入课程树，则返回
+    resolved 作为用户端有效状态，保留原始 rejected 记录用于审计。
+    """
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    codes = list(dict.fromkeys(
+        _normalize_request_code(code)
+        for code in (request.GET.get("codes") or "").split(",")
+        if _normalize_request_code(code)
+    ))[:100]
+    if not codes:
+        return _ok({"items": {}})
+
+    items = {}
+    code_set = set(codes)
+    linked_courses = _linked_course_code_details(code_set)
+    # 兼容 v=258 之前已落库的大小写/连字符写法：新申请统一规范化，
+    # 历史申请不能因为数据库里的旧格式而在课表里显示成「未申请」。
+    rows = CourseCreationRequest.objects.filter(
+        user=request.user,
+    ).order_by("-created_at", "-id")
+    for req in rows:
+        normalized_code = _normalize_request_code(req.course_code)
+        if normalized_code not in code_set or normalized_code in items:
+            continue
+        linked = (
+            req.status == CourseCreationRequest.Status.REJECTED and
+            normalized_code in linked_courses
+        )
+        status = "resolved" if linked else req.status
+        linked_detail = linked_courses.get(normalized_code) or {}
+        items[normalized_code] = {
+            "id": req.id,
+            "status": status,
+            "request_status": req.status,
+            "resolved": linked,
+            "course_type": req.course_type,
+            "course_name": req.course_name,
+            "course_code": normalized_code,
+            "college_id": req.college_id,
+            "target_category_id": req.target_category_id,
+            "general_category_id": req.general_category_id,
+            "review_notes": req.review_notes if status == CourseCreationRequest.Status.REJECTED else "",
+            "file_count": linked_detail.get("file_count") if linked else None,
+            "payload": {
+                "course_type": req.course_type,
+                "course_name": req.course_name,
+                "course_code": normalized_code,
+                "college_id": req.college_id,
+                "target_category_id": req.target_category_id,
+                "general_category_id": req.general_category_id,
+            },
+        }
+    return _ok({"items": items})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -322,7 +450,7 @@ def api_course_request_create(request):
 
     course_type = (body.get("course_type") or "").strip()
     course_name = (body.get("course_name") or "").strip()
-    course_code = (body.get("course_code") or "").strip().replace("*", "").replace("-", "")
+    course_code = _normalize_request_code(body.get("course_code"))
     college_id = body.get("college_id")
     target_category_id = body.get("target_category_id")
     general_category_id = body.get("general_category_id")
@@ -877,6 +1005,7 @@ def api_moderation_course_request_approve(request, request_id):
         return _err("随附资料迁移失败，申请未批准；请检查文件后重试", 500)
     if err is not None:
         return err
+    record_request_event(request, "moderation.decision", outcome="course_approved")
     return _ok({"id": req.id, "status": req.status})
 
 
@@ -929,6 +1058,7 @@ def api_moderation_course_request_reject(request, request_id):
             message=f"你的申请「{req.course_name}」已被驳回：{notes}",
             course_code=req.course_code, course_name=req.course_name,
         )
+    record_request_event(request, "moderation.decision", outcome="course_rejected")
     return _ok({"id": req.id, "status": req.status})
 
 
@@ -950,4 +1080,5 @@ def api_moderation_course_requests_batch_approve(request):
                 approved += 1
         except Exception:
             continue
+    record_request_event(request, "moderation.decision", outcome="course_batch_approved")
     return _ok({"approved_count": approved})

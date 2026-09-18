@@ -20,6 +20,7 @@ from .utils import (
     _build_tree_node, _get_courses_in_category,
     _create_notification, _user_can_edit_material,
     _follow_merge, _merged_codes_map,
+    _normalize_course_code, _normalized_course_code_expression,
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
@@ -249,16 +250,26 @@ def api_course_timetable_summary(request):
     if not codes:
         return _ok(summary)
 
-    courses = Course.objects.filter(code__in=codes).annotate(
+    raw_by_normalized = {}
+    for raw_code in codes:
+        normalized = _normalize_course_code(raw_code)
+        if normalized:
+            raw_by_normalized.setdefault(normalized, []).append(raw_code)
+
+    courses = Course.objects.annotate(
+        _normalized_code=_normalized_course_code_expression(),
         _material_count=Count(
             "materials", filter=Q(materials__is_approved=True)
         )
-    ).values("code", "course_type", "_material_count")
+    ).filter(_normalized_code__in=set(raw_by_normalized)).values(
+        "_normalized_code", "course_type", "_material_count"
+    )
     for row in courses:
-        item = summary[row["code"]]
-        item["exists"] = True
-        item["course_type"] = row["course_type"]
-        item["file_count"] = max(item["file_count"], row["_material_count"] or 0)
+        for raw_code in raw_by_normalized.get(row["_normalized_code"], []):
+            item = summary[raw_code]
+            item["exists"] = True
+            item["course_type"] = row["course_type"]
+            item["file_count"] = max(item["file_count"], row["_material_count"] or 0)
 
     return _ok(summary)
 

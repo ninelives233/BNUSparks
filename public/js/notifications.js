@@ -170,6 +170,9 @@
     if (e && e.target !== e.currentTarget) return;
     document.getElementById('notifDrawer').style.display = 'none';
     unlockScroll();
+    // 外观子页会注册为 active dialog；关闭抽屉时一并清理，避免后续 Escape
+    // 被隐藏的外观弹层拦截，导致其他浮层无法关闭。
+    if (typeof deactivateDialog === 'function') deactivateDialog();
   }
 
   // ── 模式切换（Iter 6） ──

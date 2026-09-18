@@ -35,6 +35,11 @@ class UserProfile(models.Model):
         HOME = "home", "首页"
         TIMETABLE = "timetable", "我的课程"
 
+    class TimetableTextAlign(models.TextChoices):
+        LEFT = "left", "靠左"
+        CENTER = "center", "居中"
+        RIGHT = "right", "靠右"
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.USER)
     moderated_sections = models.ManyToManyField(
@@ -84,7 +89,20 @@ class UserProfile(models.Model):
     )
     identity_updated_at = models.DateTimeField("身份最近修改时间", null=True, blank=True)
 
-    # 空值表示历史用户尚未主动设置，接口层回退到松散首页＋暖色＋首页入口。
+    # 校区（beijing/zhuhai/unknown）——由课表导入时的上课地点关键词自动判定；
+    # unknown 只表示尚未导入课表或地点无特征，不参与猜测。
+    class Campus(models.TextChoices):
+        UNKNOWN = "unknown", "未判定"
+        BEIJING = "beijing", "北京校区"
+        ZHUHAI = "zhuhai", "珠海校区"
+
+    campus = models.CharField(
+        "校区", max_length=10, choices=Campus.choices,
+        default=Campus.UNKNOWN, db_index=True,
+    )
+
+    # 空值表示历史用户尚未主动设置，接口层回退到紧凑首页＋暖色＋汉堡菜单；
+    # 打开入口按培养层次推导，硕士/博士默认进入我的课程。
     home_layout = models.CharField(
         "首页布局", max_length=10, choices=HomeLayout.choices,
         blank=True, default="",
@@ -101,23 +119,39 @@ class UserProfile(models.Model):
         "打开时进入", max_length=10, choices=DefaultView.choices,
         blank=True, default="",
     )
+    timetable_text_align = models.CharField(
+        "课程卡片文字对齐", max_length=6, choices=TimetableTextAlign.choices,
+        blank=True, default="",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "用户资料"
         verbose_name_plural = "用户资料"
+        indexes = [
+            models.Index(fields=["identity_education"], name="profile_identity_edu"),
+            models.Index(fields=["identity_college", "identity_major"], name="profile_identity_college_major"),
+        ]
 
     def __str__(self):
         return f"{self.user.username} ({self.get_role_display()})"
 
 
 class College(models.Model):
+    class Campus(models.TextChoices):
+        BEIJING = "北京", "北京校区"
+        ZHUHAI = "珠海", "珠海校区"
+
     name = models.CharField("学院名称", max_length=100)
     short_name = models.CharField("简称", max_length=20, blank=True)
     slug = models.SlugField("URL标识", max_length=100, unique=True)
     description = models.TextField("描述", blank=True)
     order = models.IntegerField("排序", default=0)
+    campus = models.CharField(
+        "校区", max_length=10, choices=Campus.choices, default=Campus.BEIJING,
+        help_text="仅作内部归属标注（身份标签不区分校区）；珠海学院以 2026 招生目录核实为准",
+    )
 
     class Meta:
         verbose_name = "学院"
@@ -126,6 +160,65 @@ class College(models.Model):
 
     def __str__(self):
         return self.short_name or self.name
+
+
+class Major(models.Model):
+    """专业库：身份标签「专业」下拉的一等数据源（v259）。
+
+    建库次序反转：此前专业选项派生自课程树（先有培养方案再有专业），
+    现在先建专业库，后续硕博培养方案与课程树再挂接到 level + name 上。
+    本科专业由课程树「专业课」分支同步；硕博专业按学位授权点建库。
+    """
+
+    class Level(models.TextChoices):
+        UNDERGRADUATE = "本科", "本科"
+        MASTER = "硕士", "硕士"
+        DOCTOR = "博士", "博士"
+
+    class Track(models.TextChoices):
+        ACADEMIC = "academic", "学术学位"
+        PROFESSIONAL = "professional", "专业学位"
+
+    college = models.ForeignKey(
+        College, on_delete=models.CASCADE,
+        related_name="majors", verbose_name="学院",
+    )
+    name = models.CharField("专业名称", max_length=100)
+    level = models.CharField("培养层次", max_length=10, choices=Level.choices)
+    track = models.CharField(
+        "学位类型", max_length=20, choices=Track.choices,
+        blank=True, default="",
+        help_text="硕博专用：学术学位/专业学位；本科留空",
+    )
+    code = models.CharField(
+        "学科代码", max_length=10, blank=True, default="",
+        help_text="硕博一级学科/专业学位类别代码（如 0101、0451），便于后续对接",
+    )
+    department = models.CharField(
+        "所属系", max_length=50, blank=True, default="",
+        help_text="学院内部系建制（如文理学院中文系）；本科下拉按系 optgroup 分组，无系建制的学院留空",
+    )
+    order = models.IntegerField("排序", default=0)
+    is_active = models.BooleanField(
+        "启用", default=True,
+        help_text="停用后不再出现在身份标签选项中，但保留历史数据与匹配能力",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "专业"
+        verbose_name_plural = "专业"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["college", "name", "level"],
+                name="uniq_major_college_name_level",
+            ),
+        ]
+        ordering = ["order", "id"]
+        indexes = [models.Index(fields=["level", "is_active"])]
+
+    def __str__(self):
+        return f"{self.college.short_name or self.college.name}·{self.level}·{self.name}"
 
 
 class CourseType(models.TextChoices):
@@ -206,6 +299,7 @@ class Material(models.Model):
     file_type = models.CharField("文件类型", max_length=20, blank=True,
                                  help_text="pdf/docx/pptx 等")
     uploader_name = models.CharField("上传者昵称", max_length=50, blank=True)
+    view_count = models.PositiveIntegerField("浏览量", default=0)
     download_count = models.IntegerField("下载次数", default=0)
     is_approved = models.BooleanField("已审核", default=True)
 
@@ -248,6 +342,10 @@ class Material(models.Model):
         verbose_name = "资料"
         verbose_name_plural = "资料"
         ordering = ["-is_pinned", "-created_at"]
+        indexes = [
+            models.Index(fields=["created_at"], name="material_created_at"),
+            models.Index(fields=["review_status", "created_at"], name="material_review_created"),
+        ]
 
     def __str__(self):
         return self.title
@@ -507,6 +605,11 @@ class DownloadRecord(models.Model):
         verbose_name = "下载记录"
         verbose_name_plural = "下载记录"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_at"], name="download_created_at"),
+            models.Index(fields=["activity_type", "created_at"], name="download_activity_created"),
+            models.Index(fields=["user", "created_at"], name="download_user_created"),
+        ]
 
     def __str__(self):
         return f"{self.user.username} → {self.material_title}"
@@ -584,6 +687,9 @@ class CourseCreationRequest(models.Model):
         verbose_name = "新建课程申请"
         verbose_name_plural = "新建课程申请"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="course_req_status_created"),
+        ]
 
     def __str__(self):
         return f"[{self.get_course_type_display()}] {self.course_name} by {self.user}"
@@ -698,6 +804,9 @@ class Report(models.Model):
         verbose_name = "举报"
         verbose_name_plural = "举报"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="report_status_created"),
+        ]
         constraints = [
             # 同一用户同一资料只报一次；连带举报按被举报用户防重复；
             # v183 问答区举报：同一用户对同一问题/回答只报一次
@@ -857,6 +966,9 @@ class QaQuestion(models.Model):
         verbose_name = "问答区问题"
         verbose_name_plural = "问答区问题"
         ordering = ["-is_pinned", "-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="qa_question_status_created"),
+        ]
 
     def __str__(self):
         return self.title
@@ -887,6 +999,9 @@ class QaAnswer(models.Model):
         verbose_name = "问答区回答"
         verbose_name_plural = "问答区回答"
         ordering = ["-is_pinned", "-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"], name="qa_answer_status_created"),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["question"], condition=Q(is_accepted=True),
@@ -1065,6 +1180,7 @@ class QaDeleteRequest(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["target_type", "target_id"], name="qa_delreq_target"),
+            models.Index(fields=["status", "created_at"], name="qa_delreq_status_created"),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -1121,3 +1237,94 @@ class TimetableImportRecord(models.Model):
 
     def __str__(self):
         return f"课表导入 {self.user_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class MonitoringEvent(models.Model):
+    """行为事件账本。
+
+    事件只保存低基数枚举、按日匿名摘要和必要的用户外键；不保存搜索词、
+    文件名、完整 URL、JWT 或原始 IP。``event_id`` 由客户端/服务端生成，
+    让批量重试可以安全地忽略重复事件。
+    """
+
+    class EventName(models.TextChoices):
+        LOGIN_SUCCESS = "auth.login.success", "登录成功"
+        LOGIN_FAILURE = "auth.login.failure", "登录失败"
+        VIEW_OPEN = "view.open", "页面打开"
+        SEARCH_EXECUTE = "search.execute", "执行搜索"
+        SEARCH_NO_RESULT = "search.no_result", "搜索无结果"
+        PREVIEW_SUCCESS = "material.preview.success", "预览成功"
+        PREVIEW_FAILURE = "material.preview.failure", "预览失败"
+        DOWNLOAD_SUCCESS = "material.download.success", "下载成功"
+        DOWNLOAD_QUOTA_DENIED = "material.download.quota_denied", "下载配额拒绝"
+        DOWNLOAD_FAILURE = "material.download.failure", "下载失败"
+        UPLOAD_SUCCESS = "material.upload.success", "上传成功"
+        UPLOAD_FAILURE = "material.upload.failure", "上传失败"
+        TIMETABLE_IMPORT_SUCCESS = "timetable.import.success", "课表导入成功"
+        TIMETABLE_IMPORT_FAILURE = "timetable.import.failure", "课表导入失败"
+        MODERATION_DECISION = "moderation.decision", "审核决定"
+
+    class Audience(models.TextChoices):
+        USER = "user", "登录用户"
+        ANONYMOUS = "anonymous", "匿名访客"
+
+    event_id = models.CharField("事件编号", max_length=80, unique=True)
+    event_name = models.CharField("事件名称", max_length=48, choices=EventName.choices)
+    audience = models.CharField("主体类型", max_length=12, choices=Audience.choices)
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="monitoring_events", verbose_name="登录用户",
+    )
+    # 仅匿名主体填写：按天用 SECRET_KEY 做 HMAC，原始匿名标识不入库。
+    actor_hash = models.CharField("匿名主体摘要", max_length=64, blank=True, default="")
+    day = models.DateField("本地日期", db_index=True)
+    occurred_at = models.DateTimeField("发生时间", db_index=True)
+    received_at = models.DateTimeField("接收时间", auto_now_add=True)
+    view_name = models.CharField("规范化视图", max_length=40, blank=True, default="")
+    outcome = models.CharField("低基数结果", max_length=24, blank=True, default="")
+
+    class Meta:
+        verbose_name = "监测行为事件"
+        verbose_name_plural = "监测行为事件"
+        indexes = [
+            models.Index(fields=["event_name", "day"], name="mon_event_name_day"),
+            models.Index(fields=["audience", "day"], name="mon_audience_day"),
+            models.Index(fields=["day", "occurred_at"], name="mon_day_occurred"),
+            models.Index(fields=["user", "day"], name="mon_user_day"),
+        ]
+
+    def __str__(self):
+        return f"{self.event_name} @ {self.occurred_at:%Y-%m-%d %H:%M}"
+
+
+class MonitoringAggregate(models.Model):
+    """长期保留的小时/日事件聚合，不含可还原到个人的原始事件内容。"""
+
+    class Granularity(models.TextChoices):
+        HOUR = "hour", "小时"
+        DAY = "day", "日"
+
+    granularity = models.CharField("聚合粒度", max_length=5, choices=Granularity.choices)
+    bucket_start = models.DateTimeField("桶起点")
+    event_name = models.CharField("事件名称", max_length=48, choices=MonitoringEvent.EventName.choices)
+    audience = models.CharField("主体类型", max_length=12, choices=MonitoringEvent.Audience.choices)
+    event_count = models.PositiveIntegerField("事件次数", default=0)
+    people_count = models.PositiveIntegerField("去重人数", default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "监测行为聚合"
+        verbose_name_plural = "监测行为聚合"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["granularity", "bucket_start", "event_name", "audience"],
+                name="uniq_mon_aggregate_bucket_event_audience",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["granularity", "bucket_start"], name="mon_agg_gran_bucket"),
+            models.Index(fields=["event_name", "bucket_start"], name="mon_agg_event_bucket"),
+        ]
+
+    def __str__(self):
+        return f"{self.granularity} {self.event_name} {self.bucket_start:%Y-%m-%d %H:%M}"

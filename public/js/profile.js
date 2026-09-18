@@ -114,11 +114,11 @@
     var edu = (currentUser && currentUser.identity_education) || '';
     var eduEl = document.getElementById('_idnEducation');
     if (eduEl) eduEl.value = edu;
-    populateIdentitySelects('_idnCollege', '_idnMajor', { college: col, major: maj });
+    populateIdentitySelects('_idnCollege', '_idnMajor', { college: col, major: maj }, '_idnEducation');
   }
 
   function onIdentityCollegeChange() {
-    fillIdentityMajors('_idnCollege', '_idnMajor', '');
+    fillIdentityMajors('_idnCollege', '_idnMajor', '', '_idnEducation');
   }
 
   function closeIdentityEditor() {
@@ -219,7 +219,9 @@
   }
 
   // ── 我的上传独立页面（Iter 6） ──
-  function showMyUploadsPage() {
+  function showMyUploadsPage(initialTab) {
+    var validTabs = ['approved', 'pending', 'rejected', 'deleted'];
+    if (validTabs.indexOf(initialTab) !== -1) _myUploadTab = initialTab;
     closeNotifDrawer();
     // 彻底清除所有视图
     document.querySelectorAll('.view-section').forEach(function(v) {
@@ -230,7 +232,7 @@
     if (v) { v.style.display = 'block'; v.classList.add('active'); }
     updateSidebar('profile');
     window.scrollTo({ top: 0 });
-    pushViewState('myuploads', {});
+    pushViewState('myuploads', { myUploadTab: _myUploadTab });
     renderMyUploadsPage();
     _updateFooterVisibility('myuploads');
   }
@@ -353,7 +355,9 @@
   }
 
   function switchMyUploadsTab(tab) {
+    if (['approved', 'pending', 'rejected', 'deleted'].indexOf(tab) === -1) return;
     _myUploadTab = tab;
+    if (typeof patchViewState === 'function') patchViewState({ myUploadTab: tab });
     renderMyUploadsPage();
   }
 
@@ -400,7 +404,8 @@
   }
 
 
-  function showMyFavoritesPage() {
+  function showMyFavoritesPage(initialTab) {
+    if (['course', 'post', 'file'].indexOf(initialTab) !== -1) _myFavTab = initialTab;
     closeNotifDrawer();
     document.querySelectorAll('.view-section').forEach(function(v) {
       v.style.display = 'none';
@@ -410,7 +415,7 @@
     if (v) { v.style.display = 'block'; v.classList.add('active'); }
     updateSidebar('profile');
     window.scrollTo({ top: 0 });
-    pushViewState('myfavorites', {});
+    pushViewState('myfavorites', { myFavoriteTab: _myFavTab });
     renderMyFavoritesPage();
     _updateFooterVisibility('myfavorites');
   }
@@ -418,7 +423,9 @@
   var _myFavTab = 'course';
 
   function switchMyFavTab(tab) {
+    if (['course', 'post', 'file'].indexOf(tab) === -1) return;
     _myFavTab = tab;
+    if (typeof patchViewState === 'function') patchViewState({ myFavoriteTab: tab });
     document.querySelectorAll('.mu-tab[data-favtab]').forEach(function(b) {
       b.classList.toggle('active', b.getAttribute('data-favtab') === tab);
     });

@@ -9,7 +9,7 @@ import json
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
-from django.db.models import Count
+from django.db.models import Count, F
 
 from .utils import (
     _err, _ok, _get_or_create_profile,
@@ -205,6 +205,7 @@ def api_file_detail(request, file_id):
         "description": material.description or "",
         "course_name": material.course.name if material.course else "",
         "course_code": material.course.code if material.course else "",
+        "view_count": material.view_count,
         "download_count": material.download_count,
         "favorite_count": getattr(material, "favorite_count", 0),
         "is_favorited": is_favorited,
@@ -216,3 +217,22 @@ def api_file_detail(request, file_id):
         "is_approved": material.is_approved,
         "is_pinned": material.is_pinned,
     })
+
+
+@csrf_exempt
+@require_login
+def api_file_view(request, file_id):
+    """POST /api/files/<id>/view/ — 记录一次已审核资料详情页浏览。"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+
+    material = Material.objects.filter(
+        id=file_id, review_status="approved",
+    ).first()
+    if not material:
+        return _err("文件不存在", 404)
+
+    # 资料浏览量采用 PV 口径：每次成功打开详情页计一次；F() 保证并发打开不丢计数。
+    Material.objects.filter(id=material.id).update(view_count=F("view_count") + 1)
+    material.refresh_from_db(fields=["view_count"])
+    return _ok({"view_count": material.view_count})

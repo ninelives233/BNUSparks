@@ -103,12 +103,19 @@ deploy/
 
 data/.zip_cache/
 data/.pdf_cache/
+data/logs/
+
+# 本地账号导入清单（含个人身份信息）
+*账号清单*.xlsx
 
 # 人类可读的项目地图：作为维护事实源纳入版本控制；其他 docs 仍保持忽略
 !docs/
 docs/*
 !docs/PROJECT_MAP.md
 !docs/GITHUB_REPO_AGENT_GUIDE.md
+!docs/CAPACITY_ASSESSMENT_2026-09-17.md
+!docs/admin-status-prototype/
+!docs/admin-status-prototype/**
 
 # 工具本地产物
 .zcode/

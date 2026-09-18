@@ -92,12 +92,12 @@
   function togglePwdVisibility(inputId, btn) {
     const inp = document.getElementById(inputId);
     if (!inp) return;
-    if (inp.type === 'password') {
-      inp.type = 'text';
-      btn.textContent = '🙈';
-    } else {
-      inp.type = 'password';
-      btn.textContent = '👁️';
+    const isVisible = inp.type === 'password';
+    inp.type = isVisible ? 'text' : 'password';
+    if (btn) {
+      btn.classList.toggle('is-visible', isVisible);
+      btn.setAttribute('aria-label', isVisible ? '隐藏密码' : '显示密码');
+      btn.setAttribute('aria-pressed', String(isVisible));
     }
   }
 
@@ -119,7 +119,7 @@
       _hideVerificationResendAction();
     }
     activateDialog(modal);
-    populateIdentitySelects('regCollege', 'regMajor', {}).then(syncRegisterIdentityHint);
+    populateIdentitySelects('regCollege', 'regMajor', {}, 'regEducation').then(syncRegisterIdentityHint);
   }
   function showVerificationResend(message) {
     showRegister({ showResend: true, message: message });
@@ -139,7 +139,23 @@
     _hideLoginResendAction();
     activateDialog(modal);
   }
+
+  function onRegisterEmailSuffixChange() {
+    var suffix = document.getElementById('regEmailSuffix');
+    if (suffix && suffix.value === '@bnu.edu.cn') {
+      alert('学生邮箱的后缀为@mail.bnu.edu.cn，请核实后再注册');
+    }
+  }
+
   function closeAuthModal() {
+    // 问答区访客关闭登录提示时，_popModalHistory() 会触发 qa 的 popstate
+    // 重绘；标记这一次关闭，避免重绘再次把登录弹窗打开形成死循环。
+    var dismissingQaLogin = !currentUser &&
+      typeof isQaViewActive === 'function' && isQaViewActive();
+    if (dismissingQaLogin) {
+      window._qaLoginPending = false;
+      window._qaLoginPromptDismissed = true;
+    }
     document.getElementById('loginModal').style.display = 'none';
     document.getElementById('registerModal').style.display = 'none';
     document.getElementById('loginError').style.display = 'none';
@@ -155,34 +171,82 @@
     // 清除密码字段
     var pw = document.getElementById('regPassword');
     var pwc = document.getElementById('regPasswordConfirm');
+    var legalConsent = document.getElementById('regLegalConsent');
     if (pw) pw.value = '';
     if (pwc) pwc.value = '';
+    if (legalConsent) legalConsent.checked = true;
   }
 
-  // 身份标签：注册/个人中心编辑共用的学院+专业联动；培养层次为固定四项。
+  // ── 身份标签三级联动（v245）：培养层次 → 学院 → 专业 ──
+  // 数据源 /api/majors/（Major 专业库）：本科=课程树同步（文理学院等带系建制），
+  // 硕博=学位授权点目录。硕博专业按 学硕/专硕（学博/专博）optgroup 分组；
+  // 本科条目带 department（所属系）时同样按系 optgroup 分组；
+  // 目录拉取失败时本科回退课程树口径、硕博仅提供「其他」。
   // preset = { college, major }，用于编辑时回填当前身份。
-  async function populateIdentitySelects(collegeSelId, majorSelId, preset) {
+  var _identityCatalogPromise = null;
+  var _GRAD_TRACK_LABELS = {
+    '硕士': { academic: '学硕', professional: '专硕' },
+    '博士': { academic: '学博', professional: '专博' },
+  };
+
+  function _identityCatalog() {
+    if (!_identityCatalogPromise) {
+      _identityCatalogPromise = api('/api/majors/').catch(function() { return null; });
+    }
+    return _identityCatalogPromise;
+  }
+
+  function _identityLevel(educationSelId) {
+    var el = document.getElementById(educationSelId);
+    var value = el ? el.value : '';
+    // 未选层次时先按本科给默认选项；选择层次后切换即重灌
+    return value || '本科';
+  }
+
+  function _isGradLevel(level) {
+    return level === '硕士' || level === '博士';
+  }
+
+  async function populateIdentitySelects(collegeSelId, majorSelId, preset, educationSelId) {
     preset = preset || {};
     const collegeSel = document.getElementById(collegeSelId);
     const majorSel = document.getElementById(majorSelId);
     if (!collegeSel || !majorSel) return;
-    let colleges = [];
-    try { colleges = await api('/api/colleges/'); } catch(e) { /* 拉取失败则只有「其他」 */ }
-    // 经济与工商管理学院排第一，其余保持原顺序，最后「其他」（预防学院未收录）
-    var ordered = colleges.slice().sort(function(a, b) {
-      var aEc = /经济与工商/.test(a.name);
-      var bEc = /经济与工商/.test(b.name);
-      return aEc === bEc ? 0 : (aEc ? -1 : 1);
-    });
+    var level = _identityLevel(educationSelId);
+    const catalog = await _identityCatalog();
+    var ordered = null;
+    if (catalog && catalog[level]) {
+      // 目录可用：学院取目录键（按层次过滤），经济与工商管理学院排第一，最后「其他」（预防学院未收录）
+      ordered = Object.keys(catalog[level]).sort(function(a, b) {
+        var aEc = /经济与工商/.test(a);
+        var bEc = /经济与工商/.test(b);
+        return aEc === bEc ? 0 : (aEc ? -1 : 1);
+      });
+    } else if (level !== '本科') {
+      // 目录不可用且硕博无兜底来源：只有「其他」
+      collegeSel.innerHTML = '<option value="">学院</option><option value="其他">其他</option>';
+      if (preset.college === '其他') collegeSel.value = '其他';
+      await fillIdentityMajors(collegeSelId, majorSelId, preset.major || '', educationSelId);
+      return;
+    } else {
+      // 本科目录不可用：回退旧的 /api/colleges/ 逻辑
+      let colleges = [];
+      try { colleges = await api('/api/colleges/'); } catch(e) { /* 拉取失败则只有「其他」 */ }
+      ordered = colleges.map(function(c) { return c.name; }).sort(function(a, b) {
+        var aEc = /经济与工商/.test(a);
+        var bEc = /经济与工商/.test(b);
+        return aEc === bEc ? 0 : (aEc ? -1 : 1);
+      });
+    }
     collegeSel.innerHTML = '<option value="">学院</option>' +
-      ordered.map(function(c) { return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>'; }).join('') +
+      ordered.map(function(name) { return '<option value="' + esc(name) + '">' + esc(name) + '</option>'; }).join('') +
       '<option value="其他">其他</option>';
-    if (preset.college) collegeSel.value = preset.college;
-    await fillIdentityMajors(collegeSelId, majorSelId, preset.major || '');
+    if (preset.college && ordered.indexOf(preset.college) !== -1) collegeSel.value = preset.college;
+    await fillIdentityMajors(collegeSelId, majorSelId, preset.major || '', educationSelId);
   }
 
   // 依据所选学院联动专业列表；「其他」学院 → 专业强制「其他」
-  async function fillIdentityMajors(collegeSelId, majorSelId, presetMajor) {
+  async function fillIdentityMajors(collegeSelId, majorSelId, presetMajor, educationSelId) {
     const collegeSel = document.getElementById(collegeSelId);
     const majorSel = document.getElementById(majorSelId);
     if (!collegeSel || !majorSel) return;
@@ -199,6 +263,67 @@
       majorSel.disabled = true;
       return;
     }
+    var level = _identityLevel(educationSelId);
+    const catalog = await _identityCatalog();
+    if (catalog && catalog[level] && catalog[level][college]) {
+      var entries = catalog[level][college];
+      var html = '<option value="">请选择专业…</option>';
+      if (_isGradLevel(level)) {
+        var labels = _GRAD_TRACK_LABELS[level];
+        ['academic', 'professional'].forEach(function(track) {
+          var group = entries.filter(function(e) { return e.track === track; });
+          if (group.length) {
+            html += '<optgroup label="' + labels[track] + '">' +
+              group.map(function(e) {
+                return '<option value="' + esc(e.name) + '">' + esc(e.name) + '</option>';
+              }).join('') + '</optgroup>';
+          }
+        });
+      } else {
+        // 本科：目录条目为 {name, department?}（旧缓存可能仍是字符串）；
+        // 无系归属平铺，有系归属按系 optgroup 分组（与硕博 学硕/专硕 同款交互），
+        // 系顺序 = 建库目录顺序（学院官网系级建制）。
+        var deptGroups = [];
+        var deptIndex = {};
+        var flatNames = [];
+        entries.forEach(function(e) {
+          if (typeof e === 'string') { flatNames.push(e); return; }
+          var dept = e.department || '';
+          if (!dept) { flatNames.push(e.name); return; }
+          if (!Object.prototype.hasOwnProperty.call(deptIndex, dept)) {
+            deptIndex[dept] = deptGroups.length;
+            deptGroups.push({ name: dept, majors: [] });
+          }
+          deptGroups[deptIndex[dept]].majors.push(e.name);
+        });
+        html += flatNames.map(function(name) {
+          return '<option value="' + esc(name) + '">' + esc(name) + '</option>';
+        }).join('');
+        deptGroups.forEach(function(g) {
+          html += '<optgroup label="' + esc(g.name) + '">' +
+            g.majors.map(function(name) {
+              return '<option value="' + esc(name) + '">' + esc(name) + '</option>';
+            }).join('') + '</optgroup>';
+        });
+      }
+      html += '<option value="其他">其他</option>';
+      majorSel.innerHTML = html;
+      majorSel.disabled = false;
+      if (presetMajor && entries.some(function(e) {
+        return (typeof e === 'string' ? e : e.name) === presetMajor;
+      })) {
+        majorSel.value = presetMajor;
+      }
+      return;
+    }
+    if (level !== '本科') {
+      // 目录无该学院条目（或拉取失败）：硕博仅「其他」可选
+      majorSel.innerHTML = '<option value="其他">其他</option>';
+      majorSel.value = '其他';
+      majorSel.disabled = false;
+      return;
+    }
+    // 本科目录不可用：回退课程树口径（与建库同步规则一致）
     if (typeof courseTree === 'undefined' || !courseTree || !courseTree['专业课']) {
       if (typeof ensureFeature === 'function' && typeof loadCourseTree !== 'function') {
         await ensureFeature('explorer');
@@ -220,8 +345,31 @@
     }
   }
 
+  // 培养层次切换：清空已选学院/专业，重灌该层次的学院列表（注册表单）
+  function onRegEducationChange() {
+    _resetIdentityCollegeMajor('regCollege', 'regMajor');
+    return populateIdentitySelects('regCollege', 'regMajor', {}, 'regEducation').then(syncRegisterIdentityHint);
+  }
+
+  // 培养层次切换（个人中心编辑模态）
+  function onIdentityEducationChange() {
+    _resetIdentityCollegeMajor('_idnCollege', '_idnMajor');
+    return populateIdentitySelects('_idnCollege', '_idnMajor', {}, '_idnEducation');
+  }
+
+  function _resetIdentityCollegeMajor(collegeSelId, majorSelId) {
+    var collegeSel = document.getElementById(collegeSelId);
+    var majorSel = document.getElementById(majorSelId);
+    if (collegeSel) collegeSel.value = '';
+    if (majorSel) {
+      majorSel.innerHTML = '<option value="">专业</option>';
+      majorSel.value = '';
+      majorSel.disabled = true;
+    }
+  }
+
   function onRegCollegeChange() {
-    return fillIdentityMajors('regCollege', 'regMajor', '').then(syncRegisterIdentityHint);
+    return fillIdentityMajors('regCollege', 'regMajor', '', 'regEducation').then(syncRegisterIdentityHint);
   }
 
   function syncRegisterIdentityHint() {
@@ -231,6 +379,12 @@
     if (!education || !major || !hint) return false;
     var warning = education.value === '本科' && major.value === '其他';
     hint.classList.toggle('mf-label-hint--warning', warning);
+    // v245：提示随培养层次切换口径
+    hint.textContent = education.value === '硕士'
+      ? '（按学硕/专硕与实际学位类型选择；无对应专业选「其他」）'
+      : education.value === '博士'
+        ? '（按学博/专博与实际学位类型选择；无对应专业选「其他」）'
+        : '（大类招生请填目标专业，勿选“其他”）';
     return warning;
   }
 
@@ -493,6 +647,8 @@
     const form = document.getElementById('registerForm');
     const success = document.getElementById('registerSuccess');
     try {
+      var legalConsent = document.getElementById('regLegalConsent');
+      if (!legalConsent || !legalConsent.checked) throw new Error('请先阅读并同意用户协议与隐私政策');
       var sid = document.getElementById('regSid').value.trim();
       if (!sid) throw new Error('请输入学号');
       var suffix = document.getElementById('regEmailSuffix') ? document.getElementById('regEmailSuffix').value : '@mail.bnu.edu.cn';

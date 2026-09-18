@@ -33,7 +33,7 @@ from .courses import (
 from .files import (
     api_file_upload, api_file_upload_text,
     api_download_token, api_file_download, api_file_delete,
-    api_file_detail, api_zip_structure,
+    api_file_detail, api_file_view, api_zip_structure,
 )
 
 # 举报
@@ -73,7 +73,7 @@ from .operations import (
 
 # 新建课程申请
 from .course_requests import (
-    api_course_request_create, api_course_request_check,
+    api_course_request_create, api_course_request_check, api_course_request_status,
     api_course_request_upload_file,
     api_course_request_delete,
     api_moderation_course_requests,
@@ -89,6 +89,9 @@ from .admin import (
 from .admin_monitoring import (
     api_admin_monitoring, api_admin_user_downloads, api_admin_user_timetable,
 )
+
+# 行为事件批量采集（匿名可写入；仅保存每日 HMAC 摘要）
+from ..monitoring_events import api_monitoring_events
 
 # 公告
 from .announcements import api_announcements, api_announcement_delete
@@ -132,3 +135,6 @@ from .utils import (
     _report_candidates,
     _get_courses_in_category,
 )
+
+# ── 专业目录（v259 身份标签三级联动数据源）──
+from .majors import api_majors

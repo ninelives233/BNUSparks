@@ -25,6 +25,7 @@ from .utils import (
     UserProfile, Course, Material, Notification, MaterialType,
     CourseCategory,
 )
+from ..monitoring_events import record_outcome
 
 
 def _notify_pending_upload(material, uploader, title, context_category):
@@ -53,6 +54,7 @@ def _notify_pending_upload(material, uploader, title, context_category):
 
 @csrf_exempt
 @require_login
+@record_outcome("material.upload.success", "material.upload.failure")
 def api_file_upload(request):
     """POST /api/files/upload"""
     if request.method != "POST":
@@ -195,6 +197,7 @@ def api_file_upload(request):
 
 @csrf_exempt
 @require_login
+@record_outcome("material.upload.success", "material.upload.failure")
 def api_file_upload_text(request):
     """POST /api/files/upload-text/ — 文字录入转 TXT"""
     if request.method != "POST":

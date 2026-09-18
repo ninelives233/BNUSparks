@@ -17,6 +17,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .utils import _err, _ok, require_login
+from ..monitoring_events import record_timetable_outcome
+from .utils_campus import update_user_campus
 from ..models import TimetableImportRecord, UserTimetable
 
 # 课表 JSON 体积很小（12 门课约 4KB）；上限仅防滥用
@@ -40,6 +42,7 @@ def _updated_at_value(row):
 # PUT 被 CsrfViewMiddleware 以 403 拒绝
 @csrf_exempt
 @require_login
+@record_timetable_outcome
 def api_user_timetable(request):
     if request.method == "GET":
         row = UserTimetable.objects.filter(user=request.user).first()
@@ -95,6 +98,7 @@ def api_user_timetable(request):
                 row.save(update_fields=["data", "updated_at"])
             else:
                 row = UserTimetable.objects.create(user=request.user, data=data)
+        update_user_campus(request.user, data)
         return _ok({"updated_at": _updated_at_value(row), "accepted": True, "import_recorded": is_import})
 
     if request.method == "DELETE":

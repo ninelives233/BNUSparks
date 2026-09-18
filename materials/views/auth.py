@@ -27,10 +27,14 @@ from django.utils.html import escape
 
 from .utils import (
     _err, _ok, _jwt_encode, _get_user, _get_or_create_profile,
-    _identity_can_edit, _normalize_identity, _request_client_ip,
+    _default_view_for_profile, _identity_can_edit, _mobile_nav_for_profile,
+    _normalize_identity,
+    _request_client_ip,
     require_login, UserProfile,
     DAILY_DOWNLOAD_LIMIT,
 )
+from ..monitoring_events import record_login_outcome, record_monitoring_event
+from ..models import MonitoringEvent
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -38,6 +42,29 @@ from .utils import (
 # ═══════════════════════════════════════════════════════════════
 
 logger = logging.getLogger(__name__)
+
+def _log_login_ip(request, username):
+    """开学季临时统计：登录成功时追加 IP 留痕（JSONL），仅用于推断用户校区分布。
+
+    记录仅含时间/用户名/客户端 IP，落盘在 data/logs/ 下不进库；统计结束后
+    可直接删除文件停用。写入失败不影响登录流程。
+    """
+    try:
+        from datetime import datetime, timezone as _tz
+        from pathlib import Path as _Path
+        log_dir = _Path(settings.MEDIA_ROOT).parent / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "t": datetime.now(_tz.utc).isoformat(timespec="seconds"),
+            "username": username,
+            "ip": _request_ip(request),
+        }
+        log_file = log_dir / "login_ips.jsonl"
+        with open(log_file, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        logger.warning("login ip log failed", exc_info=True)
+
 
 VERIFICATION_RESEND_COOLDOWN = 60
 VERIFICATION_FAILURE_COOLDOWN = 15
@@ -463,18 +490,21 @@ def api_verify_email(request):
             "identity_college": profile.identity_college or "",
             "identity_major": profile.identity_major or "",
             "identity_can_edit": _identity_can_edit(profile),
-            "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+            "home_layout": profile.home_layout or UserProfile.HomeLayout.COMPACT,
             "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
-            "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
-            "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+            "mobile_nav": _mobile_nav_for_profile(profile),
+            "default_view": _default_view_for_profile(profile),
+            "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
             "appearance_configured": bool(
-                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
+                profile.timetable_text_align
             ),
         },
     })
 
 
 @csrf_exempt
+@record_login_outcome
 def api_login(request):
     """POST /api/auth/login — 支持邮箱或用户名登录"""
     if request.method != "POST":
@@ -535,12 +565,17 @@ def api_login(request):
     if not user.is_active:
         return _err("请先验证邮箱后再登录；可在注册窗口重新发送验证邮件。")
 
+    _log_login_ip(request, user.username)
+
     token_expiry = 30 * 86400 if remember else 7 * 86400
     token = _jwt_encode({
         "user_id": user.id,
         "exp": time.time() + token_expiry,
     })
     profile = _get_or_create_profile(user)
+    # 登录事件只关联内部 user_id，不把用户名/邮箱/IP 带入行为账本。
+    record_monitoring_event(MonitoringEvent.EventName.LOGIN_SUCCESS, user=user)
+    request._monitor_login_recorded = True
     return _ok({
         "token": token,
         "user": {
@@ -554,12 +589,14 @@ def api_login(request):
             "identity_college": profile.identity_college or "",
             "identity_major": profile.identity_major or "",
             "identity_can_edit": _identity_can_edit(profile),
-            "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+            "home_layout": profile.home_layout or UserProfile.HomeLayout.COMPACT,
             "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
-            "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
-            "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+            "mobile_nav": _mobile_nav_for_profile(profile),
+            "default_view": _default_view_for_profile(profile),
+            "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
             "appearance_configured": bool(
-                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
+                profile.timetable_text_align
             ),
         },
     })
@@ -606,12 +643,14 @@ def api_me(request):
         "show_college_public": profile.show_college_public,
         "show_major_public": profile.show_major_public,
         "identity_can_edit": _identity_can_edit(profile),
-        "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+        "home_layout": profile.home_layout or UserProfile.HomeLayout.COMPACT,
         "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
-        "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
-        "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+        "mobile_nav": _mobile_nav_for_profile(profile),
+        "default_view": _default_view_for_profile(profile),
+        "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
         "appearance_configured": bool(
-            profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+            profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
+            profile.timetable_text_align
         ),
     })
 

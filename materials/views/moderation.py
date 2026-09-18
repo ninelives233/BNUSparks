@@ -24,6 +24,7 @@ from .utils import (
     UserProfile, Material, CourseCategory, Notification,
     ReviewComment, DeletionRecord, Course, _bump_user_public_gen,
 )
+from ..monitoring_events import record_request_event
 from ..models import COURSE_TREE_CACHE_KEY, invalidate_stats_cache
 
 
@@ -163,6 +164,7 @@ def api_moderation_batch_approve(request):
             message=f"你上传的 {n} 份资料已通过审核，现在可以下载了。",
             triggered_by=request.user,
         )
+    record_request_event(request, "moderation.decision", outcome="batch_approved")
     return _ok({"approved_count": count})
 
 
@@ -222,6 +224,7 @@ def api_moderation_approve(request, file_id):
             triggered_by=request.user,
         )
 
+    record_request_event(request, "moderation.decision", outcome="approved")
     return _ok({"message": "已通过"})
 
 
@@ -276,6 +279,7 @@ def api_moderation_reject(request, file_id):
             triggered_by=request.user,
         )
 
+    record_request_event(request, "moderation.decision", outcome="rejected")
     return _ok({"message": "已驳回"})
 
 

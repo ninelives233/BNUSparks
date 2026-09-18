@@ -5,11 +5,12 @@
 (function () {
   'use strict';
 
-  var DEFAULTS = { home_layout: 'loose', color_theme: 'warm', mobile_nav: 'bottom', default_view: 'home' };
+  var DEFAULTS = { home_layout: 'compact', color_theme: 'warm', mobile_nav: 'burger', default_view: 'home', timetable_text_align: 'left' };
   var LAYOUTS = { loose: true, compact: true };
   var THEMES = { warm: true, cool: true, dark: true, system: true };
   var NAVS = { bottom: true, burger: true };
   var DEFAULT_VIEWS = { home: true, timetable: true };
+  var TEXT_ALIGNS = { left: true, center: true, right: true };
   var GUEST_KEY = 'bnusparks_appearance_guest';
   var SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
   var _appearanceContext = null;
@@ -21,14 +22,16 @@
       home_layout: LAYOUTS[raw.home_layout] ? raw.home_layout : DEFAULTS.home_layout,
       color_theme: THEMES[raw.color_theme] ? raw.color_theme : DEFAULTS.color_theme,
       mobile_nav: NAVS[raw.mobile_nav] ? raw.mobile_nav : DEFAULTS.mobile_nav,
-      default_view: DEFAULT_VIEWS[raw.default_view] ? raw.default_view : DEFAULTS.default_view
+      default_view: DEFAULT_VIEWS[raw.default_view] ? raw.default_view : DEFAULTS.default_view,
+      timetable_text_align: TEXT_ALIGNS[raw.timetable_text_align] ? raw.timetable_text_align : DEFAULTS.timetable_text_align
     };
   }
 
   function sameValue(left, right) {
     return !!left && !!right && left.home_layout === right.home_layout &&
       left.color_theme === right.color_theme && left.mobile_nav === right.mobile_nav &&
-      left.default_view === right.default_view;
+      left.default_view === right.default_view &&
+      left.timetable_text_align === right.timetable_text_align;
   }
 
   function readGuest() {
@@ -101,6 +104,7 @@
     root.dataset.bnuThemePreference = next.color_theme;
     root.dataset.bnuLayout = next.home_layout;
     root.dataset.bnuNav = next.mobile_nav;
+    root.dataset.bnuTimetableTextAlign = next.timetable_text_align;
     if (document.body) {
       document.body.dataset.homeLayout = next.home_layout;
       document.body.classList.toggle('home-layout-compact', next.home_layout === 'compact');
@@ -113,6 +117,7 @@
         effective_theme: effectiveTheme,
         mobile_nav: next.mobile_nav,
         default_view: next.default_view,
+        timetable_text_align: next.timetable_text_align,
         previous: previous,
       }
     }));
@@ -185,6 +190,11 @@
       button.classList.toggle('is-selected', selected);
       button.setAttribute('aria-pressed', selected ? 'true' : 'false');
     });
+    panel.querySelectorAll('[data-appearance-text-align]').forEach(function (button) {
+      var selected = value.timetable_text_align === button.getAttribute('data-appearance-text-align');
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
     updatePersistenceNote();
   }
 
@@ -220,12 +230,24 @@
         '<span class="appearance-swatch appearance-swatch--' + id + '"><i></i><b></b></span>' +
         '<span><strong>' + title + '</strong><small>' + colors + '</small></span></button>';
     };
+    var textAlignButton = function (id, title, description) {
+      return '<button type="button" class="appearance-choice appearance-text-align-choice' +
+        (value.timetable_text_align === id ? ' is-selected' : '') + '" data-appearance-text-align="' + id + '" aria-pressed="' +
+        (value.timetable_text_align === id ? 'true' : 'false') + '">' +
+        '<span class="appearance-align-preview appearance-align-preview--' + id + '"><i></i><i></i><i></i></span>' +
+        '<span><strong>' + title + '</strong><small>' + description + '</small></span></button>';
+    };
     panel.innerHTML =
       '<div class="appearance-intro"><span class="appearance-kicker">界面偏好</span>' +
         '<p>设置会即时预览；保存状态会在这里明确显示。</p></div>' +
       '<fieldset class="appearance-fieldset"><legend>信息密度</legend><div class="appearance-choice-grid">' +
         layoutButton('loose', '松散', '留白更充足，适合慢慢浏览') +
         layoutButton('compact', '紧凑', '信息更集中，快速进入资料') +
+      '</div></fieldset>' +
+      '<fieldset class="appearance-fieldset"><legend>课程卡片文字</legend><div class="appearance-choice-grid">' +
+        textAlignButton('left', '靠左', '保持现有课表阅读方式') +
+        textAlignButton('center', '居中', '标题与教室信息居中') +
+        textAlignButton('right', '靠右', '标题与教室信息靠右') +
       '</div></fieldset>' +
       '<fieldset class="appearance-fieldset"><legend>打开时进入</legend><div class="appearance-choice-grid appearance-entry-grid">' +
         defaultViewButton('home', '首页', '先看公告、入口和资料推荐', 'ni-home') +
@@ -264,6 +286,11 @@
         setAppearance('default_view', button.getAttribute('data-appearance-default-view'));
       });
     });
+    panel.querySelectorAll('[data-appearance-text-align]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setAppearance('timetable_text_align', button.getAttribute('data-appearance-text-align'));
+      });
+    });
     var reset = panel.querySelector('[data-appearance-reset]');
     if (reset) reset.addEventListener('click', function () { setAppearanceValue(DEFAULTS); });
     updateChoiceStates();
@@ -293,11 +320,13 @@
   }
 
   function setAppearance(field, value) {
-    if (field !== 'home_layout' && field !== 'color_theme' && field !== 'mobile_nav' && field !== 'default_view') return;
+    if (field !== 'home_layout' && field !== 'color_theme' && field !== 'mobile_nav' &&
+        field !== 'default_view' && field !== 'timetable_text_align') return;
     if (field === 'home_layout' && !LAYOUTS[value]) return;
     if (field === 'color_theme' && !THEMES[value]) return;
     if (field === 'mobile_nav' && !NAVS[value]) return;
     if (field === 'default_view' && !DEFAULT_VIEWS[value]) return;
+    if (field === 'timetable_text_align' && !TEXT_ALIGNS[value]) return;
     var next = current();
     next[field] = value;
     setAppearanceValue(next);

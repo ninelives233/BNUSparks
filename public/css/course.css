@@ -12,6 +12,21 @@
 .nc-card-head { margin-bottom: var(--space-md); }
 .nc-card-title { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; color: var(--ink); margin: 0 0 4px; }
 .nc-card-sub { font-size: 0.8rem; color: var(--ink-faint); }
+.nc-rejection-note {
+  display: grid; grid-template-columns: 24px 1fr; gap: 9px; align-items: start;
+  margin: 0 0 var(--space-md); padding: 10px 12px;
+  border: 1px solid var(--danger-border); border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm); background: var(--danger-light);
+  color: var(--ink-soft); font-size: 0.82rem; line-height: 1.6;
+}
+.nc-rejection-mark {
+  width: 21px; height: 21px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--danger-border); border-radius: 50%;
+  color: var(--danger-dark); font-weight: 750; line-height: 1;
+}
+.nc-rejection-note strong { display: block; color: var(--danger-dark); font-weight: 700; }
+.nc-rejection-note p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nc-rejection-note .nc-rejection-course { color: var(--ink); font-weight: 650; }
 
 /* 分段控制器 */
 .nc-seg {

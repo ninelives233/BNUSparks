@@ -1552,6 +1552,38 @@
   border-color: var(--primary-light);
   background: var(--primary-surface);
 }
+/* 课程卡片文字对齐预览：三条短线用同一张小纸面表达靠左/居中/靠右。 */
+.appearance-align-preview {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 38px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.appearance-align-preview i {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--primary-light);
+}
+.appearance-align-preview i:nth-child(2) { background: var(--primary); }
+.appearance-align-preview--left i:nth-child(1) { width: 100%; }
+.appearance-align-preview--left i:nth-child(2) { width: 72%; }
+.appearance-align-preview--left i:nth-child(3) { width: 88%; }
+.appearance-align-preview--center i { margin-inline: auto; }
+.appearance-align-preview--center i:nth-child(1) { width: 76%; }
+.appearance-align-preview--center i:nth-child(2) { width: 100%; }
+.appearance-align-preview--center i:nth-child(3) { width: 58%; }
+.appearance-align-preview--right i { margin-left: auto; }
+.appearance-align-preview--right i:nth-child(1) { width: 100%; }
+.appearance-align-preview--right i:nth-child(2) { width: 72%; }
+.appearance-align-preview--right i:nth-child(3) { width: 88%; }
 .appearance-swatch {
   display: flex;
   flex-direction: column;

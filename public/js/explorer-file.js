@@ -307,6 +307,25 @@
 
   var _fdPrevSidebar = null; // 保存进入文件详情前的侧边栏状态
 
+  function _renderFdStats(file) {
+    var meta2 = document.querySelector('.fd-meta2');
+    if (!meta2) return;
+    var viewHtml = '<span class="fd-meta-item fd-meta-view"><span class="fd-meta-icon">' + FD_ICONS.view + '</span> 浏览量：' + (file.view_count || 0) + '</span>';
+    var dlHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.download + '</span> 下载量：' + (file.download_count || 0) + '</span>';
+    var favHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.star + '</span> 收藏量：' + (file.favorite_count || 0) + '</span>';
+    meta2.innerHTML = '<div class="fd-meta-row">' + viewHtml + '<span class="fd-meta-sep">|</span>' + dlHtml + '<span class="fd-meta-sep">|</span>' + favHtml + '</div>';
+  }
+
+  function _recordFdView(fileId) {
+    if (!fileId) return;
+    api('/api/files/' + fileId + '/view/', { method: 'POST' }).then(function(data) {
+      if (_currentDetailFile && _currentDetailFile.id === fileId) {
+        _currentDetailFile.view_count = data.view_count;
+        _renderFdStats(_currentDetailFile);
+      }
+    }).catch(function() {});
+  }
+
   function showFileDetail(file) {
     // 文件详情可从搜索、通知或管理追溯页直接打开；这些入口可能尚未加载 explorer 核心。
     if (typeof expPath === 'undefined' && typeof ensureFeature === 'function') {
@@ -336,6 +355,7 @@
           var v = document.getElementById('fileDetailView');
           if (v) { v.style.display = 'block'; v.classList.add('active'); }
           _renderFileDetail(fullFile);
+          _recordFdView(fid);
         }).catch(function() {
           // API 失败时回退到课程页
           if (file.course_code) {
@@ -360,6 +380,7 @@
     window.scrollTo({ top: 0 });
     pushViewState('fileDetail', { fileId: file.id, prevView: _fdPrevSidebar });
     _renderFileDetail(file);
+    _recordFdView(file.id);
   }
 
   function _renderFileDetail(file) {
@@ -433,12 +454,7 @@
         : esc(file.teacher || '未填写')) + '</span>';
       meta1.innerHTML = '<div class="fd-meta-row">' + fileNameHtml + '<span class="fd-meta-sep">|</span>' + typeHtml + '<span class="fd-meta-sep">|</span>' + dateHtml + '<span class="fd-meta-sep">|</span>' + sizeHtml + '<span class="fd-meta-sep">|</span>' + teacherHtml + '</div>';
     }
-    var meta2 = document.querySelector('.fd-meta2');
-    if (meta2) {
-      var dlHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.download + '</span> 下载量：' + (file.download_count || 0) + '</span>';
-      var favHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.star + '</span> 收藏量：' + (file.favorite_count || 0) + '</span>';
-      meta2.innerHTML = '<div class="fd-meta-row">' + dlHtml + '<span class="fd-meta-sep">|</span>' + favHtml + '</div>';
-    }
+    _renderFdStats(file);
     var descEl = document.querySelector('.fd-desc-area');
     if (descEl) {
       var descContent = canEdit

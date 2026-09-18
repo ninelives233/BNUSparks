@@ -20,7 +20,9 @@ from django.utils import timezone
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile, _identity_can_edit,
-    _normalize_identity, _strip_exif, _safe_int, require_login, Notification,
+    _default_view_for_profile, _mobile_nav_for_profile, _normalize_identity,
+    _strip_exif, _safe_int,
+    require_login, Notification,
     UserProfile, Material, DownloadRecord, DeletionRecord, ReviewComment,
     Course, CourseCategory, F, Favorite, _bump_user_public_gen,
     DAILY_DOWNLOAD_LIMIT,
@@ -30,12 +32,14 @@ from .utils import (
 def _appearance_payload(profile):
     """序列化外观偏好；空值回退默认，同时保留是否主动设置的事实。"""
     return {
-        "home_layout": profile.home_layout or UserProfile.HomeLayout.LOOSE,
+        "home_layout": profile.home_layout or UserProfile.HomeLayout.COMPACT,
         "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
-        "mobile_nav": profile.mobile_nav or UserProfile.MobileNav.BOTTOM,
-        "default_view": profile.default_view or UserProfile.DefaultView.HOME,
+        "mobile_nav": _mobile_nav_for_profile(profile),
+        "default_view": _default_view_for_profile(profile),
+        "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
         "appearance_configured": bool(
-            profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view
+            profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
+            profile.timetable_text_align
         ),
     }
 
@@ -47,6 +51,11 @@ def _appearance_payload(profile):
 def _profile_payload(request, profile):
     """序列化当前用户完整资料（GET/PATCH 共用，保证字段一致）"""
     today = date.today()
+    ghost_ids = DeletionRecord.objects.values_list("material_id", flat=True)
+    received_download_count = Material.objects.filter(
+        uploader=request.user,
+        review_status="approved",
+    ).exclude(id__in=ghost_ids).aggregate(total=Sum("download_count"))["total"] or 0
     # 限额只对普通用户生效：其余角色限量为 -1（前端显示「不限」）
     if profile.role == UserProfile.Role.USER:
         if profile.last_download_date == today:
@@ -102,10 +111,8 @@ def _profile_payload(request, profile):
         **_appearance_payload(profile),
         "sections_display": sections_display,
         "upload_count": Material.objects.filter(uploader=request.user).count(),
-        "download_count": DownloadRecord.objects.filter(
-            user=request.user,
-            activity_type__in=(DownloadRecord.ActivityType.LEGACY, DownloadRecord.ActivityType.DOWNLOAD),
-        ).count(),
+        # 个人中心展示的是「被下载次数」，不是该用户主动下载资料的次数。
+        "download_count": received_download_count,
         "collection_count": Favorite.objects.filter(material__uploader=request.user).count(),
     }
 
@@ -135,6 +142,7 @@ def api_profile(request):
             "color_theme": set(UserProfile.ColorTheme.values),
             "mobile_nav": set(UserProfile.MobileNav.values),
             "default_view": set(UserProfile.DefaultView.values),
+            "timetable_text_align": set(UserProfile.TimetableTextAlign.values),
         }
         for field, valid_values in appearance_values.items():
             if field in body:

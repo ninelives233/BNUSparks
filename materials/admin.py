@@ -1,11 +1,12 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import College, Course, MaterialType, Material, UserProfile, Notification, CourseCategory
+from .models import College, Course, MaterialType, Material, UserProfile, Notification, CourseCategory, Major
 
 
 @admin.register(College)
 class CollegeAdmin(admin.ModelAdmin):
-    list_display = ["name", "short_name", "order"]
+    list_display = ["name", "short_name", "order", "campus"]
+    list_filter = ["campus"]
     prepopulated_fields = {"slug": ["name"]}
     search_fields = ["name"]
 
@@ -65,3 +66,11 @@ class CourseCategoryAdmin(admin.ModelAdmin):
     list_display = ["name", "parent", "order"]
     search_fields = ["name"]
     autocomplete_fields = ["parent", "course"]
+
+
+@admin.register(Major)
+class MajorAdmin(admin.ModelAdmin):
+    list_display = ["name", "college", "level", "track", "code", "order", "is_active"]
+    list_filter = ["level", "track", "is_active", "college"]
+    search_fields = ["name", "college__name"]
+    list_editable = ["order", "is_active"]
