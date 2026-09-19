@@ -1668,6 +1668,19 @@
   }
   .about-section a { color: var(--primary); font-weight: 500; }
   .about-section a:hover { text-decoration: underline; }
+  /* 用户交流群二维码缩略图：点击新标签页看大图（移动端可直接长按识别） */
+  .qr-thumb-link { display: block; width: max-content; }
+  .about-section .qr-thumb {
+    display: block; margin-top: 10px;
+    border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+    background: #fff;
+    transition: box-shadow 0.15s, transform 0.15s;
+  }
+  .about-section .qr-thumb-link:hover { text-decoration: none; }
+  .about-section .qr-thumb-link:hover .qr-thumb {
+    box-shadow: 0 2px 10px oklch(0 0 0 / 0.14);
+    transform: translateY(-1px);
+  }
 
   /* ═══════════════════════════════════════════
      Search overlay

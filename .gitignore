@@ -83,3 +83,7 @@ deploy/nginx/*
 
 # ── 工具产物 ──
 output/
+
+# ── 用户交流群二维码（含真人头像且每周过期，不入库）──
+# 仓库只放占位符 public/group-qr.placeholder.png；部署机自行复制为 public/group-qr.png
+public/group-qr.png

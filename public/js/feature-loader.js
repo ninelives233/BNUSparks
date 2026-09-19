@@ -45,7 +45,9 @@
   // 保留上次成功数据，页面隐藏时暂停自动刷新。
   // v303：移动端审核分段控件/论坛筛选 chips 不再竖排（.pc-seg 换行 + 按钮禁折行），
   //       课程列表行移动端收紧（图标 28px/间距 10px/标题单行省略号）。
-  var VERSION = '303';
+  // v304：关于页「联系我们」新增用户交流群二维码入口与反馈问卷卡片；
+  //       footer「投稿与建议」改为「意见反馈」指向问卷；group-qr.png 进部署包。
+  var VERSION = '304';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
