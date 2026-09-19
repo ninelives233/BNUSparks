@@ -181,7 +181,7 @@ function _qaFilterBarHtml() {
     l1Html += '<button class="qa-pill qa-pill-l1' + (_qaTagL1 == t.id ? ' on' : '') + '" onclick="qaFilterL1(' + t.id + ')">' + esc(t.name) + '</button>';
   });
   html += '<div class="qa-filter-row">' +
-    '<span class="qa-filter-label">一级</span>' +
+    '<span class="qa-filter-label">分类</span>' +
     '<div class="qa-pills qa-pills-l1">' + l1Html + '</div>' +
   '</div>';
 
@@ -191,7 +191,7 @@ function _qaFilterBarHtml() {
     l2Html += '<button class="qa-pill qa-pill-l2' + (_qaTagL2 == t.id ? ' on' : '') + '" onclick="qaFilterL2(' + t.id + ')">' + esc(t.name) + '</button>';
   });
   html += '<div class="qa-filter-row">' +
-    '<span class="qa-filter-label">二级</span>' +
+    '<span class="qa-filter-label">话题</span>' +
     '<div class="qa-pills qa-pills-l2">' + l2Html + '</div>' +
   '</div>';
   if (_qaTagL2 && _qaTags) {
@@ -227,6 +227,22 @@ function _qaStatHtml(q) {
     '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + q.answer_count + '</b></span>';
 }
 
+// v185 回答叫号牌（列表卡专用）：三态编码「得到解答了吗」——
+// 已解决=常青勾 / 有回答=墨蓝计数 / 待回答=中性纸色
+function _qaAnswerChipHtml(q) {
+  var cls = q.has_accepted ? ' is-solved' : (q.answer_count > 0 ? ' has-answers' : '');
+  var text = q.has_accepted
+    ? _QA_IC_CHECK + ' 已解决'
+    : (q.answer_count > 0 ? q.answer_count + ' 回答' : '待回答');
+  return '<span class="qa-answer-chip' + cls + '">' + text + '</span>';
+}
+
+// 列表卡脚部统计（浏览/收藏；回答数由叫号牌承担，不重复展示）
+function _qaBrowseStatHtml(q) {
+  return '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + q.view_count + '</b></span>' +
+    '<span class="qa-stat">' + window.ICONS.star + '<b>' + q.favorite_count + '</b></span>';
+}
+
 function _qaAvatarHtml(name, url, role) {
   var initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
   var image = url
@@ -246,18 +262,18 @@ function _qaPersonHtml(name, url, role, label) {
 function _qaCardHtml(q) {
   var badges = _qaBadgesHtml(q);
   var pinHtml = q.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '';
-  var solved = q.has_accepted ? '<span class="qa-accepted-badge qa-accepted-badge--sm" title="已有最佳回答">' + _QA_IC_CHECK + '</span>' : '';
   return '<div class="qa-card' + (q.is_pinned ? ' qa-card--pinned' : '') + '" onclick="qaOpenDetail(' + q.id + ')">' +
     '<div class="qa-card-head">' +
       (badges ? '<span class="qa-card-tags">' + badges + '</span>' : '') +
       (pinHtml ? pinHtml : '') +
-      '<span class="qa-card-date">' + esc(q.created_at) + '</span>' +
+      _qaAnswerChipHtml(q) +
     '</div>' +
-    '<div class="qa-card-title">' + solved + esc(q.title) + '</div>' +
+    '<div class="qa-card-title">' + esc(q.title) + '</div>' +
     (q.content_preview ? '<div class="qa-card-preview">' + esc(q.content_preview) + '</div>' : '') +
     '<div class="qa-card-foot">' +
       '<span class="qa-card-author">' + esc(q.author) + '</span>' +
-      '<span class="qa-card-meta">' + _qaStatHtml(q) + '</span>' +
+      '<span class="qa-card-date">' + esc(q.created_at) + '</span>' +
+      '<span class="qa-card-meta">' + _qaBrowseStatHtml(q) + '</span>' +
     '</div>' +
   '</div>';
 }
@@ -466,7 +482,7 @@ function _qaAnswerHtml(a, idx, expanded, total, d) {
     '<button class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'answer\', ' + a.id + ')">删除</button>' +
   '</div>' : '';
 
-  return '<div class="qa-answer' + expanded + '" data-qa-answer>' +
+  return '<div class="qa-answer' + expanded + (a.is_accepted ? ' qa-answer--accepted' : '') + '" data-qa-answer>' +
     '<div class="qa-answer-head">' + pin + acceptedBadge + _qaPersonHtml(a.author, a.avatar_url, 'answer', '回答者 · ' + a.created_at) + collapseBtn + '</div>' +
     '<div class="qa-answer-body"><div class="qa-rich">' + qaSafeHtml(a.content) + '</div></div>' +
     '<div class="qa-answer-actions">' +

@@ -39,9 +39,11 @@
   // v300：行为事件账本接入运行状态；页面/搜索批量采集，服务端事件幂等落库，
   // 运行状态增加真实 DAU、主体拆分、活动构成和点击日查看小时分布。
   // v301：运行状态与用户活动指标改用管理员可直接理解的中文文案，不改变统计口径。
+  // v302：问答区视觉重构（索引卡方向）——回答叫号牌三态、卡片 hover 标题染墨蓝、
+  // 排序分段控件、最佳回答常青左缘轨、回答展开 0fr→1fr 高度过渡；仅展示层。
   // v292：运行状态生产接入拆出 admin-health.js；同一缓存键串行加载，接口失败
   // 保留上次成功数据，页面隐藏时暂停自动刷新。
-  var VERSION = '301';
+  var VERSION = '302';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
