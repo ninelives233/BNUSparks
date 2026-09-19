@@ -89,7 +89,10 @@ def _check_report_quota(user):
     """检查并扣除每日举报配额，返回 (allowed, remaining, message)。
 
     daily_report_count = 「当日已提交的举报次数」（连带举报在同一 POST 内只计 1 次）。
-    跨天用 .update() 重置、F() 原子递增（并发安全）。仅普通用户限量，管理员豁免。
+    跨天重置与上限判断都走条件 UPDATE：与下载配额同一原子路径，即便
+    SQLite 的 select_for_update 无效、两个请求都预读到旧计数 14，也只有
+    一个请求能通过 ``daily_report_count__lt`` 条件越过第 15 次。仅普通
+    用户限量，管理员豁免。
     """
     profile = _get_or_create_profile(user)
     # 限额只对普通用户生效，其余角色（小版主/版主/总管理员）不限量
@@ -97,20 +100,35 @@ def _check_report_quota(user):
         return True, -1, ""
 
     today = date.today()
-    if profile.last_report_date != today:
-        UserProfile.objects.filter(user=user).update(
-            daily_report_count=0,
-            last_report_date=today,
-        )
-        profile.refresh_from_db()
-
-    if profile.daily_report_count >= DAILY_REPORT_LIMIT:
-        return False, 0, "今日举报次数过多"
-
-    UserProfile.objects.filter(user=user).update(
-        daily_report_count=F('daily_report_count') + 1,
+    # 条件跨天重置：两个并发请求中只有第一个能把旧日期改成今天，
+    # 后来者不会基于旧快照把已递增的计数再次清零。
+    UserProfile.objects.filter(pk=profile.pk).exclude(last_report_date=today).update(
+        daily_report_count=0,
         last_report_date=today,
     )
-    profile.refresh_from_db()
-    remaining = DAILY_REPORT_LIMIT - profile.daily_report_count
+
+    updated = UserProfile.objects.filter(
+        pk=profile.pk,
+        last_report_date=today,
+        daily_report_count__lt=DAILY_REPORT_LIMIT,
+    ).update(daily_report_count=F('daily_report_count') + 1)
+    if not updated:
+        return False, 0, "今日举报次数过多"
+
+    count = UserProfile.objects.filter(pk=profile.pk).values_list(
+        "daily_report_count", flat=True
+    ).first() or 0
+    remaining = max(0, DAILY_REPORT_LIMIT - count)
     return True, remaining, ""
+
+
+def _refund_report_quota(user):
+    """并发重复举报被唯一约束拒绝时回滚本次扣额（计数不为负）。
+
+    只在「扣额成功但举报未能创建」的路径调用；正常成功与重复举报的
+    幂等去重都不应触发。配合 _check_report_quota 的条件递增，保证
+    校验失败/重复提交不消耗当日额度。
+    """
+    UserProfile.objects.filter(
+        user=user, daily_report_count__gt=0,
+    ).update(daily_report_count=F('daily_report_count') - 1)

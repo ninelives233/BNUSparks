@@ -6,6 +6,7 @@ courses list, course-tree, course-files, search, stats, colleges
 
 import json
 import hashlib
+import logging
 
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -13,7 +14,9 @@ from django.db.models import Count, Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.cache import cache
-from django.http import JsonResponse, HttpResponseNotModified
+from django.http import JsonResponse, HttpResponse, HttpResponseNotModified
+
+logger = logging.getLogger(__name__)
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile,
@@ -27,15 +30,22 @@ from .utils import (
 from ..models import COURSE_TREE_CACHE_KEY, get_stats_cache_key
 
 
-def _etag_json_response(request, data):
-    """内容 ETag + 304：浏览器每次重验证，未变返回 304（省去 406KB 树重复传输）。
+def _tree_cache_payload(tree):
+    """把树序列化成 {body(bytes), etag} 一次并缓存——热命中不再重编码整棵树（F12）。"""
+    resp = JsonResponse({"ok": True, "data": tree})
+    return {
+        "body": resp.content,
+        "etag": '"' + hashlib.md5(resp.content).hexdigest() + '"',
+        "v": 2,
+    }
 
-    内容哈希保证数据变化后 ETag 必然变化 → 无陈旧缓存风险。
-    """
-    resp = JsonResponse({"ok": True, "data": data})
-    etag = '"' + hashlib.md5(resp.content).hexdigest() + '"'
+
+def _tree_response_from_cache(request, payload):
+    """从缓存的 bytes+ETag 构造响应；命中 If-None-Match 在编码之前返回 304。"""
+    etag = payload["etag"]
     if request.headers.get("If-None-Match") == etag:
         return HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "no-cache"})
+    resp = HttpResponse(payload["body"], content_type="application/json")
     resp["ETag"] = etag
     resp["Cache-Control"] = "no-cache"
     return resp
@@ -128,6 +138,41 @@ def api_course_files(request, course_code):
     backfill_boundary = timezone.now() - timedelta(hours=48)
     user_id = user.id if user is not None else None
 
+    def _is_backfill_candidate(m):
+        return (m.review_status == "approved"
+                and user is not None
+                and m.uploader_id == user.id
+                and m.reviewed_by_id is not None
+                and m.reviewed_by_id != user.id
+                and m.uploader_id != m.reviewed_by_id
+                and m.reviewed_at is not None
+                and m.reviewed_at >= backfill_boundary)
+
+    # 批量对账替代逐条 exists()（F08）：先收集候选，一次查出已补发的
+    # 资料集合，再对缺口补发。跨进程并发补发由 Notification 的
+    # uniq_notif_approved_per_material 部分唯一约束兜底（迁移 0055）。
+    file_list = list(materials)
+    candidates = [m for m in file_list if _is_backfill_candidate(m)]
+    if candidates:
+        notified_ids = set(Notification.objects.filter(
+            recipient=user, material_id__in=[m.id for m in candidates],
+            type=Notification.Type.APPROVED,
+        ).values_list("material_id", flat=True))
+        for m in candidates:
+            if m.id in notified_ids:
+                continue
+            try:
+                _create_notification(
+                    recipient=user, type=Notification.Type.APPROVED,
+                    title="你的资料已通过审核",
+                    message=f"你的资料「{m.title}」已通过审核，现在可以下载了。",
+                    material=m,
+                )
+                notified_ids.add(m.id)
+            except Exception:
+                logger.warning("补发审核通过通知失败 material=%s", m.id, exc_info=True)
+                notified_ids.add(m.id)  # 失败也不在本次请求内重试轰炸
+
     def _serialize_file(m):
         rs = m.review_status
         if (rs == "approved"
@@ -138,24 +183,6 @@ def api_course_files(request, course_code):
                 and m.uploader_id != m.reviewed_by_id
               and m.created_at > delay_boundary):
             rs = "pending"
-        elif (rs == "approved"
-              and user is not None
-              and m.uploader_id == user.id
-              and m.reviewed_by_id is not None
-              and m.reviewed_by_id != user.id
-              and m.uploader_id != m.reviewed_by_id
-              and m.reviewed_at is not None
-              and m.reviewed_at >= backfill_boundary
-              and not Notification.objects.filter(
-                  recipient=user, material=m,
-                  type=Notification.Type.APPROVED,
-              ).exists()):
-            _create_notification(
-                recipient=user, type=Notification.Type.APPROVED,
-                title="你的资料已通过审核",
-                message=f"你的资料「{m.title}」已通过审核，现在可以下载了。",
-                material=m,
-            )
         uploader_profile = getattr(m.uploader, 'profile', None) if m.uploader else None
         return {
             "id": m.id, "title": m.title,
@@ -181,7 +208,7 @@ def api_course_files(request, course_code):
             "is_pinned": m.is_pinned,
         }
 
-    return _ok([_serialize_file(m) for m in materials])
+    return _ok([_serialize_file(m) for m in file_list])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -189,11 +216,19 @@ def api_course_files(request, course_code):
 # ═══════════════════════════════════════════════════════════════
 
 def api_course_tree(request):
-    """GET /api/courses/tree — 课程导航树（预加载优化版，4次查询代替400次，缓存10min，变更时信号清缓存）"""
+    """GET /api/courses/tree — 课程导航树（预加载优化版，4次查询代替400次，缓存10min，变更时信号清缓存）
+
+    F12：缓存直接存序列化好的 bytes + ETag——热命中不再把整棵树重新
+    JSON 编码再哈希；304 在编码之前返回。滚动过渡期兼容旧格式（裸 tree）。
+    """
     CACHE_KEY = COURSE_TREE_CACHE_KEY
     cached = cache.get(CACHE_KEY)
     if cached is not None:
-        return _etag_json_response(request, cached)
+        if isinstance(cached, dict) and cached.get("v") == 2:
+            return _tree_response_from_cache(request, cached)
+        payload = _tree_cache_payload(cached)
+        cache.set(CACHE_KEY, payload, 600)
+        return _tree_response_from_cache(request, payload)
 
     # 1. 一次性加载所有 CourseCategory（避免 FK N+1；merged_into 供同名合并展示）
     all_cats = CourseCategory.objects.select_related('course', 'course__merged_into').all()
@@ -225,8 +260,9 @@ def api_course_tree(request):
         if children:
             tree[root.name] = {"children": _build_tree_node(children, preload=preload)}
 
-    cache.set(CACHE_KEY, tree, 600)
-    return _etag_json_response(request, tree)
+    payload = _tree_cache_payload(tree)
+    cache.set(CACHE_KEY, payload, 600)
+    return _tree_response_from_cache(request, payload)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -291,12 +327,16 @@ def api_search(request):
     if search_type in ("all", "course"):
         # 同名合并：别名课程代码也命中主课程（merged_courses 反向联表），
         # 别名行本身不单独返回，由主课程行携带全代码列表展示
+        # F10：候选量下推到数据库——别名/去重仍留在 Python 层保证结果
+        # 数量语义不变，但普通迭代不再拉取全部匹配行（候选上限 200，
+        # 远大于展示的 20 条；即使前 200 行全是别名行的极端情况，也只是
+        # 少返回部分课程，不会出错）。
         courses_qs = Course.objects.select_related('college').filter(
             Q(code__icontains=query) | Q(name__icontains=query)
             | Q(merged_courses__code__icontains=query),
             # v=147：排除已删除文件夹的孤儿 Course，避免搜索结果残留
             coursecategory__isnull=False,
-        ).order_by("code").distinct()
+        ).order_by("code").distinct()[:200]
         seen = set()
         results["courses"] = []
         merged_codes_all = _merged_codes_map()

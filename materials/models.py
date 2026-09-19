@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.db.models import Q
 from django.core.validators import FileExtensionValidator
@@ -255,6 +257,11 @@ class Course(models.Model):
         verbose_name = "课程"
         verbose_name_plural = "课程"
         ordering = ["-course_type", "college", "name"]
+        # F13：code 精确/前缀匹配（课程文件入口、树构建）此前全表扫描；
+        # 普通索引即可，不加 unique——空值语义与同名拆分路径依赖重复 code。
+        indexes = [
+            models.Index(fields=["code"], name="course_code_idx"),
+        ]
 
     def __str__(self):
         prefix = ""
@@ -453,6 +460,20 @@ class Notification(models.Model):
         verbose_name = "通知"
         verbose_name_plural = "通知"
         ordering = ["-created_at"]
+        indexes = [
+            # 徽章/列表按 接收人+已读+时间 筛选排序；补发对账按 接收人+资料+类型 查重
+            models.Index(fields=["recipient", "is_read", "created_at"], name="notif_recip_read_created"),
+            models.Index(fields=["recipient", "material", "type"], name="notif_recip_material_type"),
+        ]
+        constraints = [
+            # 「审核通过」补发通知幂等依据：同一人同一资料至多一条 approved 通知。
+            # 迁移前先去重存量（见 0055），并发补发由约束兜底。
+            models.UniqueConstraint(
+                fields=["recipient", "material"],
+                condition=Q(type="approved", material__isnull=False),
+                name="uniq_notif_approved_per_material",
+            ),
+        ]
 
     def __str__(self):
         return f"[{self.get_type_display()}] {self.title}"
@@ -849,7 +870,7 @@ STATS_CACHE_VERSION_KEY = "api_stats_data_version"
 
 
 def get_stats_cache_key(limit):
-    """返回带版本号的统计缓存键，支持一次失效所有 limit 变体。"""
+    """返回带版本令牌的统计缓存键，支持一次失效所有 limit 变体。"""
     version = cache.get(STATS_CACHE_VERSION_KEY)
     if version is None:
         version = 1
@@ -859,12 +880,13 @@ def get_stats_cache_key(limit):
 
 
 def invalidate_stats_cache():
-    """使所有首页统计缓存失效，不依赖 DatabaseCache 的 delete_pattern。"""
-    try:
-        cache.incr(STATS_CACHE_VERSION_KEY)
-    except ValueError:
-        # 首次写入前没有版本键；add 保证不会覆盖并发请求已写入的版本。
-        cache.add(STATS_CACHE_VERSION_KEY, 1, timeout=None)
+    """使所有首页统计缓存失效。
+
+    F12：令牌式失效——Django DatabaseCache 的 incr 实质是 get+set 并不
+    原子；改写随机令牌一次 SET 完成，多 worker 并发失效也不会丢一次递增，
+    且令牌被驱逐后不会与存活旧键撞回同一代际。
+    """
+    cache.set(STATS_CACHE_VERSION_KEY, uuid.uuid4().hex, timeout=None)
 
 from django.core.cache import cache
 from django.db.models.signals import post_save, post_delete
@@ -890,12 +912,14 @@ USER_PUBLIC_GEN_PREFIX = "user_public_gen_"
 
 
 def _bump_user_public_gen(user_id):
-    """递增用户公开页代际计数，使 api_user_public 的旧缓存键即时失效。"""
+    """令牌式递增用户公开页代际（api_user_public 缓存键随令牌变化）。
+
+    F12：get+set 或 incr 在 SQLite DatabaseCache 上都不保证原子；改写随机
+    令牌天然幂等于「失效」语义——任意一次写都会让旧缓存键读不到。
+    """
     if not user_id:
         return
-    key = f"{USER_PUBLIC_GEN_PREFIX}{user_id}"
-    gen = cache.get(key) or 0
-    cache.set(key, gen + 1)
+    cache.set(f"{USER_PUBLIC_GEN_PREFIX}{user_id}", uuid.uuid4().hex)
 
 
 @receiver(post_save, sender=Material)
@@ -1203,6 +1227,9 @@ class UserTimetable(models.Model):
     )
     data = models.JSONField("课表数据")
     updated_at = models.DateTimeField("更新时间", auto_now=True)
+    # 服务端修订号：PUT 以 ``revision=旧值`` 为条件更新，SQLite 上
+    # select_for_update 无效，靠它保证「读到的版本没被并发请求改过」。
+    revision = models.PositiveIntegerField("修订号", default=0)
 
     class Meta:
         verbose_name = "用户课表"

@@ -14,6 +14,18 @@ def api_notifications(request):
        POST /auth/notifications/ — 全部标为已读
        DELETE /auth/notifications/ — 清空所有通知"""
     if request.method == "GET":
+        # 徽章轮询的 count-only 分支（?count_only=1）：只查权威未读数，
+        # 不取列表、不分页——省掉徽章请求里多余的两条 count 和列表查询。
+        if request.GET.get("count_only") == "1":
+            unread = Notification.objects.filter(
+                recipient=request.user, is_read=False).count()
+            return _ok({
+                "unread_count": unread,
+                "total": unread,
+                "page": 1,
+                "total_pages": 1,
+                "list": [],
+            })
         notifs = Notification.objects.filter(recipient=request.user).order_by("-created_at")
         # 徽标轮询只取未读，减少负载（?unread_only=1）
         if request.GET.get("unread_only") == "1":

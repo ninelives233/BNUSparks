@@ -76,7 +76,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'data' / 'db.sqlite3',
-        'OPTIONS': {'timeout': 20},  # 锁等待上限，配合 materials/apps.py 的 WAL 信号
+        # F11：busy 上限统一为 5 秒——materials/apps.py 的连接信号实际
+        # 生效的就是 5 秒（busy_timeout=5000），声明与实际不一致会误导排障。
+        # 加大等待只会占住更多请求线程，不作为首选；短事务 + WAL 是主策略。
+        'OPTIONS': {'timeout': 5},
     }
 }
 

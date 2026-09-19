@@ -245,6 +245,14 @@ def _qa_delete_needs_approval(target):
 
 
 def _qa_question_summary(q):
+    # F08：列表入口已在 QuerySet 上注解 _answer_n/_has_accepted 时直接取用，
+    # 未注解的调用方（管理端等）保持逐题查询的旧行为。
+    answer_count = getattr(q, "_answer_n", None)
+    if answer_count is None:
+        answer_count = q.answers.filter(status=QaAnswer.Status.PUBLISHED).count()
+    has_accepted = getattr(q, "_has_accepted", None)
+    if has_accepted is None:
+        has_accepted = q.answers.filter(is_accepted=True).exists()
     return {
         "id": q.id,
         "title": q.title,
@@ -255,22 +263,29 @@ def _qa_question_summary(q):
         "tag_l2": q.tag_l2.name if q.tag_l2_id else "",
         "view_count": q.view_count,
         "favorite_count": q.favorite_count,
-        "answer_count": q.answers.filter(status=QaAnswer.Status.PUBLISHED).count(),
+        "answer_count": answer_count,
         "is_pinned": q.is_pinned,
         # v183：热度分 / 是否有最佳回答
         "heat_score": q.heat_score,
-        "has_accepted": q.answers.filter(is_accepted=True).exists(),
+        "has_accepted": bool(has_accepted),
         "created_at": q.created_at.strftime("%Y-%m-%d %H:%M"),
         "content_preview": _strip_html(q.content)[:80],
     }
 
 
-def _qa_answer_item(a, user=None, qa_fav_count=None):
+def _qa_answer_item(a, user=None, qa_fav_count=None, liked_set=None, fav_set=None):
     liked = False
     is_favorited = False
     if user is not None:
-        liked = QaAnswerLike.objects.filter(user=user, answer=a).exists()
-        is_favorited = QaFavorite.objects.filter(user=user, answer=a).exists()
+        # F08：详情入口传入整页批量集合时按成员判断，替代每条回答 2 次 exists
+        if liked_set is not None:
+            liked = a.id in liked_set
+        else:
+            liked = QaAnswerLike.objects.filter(user=user, answer=a).exists()
+        if fav_set is not None:
+            is_favorited = a.id in fav_set
+        else:
+            is_favorited = QaFavorite.objects.filter(user=user, answer=a).exists()
     # v183：favorite_count 传参避免逐条查询 N+1（未传时保持旧行为）
     favorite_count = qa_fav_count if qa_fav_count is not None else QaFavorite.objects.filter(answer=a).count()
     return {

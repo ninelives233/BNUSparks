@@ -20,6 +20,7 @@ from django.http import Http404
 from .utils import (
     _err, _ok, _get_or_create_profile, _create_notification,
     _report_candidates, _all_super_admins, _check_report_quota,
+    _refund_report_quota,
     _perform_soft_delete, _check_moderator_access, require_login, require_role,
     _safe_int, DAILY_REPORT_LIMIT,
     UserProfile, Material, Notification, DeletionRecord,
@@ -107,11 +108,6 @@ def api_file_report(request, file_id):
     ).exists():
         return _err("你已举报过该资料", 400)
 
-    # 每日举报限额（普通用户 15 次/天，管理员豁免，隐性计数）
-    allowed, _, qmsg = _check_report_quota(request.user)
-    if not allowed:
-        return _err(qmsg, 429)
-
     try:
         body = json.loads(request.body) if request.body else {}
     except Exception:
@@ -126,6 +122,12 @@ def api_file_report(request, file_id):
     if "other" in reasons and not detail:
         return _err('选择"其他原因"时，必须填写详细说明', 400)
     report_user = bool(body.get("report_user"))
+
+    # 每日举报限额在入参校验全部通过后才扣（普通用户 15 次/天，管理员豁免）：
+    # 校验失败不再白扣额度。
+    allowed, _, qmsg = _check_report_quota(request.user)
+    if not allowed:
+        return _err(qmsg, 429)
 
     reporter_name = _display_name(request.user)
     m_title = material.title
@@ -149,6 +151,8 @@ def api_file_report(request, file_id):
             detail=detail,
         )
     except IntegrityError:
+        # 并发重复举报被唯一约束拒绝：本次已扣的额度退回，不留空耗。
+        _refund_report_quota(request.user)
         return _err("你已举报过该资料", 400)
     if candidates:
         rep.candidates.set(candidates)
@@ -248,10 +252,6 @@ def api_qa_report(request, kind, target_id):
     if dup:
         return _err("你已举报过该内容", 400)
 
-    allowed, _, qmsg = _check_report_quota(request.user)
-    if not allowed:
-        return _err(qmsg, 429)
-
     try:
         body = json.loads(request.body) if request.body else {}
     except Exception:
@@ -265,6 +265,11 @@ def api_qa_report(request, kind, target_id):
     detail = str(body.get("detail") or "").strip()
     if "other" in reasons and not detail:
         return _err('选择"其他原因"时，必须填写详细说明', 400)
+
+    # 每日限额在入参校验通过后才扣，校验失败不白扣额度
+    allowed, _, qmsg = _check_report_quota(request.user)
+    if not allowed:
+        return _err(qmsg, 429)
 
     is_question = kind == "questions"
     question_title = target.title if is_question else target.question.title
@@ -288,6 +293,8 @@ def api_qa_report(request, kind, target_id):
     try:
         rep = Report.objects.create(**kwargs)
     except IntegrityError:
+        # 并发重复举报被唯一约束拒绝：退回本次已扣额度
+        _refund_report_quota(request.user)
         return _err("你已举报过该内容", 400)
     if candidates:
         rep.candidates.set(candidates)

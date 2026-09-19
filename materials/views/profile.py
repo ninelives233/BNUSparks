@@ -284,7 +284,9 @@ def api_avatar_upload(request):
 def api_my_uploads(request):
     """GET /api/user/uploads/ — 我的上传（全部记录，前端按 tab 过滤）"""
     user = request.user
-    qs = Material.objects.filter(uploader=user).select_related("course", "material_type").order_by("-created_at")
+    qs = Material.objects.filter(uploader=user).select_related(
+        "course", "material_type", "creation_request",
+    ).order_by("-created_at")
 
     return _ok([{
         "id": m.id,

@@ -4,8 +4,8 @@ BNU Sparks · 木铎星火 — 问答区公开 API（标签 / 列表 / 详情 / 
 
 from datetime import date
 
-from django.db import IntegrityError
-from django.db.models import Count, F, Q
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.views.decorators.csrf import csrf_exempt
 
 from ..models import (
@@ -91,6 +91,14 @@ def api_qa_questions(request):
 
     page = _safe_int(request.GET.get("page"), 1, lo=1)
     page_size = _safe_int(request.GET.get("pageSize"), 10, lo=1, hi=50)
+    # F08：回答数/是否有最佳回答以注解一次算完，替代 _qa_question_summary
+    # 内每题 2 次的 count/exists（10 条列表 22 SQL → 恒定 ~4 SQL）。
+    qs = qs.annotate(
+        _answer_n=Count("answers", filter=Q(answers__status=QaAnswer.Status.PUBLISHED)),
+        _has_accepted=Exists(QaAnswer.objects.filter(
+            question=OuterRef("pk"), is_accepted=True,
+        )),
+    )
     total = qs.count()
     items = qs[(page - 1) * page_size: page * page_size]
     return _ok({
@@ -147,6 +155,16 @@ def api_qa_question_detail(request, qid):
     ).select_related("author", "author__profile").annotate(fav_n=Count("qa_favorited_by"))
         .order_by("-is_pinned", "-is_accepted", "-created_at"))
 
+    # F08：当前用户对整页回答的点赞/收藏按 ID 集合两次查完，替代逐条 exists
+    liked_set = set()
+    fav_set = set()
+    if user is not None and answers:
+        answer_ids = [a.id for a in answers]
+        liked_set = set(QaAnswerLike.objects.filter(
+            user=user, answer_id__in=answer_ids).values_list("answer_id", flat=True))
+        fav_set = set(QaFavorite.objects.filter(
+            user=user, answer_id__in=answer_ids).values_list("answer_id", flat=True))
+
     return _ok({
         "deleted": False,
         "id": q.id,
@@ -167,7 +185,8 @@ def api_qa_question_detail(request, qid):
         "has_accepted": q.answers.filter(is_accepted=True).exists(),
         "qa_user_open": _qa_user_open(),
         "created_at": q.created_at.strftime("%Y-%m-%d %H:%M"),
-        "answers": [_qa_answer_item(a, user, qa_fav_count=a.fav_n) for a in answers],
+        "answers": [_qa_answer_item(a, user, qa_fav_count=a.fav_n,
+                                    liked_set=liked_set, fav_set=fav_set) for a in answers],
     })
 
 
@@ -182,14 +201,17 @@ def api_qa_question_view(request, qid):
     user = _get_user(request)
     today = date.today()
     try:
-        if user is not None:
-            _, created = QaViewLog.objects.get_or_create(user=user, question=q, date=today)
-        else:
-            # 匿名走 (question,date) 条件唯一约束去重
-            _, created = QaViewLog.objects.get_or_create(user=None, question=q, date=today)
-        if created:
-            QaQuestion.objects.filter(id=q.id).update(view_count=F("view_count") + 1)
-            _qa_bump_heat(q, 1)  # v183：浏览 +1 热度
+        # 关系去重与计数/热度同处一个短事务：创建成功但计数失败时一并
+        # 回滚，不留「有浏览记录但计数没加」的漂移；并发重复由唯一约束兜底。
+        with transaction.atomic():
+            if user is not None:
+                _, created = QaViewLog.objects.get_or_create(user=user, question=q, date=today)
+            else:
+                # 匿名走 (question,date) 条件唯一约束去重
+                _, created = QaViewLog.objects.get_or_create(user=None, question=q, date=today)
+            if created:
+                QaQuestion.objects.filter(id=q.id).update(view_count=F("view_count") + 1)
+                _qa_bump_heat(q, 1)  # v183：浏览 +1 热度
     except IntegrityError:
         pass  # 并发下唯一约束兜底，不重复计数
     q.refresh_from_db(fields=["view_count"])
@@ -208,21 +230,21 @@ def api_qa_question_favorite(request, qid):
     fav_qs = QaFavorite.objects.filter(
         user=request.user, question=q, answer__isnull=True,
     )
-    deleted, _ = fav_qs.delete()
-    if deleted:
-        QaQuestion.objects.filter(id=q.id, favorite_count__gt=0).update(
-            favorite_count=F("favorite_count") - 1)
-        _qa_bump_heat(q, -3)  # v183：取消收藏 -3 热度
-        favorited = False
-    else:
-        try:
-            QaFavorite.objects.create(user=request.user, question=q, answer=None)
-        except IntegrityError:
-            # 并发请求已创建：唯一约束保证一条，计数不能重复增加。
-            pass
-        else:
-            QaQuestion.objects.filter(id=q.id).update(favorite_count=F("favorite_count") + 1)
-            _qa_bump_heat(q, 3)  # v183：收藏 +3 热度
+    try:
+        with transaction.atomic():
+            deleted, _ = fav_qs.delete()
+            if deleted:
+                QaQuestion.objects.filter(id=q.id, favorite_count__gt=0).update(
+                    favorite_count=F("favorite_count") - 1)
+                _qa_bump_heat(q, -3)  # v183：取消收藏 -3 热度
+                favorited = False
+            else:
+                QaFavorite.objects.create(user=request.user, question=q, answer=None)
+                QaQuestion.objects.filter(id=q.id).update(favorite_count=F("favorite_count") + 1)
+                _qa_bump_heat(q, 3)  # v183：收藏 +3 热度
+                favorited = True
+    except IntegrityError:
+        # 并发请求已创建：唯一约束保证一条，整事务回滚，计数不重复增加。
         favorited = True
     q.refresh_from_db(fields=["favorite_count"])
     return _ok({"favorited": favorited, "favorite_count": q.favorite_count})
@@ -230,11 +252,16 @@ def api_qa_question_favorite(request, qid):
 
 def _ensure_question_fav(user, question):
     """收藏回答时同步建立问题级收藏（我的收藏合并显示）"""
-    _, created = QaFavorite.objects.get_or_create(
-        user=user, question=question, answer=None,
-    )
-    if created:
-        QaQuestion.objects.filter(id=question.id).update(favorite_count=F("favorite_count") + 1)
+    try:
+        with transaction.atomic():
+            _, created = QaFavorite.objects.get_or_create(
+                user=user, question=question, answer=None,
+            )
+            if created:
+                QaQuestion.objects.filter(id=question.id).update(
+                    favorite_count=F("favorite_count") + 1)
+    except IntegrityError:
+        pass  # 并发重复：唯一约束兜底，计数不动
 
 
 @csrf_exempt
@@ -271,20 +298,21 @@ def api_qa_answer_like(request, aid):
     if not a:
         return _err("内容不存在", 404)
     like_qs = QaAnswerLike.objects.filter(user=request.user, answer=a)
-    deleted, _ = like_qs.delete()
-    if deleted:
-        QaAnswer.objects.filter(id=a.id, like_count__gt=0).update(
-            like_count=F("like_count") - 1)
-        _qa_bump_heat(a.question, -2)  # v183：取消点赞 -2 热度
-        liked = False
-    else:
-        try:
-            QaAnswerLike.objects.create(user=request.user, answer=a)
-            QaAnswer.objects.filter(id=a.id).update(like_count=F("like_count") + 1)
-            _qa_bump_heat(a.question, 2)  # v183：点赞 +2 热度
-            liked = True
-        except IntegrityError:
-            liked = True  # 并发下已存在视为已点赞
+    try:
+        with transaction.atomic():
+            deleted, _ = like_qs.delete()
+            if deleted:
+                QaAnswer.objects.filter(id=a.id, like_count__gt=0).update(
+                    like_count=F("like_count") - 1)
+                _qa_bump_heat(a.question, -2)  # v183：取消点赞 -2 热度
+                liked = False
+            else:
+                QaAnswerLike.objects.create(user=request.user, answer=a)
+                QaAnswer.objects.filter(id=a.id).update(like_count=F("like_count") + 1)
+                _qa_bump_heat(a.question, 2)  # v183：点赞 +2 热度
+                liked = True
+    except IntegrityError:
+        liked = True  # 并发下已存在视为已点赞，整事务回滚计数不动
     a.refresh_from_db(fields=["like_count"])
     return _ok({"liked": liked, "like_count": a.like_count})
 

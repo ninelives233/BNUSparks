@@ -34,7 +34,7 @@ from .utils import (
     DAILY_DOWNLOAD_LIMIT,
 )
 from ..monitoring_events import record_login_outcome, record_monitoring_event
-from ..models import MonitoringEvent
+from ..models import MonitoringEvent, Notification
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -628,6 +628,9 @@ def api_me(request):
         "nickname": user.first_name or user.username,
         "email": user.email,
         "role": profile.role,
+        # F05：登录/刷新随 me 附带权威未读数，前端首拉徽章不再单独发请求
+        "unread_count": Notification.objects.filter(
+            recipient=user, is_read=False).count(),
         "moderated_sections": list(profile.moderated_sections.values_list("id", flat=True)),
         "managed_majors": list(profile.managed_majors.values_list("id", flat=True)),
         "can_moderate_general": profile.can_moderate_general if profile else False,

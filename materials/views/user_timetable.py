@@ -10,8 +10,10 @@ DELETE /api/user/timetable/   清除云端课表
 """
 
 import json
+import random
+import time
 
-from django.db import transaction
+from django.db import IntegrityError, OperationalError
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -24,6 +26,9 @@ from ..models import TimetableImportRecord, UserTimetable
 # 课表 JSON 体积很小（12 门课约 4KB）；上限仅防滥用
 _MAX_BYTES = 200 * 1024
 
+# 同版本并发写入/SQLite busy 的有界重试次数；超出即向客户端报冲突
+_MAX_WRITE_ATTEMPTS = 4
+
 
 def _imported_at(data):
     try:
@@ -35,6 +40,50 @@ def _imported_at(data):
 def _updated_at_value(row):
     """保留微秒，避免 JSON 默认时间编码截断后条件拉取漏掉极短更新。"""
     return row.updated_at.isoformat(timespec="microseconds") if row.updated_at else None
+
+
+def _micro_iso(dt):
+    return dt.isoformat(timespec="microseconds") if dt else None
+
+
+def _timetable_put_once(user, data, is_import):
+    """一次「读取→版本仲裁→条件写入」尝试。
+
+    返回响应 dict；返回 None 表示同版本并发写入（或并发首写）撞车，
+    调用方需重读最新数据重新仲裁。写库走 ``revision=旧值`` 条件
+    UPDATE——SQLite 上 select_for_update 不产生行锁，条件更新才是
+    「读到的版本没被别人改过」的可验证保证。
+    """
+    row = UserTimetable.objects.filter(user=user).first()
+    if row and _imported_at(row.data) > _imported_at(data):
+        # 旧客户端兼容路径：较旧的导入版本不覆盖更新的课表
+        return {
+            "updated_at": _updated_at_value(row),
+            "accepted": False,
+            "data": row.data,
+            "import_recorded": is_import,
+        }
+    now = timezone.now()
+    if row:
+        updated = UserTimetable.objects.filter(
+            pk=row.pk, revision=row.revision,
+        ).update(data=data, updated_at=now, revision=row.revision + 1)
+        if not updated:
+            return None  # 条件更新 0 行：并发同版本写入已发生，重读仲裁
+        return {
+            "updated_at": _micro_iso(now),
+            "accepted": True,
+            "import_recorded": is_import,
+        }
+    try:
+        row = UserTimetable.objects.create(user=user, data=data)
+    except IntegrityError:
+        return None  # 并发首写撞唯一约束：重读仲裁
+    return {
+        "updated_at": _updated_at_value(row),
+        "accepted": True,
+        "import_recorded": is_import,
+    }
 
 
 # csrf_exempt 必须作用于最终视图对象（放最外层）：JWT Bearer 认证不依赖
@@ -76,30 +125,31 @@ def api_user_timetable(request):
         event = body.get("event") if isinstance(body.get("event"), dict) else {}
         event_id = str(event.get("id") or "").strip()
         is_import = event.get("type") == "import" and 0 < len(event_id) <= 64
+        if is_import:
+            # 导入留痕自身幂等（唯一约束 + get_or_create），独立于写入重试：
+            # 即便随后仲裁为 accepted:false，事件也只记一次。
+            TimetableImportRecord.objects.get_or_create(
+                user=request.user,
+                event_id=event_id,
+                defaults={"course_count": len(data["courses"])},
+            )
         # 上传请求可能因网络重试/跨端同时保存而乱序到达；较旧的导入版本
-        # 不能覆盖更新的课表。锁住单用户行，保持“比较版本→写入”原子化。
-        with transaction.atomic():
-            if is_import:
-                TimetableImportRecord.objects.get_or_create(
-                    user=request.user,
-                    event_id=event_id,
-                    defaults={"course_count": len(data["courses"])},
-                )
-            row = UserTimetable.objects.select_for_update().filter(user=request.user).first()
-            if row and _imported_at(row.data) > _imported_at(data):
-                return _ok({
-                    "updated_at": _updated_at_value(row),
-                    "accepted": False,
-                    "data": row.data,
-                    "import_recorded": is_import,
-                })
-            if row:
-                row.data = data
-                row.save(update_fields=["data", "updated_at"])
-            else:
-                row = UserTimetable.objects.create(user=request.user, data=data)
-        update_user_campus(request.user, data)
-        return _ok({"updated_at": _updated_at_value(row), "accepted": True, "import_recorded": is_import})
+        # 不能覆盖更新的课表。每次尝试都是独立短事务，冲突（条件更新 0 行）
+        # 重读最新数据重新仲裁；SQLite busy 有界退避重试，不外溢为 500。
+        payload = None
+        for attempt in range(_MAX_WRITE_ATTEMPTS):
+            try:
+                payload = _timetable_put_once(request.user, data, is_import)
+            except OperationalError:
+                payload = None
+            if payload is not None:
+                break
+            time.sleep(random.uniform(0.05, 0.15) * (attempt + 1))
+        if payload is None:
+            return _err("课表保存冲突，请稍后重试", 503)
+        if payload.get("accepted"):
+            update_user_campus(request.user, data)
+        return _ok(payload)
 
     if request.method == "DELETE":
         deleted, _ = UserTimetable.objects.filter(user=request.user).delete()

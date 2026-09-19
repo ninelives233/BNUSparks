@@ -6,11 +6,17 @@ download-token, X-Accel 文件服务, download
 
 import os
 import re
+import time
+import uuid
+import fcntl
+import logging
 import mimetypes
 import hashlib
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 try:
     from pypdf import PdfReader, PdfWriter
@@ -147,6 +153,10 @@ def _record_file_activity(user, material, file_id, activity_type, request_id=Non
 
     系统浏览器可能重放微信移交的同一 URL。``request_id`` 的唯一约束保证
     同一令牌只产生一条流水、一次正式下载计数。
+
+    返回值区分三种结局（当前调用方均不依赖，但保留可观察语义）：
+    True=新写入；"duplicate"=重复行为编号幂等跳过；False=真实写失败
+    （已记录异常日志，业务交付不受阻，计数可能欠账属可容忍口径）。
     """
     try:
         with transaction.atomic():
@@ -162,8 +172,12 @@ def _record_file_activity(user, material, file_id, activity_type, request_id=Non
             if activity_type == DownloadRecord.ActivityType.DOWNLOAD:
                 Material.objects.filter(id=file_id).update(download_count=F("download_count") + 1)
     except IntegrityError:
-        return False
+        return "duplicate"
     except Exception:
+        logger.exception(
+            "下载流水写入失败 user=%s material=%s activity=%s",
+            getattr(user, "id", None), file_id, activity_type,
+        )
         return False
     return True
 
@@ -197,6 +211,72 @@ def _record_download_result(request, *, preview, success, request_id=None, quota
         event_name = "material.download.success" if success else "material.download.failure"
         kind = "download-success" if success else "download-failure"
     record_request_event(request, event_name, event_id=_download_event_id(kind, request_id))
+
+
+def _publish_pdf_preview(cache_path, buf, *, max_wait=8.0):
+    """把已生成的裁剪 PDF 发布到预览缓存（同键跨进程合并生成）。
+
+    同一缓存键的并发冷请求经每键文件锁（flock）串行化：拿到锁后先复查
+    缓存是否已被其他 worker 发布，避免重复写。等待有界（max_wait 秒），
+    超时不阻塞用户——调用方直接回送内存中的裁剪结果。
+
+    锁文件发布后保留不复删：删除会让正在等待的进程持有一个孤儿 inode
+    的锁，而新来的进程创建新文件再拿锁，互斥随之失效。临时文件本身
+    （*.tmp）在发布后立即清理。
+
+    返回 True 表示缓存已就绪（自己发布或他人已发布），False 表示发布
+    失败/超时（调用方回送内存结果，不降级完整文件、不误扣配额）。
+    """
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path = cache_path.with_name(cache_path.name + '.lock')
+        deadline = time.monotonic() + max_wait
+        fd = None
+        while True:
+            try:
+                fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if fd is not None:
+                    os.close(fd)
+                    fd = None
+                if time.monotonic() >= deadline:
+                    return False
+                time.sleep(0.05)
+        try:
+            if not cache_path.exists():
+                # 唯一临时文件 + 关闭后原子替换：两个 worker 不会写同一个
+                # .tmp；读者只会看到完整发布的文件，不会读到半截内容。
+                tmp = cache_path.with_name(
+                    f'{cache_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp')
+                try:
+                    with open(tmp, 'wb') as f:
+                        f.write(buf.getvalue())
+                    os.replace(tmp, cache_path)
+                finally:
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
+            return True
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+    except OSError:
+        logger.warning("PDF 预览缓存发布失败：%s", cache_path, exc_info=True)
+        return False
+
+
+def _serve_pdf_buffer_response(buf, display_filename):
+    """内存裁剪 PDF 直送（缓存发布失败/超时的预览出口，免配额不降级）。"""
+    resp = FileResponse(BytesIO(buf.getvalue()), content_type="application/pdf")
+    resp["Content-Disposition"] = _content_disposition_header(display_filename, attachment=False)
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["X-Frame-Options"] = "SAMEORIGIN"
+    return resp
 
 
 def api_file_download(request, file_id):
@@ -266,25 +346,25 @@ def api_file_download(request, file_id):
                     writer.add_page(reader.pages[i])
                 buf = BytesIO()
                 writer.write(buf)
-                buf.seek(0)
-                if cache_path:
-                    try:
-                        cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        tmp = cache_path.with_suffix('.tmp')
-                        with open(tmp, 'wb') as f:
-                            f.write(buf.getvalue())
-                        os.replace(tmp, cache_path)
-                        _record_file_activity(
-                            user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
-                            activity_request_id,
-                        )
-                        response = _serve_file_response(request, cache_path,
-                                                        display_filename=display, inline=True, preview_cache=True)
-                        _record_download_result(request, preview=True, success=getattr(response, "status_code", 500) < 400,
-                                                request_id=activity_request_id)
-                        return response
-                    except OSError:
-                        pass  # 缓存写入失败 → 降级为完整文件预览（计入配额）
+                # 裁剪成功即视为预览成功：缓存发布竞争/失败/超时只影响
+                # 缓存与否，直接回送内存中的裁剪结果——不再降级为完整
+                # 文件预览，避免因缓存竞争误扣配额、浪费带宽。
+                if cache_path and _publish_pdf_preview(cache_path, buf):
+                    _record_file_activity(
+                        user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
+                        activity_request_id,
+                    )
+                    response = _serve_file_response(request, cache_path,
+                                                    display_filename=display, inline=True, preview_cache=True)
+                else:
+                    _record_file_activity(
+                        user, material, file_id, DownloadRecord.ActivityType.PREVIEW,
+                        activity_request_id,
+                    )
+                    response = _serve_pdf_buffer_response(buf, display)
+                _record_download_result(request, preview=True, success=getattr(response, "status_code", 500) < 400,
+                                        request_id=activity_request_id)
+                return response
             except Exception:
                 pass  # 解析失败 → 降级为完整文件预览（计入配额）
         # 完整文件预览（图片/PPT/文本/切页失败降级）仍占当天不同文件配额，

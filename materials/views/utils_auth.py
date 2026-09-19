@@ -70,6 +70,11 @@ def _jwt_decode(token):
 
 
 def _get_user(request):
+    # 单请求内复用解析结果（F05）：require_login 已解析过时，视图内再调
+    # _get_user 不再重复发 user + token_version 两条查询。
+    cached = getattr(request, "_jwt_user", None)
+    if cached is not None:
+        return cached
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer ") or len(auth) < 20:
         return None
@@ -91,6 +96,7 @@ def _get_user(request):
                 return None
         except Exception:
             pass
+    request._jwt_user = user
     return user
 
 

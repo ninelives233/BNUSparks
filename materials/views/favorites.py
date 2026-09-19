@@ -68,7 +68,9 @@ def api_my_favorites(request):
         return _err("仅支持 GET", 405)
 
     page = _safe_int(request.GET.get("page"), 1, lo=1)
-    page_size = int(request.GET.get("page_size", 20))
+    # F09：page_size 安全解析 + 上限。旧实现裸 int()——非数字直接 500，
+    # 0 触发除零，巨大值等同无上限一次性拉全表。
+    page_size = _safe_int(request.GET.get("page_size"), 20, lo=1, hi=100)
     offset = (page - 1) * page_size
 
     favorites = Favorite.objects.filter(
@@ -151,7 +153,7 @@ def api_my_course_favorites(request):
         return _err("仅支持 GET", 405)
     favs = CourseFavorite.objects.filter(
         user=request.user
-    ).select_related("course").order_by("-created_at")
+    ).select_related("course", "course__college").order_by("-created_at")
 
     seen = {}
     for fav in favs:

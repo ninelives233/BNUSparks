@@ -596,62 +596,83 @@ def api_monitoring_events(request):
 
 
 def aggregate_monitoring_events(retention_days=RAW_RETENTION_DAYS, dry_run=False):
-    """聚合并清理 raw 事件，供 management command 与定时任务调用。"""
+    """聚合并清理 raw 事件，供 management command 与定时任务调用。
+
+    F11：按日期桶分批——每天一个短事务（upsert 聚合 + 删该天原始行），
+    积压多天时不再把全部更新压进一个长事务长时间持锁。历史日期不可变
+    （只写当天），查询与删除之间不会混入新事件；update_or_create 使重跑
+    幂等，只有当天聚合提交成功后才清理该天的原始记录。
+    """
     cutoff = _local_now() - timedelta(days=max(1, int(retention_days)))
     cutoff_date = _event_day(cutoff)
     base = MonitoringEvent.objects.filter(day__lt=cutoff_date)
     if not base.exists():
         return {"hourly": 0, "daily": 0, "deleted": 0, "dry_run": dry_run}
-    hourly_rows = (
-        base.annotate(bucket=TruncHour("occurred_at", tzinfo=timezone.get_current_timezone() if settings.USE_TZ else None))
-        .values("bucket", "event_name", "audience")
-        .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
-    )
-    daily_rows = (
-        base.annotate(bucket=TruncDate("occurred_at", tzinfo=timezone.get_current_timezone() if settings.USE_TZ else None))
-        .values("bucket", "event_name", "audience")
-        .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
-    )
-    hourly_all_rows = (
-        base.annotate(bucket=TruncHour("occurred_at", tzinfo=timezone.get_current_timezone() if settings.USE_TZ else None))
-        .values("bucket", "audience")
-        .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
-    )
-    daily_all_rows = (
-        base.annotate(bucket=TruncDate("occurred_at", tzinfo=timezone.get_current_timezone() if settings.USE_TZ else None))
-        .values("bucket", "audience")
-        .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
-    )
+
+    tzinfo = timezone.get_current_timezone() if settings.USE_TZ else None
+
+    def _day_rows(day):
+        day_base = MonitoringEvent.objects.filter(day=day)
+        hourly_rows = (
+            day_base.annotate(bucket=TruncHour("occurred_at", tzinfo=tzinfo))
+            .values("bucket", "event_name", "audience")
+            .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
+        )
+        daily_rows = (
+            day_base.annotate(bucket=TruncDate("occurred_at", tzinfo=tzinfo))
+            .values("bucket", "event_name", "audience")
+            .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
+        )
+        hourly_all_rows = (
+            day_base.annotate(bucket=TruncHour("occurred_at", tzinfo=tzinfo))
+            .values("bucket", "audience")
+            .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
+        )
+        daily_all_rows = (
+            day_base.annotate(bucket=TruncDate("occurred_at", tzinfo=tzinfo))
+            .values("bucket", "audience")
+            .annotate(event_count=Count("id"), user_people=Count("user_id", distinct=True), anon_people=Count("actor_hash", distinct=True))
+        )
+        return hourly_rows, daily_rows, hourly_all_rows, daily_all_rows, day_base
+
+    def _upsert(granularity, rows, all_event=False):
+        n = 0
+        for row in rows:
+            bucket = row["bucket"]
+            if bucket is None:
+                continue
+            bucket = _make_aware_if_needed(bucket)
+            people = row["user_people"] if row["audience"] == MonitoringEvent.Audience.USER else row["anon_people"]
+            MonitoringAggregate.objects.update_or_create(
+                granularity=granularity,
+                bucket_start=bucket,
+                event_name=AGGREGATE_ALL_EVENT if all_event else row["event_name"],
+                audience=row["audience"],
+                defaults={"event_count": row["event_count"], "people_count": people},
+            )
+            n += 1
+        return n
+
+    days = list(base.values_list("day", flat=True).distinct().order_by("day"))
     if dry_run:
-        return {"hourly": len(hourly_rows) + len(hourly_all_rows), "daily": len(daily_rows) + len(daily_all_rows), "deleted": base.count(), "dry_run": True}
-    with transaction.atomic():
-        for granularity, rows in ((MonitoringAggregate.Granularity.HOUR, hourly_rows), (MonitoringAggregate.Granularity.DAY, daily_rows)):
-            for row in rows:
-                bucket = row["bucket"]
-                if bucket is None:
-                    continue
-                bucket = _make_aware_if_needed(bucket)
-                people = row["user_people"] if row["audience"] == MonitoringEvent.Audience.USER else row["anon_people"]
-                MonitoringAggregate.objects.update_or_create(
-                    granularity=granularity,
-                    bucket_start=bucket,
-                    event_name=row["event_name"],
-                    audience=row["audience"],
-                    defaults={"event_count": row["event_count"], "people_count": people},
-                )
-        for granularity, rows in ((MonitoringAggregate.Granularity.HOUR, hourly_all_rows), (MonitoringAggregate.Granularity.DAY, daily_all_rows)):
-            for row in rows:
-                bucket = row["bucket"]
-                if bucket is None:
-                    continue
-                bucket = _make_aware_if_needed(bucket)
-                people = row["user_people"] if row["audience"] == MonitoringEvent.Audience.USER else row["anon_people"]
-                MonitoringAggregate.objects.update_or_create(
-                    granularity=granularity,
-                    bucket_start=bucket,
-                    event_name=AGGREGATE_ALL_EVENT,
-                    audience=row["audience"],
-                    defaults={"event_count": row["event_count"], "people_count": people},
-                )
-        deleted, _ = base.delete()
-    return {"hourly": len(hourly_rows) + len(hourly_all_rows), "daily": len(daily_rows) + len(daily_all_rows), "deleted": deleted, "dry_run": False}
+        hourly_n = daily_n = deleted_n = 0
+        for day in days:
+            h, d, ha, da, day_base = _day_rows(day)
+            hourly_n += len(h) + len(ha)
+            daily_n += len(d) + len(da)
+            deleted_n += day_base.count()
+        return {"hourly": hourly_n, "daily": daily_n, "deleted": deleted_n, "dry_run": True}
+
+    hourly_total = daily_total = deleted_total = 0
+    for day in days:
+        hourly_rows, daily_rows, hourly_all_rows, daily_all_rows, day_base = _day_rows(day)
+        with transaction.atomic():
+            _upsert(MonitoringAggregate.Granularity.HOUR, hourly_rows)
+            _upsert(MonitoringAggregate.Granularity.DAY, daily_rows)
+            _upsert(MonitoringAggregate.Granularity.HOUR, hourly_all_rows, all_event=True)
+            _upsert(MonitoringAggregate.Granularity.DAY, daily_all_rows, all_event=True)
+            deleted, _ = day_base.delete()
+        hourly_total += len(hourly_rows) + len(hourly_all_rows)
+        daily_total += len(daily_rows) + len(daily_all_rows)
+        deleted_total += deleted
+    return {"hourly": hourly_total, "daily": daily_total, "deleted": deleted_total, "dry_run": False}
