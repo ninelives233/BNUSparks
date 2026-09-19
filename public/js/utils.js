@@ -1,6 +1,10 @@
   // ── Token 缓存 + API 内存缓存 ──
   let _cachedToken = null;
-  const _apiCache = {};
+  // F06：缓存身份 = pathname + 规范化后的完整查询参数（不同关键词/页码互不串用）；
+  // 缓存政策按 pathname 匹配；只有政策 TTL>0 的 GET 才入缓存，条目数量有界。
+  const _apiCache = new Map();
+  const _apiInflight = new Map();   // 同键进行中的 GET 合并，TTL 内只发一次
+  const API_CACHE_MAX_ENTRIES = 60;
   const API_CACHE_TTL = {
     '/api/courses/tree/': 600000,
     '/api/stats/': 120000,
@@ -9,13 +13,63 @@
     '/api/user/rankings/': 30000,
   };
 
-  // 清除 GET 内存缓存中 url 以 prefix 开头的项（上传/删除/审核等变更后调用，
-  // 保证课程树 fileCount / 排行榜等数据即时刷新，无需硬刷新）
-  function clearApiCache(prefix) {
-    if (!prefix) return;
-    Object.keys(_apiCache).forEach(function(url) {
-      if (url.indexOf(prefix) === 0) delete _apiCache[url];
+  function _apiCachePolicy(pathname) {
+    for (const p in API_CACHE_TTL) {
+      if (pathname === p || pathname.indexOf(p) === 0) return API_CACHE_TTL[p];
+    }
+    return 0;
+  }
+
+  function _apiCacheKey(url) {
+    // 完整 URL 决定缓存身份：参数按名排序、去重同名参数合并为规范形式
+    try {
+      const u = new URL(url, location.origin);
+      const params = u.search ? Array.from(u.searchParams.entries()) : [];
+      params.sort(function (a, b) {
+        return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0);
+      });
+      const qs = params.map(function (kv) { return kv[0] + '=' + kv[1]; }).join('&');
+      return u.pathname + (qs ? '?' + qs : '');
+    } catch (e) {
+      return url;
+    }
+  }
+
+  // 条目记录写入时的账号：读取时校验，换账号后旧账号的私有响应不回用
+  function _apiCacheUid() {
+    try {
+      if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) return currentUser.id;
+    } catch (e) { /* currentUser 未声明（脚本加载早期） */ }
+    return localStorage.getItem('bnusparks_user_id') || '';
+  }
+
+  function _apiCacheSet(key, data, ttl) {
+    const now = Date.now();
+    _apiCache.forEach(function (entry, k) {
+      if (!entry.ttl || now - entry.ts >= entry.ttl) _apiCache.delete(k);
     });
+    if (_apiCache.size >= API_CACHE_MAX_ENTRIES) {
+      const overflow = _apiCache.size - API_CACHE_MAX_ENTRIES + 1;
+      const iter = _apiCache.keys();
+      for (let i = 0; i < overflow; i++) {
+        const step = iter.next();
+        if (step.done) break;
+        _apiCache.delete(step.value);
+      }
+    }
+    _apiCache.set(key, { data: data, ts: now, ttl: ttl, uid: _apiCacheUid() });
+  }
+
+  // 清除 GET 内存缓存中 url 以 prefix 开头的项（上传/删除/审核等变更后调用，
+  // 保证课程树 fileCount / 排行榜等数据即时刷新，无需硬刷新）。
+  // 不带 prefix 时清空全部缓存（登出/换账号）。
+  function clearApiCache(prefix) {
+    if (!prefix) { _apiCache.clear(); _apiInflight.clear(); return; }
+    const doomed = [];
+    _apiCache.forEach(function (entry, url) {
+      if (url.indexOf(prefix) === 0) doomed.push(url);
+    });
+    doomed.forEach(function (url) { _apiCache.delete(url); });
   }
 
   function setAuthTokenCache(token) {
@@ -24,6 +78,8 @@
 
   function clearAuthToken() {
     _cachedToken = null;
+    _apiCache.clear();
+    _apiInflight.clear();
     sessionStorage.removeItem('token');
     localStorage.removeItem('token');
     localStorage.removeItem('_loginTime');
@@ -31,15 +87,7 @@
     localStorage.removeItem('bnusparks_user_id');
   }
 
-  async function api(url, opts = {}) {
-    // GET 请求内存缓存
-    if (!opts.method || opts.method === 'GET') {
-      const entry = _apiCache[url];
-      if (entry && Date.now() - entry.ts < (entry.ttl || 0)) {
-        return entry.data;
-      }
-    }
-
+  async function _apiRequest(url, opts) {
     // Token 缓存（避免每次读取 storage）
     if (!_cachedToken) {
       _cachedToken = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -54,45 +102,82 @@
     }
     if (opts.body && !(opts.body instanceof FormData)) opts.body = JSON.stringify(opts.body);
 
-    // 超时控制（默认 10 秒）
+    // 超时控制（默认 10 秒）：同时覆盖响应头与响应体读取（F14）；
+    // 外部 signal 合并进内置 controller——任一来源中止都会终止整个请求。
     const controller = new AbortController();
+    const external = opts.signal;
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener('abort', function () { controller.abort(); }, { once: true });
+    }
     const timeout = setTimeout(() => controller.abort(), opts.timeout || 10000);
-    if (!opts.signal) opts.signal = controller.signal;
 
     let resp;
     try {
-      resp = await fetch(url, { ...opts, headers });
+      resp = await fetch(url, { ...opts, signal: controller.signal, headers });
     } catch (err) {
       clearTimeout(timeout);
-      if (err.name === 'AbortError') throw new Error('请求超时');
+      if (err.name === 'AbortError') {
+        throw new Error((external && external.aborted) ? '请求已取消' : '请求超时');
+      }
       throw err;
     }
-    clearTimeout(timeout);
 
     let data;
     try {
       data = await resp.json();
     } catch (err) {
+      clearTimeout(timeout);
+      if (err.name === 'AbortError') {
+        throw new Error((external && external.aborted) ? '请求已取消' : '请求超时');
+      }
       // 非 JSON 响应（Django 500 HTML / nginx 网关页）：给出可读错误，
       // 避免前端暴露 "Unexpected token '<' ... is not valid JSON"
       throw new Error('服务器返回异常（HTTP ' + resp.status + '），请稍后重试');
     }
+    clearTimeout(timeout);
     if (!data.ok) {
       var apiError = new Error(data.error || '请求失败');
       apiError.status = resp.status;
       throw apiError;
     }
+    return data.data;
+  }
 
-    // 缓存 GET 响应
-    if (!opts.method || opts.method === 'GET') {
-      _apiCache[url] = {
-        data: data.data,
-        ts: Date.now(),
-        ttl: API_CACHE_TTL[url] || 0,
-      };
+  async function api(url, opts = {}) {
+    const isGet = !opts.method || opts.method === 'GET';
+    let pathname = url;
+    try { pathname = new URL(url, location.origin).pathname; } catch (e) { /* 相对路径兜底 */ }
+    const ttl = isGet ? _apiCachePolicy(pathname) : 0;
+    const cacheKey = isGet ? _apiCacheKey(url) : null;
+
+    if (cacheKey && ttl > 0) {
+      const uid = _apiCacheUid();
+      const entry = _apiCache.get(cacheKey);
+      if (entry && entry.uid === uid && Date.now() - entry.ts < entry.ttl) {
+        // 命中刷新插入序（近似 LRU）
+        _apiCache.delete(cacheKey);
+        _apiCache.set(cacheKey, entry);
+        return entry.data;
+      }
+      const inflight = _apiInflight.get(cacheKey);
+      if (inflight) return inflight;
     }
 
-    return data.data;
+    const request = _apiRequest(url, opts);
+    if (cacheKey && ttl > 0) {
+      _apiInflight.set(cacheKey, request);
+      request.then(function () {
+        _apiInflight.delete(cacheKey);
+      }, function () {
+        _apiInflight.delete(cacheKey);
+      });
+      return request.then(function (data) {
+        _apiCacheSet(cacheKey, data, ttl);
+        return data;
+      });
+    }
+    return request;
   }
 
   function formatSize(bytes) {
@@ -608,15 +693,41 @@
     if (btn) btn.addEventListener('click', go);
   }
 
+  // F14 搜索竞态保护：只有序号最新（且账号未变）的请求允许渲染结果；
+  // 打开新结果层前先移除旧的搜索覆层，快速连搜不再叠出多个窗口；
+  // 失败/超时不再静默吞掉，给出可见的失败层。
+  let _searchSeq = 0;
+
   async function searchQuery(q) {
+    const seq = ++_searchSeq;
+    let results;
     try {
-      const results = await api('/api/search/?q=' + encodeURIComponent(q));
-      if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
-        window.BnuMonitoring.track('search.execute');
-        if (!(results.courses || []).length && !(results.materials || []).length) {
-          window.BnuMonitoring.track('search.no_result');
-        }
+      results = await api('/api/search/?q=' + encodeURIComponent(q));
+    } catch (e) {
+      if (seq !== _searchSeq) return; // 已有更新的搜索
+      if (typeof currentUser === 'undefined' || !currentUser) return; // 已登出
+      document.querySelectorAll('.search-overlay').forEach(function (el) { el.remove(); });
+      const errOverlay = document.createElement('div');
+      errOverlay.className = 'search-overlay';
+      errOverlay.innerHTML =
+        '<div class="search-overlay-inner sg-inner"><div class="sg-header">' +
+        '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>' +
+        '<div class="sg-title-row"><span class="sg-title-icon">🔍</span><h3 class="sg-title">' + esc(q) + '</h3></div>' +
+        '<p class="sg-subtitle">' + esc((e && e.message) || '搜索失败') + '</p></div>' +
+        '<div class="sg-body"><div class="sg-empty">' +
+        '<div class="sg-empty-icon">⚠️</div><div class="sg-empty-title">搜索失败</div>' +
+        '<div class="sg-empty-desc">请检查网络后重试</div></div></div></div>';
+      document.body.appendChild(errOverlay);
+      return;
+    }
+    if (seq !== _searchSeq) return; // 已有更新的搜索：丢弃旧结果，不叠窗口
+    if (typeof currentUser === 'undefined' || !currentUser) return;
+    if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
+      window.BnuMonitoring.track('search.execute');
+      if (!(results.courses || []).length && !(results.materials || []).length) {
+        window.BnuMonitoring.track('search.no_result');
       }
+    }
       const overlay = document.createElement('div');
       overlay.className = 'search-overlay';
 
@@ -704,8 +815,9 @@
       html += '</div>'; /* /.search-overlay-inner */
 
       overlay.innerHTML = html;
+      // 单一活动结果层：展示新结果前移除旧的搜索覆层
+      document.querySelectorAll('.search-overlay').forEach(function (el) { el.remove(); });
       document.body.appendChild(overlay);
-    } catch(e) { /* ignore */ }
   }
 
   /* ═══════════════════════════════════════════════════════════

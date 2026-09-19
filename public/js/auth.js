@@ -753,7 +753,10 @@
 
   async function _loadNotifCount() {
     try {
-      const data = await api('/api/auth/notifications/?unread_only=1');
+      // F05：徽章轮询走服务端 count-only 分支（只查权威未读数，不取列表）。
+      // 本地已读集合的扣减只对“已标已读但服务端尚未确认”的瞬时窗口生效——
+      // 服务端确认后下一次轮询即为权威口径，红点不回弹。
+      const data = await api('/api/auth/notifications/?count_only=1');
       const badge = document.getElementById('notifBadge');
       if (!badge) return;
       // 与通知中心同一口径：服务端未读 && 本地未标已读
@@ -766,6 +769,11 @@
           if (!n.is_read && readSet.has(n.id)) realUnread--;
         });
       }
+      // count-only 响应不带列表：按本地已读集合里“最近标记”的数量兜底扣减，
+      // 防止标记请求仍在途时红点闪回。集合来自通知中心的本地已读缓存。
+      if (!data.list && readSet.size && typeof _getUnconfirmedReadCount === 'function') {
+        realUnread -= _getUnconfirmedReadCount();
+      }
       if (realUnread < 0) realUnread = 0;
       if (realUnread > 0) {
         badge.textContent = realUnread > 99 ? '99+' : realUnread;
@@ -774,4 +782,17 @@
         badge.style.display = 'none';
       }
     } catch(e) { /* ignore */ }
+  }
+
+  // F05：登录/刷新时 /auth/me 已附带权威 unread_count——直接渲染徽章，
+  // 不再立即重复发一次通知请求；轮询仍走 count_only。
+  function applyPresetNotifCount(unread) {
+    var badge = document.getElementById('notifBadge');
+    if (!badge || typeof unread !== 'number' || unread < 0) return;
+    if (unread > 0) {
+      badge.textContent = unread > 99 ? '99+' : unread;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
   }

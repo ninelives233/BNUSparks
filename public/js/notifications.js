@@ -4,14 +4,22 @@
   function _getReadNotifSet() {
     try { return new Set(JSON.parse(localStorage.getItem('readNotifs') || '[]')); } catch(e) { return new Set(); }
   }
+  // 「本地已标已读、服务端尚未确认」的瞬时集合：徽章轮询改走 count-only
+  // （响应不带列表）后，用它的数量兜底扣减红点，防止标记请求在途或失败
+  // 时闪回；POST 确认成功后即移出，轮询恢复权威口径。
+  var _unconfirmedReadIds = new Set();
+  function _getUnconfirmedReadCount() { return _unconfirmedReadIds.size; }
+  function _confirmReadNotif(nid) { _unconfirmedReadIds.delete(nid); }
+  function _confirmAllReadNotifs() { _unconfirmedReadIds.clear(); }
   function _addReadNotif(nid) {
     var set = _getReadNotifSet();
     set.add(nid);
     localStorage.setItem('readNotifs', JSON.stringify(Array.from(set)));
+    _unconfirmedReadIds.add(nid);
   }
   function _addAllReadNotifs(nids) {
     var set = _getReadNotifSet();
-    nids.forEach(function(id) { set.add(id); });
+    nids.forEach(function(id) { set.add(id); _unconfirmedReadIds.add(id); });
     localStorage.setItem('readNotifs', JSON.stringify(Array.from(set)));
   }
 
@@ -394,6 +402,7 @@
     _addReadNotif(nid);
     try {
       await api('/api/auth/notifications/' + nid + '/read/', { method: 'POST' });
+      _confirmReadNotif(nid);
       if (el) {
         el.classList.remove('notif-item-unread');
         el.classList.add('notif-item-read');
@@ -420,9 +429,11 @@
     // 后台尝试通知服务器（不阻塞 UI）
     try {
       await api('/api/auth/notifications/', { method: 'POST' });
+      _confirmAllReadNotifs();
     } catch (err) { console.warn('全部标为已读 API 失败:', err); }
     _notifLoaded = false;
     loadNotifications();
+    loadNotifCount();
   }
 
   async function deleteOneNotif(nid, el, event) {

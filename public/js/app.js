@@ -411,10 +411,11 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(renderInitialView)
     .catch(function() { renderInitialView(); });
 
-  // 每 20 秒刷新通知徽章 + 切回页面/聚焦时立即刷新（v=148 红点同步）
+  // 通知徽章轮询（F05：20s→60s，后台标签页暂停常规轮询；切回页面/聚焦
+  // 时立即刷新补齐时效）。轮询请求走服务端 count-only 分支。
   setInterval(function() {
-    if (currentUser) loadNotifCount();
-  }, 20000);
+    if (!document.hidden && currentUser) loadNotifCount();
+  }, 60000);
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden && currentUser) loadNotifCount();
   });

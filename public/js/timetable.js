@@ -824,6 +824,13 @@ function ttRefreshRequestStatuses(force) {
 // 冲突规则：本地与云端按 importedAt 取较新者；仅一方有时直接采用并补齐另一方
 var ttSyncUploadPromise = null;
 var ttSyncUploadQueued = false;
+// F05 轮询治理：稳定态 30 秒（原 5 秒），本地编辑后 2 分钟内加速到 10 秒；
+// 失败指数退避 + 随机抖动，隐藏/非当前页暂停。
+var TT_SYNC_INTERVAL_SLOW = 30000;
+var TT_SYNC_INTERVAL_ACTIVE = 10000;
+var TT_SYNC_ACTIVE_WINDOW = 120000;
+var ttSyncLastEditAt = 0;
+var ttSyncFailureStreak = 0;
 var ttSyncPendingEvent = null;
 var ttSyncMutationVersion = 0;
 var ttSyncPullPromise = null;
@@ -864,6 +871,7 @@ function ttSyncUpload(event) {
   ttSyncMutationVersion++;
   ttSyncUploadQueued = true;
   ttState.cloudSynced = false;
+  ttSyncLastEditAt = Date.now();
   if (ttSyncUploadPromise) return ttSyncUploadPromise;
 
   var uidAtCall = ttState.uid;
@@ -970,15 +978,33 @@ function ttSyncIsActive() {
   return !!(currentUser && !ttState.viewerMode && view && view.classList.contains('active'));
 }
 
+// F05：稳定态 30 秒、编辑后短期 10 秒；连续失败按 2^n 退避（封顶 ×8），
+// 再叠加 ±20% 随机抖动避免多标签页同相位轮询。
+function ttSyncIntervalMs() {
+  var base = (Date.now() - ttSyncLastEditAt < TT_SYNC_ACTIVE_WINDOW)
+    ? TT_SYNC_INTERVAL_ACTIVE : TT_SYNC_INTERVAL_SLOW;
+  var backoff = Math.min(Math.pow(2, ttSyncFailureStreak), 8);
+  return Math.round(base * backoff * (0.8 + Math.random() * 0.4));
+}
+
+function ttSyncPollTick() {
+  ttSyncPollTimer = null;
+  if (!document.hidden && ttSyncIsActive()) {
+    var pull = ttSyncPull();
+    // 只有仍有 pending/rejected 申请时才轮询申请状态；稳定课表不再被周期性重绘。
+    if (ttShouldPollRequestStatuses()) ttRefreshRequestStatuses(false);
+    Promise.resolve(pull).then(function (ok) {
+      ttSyncFailureStreak = ok ? 0 : Math.min(ttSyncFailureStreak + 1, 3);
+    }, function () {
+      ttSyncFailureStreak = Math.min(ttSyncFailureStreak + 1, 3);
+    });
+  }
+  ttSyncPollTimer = setTimeout(ttSyncPollTick, ttSyncIntervalMs());
+}
+
 function ttStartSyncWatchers() {
   if (ttSyncPollTimer) return;
-  ttSyncPollTimer = setInterval(function () {
-    if (!document.hidden && ttSyncIsActive()) {
-      ttSyncPull();
-      // 只有仍有 pending/rejected 申请时才轮询申请状态；稳定课表不再被周期性重绘。
-      if (ttShouldPollRequestStatuses()) ttRefreshRequestStatuses(false);
-    }
-  }, 5000);
+  ttSyncPollTimer = setTimeout(ttSyncPollTick, ttSyncIntervalMs());
   if (ttSyncWatchersInstalled) return;
   ttSyncWatchersInstalled = true;
   document.addEventListener('visibilitychange', function () {
