@@ -67,6 +67,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'bnusparks.wsgi.application'
 
+# ── 数据目录（SQLite / 用户上传 / 删除暂存区；全新 clone 开箱即用） ──
+for _data_dir in (BASE_DIR / 'data', BASE_DIR / 'data' / 'materials', BASE_DIR / 'data' / 'trash'):
+    _data_dir.mkdir(parents=True, exist_ok=True)
+
 # ── 数据库 ──
 DATABASES = {
     'default': {
