@@ -107,6 +107,8 @@
 }
 .pc-seg {
   display: inline-flex;
+  flex-wrap: wrap;      /* 窄屏放不下时换行，而不是把按钮压成一字一行竖排 */
+  max-width: 100%;
   background: oklch(0.93 0.005 60);
   border-radius: var(--radius-sm);
   padding: 3px;
@@ -125,6 +127,8 @@
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;  /* 中文标签禁止折行 */
+  flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
 .pc-seg-btn:hover { background: oklch(0.9 0.005 60); color: var(--ink); }

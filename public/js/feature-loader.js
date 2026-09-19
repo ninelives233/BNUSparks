@@ -43,7 +43,9 @@
   // 排序分段控件、最佳回答常青左缘轨、回答展开 0fr→1fr 高度过渡；仅展示层。
   // v292：运行状态生产接入拆出 admin-health.js；同一缓存键串行加载，接口失败
   // 保留上次成功数据，页面隐藏时暂停自动刷新。
-  var VERSION = '302';
+  // v303：移动端审核分段控件/论坛筛选 chips 不再竖排（.pc-seg 换行 + 按钮禁折行），
+  //       课程列表行移动端收紧（图标 28px/间距 10px/标题单行省略号）。
+  var VERSION = '303';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

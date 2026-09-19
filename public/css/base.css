@@ -1146,7 +1146,11 @@
   }
   .folder-list-item:hover .fli-icon { background: oklch(from var(--primary) l c h / 0.12); }
   .fli-info { flex: 1; min-width: 0; }
-  .fli-name { font-size: 0.88rem; font-weight: 500; color: var(--ink); }
+  /* 课程名单行省略号截断：窄屏标题列被挤压时宁可截断，也不一字一行竖摞 */
+  .fli-name {
+    font-size: 0.88rem; font-weight: 500; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   /* 同名合并叶子行可能并列多个课程代码：超长省略号截断，完整列表在 title 悬停 */
   .fli-meta {
     font-size: 0.72rem; color: var(--ink-faint); margin-top: 2px;
@@ -1219,7 +1223,6 @@
     .folder-card .fc-icon { width: 58px; height: 58px; }
     .folder-card .fc-icon svg { width: 31px; height: 31px; }
     .folder-card .fc-name { font-size: 0.75rem; }
-    .folder-list-item { padding: 10px 14px; }
     .file-table thead th,
     .file-table tbody td { padding: 8px 12px; font-size: 0.78rem; }
   }
@@ -2342,6 +2345,16 @@
     transition: background 0.15s;
   }
   .folder-list-item:hover .fli-icon { background: oklch(from var(--primary) l c h / 0.12); }
+
+  /* ── 移动端列表行收紧（置于 fli-icon 重申段之后才能赢过同特异性规则）──
+     图标/徽章/间距降档，把宽度让给标题列；配合 .fli-name 单行省略号，
+     「概率论与数理统计」这类长课程名不再被挤成一字一行竖摞 */
+  @media (max-width: 640px) {
+    .folder-list-item { gap: 10px; padding: 10px 12px; }
+    .folder-list-item .fli-icon { width: 28px; height: 28px; font-size: 0.8rem; }
+    .fli-badge { padding: 3px 9px; }
+    .fli-fav-star { width: 24px; height: 24px; }
+  }
 
   /* ═══════════════════════════════════════════
      Homepage Navigation Cards + Dividers

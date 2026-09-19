@@ -121,7 +121,7 @@
     }
     return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
-      '<div class="fli-info"><div class="fli-name">' + esc(item.name) + '</div><div class="fli-meta"' + metaTitle + '>' + meta + '</div></div>' +
+      '<div class="fli-info"><div class="fli-name" title="' + esc(item.name) + '">' + esc(item.name) + '</div><div class="fli-meta"' + metaTitle + '>' + meta + '</div></div>' +
       badge + favStar +
       (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') + '</div>';
   }
