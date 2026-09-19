@@ -1,0 +1,35 @@
+name: CI
+
+# 主仓库 CI 只做「无密钥、无数据库」级别的检查。
+# 全量测试套件（537 例）在私人仓库 bnusparks-tests 维护，
+# 克隆到 materials/tests/ 后本地运行：
+#   bash materials/tests/run_tests.sh
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      # settings.py 要求存在 SECRET_KEY（CI 用一次性假值即可，不接入任何真实凭据）
+      SECRET_KEY: ci-dummy-secret-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check --settings=bnusparks.settings_test
+
+      - name: 迁移完整性（模型变更必须伴随 migration）
+        run: python manage.py makemigrations --check --dry-run --settings=bnusparks.settings_test
+
+      - name: collectstatic（静态资源可完整收集）
+        run: python manage.py collectstatic --noinput --settings=bnusparks.settings_test

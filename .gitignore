@@ -1,122 +1,85 @@
-# OS
+# ══════════════════════════════════════════════════════════════
+# BNU Sparks · .gitignore（2026-09 仓库边界清理版）
+# 原则：仓库只保留「运行 + 测试配套 + 无密钥部署模板 + 治理」；
+#       宣传素材 / 原型 / 校区数据 / 凭证 / 一次性脚本只在本地。
+# ══════════════════════════════════════════════════════════════
+
+# ── OS ──
 .DS_Store
 Thumbs.db
 
-# Changelog (not project code)
-CHANGELOG.md
-
-# Python
+# ── Python ──
 __pycache__/
 *.pyc
 *.pyo
 venv/
 *.egg-info/
 
-# Claude Code local config (skills, agents, memory — not project code)
+# ── 密钥与环境（绝不入库）──
+.env
+bnusparks/settings_prod_local.py
+backup/
+
+# ── 数据（用户上传、数据库、缓存、日志、校区课程目录）──
+data/
+*.sqlite3
+*.sqlite
+tmp_seed_pdfs/
+staticfiles/
+test_data/
+*账号清单*.xlsx
+
+# ── 部署脚本（含 SSH 凭证，永不入库；无密钥模板除外）──
+deploy.sh
+setup-new-server.sh
+
+# ── 本地脚本（共享仓库只收通用脚本，其余校区专属/一次性留本地）──
+scripts/*
+!scripts/clean_stale_data.py
+!scripts/deploy_verify.sh
+!scripts/security-audit.sh
+
+# ── AI / IDE 本机配置 ──
 .agents/
 .claude/
-CLAUDE.md
-
-# IDE / Editor
-.obsidian/
-.vscode/
 .codex/
+.zcode/
+.vscode/
+.obsidian/
+CLAUDE.md
+AGENTS.md
 
-# History (archived design iterations, old Django attempts)
+# ── 文档与历史存档（仅白名单文档入库）──
 history/
-
-# Environment variables (API keys, passwords)
-.env
-
-# Design documents (project planning, not code)
+CHANGELOG.md
+DEPLOY.md
 design-*-user-file-modules.md
 design-*-file-management.md
 design-requirements-*.md
 implementation-plan-*.md
+docs/*
+!docs/OPERATIONS.md
+project-map.md
+ANNOUNCEMENT_*.md
+demo.html
+artifacts/
 
-# Server
+# ── 服务器运行产物 ──
 *.pid
 
-# Django
-*.sqlite3
-*.sqlite
-staticfiles/
+# ── 测试（测试套件在私人仓库 bnusparks-tests；克隆到 materials/tests/ 使用）──
+materials/tests.py
+materials/tests/
 
-# Production settings (contains server IP/domain)
-bnusparks/settings_prod.py
-
-# Data
-data/materials/
-data/*.sqlite3
-data/备案图标.png
-
-# Source archives (batch import sources, not repo content)
-data/资料的压缩包们/
-
-# 培养方案 JSON 存档（11MB，按需通过 import_pyfa 命令导入）
-data/major_course_map.json
-
-# 种子 PDF 临时目录（培养方案导入用，不提交）
-tmp_seed_pdfs/
-
-# Documentation (project planning, worklogs — not code)
-docs/
-
-# Deployment scripts (contain SSH credentials — NEVER COMMIT)
-deploy.sh
-deploy.sh.template
-setup-new-server.sh
-scripts/deploy.sh
-scripts/deploy.py
-DEPLOY.md
-
-# One-time helper scripts / 自动化脚本（不用于生产环境，含内部信息）
-scripts/
-
-# Backup (database dump, .env — local only)
-backup/
-
-# Test artifacts
-test_data/
-
-# Django dead code (old template era, SPA 已废弃)
+# ── Django 旧模板时代遗留（SPA 已废弃）──
 materials/templates/
 materials/static/
 
-# One-time import tools（不用于生产）—— 但 v174 问答区定时命令用于生产，需跟踪
-materials/management/
-!materials/management/
-materials/management/commands/cleanup_invalid_courses.py
-materials/management/commands/import_pyfa.py
-materials/management/commands/purge_trash.py
+# ── 部署配置目录（只收 *.conf.example 模板）──
+deploy/*
+!deploy/nginx/
+deploy/nginx/*
+!deploy/nginx/bnusparks.conf.example
 
-# 空测试模板（不用于生产）
-materials/tests.py
-
-# ═══ 安全去敏（公开仓库不追踪，本地保留）═══
-# 测试文件含权限链/XSS向量/路径穿越边界等攻击面细节，等同"攻击手册"，仅本地保留
-materials/tests/
-# 服务器架构配置（internal 路径/限流策略），仅本地 + 服务器保留
-deploy/
-
-# 项目元信息（不用于运行网站）
-
-data/.zip_cache/
-data/.pdf_cache/
-data/logs/
-
-# 本地账号导入清单（含个人身份信息）
-*账号清单*.xlsx
-
-# 人类可读的项目地图：作为维护事实源纳入版本控制；其他 docs 仍保持忽略
-!docs/
-docs/*
-!docs/PROJECT_MAP.md
-!docs/GITHUB_REPO_AGENT_GUIDE.md
-!docs/CAPACITY_ASSESSMENT_2026-09-17.md
-!docs/admin-status-prototype/
-!docs/admin-status-prototype/**
-
-# 工具本地产物
-.zcode/
+# ── 工具产物 ──
 output/

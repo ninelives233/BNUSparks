@@ -1,0 +1,13 @@
+#!/bin/bash
+# 部署环境配置模板（不含密码/私钥）。
+#
+# 不要把密码写进本文件，也不要使用 sshpass。请先通过可信渠道核对服务器 SSH
+# 指纹并写入 known_hosts，然后在当前 shell 导出以下变量，再运行 bash deploy.sh。
+
+export BNUSPARKS_DEPLOY_HOST="root@your-server.example"
+export BNUSPARKS_DEPLOY_ROOT="/opt/bnusparks"
+export BNUSPARKS_KNOWN_HOSTS="${HOME}/.ssh/known_hosts"
+
+# 示例：
+#   source deploy.sh.template
+#   bash deploy.sh

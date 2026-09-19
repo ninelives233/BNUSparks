@@ -1,0 +1,157 @@
+# BNU Sparks — Nginx 站点配置模板（安全加固 + X-Accel 带宽优化）
+#
+# 使用方法：
+#   1. 复制本文件到服务器 /etc/nginx/sites-available/bnusparks（或 include 于 http{}）
+#   2. 将 <your-domain> 替换为你的域名；确认证书路径与密钥路径
+#   3. 站点根目录默认 /opt/bnusparks（BNUSPARKS_DEPLOY_ROOT），不同请同步替换
+#   4. /admin/ 基本锁：htpasswd -c /etc/nginx/.htpasswd_admin <user>
+#
+# 要点（对应安全加固计划）：
+#  - X-Accel: /protected/（正式文件）与 /protected-preview/（.pdf_cache/.img_cache）
+#    internal location，由 Django 鉴权后转交 nginx 流式送出（需 settings_prod USE_X_ACCEL=True）
+#  - 移除公开 /media/ 直出（S2），仅保留 /media/avatars/；其余 /media/ 一律 deny
+#  - /admin/ 加 auth_basic 密码锁（P2.2）
+#  - /api/auth/ 与上传类限流（P1.7）
+#  - 静态资源 expires 长缓存（P3.2）
+#  - server 级安全头 + CSP（P2.1/P2.3）
+#
+# 注意：本文件若被 include 于 nginx.conf 的 http{} 内，顶层 limit_req_zone 属 http 上下文；
+#       若放 sites-available，需把 limit_req_zone 两行移入 http{} 上下文。
+
+limit_req_zone $binary_remote_addr zone=auth_zone:10m rate=10r/m;
+# 上传限流：rate=60r/m + burst=30。过紧（如 10r/m+burst5）会把一次多文件批量上传
+# （每个文件一次 POST）打成 429 HTML，前端误报「Unexpected token '<'」。
+# 上传资料走人工审核，限流只需防极速刷量。
+limit_req_zone $binary_remote_addr zone=upload_zone:10m rate=60r/m;
+
+server {
+    listen 80;
+    server_name <your-domain> www.<your-domain>;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name <your-domain> www.<your-domain>;
+
+    # 证书路径按实际部署调整（certbot 或云厂商证书）
+    ssl_certificate     /etc/ssl/certs/<your-domain>_bundle.crt;
+    ssl_certificate_key /etc/ssl/private/<your-domain>.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    client_max_body_size 60M;
+
+    # ── 安全响应头（server 级；location 内部无 add_header 时全部继承）──
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
+
+    # ── 文本资源压缩：课程树 JSON、首页 HTML、JS/CSS 均由边缘层压缩 ──
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    # text/html 已由 Nginx 默认包含，显式重复会触发 duplicate MIME type 警告。
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    # ── 认证入口限流（仅凭据端点，不含 /me、/notifications、/profile 等高频接口）──
+    # 若整段 /api/auth/ 都限流，通知轮询/用户信息刷新会误触发 429。
+    location ~ ^/api/auth/(login|register|verify-email|forgot-password|reset-password|change-password)/$ {
+        limit_req zone=auth_zone burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ── 上传类限流（文件上传/文本上传/课程申请随附/头像，burst 30）──
+    location ~ ^/api/(files/(upload|upload-text)/|courses/request/[0-9]+/files/|auth/avatar/) {
+        limit_req zone=upload_zone burst=30 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ── Django admin 密码锁（P2.2）──
+    location /admin/ {
+        auth_basic "Restricted Admin Area";
+        auth_basic_user_file /etc/nginx/.htpasswd_admin;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ── 前端 + 常规 API ──
+    # 未配置站点图标时，浏览器默认请求应明确返回 404，不回退到 SPA 首页。
+    location = /favicon.ico {
+        access_log off;
+        log_not_found off;
+        return 404;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ── 静态资源：长缓存（expires 而非 add_header，安全头继承不中断）──
+    location ^~ /static/legal/ {
+        alias /opt/bnusparks/staticfiles/legal/;
+        expires -1;
+        access_log off;
+        log_not_found off;
+    }
+    location /static/ {
+        alias /opt/bnusparks/staticfiles/;
+        expires 30d;
+        access_log off;
+        log_not_found off;
+    }
+
+    # ── 仅头像公开直出；其余 /media/ 全部拒绝（S2，杜绝存储型 XSS 载体）──
+    location /media/avatars/ {
+        alias /opt/bnusparks/data/materials/avatars/;
+        expires 7d;
+        access_log off;
+        log_not_found off;
+    }
+    location /media/ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # ── X-Accel internal 文件服务（P3.1）：正式文件 ──
+    location /protected/ {
+        internal;
+        alias /opt/bnusparks/data/materials/;
+        access_log off;
+        log_not_found off;
+    }
+
+    # ── X-Accel internal：PDF 切片缓存 / .img_cache（位于 data/ 一级）──
+    location /protected-preview/ {
+        internal;
+        alias /opt/bnusparks/data/;
+        access_log off;
+        log_not_found off;
+    }
+}
