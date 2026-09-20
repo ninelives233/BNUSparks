@@ -144,7 +144,7 @@
       sections: [
         { heading: '📬 邮箱', text: 'bnusparks@163.com — 欢迎投稿、建议与合作。' },
         { heading: '🐙 GitHub', text: '在 <a href="https://github.com/ninelives233/BNUSparks" target="_blank">github.com/ninelives233/BNUSparks</a> 提交 Issue 或 PR。' },
-        { heading: '👥 用户交流群', text: '微信扫码加入 BNUSparks-preview 群聊，和同学、维护者直接交流。点击二维码可查看大图。<a class="qr-thumb-link" href="/static/group-qr.png?v=304" target="_blank" rel="noopener"><img class="qr-thumb" src="/static/group-qr.png?v=304" width="112" height="112" alt="用户交流群二维码，点击查看大图"></a>' },
+        { heading: '👥 用户交流群', text: '微信扫码加入 BNUSparks-preview 群聊，和同学、维护者直接交流。点击二维码可查看大图。<a class="qr-thumb-link" href="/static/group-qr.png?v=312" target="_blank" rel="noopener"><img class="qr-thumb" src="/static/group-qr.png?v=312" width="112" height="112" alt="用户交流群二维码，点击查看大图"></a>' },
         { heading: '📝 用户反馈', text: '<a href="https://wj.qq.com/s2/27532661/uiui/" target="_blank" rel="noopener">填写反馈问卷 →</a> 任何问题或建议都会被认真看到；也欢迎通过邮箱或 GitHub 告诉我们。' },
       ]
     },

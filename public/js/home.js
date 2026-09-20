@@ -179,7 +179,7 @@
       slides.push('<a class="h8-carousel-slide h8-carousel-notice compact-announcement-link" href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span class="h8-carousel-excerpt">' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>');
     }
     slides.push(
-      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span><img class="h8-carousel-qr" src="/static/group-qr.png?v=304" width="56" height="56" alt="用户交流群二维码" loading="lazy"></a>',
+      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span><img class="h8-carousel-qr" src="/static/group-qr.png?v=312" width="56" height="56" alt="用户交流群二维码" loading="lazy"></a>',
       '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">反馈问卷</span><strong>意见反馈</strong><span class="h8-carousel-text">一分钟填完，问题和建议都会被认真看到。</span></span></a>'
     );
     return slides;
