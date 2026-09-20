@@ -111,6 +111,14 @@
     --t-fast: 0.12s ease-out;   /* 微交互 hover：color/border/bg */
     --t-base: 0.2s ease;        /* 结构：transform/面板/抽屉 */
 
+    /* 动效曲线与时长（v306 首页动效体系）：入场统一走强缓出，过冲曲线只给低频奖励场景 */
+    --ease-out-strong: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --dur-quick: 0.16s;     /* 微交互位移：星标弹跳 */
+    --dur-swap: 0.2s;       /* 容器内容替换：tab 切换 / 校园入口展开 */
+    --dur-view: 0.24s;      /* SPA 视图切换入场 */
+    --dur-reveal: 0.4s;     /* 滚动 reveal / 首屏区块编排 */
+
     /* v=160 历史别名兼容：旧代码误用的未定义变量，统一映射到正式 token。
        此前这些 var() 解析为非法值→属性回退继承色/圆角归零；
        现在一次性修正视觉。后续清理可逐步内联替换后删除本块（回退=删本块）。 */

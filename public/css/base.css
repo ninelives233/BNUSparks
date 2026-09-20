@@ -4360,3 +4360,121 @@ html[data-bnu-theme="warm"] .home-eight {
     transform: none;
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   首页动效体系（v306）— 统一滚动 reveal / 视图入场 / 容器 swap /
+   骨架屏 / hover 微交互。曲线与时长全部取自 tokens.css 的
+   --ease-out-strong / --dur-* 令牌；只动 transform 与 opacity。
+   ════════════════════════════════════════════════════════════ */
+
+/* ── 统一滚动 reveal：.motion-reveal 由 JS 添加，进视口后播一次即摘除 ── */
+.motion-reveal { opacity: 0; transform: translateY(12px); }
+/* 数据就绪前扣住入场编排：区块保持隐藏，releaseHeldReveals 后才加入级联。
+   让「编排」与「内容到货」合成一个事件，避免生产慢接口下动画演完骨架、
+   内容再逐区弹入的二次闪烁。 */
+.motion-hold { opacity: 0; }
+.motion-delay-1 { --motion-delay: 40ms; }
+.motion-delay-2 { --motion-delay: 80ms; }
+.motion-delay-3 { --motion-delay: 120ms; }
+.motion-delay-4 { --motion-delay: 160ms; }
+.motion-delay-5 { --motion-delay: 200ms; }
+.motion-reveal.is-visible {
+  animation: reveal-in var(--dur-reveal) var(--ease-out-strong) var(--motion-delay, 0ms) both;
+}
+@keyframes reveal-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── SPA 视图切换入场：switchView 前进导航时由 JS 挂到进入的视图上 ── */
+.view-enter { animation: view-in var(--dur-view) var(--ease-out-strong) both; }
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── 容器内容替换（tab 切换 / 校园入口展开）：整块 6px 上移淡入 ── */
+.motion-swap { animation: swap-in var(--dur-swap) var(--ease-out-strong) both; }
+@keyframes swap-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── 首页加载骨架屏：容器扫光一次成型，线条静置；纯 transform 驱动 ── */
+.h8-skeleton-card,
+.h8-skeleton-row {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.h8-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 158px;
+  padding: 14px 16px 8px;
+}
+.h8-skeleton-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  min-height: 66px;
+}
+.h8-skeleton-row .sk-main { width: 86%; }
+.h8-skeleton-row .sk-sub { width: 46%; }
+.h8-skeleton-row .sk-metric { width: 44px; }
+.sk-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.h8-skeleton-card .sk-tag { width: 56px; height: 9px; }
+.h8-skeleton-card .sk-title { width: 82%; height: 15px; }
+.h8-skeleton-card .sk-body { width: 94%; }
+.h8-skeleton-card .sk-short { width: 52%; }
+.sk-line {
+  display: block;
+  height: 11px;
+  border-radius: 6px;
+  background: var(--border-light);
+}
+.h8-skeleton-card::after,
+.h8-skeleton-row::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 32%, oklch(from var(--ink) l c h / 0.05) 50%, transparent 68%);
+  animation: skeleton-shimmer 1.25s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
+/* ── hover 微交互：h8 推荐卡上浮 + 阴影；榜单行/动态行底色提示。
+      transform 类 hover 一律用 (hover:hover)+(pointer:fine) 门控，
+      避免触屏点按触发假悬浮。按压反馈不门控（触屏同样受益）。 ── */
+.h8-card { transition: transform 0.18s var(--ease-out-strong), box-shadow 0.18s var(--ease-out-strong); }
+.h8-rank-row, .compact-discovery-item { transition: background-color var(--t-fast); }
+@media (hover: hover) and (pointer: fine) {
+  .h8-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .h8-rank-row:hover, .compact-discovery-item:hover { background: var(--primary-surface); }
+}
+.h8-card:active { transform: translateY(-1px) scale(0.99); }
+.home-nav-card:active { transform: translateY(0) scale(0.99); }
+
+/* ── 收藏星标点亮：一次性过冲弹跳，由 JS 在收藏成功时挂 .star-pop ── */
+.star-pop { animation: star-pop 0.3s var(--ease-out-strong); }
+@keyframes star-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  70% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+/* ── 减少动态偏好：位移/扫光全部退场，内容直接可见（双保险，
+      防 JS 未运行时 .motion-reveal 初始态把内容藏住） ── */
+@media (prefers-reduced-motion: reduce) {
+  .motion-reveal, .motion-hold { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .view-enter, .motion-swap, .star-pop { animation: none !important; }
+  .h8-skeleton-card::after, .h8-skeleton-row::after { animation: none; content: none; }
+  .h8-card, .h8-rank-row, .compact-discovery-item { transition: none; }
+}

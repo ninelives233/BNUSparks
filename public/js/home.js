@@ -100,14 +100,27 @@
 
   function setHostError(host, label, retryKind) {
     if (!host) return;
+    host.removeAttribute('aria-busy');
     host.innerHTML = '<div class="compact-error"><span>' + htmlEscape(label) + '</span><button type="button" data-compact-retry="' + htmlEscape(retryKind) + '">重试</button></div>';
+  }
+
+  // v306：渲染结果与当前 DOM 一致时跳过赋值（回首页/resize 不重播动效）；
+  // 有变化才替换，并在替换「之前」探测骨架预态（数据首到→无动画直接呈现，
+  // 内容→内容→整块 swap），探测逻辑见 app.js revealListItems。
+  function renderHtmlWithMotion(host, html) {
+    if (!host) return;
+    if (host.innerHTML === html) return;
+    var isInitialLoad = !!host.querySelector('.h8-skeleton-card, .h8-skeleton-row, .compact-loading');
+    host.innerHTML = html;
+    if (typeof revealListItems === 'function') revealListItems(host, isInitialLoad);
   }
 
   function renderCompactStats(stats, error) {
     var fields = ['total_courses', 'total_files', 'total_users', 'college_with_data_count'];
     document.querySelectorAll('#compactHomeLayout [data-stat]').forEach(function (element) {
       var value = stats && stats[element.getAttribute('data-stat')];
-      element.textContent = typeof value === 'number' ? value : '—';
+      if (typeof value === 'number' && typeof animateCount === 'function') animateCount(element, value);
+      else element.textContent = typeof value === 'number' ? value : '—';
     });
     if (error) {
       var note = document.getElementById('compactDataNote');
@@ -167,11 +180,11 @@
       return;
     }
     var visibleItems = _compactData.campusExpanded ? items.slice(0, 3) : items.slice(0, 1);
-    host.innerHTML = visibleItems.map(function (item, index) {
+    renderHtmlWithMotion(host, visibleItems.map(function (item, index) {
       var id = Number(item.id || 0);
       var className = 'h8-notice-main compact-announcement-link' + (index ? ' h8-notice-secondary' : '');
       return '<a href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '" class="' + className + '"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span>' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>';
-    }).join('');
+    }).join(''));
     updateHelperVisibility();
   }
 
@@ -211,11 +224,11 @@
     }
     if (block) block.hidden = false;
     var visibleItems = _compactData.campusExpanded ? items : items.slice(0, 6);
-    host.innerHTML = items.length
+    renderHtmlWithMotion(host, items.length
       ? visibleItems.map(function (item) {
           return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
         }).join('')
-      : '<p class="h8-shortcut-note">还没有配置校园入口。</p>';
+      : '<p class="h8-shortcut-note">还没有配置校园入口。</p>');
     // 「展开入口」收进区块头部，并与公告面板共享同一个展开状态。
     if (moreLink) {
       var hasMore = items.length > 6 || _compactData.announcements.length > 1;
@@ -238,18 +251,23 @@
     _compactData.recommendationMeta = data;
     if (!items.length) {
       var emptyText = data.related_exhausted ? '暂无新资料' : '暂无精选资料';
+      host.removeAttribute('aria-busy');
       host.innerHTML = '<div class="compact-empty"><span>' + emptyText + '</span><a href="/explorer/通识课" data-home-action="courses">查看全部课程</a></div>';
       return;
     }
-    renderRecommendationItems();
+    renderRecommendationItems(true);
   }
 
-  function renderRecommendationItems() {
+  function renderRecommendationItems(animate) {
     var host = document.getElementById('compactRecommendations');
     if (!host) return;
     var items = _compactData.recommendations || [];
     var html = items.slice(0, 4).map(function (item) { return materialMarkup(item, true); }).join('');
+    if (host.innerHTML === html) return;
+    var isInitialLoad = !!host.querySelector('.h8-skeleton-card, .h8-skeleton-row, .compact-loading');
     host.innerHTML = html;
+    // 仅数据到达路径触发动画决策；resize 触发的重建（animate=false）静默替换
+    if (animate !== false && typeof revealListItems === 'function') revealListItems(host, isInitialLoad);
   }
 
   function recommendationIndexMarkup(item, index) {
@@ -407,14 +425,15 @@
     if (note) note.textContent = _compactData.hotKind === 'favorite' ? '按收藏量排序' : '按下载量排序';
     if (more) more.dataset.rankingType = _compactData.hotKind;
     if (!items.length) {
+      host.removeAttribute('aria-busy');
       host.innerHTML = '<p class="compact-empty">暂无可展示的真实资料</p>';
       return;
     }
-    host.innerHTML = items.map(function (item, index) {
+    renderHtmlWithMotion(host, items.map(function (item, index) {
       var id = Number(item.id) || 0;
       var count = _compactData.hotKind === 'favorite' ? (item.favorite_count || 0) : (item.download_count || 0);
       return '<article class="h8-rank-row compact-rank-row"><span class="h8-rank-num">' + String(index + 1).padStart(2, '0') + '</span><div><a href="/file/' + id + '" data-material-link="' + id + '">' + htmlEscape(item.title || '未命名资料') + '</a><small>' + htmlEscape(item.course_name || '') + '</small></div><span class="h8-metric">' + htmlEscape(count) + '<small>' + (_compactData.hotKind === 'favorite' ? '收藏' : '下载') + '</small></span></article>';
-    }).join('');
+    }).join(''));
   }
 
   function renderCompactRecent() {
@@ -423,14 +442,15 @@
     var stats = _compactData.stats || {};
     var items = Array.isArray(stats.recent_uploads) ? stats.recent_uploads.slice(0, 8) : [];
     if (!items.length) {
+      host.removeAttribute('aria-busy');
       host.innerHTML = '<p class="compact-empty">暂无可展示的真实资料</p>';
       return;
     }
-    host.innerHTML = items.map(function (item) {
+    renderHtmlWithMotion(host, items.map(function (item) {
       var id = Number(item.id) || 0;
       var date = String(item.created_at || '').slice(0, 10).slice(5).replace('-', ' / ');
       return '<article class="h8-rank-row compact-rank-row"><div><a href="/file/' + id + '" data-material-link="' + id + '">' + htmlEscape(item.title || '未命名资料') + '</a><small>' + recentMetaMarkup(item) + '</small></div><time>' + htmlEscape(date) + '</time></article>';
-    }).join('');
+    }).join(''));
   }
 
   function renderCompactDesktopLists(stats, error) {
@@ -471,14 +491,15 @@
       more.setAttribute('href', kind === 'recent' ? '/recent' : '/rankings');
     }
     if (!items.length) {
+      host.removeAttribute('aria-busy');
       host.innerHTML = '<p class="compact-empty">暂无可展示的真实资料</p>';
       return;
     }
-    host.innerHTML = items.map(function (item, index) {
+    renderHtmlWithMotion(host, items.map(function (item, index) {
       var marker = kind === 'recent' ? '' : '<span class="compact-discovery-rank">' + String(index + 1).padStart(2, '0') + '</span>';
       var count = kind === 'favorite' ? ((item.favorite_count || 0) + ' 收藏') : kind === 'download' ? ((item.download_count || 0) + ' 下载') : String(item.created_at || '').slice(0, 10);
       return '<button type="button" class="compact-discovery-item" data-material-id="' + (Number(item.id) || 0) + '">' + marker + '<span class="compact-discovery-info"><strong>' + htmlEscape(item.title || '未命名资料') + '</strong><small>' + (kind === 'recent' ? recentMetaMarkup(item) : htmlEscape(item.course_name || '')) + '</small></span><span class="compact-discovery-count">' + htmlEscape(count) + '</span></button>';
-    }).join('');
+    }).join(''));
   }
 
   function clearCompactData() {
@@ -515,7 +536,13 @@
     var entry = document.getElementById('compact2026Link');
     if (entry) entry.style.display = 'none';
     if (_compactRequest && _compactRequest.key === key) return _compactRequest.promise;
-    // 先完成首屏刚需数据，推荐列表单独异步加载，避免一个慢接口阻塞首页的全部内容。
+    // 推荐与首屏刚需数据并行请求：互不阻塞，慢接口只延迟自己那块的渲染。
+    // （此前推荐链在刚需数据之后，导致推荐永远最后到达、在整页动效结束后才换内容。）
+    var recommendationPromise = requestPart('/api/recommendations/?limit=4').then(function (recommendations) {
+      if (!isCurrent(context) || (document.body && document.body.dataset.homeLayout !== 'compact')) return false;
+      renderCompactRecommendations(recommendations);
+      return !recommendations.error;
+    });
     var criticalPromise = Promise.all([
       requestPart('/api/stats/?limit=8'), requestPart('/api/announcements/?limit=3'),
       requestPart('/api/campus-links/'),
@@ -533,15 +560,10 @@
       if (note && !stats.error) note.innerHTML = failed ? '<span>部分数据暂时无法读取，页面未使用估算值。</span> <button type="button" data-compact-retry="all">重试</button>' : '';
       return true;
     });
-    var recommendationPromise = criticalPromise.then(function () {
-      if (!isCurrent(context) || (document.body && document.body.dataset.homeLayout !== 'compact')) return false;
-      return requestPart('/api/recommendations/?limit=4').then(function (recommendations) {
-        if (!isCurrent(context) || (document.body && document.body.dataset.homeLayout !== 'compact')) return false;
-        renderCompactRecommendations(recommendations);
-        return !recommendations.error;
-      });
-    });
     var promise = Promise.all([criticalPromise, recommendationPromise]).then(function (result) {
+      // 首屏数据（含推荐）渲染完毕：放行被 data-motion-hold 扣住的入场编排，
+      // 让级联动画带着真实内容起播，而不是演完骨架再等内容弹入。
+      if (typeof releaseHeldReveals === 'function') releaseHeldReveals();
       return result.some(function (value) { return value !== false; });
     }).finally(function () {
       if (_compactRequest && _compactRequest.promise === promise) _compactRequest = null;
@@ -785,6 +807,8 @@
           favorite.innerHTML = icon('star', !!data.favorited);
           favorite.classList.toggle('is-favorited', !!data.favorited);
           favorite.setAttribute('aria-label', data.favorited ? '取消收藏' : '收藏资料');
+          // 收藏成功的一次性奖励反馈：星标过冲弹跳（reduced-motion 下自动跳过）
+          if (data.favorited && typeof replayClass === 'function') replayClass(favorite, 'star-pop', 320);
           _compactData.recommendations.forEach(function (item) { if (String(item.id) === String(id)) item.is_favorited = !!data.favorited; });
         }).catch(function (error) { if (isCurrent(context)) setCompactNote('收藏失败：' + (error.message || '请稍后重试')); }).finally(function () { favorite.disabled = false; });
         return;
@@ -800,7 +824,7 @@
       if (overlay && event.target === overlay) closeCampusManager();
     });
     window.addEventListener('resize', function () {
-      if (document.body && document.body.dataset.homeLayout === 'compact') renderRecommendationItems();
+      if (document.body && document.body.dataset.homeLayout === 'compact') renderRecommendationItems(false);
     });
   }
 
@@ -818,6 +842,10 @@
     clearCompactData();
     if (document.body && document.body.dataset.homeLayout === 'compact' && document.getElementById('homeView') && document.getElementById('homeView').classList.contains('active')) loadCompactHome();
     if (document.getElementById('recommendationsView') && document.getElementById('recommendationsView').classList.contains('active')) loadRecommendationsPage();
+  });
+  // 外观切换（宽松/紧凑布局）后补拉当前布局数据，并放行可能仍被扣住的编排
+  window.addEventListener('bnuappearancechange', function () {
+    if (document.body && document.body.dataset.homeLayout === 'compact' && document.getElementById('homeView') && document.getElementById('homeView').classList.contains('active')) loadCompactHome();
   });
   document.addEventListener('DOMContentLoaded', function () { setupCompactEvents(); });
 })();

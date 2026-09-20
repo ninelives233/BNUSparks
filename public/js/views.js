@@ -44,7 +44,11 @@
   function switchView(name, skipScroll) {
     document.querySelectorAll('.view-section').forEach(el => {
       el.style.display = '';
-      el.classList.toggle('active', el.id === name + 'View');
+      var entering = el.id === name + 'View';
+      var wasActive = el.classList.contains('active');
+      el.classList.toggle('active', entering);
+      // 前进导航新激活的视图播 8px 上移淡入；滚动恢复/前进后退（skipScroll）不播
+      if (entering && !wasActive && !skipScroll && typeof armViewEnter === 'function') armViewEnter(el);
     });
     if (!skipScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });

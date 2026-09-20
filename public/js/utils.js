@@ -843,9 +843,15 @@
     try {
       const s = await api('/api/stats/');
       const homeRankingLimit = 10;
-      document.getElementById('statColleges').textContent = s.college_with_data_count;
-      document.getElementById('statGeneral').textContent = s.general_with_data_count;
-      document.getElementById('statMajor').textContent = s.major_with_data_count;
+      // v306：统计数字 count-up（reduced-motion 或同值时由 animateCount 直接落定）
+      [['statColleges', s.college_with_data_count],
+       ['statGeneral', s.general_with_data_count],
+       ['statMajor', s.major_with_data_count]].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (!el) return;
+        if (typeof animateCount === 'function' && typeof pair[1] === 'number') animateCount(el, pair[1]);
+        else el.textContent = pair[1];
+      });
       const pills = document.querySelectorAll('.stat-pill');
       if (pills.length >= 3) {
         pills[0].style.cursor = 'pointer';
@@ -887,7 +893,11 @@
       }
     // Iter 7: 首页文件总数
       var totalCountEls = document.querySelectorAll('.total-material-count');
-      totalCountEls.forEach(function(el){ el.textContent = s.material_count || 0; });
+      totalCountEls.forEach(function(el){
+        var total = s.material_count || 0;
+        if (typeof animateCount === 'function' && typeof total === 'number') animateCount(el, total);
+        else el.textContent = total;
+      });
     } catch(e) {}
   }
 

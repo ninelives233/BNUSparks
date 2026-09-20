@@ -53,8 +53,8 @@
     document.documentElement.dataset.bnuTimetableTextAlign = 'left';
   }
 </script>
-<link rel="stylesheet" href="/static/css/tokens.css?v=207">
-<link rel="stylesheet" href="/static/css/base.css?v=276">
+<link rel="stylesheet" href="/static/css/tokens.css?v=306">
+<link rel="stylesheet" href="/static/css/base.css?v=309">
 <link rel="stylesheet" href="/static/css/user.css?v=212">
 <link rel="stylesheet" href="/static/css/files.css?v=200">
 <link rel="stylesheet" href="/static/css/announcement.css?v=187">
@@ -157,7 +157,9 @@
   <!-- ── 紧凑首页：沿用 docs/personal-home-prototype/v9.html 的 h8 结构；数据由 home.js 填充 ── -->
   <section class="home-compact-layout" id="compactHomeLayout" aria-labelledby="compactHomeTitle">
     <div class="container compact-home-container home-eight">
-      <header class="h8-heading">
+      <!-- v306 首屏编排：区块按 data-motion-delay 步进 70ms 依次浮现（registerReveals 驱动）；
+           data-motion-hold 扣住到数据就绪（releaseHeldReveals）才起播，编排与内容合成一个事件 -->
+      <header class="h8-heading" data-motion-reveal data-motion-hold>
         <div>
           <h1 id="compactHomeTitle">首页</h1>
           <p>课程、资料与校园入口</p>
@@ -175,7 +177,7 @@
         </div>
       </header>
 
-      <section class="h8-top" id="compactTopPanel" data-expanded="false" aria-label="公告与校园入口">
+      <section class="h8-top" id="compactTopPanel" data-expanded="false" aria-label="公告与校园入口" data-motion-reveal data-motion-delay="70" data-motion-hold>
         <div class="h8-notices compact-announcement-block">
           <div class="h8-section-head">
             <h2 id="compactAnnouncementTitle">公告</h2>
@@ -195,17 +197,23 @@
         </div>
       </section>
 
-      <section class="h8-recommend" aria-labelledby="compactRecommendationTitle">
+      <section class="h8-recommend" aria-labelledby="compactRecommendationTitle" data-motion-reveal data-motion-delay="140" data-motion-hold>
         <div class="h8-section-head">
           <h2 id="compactRecommendationTitle">为你推荐</h2>
         </div>
-        <div id="compactRecommendations" class="h8-cards"><span class="compact-loading">正在整理资料…</span></div>
+        <!-- v306 加载骨架：数据到达后由 renderCompactRecommendations 整体替换 -->
+        <div id="compactRecommendations" class="h8-cards" aria-busy="true">
+          <div class="h8-skeleton-card" aria-hidden="true"><span class="sk-line sk-tag"></span><span class="sk-line sk-title"></span><span class="sk-line sk-body"></span><span class="sk-line sk-body sk-short"></span></div>
+          <div class="h8-skeleton-card" aria-hidden="true"><span class="sk-line sk-tag"></span><span class="sk-line sk-title"></span><span class="sk-line sk-body"></span><span class="sk-line sk-body sk-short"></span></div>
+          <div class="h8-skeleton-card" aria-hidden="true"><span class="sk-line sk-tag"></span><span class="sk-line sk-title"></span><span class="sk-line sk-body"></span><span class="sk-line sk-body sk-short"></span></div>
+          <div class="h8-skeleton-card" aria-hidden="true"><span class="sk-line sk-tag"></span><span class="sk-line sk-title"></span><span class="sk-line sk-body"></span><span class="sk-line sk-body sk-short"></span></div>
+        </div>
         <div class="h8-recommend-more">
           <a id="compactRecommendationMore" class="text-btn compact-recommend-more" href="/recommendations" onclick="event.preventDefault();showRecommendations()">查看更多 →</a>
         </div>
       </section>
 
-      <div class="h8-bottom" aria-label="资料动态">
+      <div class="h8-bottom" aria-label="资料动态" data-motion-reveal data-motion-delay="210" data-motion-hold>
         <section aria-labelledby="compactHotTitle">
           <div class="h8-section-head">
             <div><h2 id="compactHotTitle">热门资料</h2><p id="compactHotNote">按下载量排序</p></div>
@@ -217,19 +225,29 @@
               <a id="compactHotMore" class="text-btn" href="/rankings" data-ranking-type="download">完整榜单 →</a>
             </div>
           </div>
-          <div id="compactHotList" class="h8-rank-list"><span class="compact-loading">正在读取资料…</span></div>
+          <div id="compactHotList" class="h8-rank-list" aria-busy="true">
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+          </div>
         </section>
         <section aria-labelledby="compactRecentTitle">
           <div class="h8-section-head">
             <div><h2 id="compactRecentTitle">最近上传</h2><p>全站已审核资料 · 按上传日期</p></div>
             <a class="text-btn" href="/recent" onclick="event.preventDefault();showRecentAll()">更多 →</a>
           </div>
-          <div id="compactRecentList" class="h8-rank-list"><span class="compact-loading">正在读取资料…</span></div>
+          <div id="compactRecentList" class="h8-rank-list" aria-busy="true">
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+            <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+          </div>
         </section>
       </div>
 
       <!-- 窄屏专属：下载榜 / 收藏榜 / 最近上传 三榜合并，桌面端由 .h8-bottom 双卡呈现 -->
-      <section class="compact-discovery-block" aria-labelledby="compactDiscoveryTitle">
+      <section class="compact-discovery-block" aria-labelledby="compactDiscoveryTitle" data-motion-reveal data-motion-delay="280" data-motion-hold>
         <div class="h8-section-head">
           <div><h2 id="compactDiscoveryTitle">资料动态</h2><p id="compactDiscoveryNote">按上传日期排列</p></div>
           <a id="compactDiscoveryMore" class="text-btn" href="/recent">更多 →</a>
@@ -239,7 +257,11 @@
           <button type="button" role="tab" aria-selected="false" data-discovery="download">下载榜</button>
           <button type="button" role="tab" aria-selected="false" data-discovery="favorite">收藏榜</button>
         </div>
-        <div id="compactDiscoveryList" class="compact-discovery-list"><span class="compact-loading">正在读取资料…</span></div>
+        <div id="compactDiscoveryList" class="compact-discovery-list" aria-busy="true">
+          <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+          <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+          <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
+        </div>
       </section>
 
       <p class="compact-data-note" id="compactDataNote" role="status" aria-live="polite"></p>
@@ -254,30 +276,31 @@
       <div class="shape shape-2"></div>
       <div class="shape shape-3"></div>
     </div>
+    <!-- v306 宽松版 hero 分段入场：首访逐级浮现，reduced-motion 直接呈现 -->
     <div class="container">
-      <h1 class="hero-title-zh">木铎<span class="hl-accent">星火</span></h1>
-      <p class="hero-title-en">BNU Sparks</p>
-      <p class="hero-desc">北京师范大学课程资源共享平台</p>
-      <p class="hero-stats-label">当前已有</p>
-      <div class="stats-row">
+      <h1 class="hero-title-zh" data-motion-reveal>木铎<span class="hl-accent">星火</span></h1>
+      <p class="hero-title-en" data-motion-reveal data-motion-delay="80">BNU Sparks</p>
+      <p class="hero-desc" data-motion-reveal data-motion-delay="160">北京师范大学课程资源共享平台</p>
+      <p class="hero-stats-label" data-motion-reveal data-motion-delay="240">当前已有</p>
+      <div class="stats-row" data-motion-reveal data-motion-delay="240">
         <span class="stat-pill"><strong id="statColleges">-</strong> 个学院</span>
         <span class="stat-pill"><strong id="statGeneral">-</strong> 门通识课</span>
         <span class="stat-pill"><strong id="statMajor">-</strong> 门专业课</span>
       </div>
       <!-- ═══ 上传按钮（窄屏：hero 内；宽屏：nav-cards 下方）═══ -->
-      <div class="home-upload-section home-upload-section--hero">
+      <div class="home-upload-section home-upload-section--hero" data-motion-reveal data-motion-delay="320">
         <button class="home-upload-btn" onclick="openCourseSearchUpload()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           上传文件
         </button>
         <p class="home-materials-count">当前已有 <strong class="total-material-count">-</strong> 份资料</p>
       </div>
-      <p class="hero-footer">
+      <p class="hero-footer" data-motion-reveal data-motion-delay="400">
         <span>投稿与建议 / 加入我们</span>
         <span class="hf-dot">·</span>
         <a href="mailto:bnusparks@163.com" class="hf-email">bnusparks@163.com</a>
       </p>
-      <p class="hero-footer" style="margin-top:4px">
+      <p class="hero-footer" style="margin-top:4px" data-motion-reveal data-motion-delay="400">
         <a href="#support" onclick="event.preventDefault();showSupportMessage()" style="color:var(--primary);font-weight:500;text-decoration:none;border-bottom:1px solid transparent;transition:border-color 0.15s;cursor:pointer">提供物质支持</a>
       </p>
     </div>
@@ -1503,20 +1526,20 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=305" defer></script>
+<script src="/static/js/utils.js?v=306" defer></script>
 <script src="/static/js/monitoring-events.js?v=300" defer></script>
 <script src="/static/js/appearance.js?v=10" defer></script>
 <script src="/static/js/auth.js?v=305" defer></script>
 <script src="/static/js/profile.js?v=220" defer></script>
 <script src="/static/js/notifications.js?v=305" defer></script>
 <script src="/static/js/admin-core.js?v=300" defer></script>
-<script src="/static/js/views.js?v=301" defer></script>
+<script src="/static/js/views.js?v=306" defer></script>
 <script src="/static/js/explorer-core.js?v=224" defer></script>
 <script src="/static/js/explorer-file.js?v=188" defer></script>
 <script src="/static/js/explorer-preview.js?v=187" defer></script>
-<script src="/static/js/home.js?v=18" defer></script>
+<script src="/static/js/home.js?v=309" defer></script>
 <script src="/static/js/feature-loader.js?v=305" defer></script>
-<script src="/static/js/app.js?v=305" defer></script>
+<script src="/static/js/app.js?v=310" defer></script>
 
 </body>
 </html>

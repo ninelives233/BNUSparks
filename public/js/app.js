@@ -31,6 +31,135 @@ window.addEventListener('scroll', () => {
   }
 });
 
+// ── 动效编排（v306）：滚动 reveal / 视图入场 / 容器 swap / 数字 count-up ──
+// 契约：只动 transform 与 opacity；reduced-motion 下全部退化为直接呈现。
+var _motionReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+var _motionIO = 'IntersectionObserver' in window
+  ? new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        _revealElement(entry.target);
+        _motionIO.unobserve(entry.target);
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -28px' })
+  : null;
+
+function _revealElement(el) {
+  el.classList.add('is-visible');
+  if (_motionReduced.matches) return;
+  // 播完即摘除动画类：元素回到自然静态，视图隐藏再显示不会重播
+  el.addEventListener('animationend', function () {
+    el.classList.remove('motion-reveal', 'is-visible');
+    el.classList.remove('motion-delay-1', 'motion-delay-2', 'motion-delay-3', 'motion-delay-4', 'motion-delay-5');
+    el.style.removeProperty('--motion-delay');
+  }, { once: true });
+}
+
+// 兜底：元素已在视口内但 IO 迟迟未回调（后台标签节流/扩展干扰等）时
+// 直接呈现，内容永不卡在隐藏态；视口外（等待滚动 reveal）的不动。
+function _revealSafetyCheck(el) {
+  if (!el.isConnected || !el.classList.contains('motion-reveal') || el.classList.contains('is-visible')) return;
+  var r = el.getBoundingClientRect();
+  var h = window.innerHeight || document.documentElement.clientHeight;
+  var w = window.innerWidth || document.documentElement.clientWidth;
+  if (r.bottom > 0 && r.top < h - 28 && r.right > 0 && r.left < w) {
+    el.classList.remove('motion-reveal');
+    el.classList.remove('motion-delay-1', 'motion-delay-2', 'motion-delay-3', 'motion-delay-4', 'motion-delay-5');
+    el.style.removeProperty('--motion-delay');
+  }
+}
+
+// 数据就绪前扣住首页区块（data-motion-hold）：只隐藏、不进 IO。
+// home.js 渲染完成后调 releaseHeldReveals() 统一放行级联；数据慢/失败时由
+// 1.2s 兜底放行，骨架照常入场（此后数据到货走零动画瞬时替换）。
+var _heldReveals = [];
+
+// 静态编排入口：绑定 [data-motion-reveal]（首页区块 / hero 子元素）。
+// data-motion-delay="N" 指定区块间步进（ms）；data-motion-hold 表示等数据
+// 就绪再入场；列表项 stagger 由调用方按需处理。
+function registerReveals(root) {
+  if (!_motionIO || _motionReduced.matches) return; // 不加动画类 = 内容保持可见
+  var scope = root || document;
+  scope.querySelectorAll('[data-motion-reveal]').forEach(function (el) {
+    if (el.dataset.motionBound) return;
+    el.dataset.motionBound = '1';
+    var delay = parseInt(el.getAttribute('data-motion-delay') || '0', 10);
+    if (delay > 0) el.style.setProperty('--motion-delay', delay + 'ms');
+    if (el.hasAttribute('data-motion-hold')) {
+      el.classList.add('motion-hold');
+      _heldReveals.push(el);
+      return;
+    }
+    el.classList.add('motion-reveal');
+    _motionIO.observe(el);
+    window.setTimeout(function () { _revealSafetyCheck(el); }, 3000);
+  });
+  if (_heldReveals.length) window.setTimeout(releaseHeldReveals, 1200);
+}
+
+// 放行被扣住的区块：加入滚动 reveal，IO 立即触发，级联从此刻起播。
+function releaseHeldReveals() {
+  if (!_heldReveals.length || _motionReduced.matches || !_motionIO) { _heldReveals = []; return; }
+  var batch = _heldReveals;
+  _heldReveals = [];
+  batch.forEach(function (el) {
+    el.classList.remove('motion-hold');
+    el.classList.add('motion-reveal');
+    _motionIO.observe(el);
+    window.setTimeout(function () { _revealSafetyCheck(el); }, 3000);
+  });
+}
+
+// 异步列表数据到达时的宿主动画决策（isInitialLoad 由调用方在替换 innerHTML
+// 「之前」探测——替换后骨架已不在 DOM，事后检测永远为 false）：
+// - isInitialLoad=true（宿主原是骨架/loading，数据首到）→ 直接呈现，不加任何
+//   动画。swap 的 opacity:0 起始帧会把整块区域闪成空白，数据到货越晚（生产
+//   接口慢于入场编排时）闪烁越明显；骨架→内容的瞬时替换没有任何空白帧。
+// - isInitialLoad=false（宿主已是真实内容：tab 切换 / 入口展开 / 刷新，用户
+//   主动触发）→ 整块 0.2s swap，作为状态变化的轻量反馈。
+// 调用方仍需先用「生成的 HTML 与当前 innerHTML 是否一致」过滤同数据重渲染。
+function revealListItems(host, isInitialLoad) {
+  if (!host || !host.children.length) return;
+  host.removeAttribute('aria-busy');
+  if (!isInitialLoad) replayClass(host, 'motion-swap', 320);
+}
+
+// 一次性动画类重放：先摘再强制 reflow 再挂，播完自动清理。
+function replayClass(el, className, duration) {
+  if (!el || _motionReduced.matches) return;
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+  window.setTimeout(function () { el.classList.remove(className); }, duration || 500);
+}
+
+// 视图切换入场：switchView 前进导航新激活视图时挂 .view-enter，播完即摘。
+function armViewEnter(el) {
+  if (!el || _motionReduced.matches) return;
+  replayClass(el, 'view-enter', 400);
+}
+
+// 数字 count-up：0 → target，500ms 三次方缓出；同值不重播（回首页数字不重转）。
+function animateCount(el, target) {
+  if (!el) return;
+  if (typeof target !== 'number' || !isFinite(target)) { el.textContent = '—'; return; }
+  var finalText = String(target);
+  if (_motionReduced.matches || el.dataset.countValue === finalText) {
+    el.dataset.countValue = finalText;
+    el.textContent = finalText;
+    return;
+  }
+  el.dataset.countValue = finalText;
+  var start = null;
+  var step = function (ts) {
+    if (start === null) start = ts;
+    var p = Math.min((ts - start) / 500, 1);
+    el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 // ── 浏览器前进/后退 ──
 window.addEventListener('popstate', async function(e) {
   const state = e.state;
@@ -146,6 +275,26 @@ window.addEventListener('popstate', async function(e) {
   // ── 正常视图切换 + 恢复内部状态 ──
   if (state && state.view && typeof switchView === 'function') {
     switchView(state.view, true);
+    // 管理后台懒加载兜底：popstate 可能落在本会话从未初始化过后台的历史条目上
+    // （跨刷新边界的旧条目、启动期被守卫拦下的条目），此时 admin.css 未加载、
+    // adminContent 为空、Tab 未绑定，只切视图会得到空壳。走完整入口补齐渲染，
+    // 用 _suppressingPushState 压掉其内部 pushViewState，避免返回时又压入新条目。
+    if (state.view === 'admin') {
+      var _adminAllowed = currentUser &&
+        (currentUser.role === 'moderator' || currentUser.role === 'super_admin' || currentUser.role === 'sub_moderator');
+      var _adminBody = document.getElementById('adminContent');
+      var _adminReady = _adminAllowed && _adminBody && _adminBody.innerHTML.trim() &&
+        window._bnusparksFeatureReady && window._bnusparksFeatureReady.admin;
+      if (_adminAllowed && !_adminReady && typeof showAdminPanel === 'function') {
+        _suppressingPushState = true;
+        try { showAdminPanel(); } finally { _suppressingPushState = false; }
+      } else if (!_adminAllowed) {
+        // 未登录/无权限：把毒化条目原地改写为首页，避免下次返回再次进入空壳
+        pushViewState('home', {}, true);
+        switchView('home', true);
+        if (typeof updateSidebar === 'function') updateSidebar('home');
+      }
+    }
     if (state.view === 'rankings' && typeof renderTopDownloaded === 'function') renderTopDownloaded(state.scrollY, state.rankingType);
     if (state.view === 'recentAll' && typeof renderRecentAll === 'function') renderRecentAll(state.scrollY);
     if (state.view === 'recommendations' && typeof loadRecommendationsPage === 'function') loadRecommendationsPage();
@@ -177,23 +326,45 @@ window.addEventListener('popstate', async function(e) {
       }
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
-    // 新建课程页：重渲染面包屑与表单
-    if (state.view === 'newCourse' && typeof renderNewCourseView === 'function') {
-      renderNewCourseView();
-      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+    // 新建课程页：重渲染面包屑与表单；newcourse.js 属懒加载模块，跨刷新边界的
+    // 旧条目可能尚未加载，先补齐 explorer 模块再渲染，避免留下空壳视图。
+    if (state.view === 'newCourse') {
+      var _renderNewCourse = function () {
+        if (typeof renderNewCourseView !== 'function') return;
+        renderNewCourseView();
+        if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      };
+      if (typeof renderNewCourseView === 'function') _renderNewCourse();
+      else if (typeof ensureFeature === 'function') ensureFeature('explorer').then(_renderNewCourse).catch(function() {});
     }
     // 个人中心三视图：返回时重新渲染（数据可能已变化，且 popstate 路径此前未恢复）
     if (state.view === 'myuploads' && typeof renderMyUploadsPage === 'function') renderMyUploadsPage();
     if (state.view === 'mydownloads' && typeof renderMyDownloadsPage === 'function') renderMyDownloadsPage();
     if (state.view === 'myfavorites' && typeof renderMyFavoritesPage === 'function') renderMyFavoritesPage();
-    // 问答区：返回时重新渲染
-    if (state.view === 'qa' && typeof renderQaView === 'function') renderQaView();
-    // 问答区发布/编辑：从历史状态恢复 mode 后重渲染（v175）
-    if (state.view === 'qaCompose' && typeof renderQaCompose === 'function') {
-      if (typeof _qaComposeMode !== 'undefined') {
-        _qaComposeMode = { type: state.type || 'question', action: state.action || 'create', qid: state.qid, aid: state.aid };
+    // 问答区：返回时重新渲染；qa.js 未加载（跨刷新边界的旧条目）时走 showQa
+    // 完整入口补齐（内部自带懒加载与失败提示），并压掉其 pushViewState 防止返回时入栈。
+    if (state.view === 'qa') {
+      if (typeof renderQaView === 'function') {
+        renderQaView();
+      } else if (typeof showQa === 'function') {
+        _suppressingPushState = true;
+        try { showQa(state.qaId); } finally { _suppressingPushState = false; }
       }
-      renderQaCompose();
+    }
+    // 问答区发布/编辑：从历史状态恢复 mode 后重渲染（v175）；qa-compose.js 未加载时
+    // 走 showQaCompose 完整入口补齐（压掉其 pushViewState）。
+    if (state.view === 'qaCompose') {
+      if (typeof renderQaCompose === 'function') {
+        if (typeof _qaComposeMode !== 'undefined') {
+          _qaComposeMode = { type: state.type || 'question', action: state.action || 'create', qid: state.qid, aid: state.aid };
+        }
+        renderQaCompose();
+      } else if (typeof showQaCompose === 'function') {
+        _suppressingPushState = true;
+        try {
+          showQaCompose({ type: state.type || 'question', action: state.action || 'create', qid: state.qid, aid: state.aid });
+        } finally { _suppressingPushState = false; }
+      }
       if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
     }
     if (state.view === 'timetable' && typeof ttNavTimetable === 'function') {
@@ -334,6 +505,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setupSearch();
 
+  // 首页区块 / hero 子元素的滚动 reveal 绑定（v306）。display:none 中的元素
+  // 不会误触发 IntersectionObserver，切换布局或视图后首次可见时才播放。
+  if (typeof registerReveals === 'function') registerReveals(document);
+
   function renderInitialView() {
     // 根路径本身只能说明“当前地址是首页”，不能覆盖用户刚刚明确选择的首页。
     // 只有没有可恢复的首页状态时，才应用账号的默认打开页。
@@ -350,6 +525,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // 恢复刷新前的视图：URL 路由优先（可分享深链直达），sessionStorage 兜底（旧逻辑）
     if (saved && saved._bnusparks) {
       _suppressingPushState = true;
+      // 管理后台入口带硬守卫：未登录/非管理员时静默 early-return，不渲染任何视图。
+      // 若先把历史条目 replaceState 成 admin 再被守卫拦下，会留下一条“返回即空壳
+      // 后台”的毒化条目。这里先做同款守卫检查，不满足则整条降级为首页，
+      // 保证历史条目与实际渲染一致。
+      if (saved.view === 'admin' &&
+          !(currentUser && (currentUser.role === 'moderator' || currentUser.role === 'super_admin' || currentUser.role === 'sub_moderator'))) {
+        saved = { _bnusparks: true, view: 'home', scrollY: 0 };
+      }
       // 兜底恢复时顺带把地址栏写成对应路径，让 URL 与视图一致
       history.replaceState(saved, '', routeToPath(saved.view, saved) || '');
       switch (saved.view) {
