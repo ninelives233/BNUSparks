@@ -161,6 +161,88 @@
     renderCompactCampus({ value: _compactData.campusPayload || { items: _compactData.campus }, error: null });
   }
 
+  // ── 公告卡头条轮换：首帧 = 最新公告（复用公告行解剖），后两帧 = 交流群/反馈常青内容 ──
+  // 展开面板、数据刷新都会重走渲染：轮播 DOM 只在帧内容变化时重建，当前帧序号
+  // 跨渲染保留（展开后轮播仍在卡片顶部原位继续）；点击促销帧跳「关于 → 联系我们」。
+  var _carouselIndex = 0;
+  var _carouselTimer = null;
+  var _carouselHover = false;
+  var _carouselBoundDoc = false;
+  var _carouselReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var _carouselInterval = 5500;
+
+  function compactCarouselSlides(items) {
+    var slides = [];
+    if (items.length) {
+      var item = items[0];
+      var id = Number(item.id || 0);
+      slides.push('<a class="h8-carousel-slide h8-carousel-notice compact-announcement-link" href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span class="h8-carousel-excerpt">' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>');
+    }
+    slides.push(
+      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span><img class="h8-carousel-qr" src="/static/group-qr.png?v=304" width="56" height="56" alt="用户交流群二维码" loading="lazy"></a>',
+      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">反馈问卷</span><strong>意见反馈</strong><span class="h8-carousel-text">一分钟填完，问题和建议都会被认真看到。</span></span></a>'
+    );
+    return slides;
+  }
+
+  function _carouselHost() {
+    return document.querySelector('#compactAnnouncement .h8-carousel');
+  }
+
+  function compactCarouselGo(index) {
+    var host = _carouselHost();
+    var track = host && host.querySelector('.h8-carousel-track');
+    if (!track || !track.children.length) return;
+    var count = track.children.length;
+    _carouselIndex = ((index % count) + count) % count;
+    track.style.transform = 'translateX(-' + _carouselIndex * 100 + '%)';
+    Array.prototype.forEach.call(track.children, function (slide, i) {
+      var current = i === _carouselIndex;
+      slide.setAttribute('aria-hidden', current ? 'false' : 'true');
+      if (current) slide.removeAttribute('tabindex');
+      else slide.setAttribute('tabindex', '-1');
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('.h8-carousel-ticks button'), function (tick, i) {
+      if (i === _carouselIndex) tick.setAttribute('aria-current', 'true');
+      else tick.removeAttribute('aria-current');
+    });
+  }
+
+  function compactCarouselRestartTimer() {
+    if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+    var host = _carouselHost();
+    if (!host || !host.isConnected) return;
+    var track = host.querySelector('.h8-carousel-track');
+    if (!track || track.children.length < 2) return;
+    // reduced-motion 用户不自动轮换，只经刻度线手动切换
+    if (_carouselReduced.matches || _carouselHover || document.hidden) return;
+    _carouselTimer = setInterval(function () { compactCarouselGo(_carouselIndex + 1); }, _carouselInterval);
+  }
+
+  function compactCarouselBind(carousel) {
+    carousel.addEventListener('mouseenter', function () { _carouselHover = true; compactCarouselRestartTimer(); });
+    carousel.addEventListener('mouseleave', function () { _carouselHover = false; compactCarouselRestartTimer(); });
+    carousel.addEventListener('focusin', function () { _carouselHover = true; compactCarouselRestartTimer(); });
+    carousel.addEventListener('focusout', function (event) {
+      if (!carousel.contains(event.relatedTarget)) { _carouselHover = false; compactCarouselRestartTimer(); }
+    });
+    Array.prototype.forEach.call(carousel.querySelectorAll('.h8-carousel-ticks button'), function (tick) {
+      tick.addEventListener('click', function () {
+        compactCarouselGo(Number(tick.getAttribute('data-index')) || 0);
+        compactCarouselRestartTimer();
+      });
+    });
+    if (_carouselBoundDoc) return;
+    _carouselBoundDoc = true;
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+      } else {
+        compactCarouselRestartTimer();
+      }
+    });
+  }
+
   function renderCompactAnnouncement(result) {
     var host = document.getElementById('compactAnnouncement');
     var block = document.querySelector('.compact-announcement-block');
@@ -173,18 +255,38 @@
     }
     var items = result && result.value && result.value.items || [];
     _compactData.announcements = items;
-    if (block) block.hidden = !items.length;
-    if (!items.length) {
-      host.innerHTML = '<p class="compact-empty">暂无新公告</p>';
-      updateHelperVisibility();
-      return;
+    // 常青帧（交流群/反馈）兜底：卡内始终有内容，公告为空也不再隐藏整卡
+    if (block) block.hidden = false;
+    var slides = compactCarouselSlides(items);
+    var signature = slides.join('|');
+    var carousel = host.querySelector('.h8-carousel');
+    if (!carousel || carousel.dataset.signature !== signature) {
+      _carouselIndex = 0;
+      var ticks = slides.map(function (_, i) {
+        return '<button type="button" data-index="' + i + '" aria-label="切换到第 ' + (i + 1) + ' 帧"></button>';
+      }).join('');
+      host.innerHTML =
+        '<div class="h8-carousel" aria-roledescription="轮播" aria-label="公告与联系入口">' +
+          '<div class="h8-carousel-track">' + slides.join('') + '</div>' +
+          '<div class="h8-carousel-ticks" role="group" aria-label="轮换内容切换">' + ticks + '</div>' +
+        '</div>' +
+        '<div class="h8-notice-rest"></div>';
+      carousel = host.querySelector('.h8-carousel');
+      carousel.dataset.signature = signature;
+      compactCarouselBind(carousel);
     }
-    var visibleItems = _compactData.campusExpanded ? items.slice(0, 3) : items.slice(0, 1);
-    renderHtmlWithMotion(host, visibleItems.map(function (item, index) {
-      var id = Number(item.id || 0);
-      var className = 'h8-notice-main compact-announcement-link' + (index ? ' h8-notice-secondary' : '');
-      return '<a href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '" class="' + className + '"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span>' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>';
-    }).join(''));
+    compactCarouselGo(_carouselIndex);
+    // 展开区：头条轮播之外的公告（第 2、3 条），收起时清空
+    var rest = host.querySelector('.h8-notice-rest');
+    if (rest) {
+      var restItems = _compactData.campusExpanded ? items.slice(1, 3) : [];
+      var restHtml = restItems.map(function (item) {
+        var id = Number(item.id || 0);
+        return '<a href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '" class="h8-notice-row compact-announcement-link"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span class="h8-carousel-excerpt">' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>';
+      }).join('');
+      if (rest.innerHTML !== restHtml) rest.innerHTML = restHtml;
+    }
+    compactCarouselRestartTimer();
     updateHelperVisibility();
   }
 
@@ -788,6 +890,9 @@
       if (homeAction && typeof showAllCourses === 'function') { event.preventDefault(); showAllCourses(); return; }
       var announcement = event.target.closest('[data-announcement-id]');
       if (announcement && typeof showAnnouncements === 'function') { event.preventDefault(); showAnnouncements(Number(announcement.getAttribute('data-announcement-id'))); return; }
+      // 公告卡轮播的常青帧（交流群/反馈问卷）：点击进「关于 → 联系我们」
+      var aboutContact = event.target.closest('[data-about-contact]');
+      if (aboutContact && typeof showAbout === 'function') { event.preventDefault(); showAbout('contact'); return; }
       var materialLink = event.target.closest('[data-material-link]');
       if (materialLink) {
         event.preventDefault();

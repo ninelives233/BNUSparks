@@ -11,7 +11,7 @@ document.addEventListener('click', function(e) {
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
       + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
       + '.guest-appearance-trigger, .compact-campus-link, .compact-campus-more, .compact-announcement-link, '
-      + '.compact-recommend-more, .recommendations-page')) return;
+      + '.compact-recommend-more, .recommendations-page, .h8-carousel-ticks button')) return;
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
