@@ -477,7 +477,10 @@
       return;
     }
     if (block) block.hidden = false;
-    var visibleItems = _compactData.campusExpanded ? items : items.slice(0, 6);
+    // 窄屏（≤700px）默认收 4 条，展开走全量弹层；桌面默认 6 条、行内展开
+    var mobileCampus = isMobileHome();
+    var campusLimit = mobileCampus ? 4 : 6;
+    var visibleItems = (!mobileCampus && _compactData.campusExpanded) ? items : items.slice(0, campusLimit);
     renderHtmlWithMotion(host, items.length
       ? visibleItems.map(function (item) {
           return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
@@ -485,7 +488,7 @@
       : '<p class="h8-shortcut-note">还没有配置校园入口。</p>', options && options.animate);
     // 「展开入口」收进区块头部，并与公告面板共享同一个展开状态。
     if (moreLink) {
-      var hasMore = items.length > 6 || _compactData.announcements.length > 1;
+      var hasMore = items.length > campusLimit || _compactData.announcements.length > 1;
       moreLink.hidden = !hasMore;
     }
     syncCompactTopState();
@@ -1089,7 +1092,11 @@
       if (overlay && event.target === overlay) closeCampusManager();
     });
     window.addEventListener('resize', function () {
-      if (document.body && document.body.dataset.homeLayout === 'compact') renderRecommendationItems(false);
+      if (document.body && document.body.dataset.homeLayout === 'compact') {
+        renderRecommendationItems(false);
+        // 跨越 700px 断点时校园入口默认条数在 4/6 间切换；同内容渲染会被跳过
+        renderCompactCampus({ value: _compactData.campusPayload || { items: _compactData.campus }, error: null }, { animate: false });
+      }
     });
   }
 

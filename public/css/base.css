@@ -1409,13 +1409,6 @@
     .campus-link-form { grid-template-columns: 1fr 1fr; }
     .campus-form-actions { grid-column: 1 / -1; }
   }
-  @media (max-width: 560px) {
-    .campus-manager-dialog { padding: 16px; border-radius: var(--radius-md); }
-    .campus-link-form { grid-template-columns: 1fr; }
-    .campus-form-actions { grid-column: auto; }
-    .campus-manager-row { grid-template-columns: 16px minmax(0, 1fr) auto auto; }
-    .campus-manager-row button:nth-last-child(-n + 2) { display: none; }
-  }
   @media (max-width: 700px) {
     body { --mobile-bottom-nav-height: calc(58px + env(safe-area-inset-bottom)); padding-bottom: calc(var(--mobile-bottom-nav-height) + 12px); }
     .mobile-bottom-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: var(--mobile-bottom-nav-height); padding-bottom: env(safe-area-inset-bottom); background: var(--raised); }
@@ -1426,8 +1419,16 @@
     .campus-manager-dialog { width: 100%; max-height: 92vh; padding: 16px; border-radius: 16px 16px 0 0; }
     .campus-link-form { grid-template-columns: 1fr; }
     .campus-form-actions { grid-column: auto; }
-    .campus-manager-row { grid-template-columns: 16px minmax(0, 1fr) auto auto; }
-    .campus-manager-row button:nth-last-child(-n + 2) { display: inline-flex; }
+    /* 窄屏行改两行目录条目：第一行 把手+名称/网址+状态+编辑，第二行 停用/上移/下移 */
+    .campus-manager-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto; grid-template-rows: auto auto; align-items: center; column-gap: 6px; row-gap: 7px; padding: 10px 0; }
+    .campus-manager-row > .campus-drag-handle { grid-row: 1; grid-column: 1; }
+    .campus-manager-row > div { grid-row: 1; grid-column: 2; }
+    .campus-manager-row > .campus-enabled-status { grid-row: 1; grid-column: 3; }
+    .campus-manager-row > button[data-campus-action='edit'] { grid-row: 1; grid-column: 4; }
+    .campus-manager-row > button[data-campus-action='toggle'] { grid-row: 2; grid-column: 2; justify-self: start; }
+    .campus-manager-row > button[data-campus-action='up'] { grid-row: 2; grid-column: 3; justify-self: start; }
+    .campus-manager-row > button[data-campus-action='down'] { grid-row: 2; grid-column: 4; justify-self: start; }
+    .campus-manager-row button { min-height: 32px; padding: 5px 12px; }
     .campus-more-overlay { align-items: flex-end; padding: 0; }
     .campus-more-dialog { width: 100%; max-height: 76vh; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0; }
   }
