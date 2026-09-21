@@ -858,7 +858,8 @@ function ttAdoptCloudTimetable(cloud) {
   ttSaveStore(ttState.data);
   ttComputeWeek();
   ttApplyScheme();
-  ttRenderAll();
+  // 云端同步是后台校准，不应在用户当前课表上重新播放整块入场动画。
+  ttRenderAll({ animate: false });
   ttResetCourseCounts();
   ttLoadCourseCounts();
   ttRefreshRequestStatuses(true);
@@ -1054,7 +1055,11 @@ function ttInitShell(viewerUserId) {
     }
     else {
       if (!ttState.viewerMode) ttMigrateLegacyStore();
-      ttRenderAll();
+      // 从其他 tab 回来时保留已经渲染好的课表；只有 DOM 缺失才静默补画。
+      var body = ttScopedElement('ttBody');
+      var expected = ttState.data && ttState.data.courses.length
+        ? (ttState.view === 'list' ? '#ttList' : '#ttGrid') : '.tt-empty';
+      if (!body || !body.querySelector(expected)) ttRenderAll({ animate: false });
       if (!ttState.viewerMode && ttState.data && ttState._countError) ttLoadCourseCounts();
       if (!ttState.viewerMode && ttState.data) ttRefreshRequestStatuses(true);
     }
@@ -1710,9 +1715,10 @@ function ttDeleteSlot(sid, btn) {
   ttToast('已删除「' + name + '」');
 }
 
-function ttRenderAll() {
+function ttRenderAll(options) {
   var body = ttScopedElement('ttBody');
   if (!body) return;
+  var animate = !options || options.animate !== false;
   ttApplyCardTextAlign();
   var hasData = !!(ttState.data && ttState.data.courses.length);
   // 空课表时没有「周」可切，隐藏移动端顶栏周次导航
@@ -1724,8 +1730,8 @@ function ttRenderAll() {
     else ttRenderEmpty(body);
     return;
   }
-  if (ttState.view === 'list') ttRenderList(body);
-  else ttRenderGrid(body);
+  if (ttState.view === 'list') ttRenderList(body, animate);
+  else ttRenderGrid(body, animate);
 }
 
 function ttRenderAdminEmpty(body) {
@@ -3402,7 +3408,7 @@ function ttApplyStartDate(raw) {
   return true;
 }
 
-function ttRenderGrid(body) {
+function ttRenderGrid(body, animate) {
   var data = ttState.data;
   var meta = data.meta || {};
   var sub = ttScopedElement('ttSubTitle');
@@ -3442,7 +3448,7 @@ function ttRenderGrid(body) {
     if (changed) ttRenderGrid(body);
   });
 
-  ttPaintGrid();
+  ttPaintGrid(animate);
 }
 
 function ttStepWeek(d) {
@@ -3453,13 +3459,14 @@ function ttStepWeek(d) {
 }
 
 // 课程树异步就绪后重绘当前视图（链接状态可能已变化）
-function ttRepaintCurrent() {
+function ttRepaintCurrent(animate) {
   if (!ttState.data) return;
+  var shouldAnimate = animate === true;
   if (ttState.view === 'list') {
     var body = ttScopedElement('ttBody');
-    if (body && ttScopedElement('ttList')) ttRenderList(body);
+    if (body && ttScopedElement('ttList')) ttRenderList(body, shouldAnimate);
   } else if (ttScopedElement('ttGrid')) {
-    ttPaintGrid();
+    ttPaintGrid(shouldAnimate);
   }
 }
 
@@ -3478,7 +3485,7 @@ function ttLegendHtml() {
     '<i class="lg2"></i> 资料丰富 <i class="lg1"></i> 有资料 <i class="lg0"></i> 暂无资料</span>';
 }
 
-function ttPaintGrid() {
+function ttPaintGrid(animate) {
   var grid = ttScopedElement('ttGrid');
   var week = ttState.week;
   if (!grid) return;
@@ -3666,7 +3673,11 @@ function ttPaintGrid() {
       (ttLinksEnabled() ? ttLegendHtml() : '');
   }
 
-  // 入场动效（尊重 reduced-motion，由 CSS 关闭）
+  // 首次渲染/用户主动切换时才播放；后台数量、申请状态和云端同步静默更新。
+  if (animate === false) {
+    grid.classList.remove('swap');
+    return;
+  }
   grid.classList.remove('swap');
   void grid.offsetWidth;
   grid.classList.add('swap');
@@ -3756,7 +3767,7 @@ function ttStatusTag(link, code) {
   return ttFileCountTag(n);
 }
 
-function ttRenderList(body) {
+function ttRenderList(body, animate) {
   var data = ttState.data;
   ttResolveCourseLinks();
   var sub = ttScopedElement('ttSubTitle');
@@ -3884,6 +3895,10 @@ function ttRenderList(body) {
     ttOpenUnlinkedTarget(row);
   };
 
+  if (animate === false) {
+    list.classList.remove('swap');
+    return;
+  }
   list.classList.remove('swap');
   void list.offsetWidth;
   list.classList.add('swap');

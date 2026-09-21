@@ -487,7 +487,7 @@
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: none; }
 }
-.tt-grid.swap .tt-card { animation: ttPop 0.16s ease-out both; }
+.tt-grid.swap .tt-card { animation: ttPop var(--dur-quick) var(--ease-out-strong) both; }
 
 /* ── 底部统计 / 图例 ────────────────────────────────── */
 .tt-foot { margin-top: var(--space-xs); display: flex; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--tt-time); }
@@ -582,7 +582,7 @@
 .tt-lrow.is-rejected::before { background: var(--danger); }
 .tt-request-note { display: block; color: var(--danger); font-size: var(--fs-2xs); line-height: 1.45; }
 .tt-request-extra { color: var(--ink-soft); }
-.tt-list.swap .tt-lrow { animation: ttPop 0.18s ease-out both; animation-delay: calc(var(--li) * 16ms); }
+.tt-list.swap .tt-lrow { animation: ttPop var(--dur-quick) var(--ease-out-strong) both; animation-delay: calc(var(--li) * 16ms); }
 
 /* ── 编辑模式（编辑态网格 + 课程编辑弹层） ─────────────
    课表本质是课程列表：编辑只做「让列表保持准确」这件事，
