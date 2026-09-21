@@ -13,12 +13,19 @@ from django.utils import timezone
 from .utils import _ok, _get_user, _get_or_create_profile
 from ..models import (
     Course, CourseCategory, CourseFavorite, DeletionRecord, DownloadRecord, Favorite,
-    Material, UserTimetable,
+    Material, UserProfile, UserTimetable,
 )
 
 
 RECOMMENDATION_CONFIG = {
-    "course_weights": {"timetable": 1.00, "favorite": 0.85, "browse": 0.65, "major": 0.35, "fallback": 0.10},
+    "course_weights": {
+        "timetable": 1.00,
+        "favorite": 0.85,
+        "browse": 0.65,
+        "college_practical": 0.50,
+        "major": 0.35,
+        "fallback": 0.10,
+    },
     "score_weights": {"relevance": 0.55, "quality": 0.20, "freshness": 0.15, "type_preference": 0.10},
     "freshness_half_life_days": 60,
     "browse_window_days": 30,
@@ -80,11 +87,14 @@ def _resolve_course_codes(codes, courses):
     return resolved
 
 
-def _category_course_roots(profile, courses):
+def _category_course_roots(profile, courses, categories=None):
     """从明确的学院+专业身份递归取课程树节点，不按学院名称猜专业。"""
     if not profile.identity_college or not profile.identity_major:
         return set()
-    categories = list(CourseCategory.objects.only("id", "parent_id", "name", "is_divider", "course_id", "course_text"))
+    if categories is None:
+        categories = list(CourseCategory.objects.only(
+            "id", "parent_id", "name", "is_divider", "course_id", "course_text"
+        ))
     by_parent = {}
     for category in categories:
         by_parent.setdefault(category.parent_id, []).append(category)
@@ -116,8 +126,89 @@ def _category_course_roots(profile, courses):
     return {root for root in roots if root}
 
 
+def _college_practical_context(profile, courses, categories=None):
+    """返回本科生所在学院直属「实用资料」目录的课程根和展示名称。
+
+    这类目录由管理端以自建文件夹创建，通常使用 ``UNB`` 课程代码，
+    并直接挂在「专业课 → 学院」节点下。名称可以由管理端再次修改，
+    所以推荐展示名必须来自 CourseCategory，而不是 Course.name。
+    名称标记作为旧数据/手工建目录的兼容兜底；硕博身份不参与该召回。
+    """
+    if not profile or profile.identity_education != UserProfile.EducationLevel.UNDERGRADUATE:
+        return set(), {}
+    college_name = (profile.identity_college or "").strip()
+    if not college_name:
+        return set(), {}
+
+    course_by_id = {course.id: course for course in courses}
+    if categories is None:
+        categories = list(CourseCategory.objects.only(
+            "id", "parent_id", "name", "is_divider", "course_id", "course_text"
+        ))
+    category_by_id = {category.id: category for category in categories}
+    child_map = {}
+    for category in categories:
+        child_map.setdefault(category.parent_id, []).append(category)
+
+    college_nodes = []
+    for category in categories:
+        if category.is_divider or category.name != college_name:
+            continue
+        parent = category_by_id.get(category.parent_id)
+        # 只认「专业课」直属学院，避免通识分类或同名中间节点误召回。
+        if parent and parent.parent_id is None and parent.name == "专业课":
+            college_nodes.append(category)
+    if not college_nodes:
+        return set(), {}
+
+    roots = set()
+    display_names = {}
+    practical_markers = ("实用", "使用材料")
+
+    def add_course(course, folder_name):
+        if course is None:
+            return
+        root_id = _root_id(course)
+        if not root_id:
+            return
+        roots.add(root_id)
+        if folder_name and root_id not in display_names:
+            display_names[root_id] = folder_name
+
+    def add_course_text(course_text, folder_name):
+        prefix = (course_text or "").replace("*", "").replace("-", "")
+        if not prefix:
+            return
+        for course in courses:
+            if (course.code or "").startswith(prefix):
+                add_course(course, folder_name)
+
+    def collect(node, folder_name):
+        if node.is_divider:
+            return
+        folder_name = folder_name or (node.name or "").strip()
+        if node.course_id:
+            add_course(course_by_id.get(node.course_id), folder_name)
+        if node.course_text:
+            add_course_text(node.course_text, folder_name)
+        for child in child_map.get(node.id, []):
+            collect(child, folder_name)
+
+    for college_node in college_nodes:
+        for folder in child_map.get(college_node.id, []):
+            if folder.is_divider:
+                continue
+            course = course_by_id.get(folder.course_id)
+            is_custom_course = bool(course and (course.code or "").upper().startswith("UNB"))
+            is_named_practical = any(marker in (folder.name or "") for marker in practical_markers)
+            if is_custom_course or is_named_practical:
+                collect(folder, (folder.name or "").strip())
+
+    return {root for root in roots if root}, display_names
+
+
 def _course_signals(user, now):
-    """返回主课程相关度、理由、信号名称和是否存在个性化信号。"""
+    """返回课程相关度、理由、信号名称及学院实用目录的展示名称。"""
     courses = _course_catalog()
     source_by_course = {}
     signal_names = []
@@ -174,13 +265,33 @@ def _course_signals(user, now):
         signal_names.append("最近浏览")
 
     profile = _get_or_create_profile(user)
-    major_roots = _category_course_roots(profile, courses)
+    category_snapshot = None
+    if profile.identity_college and (
+        profile.identity_major
+        or profile.identity_education == UserProfile.EducationLevel.UNDERGRADUATE
+    ):
+        category_snapshot = list(CourseCategory.objects.only(
+            "id", "parent_id", "name", "is_divider", "course_id", "course_text"
+        ))
+    major_roots = _category_course_roots(profile, courses, category_snapshot)
     if major_roots:
         signal_names.append("专业相关")
         for root_id in major_roots:
             add_signal(root_id, RECOMMENDATION_CONFIG["course_weights"]["major"], "与你的专业相关。")
 
-    return source_by_course, list(dict.fromkeys(signal_names))
+    practical_roots, practical_names = _college_practical_context(
+        profile, courses, category_snapshot
+    )
+    if practical_roots:
+        signal_names.append("学院实用资料")
+        for root_id in practical_roots:
+            add_signal(
+                root_id,
+                RECOMMENDATION_CONFIG["course_weights"]["college_practical"],
+                "来自你所在学院的实用资料。",
+            )
+
+    return source_by_course, list(dict.fromkeys(signal_names)), practical_names
 
 
 def _interaction_counts(material_ids):
@@ -252,13 +363,16 @@ def _freshness(created_at, now):
     return 0.5 ** (age_days / RECOMMENDATION_CONFIG["freshness_half_life_days"])
 
 
-def _serialize_candidate(material, score, relevance, reason, is_exploration, is_favorited):
+def _serialize_candidate(
+    material, score, relevance, reason, is_exploration, is_favorited,
+    display_name="",
+):
     course = material.course
     return {
         "id": material.id,
         "title": material.title,
         "course_code": course.code if course else "",
-        "course_name": course.name if course else "",
+        "course_name": display_name or (course.name if course else ""),
         "course_type": course.course_type if course else "",
         "file_type": material.material_type.name if material.material_type else (material.file_type or "其他"),
         "teacher": material.teacher or "",
@@ -288,7 +402,9 @@ def api_recommendations(request):
         refresh_index = 0
 
     now = timezone.now()
-    source_by_course, signal_names = _course_signals(user, now) if user else ({}, [])
+    source_by_course, signal_names, practical_names = (
+        _course_signals(user, now) if user else ({}, [], {})
+    )
     ghost_ids = DeletionRecord.objects.values_list("material_id", flat=True)
     base = Material.objects.filter(
         review_status="approved", course__isnull=False,
@@ -378,7 +494,10 @@ def api_recommendations(request):
             break
 
     mode = "personalized" if source_by_course else "popular"
-    items = [_serialize_candidate(material, score, relevance, reason, is_exploration, material.id in favorite_ids)
+    items = [_serialize_candidate(
+        material, score, relevance, reason, is_exploration, material.id in favorite_ids,
+        practical_names.get(_root_id(material.course), ""),
+    )
              for score, material, relevance, reason, is_exploration in selected]
     return _ok({
         "items": items,
