@@ -47,7 +47,8 @@ scripts/*
 .vscode/
 .obsidian/
 CLAUDE.md
-AGENTS.md
+
+# AGENTS.md 是脱敏后的项目级协作规则，随代码共享。
 
 # ── 文档与历史存档（仅白名单文档入库）──
 history/
@@ -59,7 +60,8 @@ design-requirements-*.md
 implementation-plan-*.md
 docs/*
 !docs/OPERATIONS.md
-project-map.md
+!docs/PROJECT_MAP.md
+!docs/BUG_TROUBLESHOOTING.md
 ANNOUNCEMENT_*.md
 demo.html
 artifacts/
