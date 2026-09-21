@@ -66,6 +66,10 @@ class UserProfile(models.Model):
     avatar = models.ImageField("头像", upload_to="avatars/", blank=True, null=True)
     token_version = models.IntegerField("JWT 令牌版本", default=0,
         help_text="改密/重置后 +1，使旧 JWT 立即失效（P2.5）")
+    first_upload_email_sent_at = models.DateTimeField(
+        "首份资料感谢邮件发送时间", null=True, blank=True,
+        help_text="首份资料感谢邮件成功发送后记录；空值允许失败后重试",
+    )
 
     # 公开资料字段（Iter 7）
     contact_email = models.EmailField("联系邮箱", blank=True, default="")

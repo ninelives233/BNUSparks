@@ -15,6 +15,7 @@ from .utils_upload import (
     UploadTooLarge, _atomic_write_chunks, _atomic_write_text,
     _remove_uploaded_file,
 )
+from .utils_email import send_first_upload_thanks
 from .utils import (
     _err, _ok, _get_or_create_profile,
     _strip_exif, _check_auto_approve,
@@ -183,6 +184,8 @@ def api_file_upload(request):
         # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
         _notify_pending_upload(material, request.user, title, context_category)
 
+    send_first_upload_thanks(request.user, material, profile)
+
     return _ok({
         "id": material.id, "title": material.title,
         "file_name": uploaded_file.name, "file_size": file_size,
@@ -328,6 +331,8 @@ def api_file_upload_text(request):
         # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），
         # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
         _notify_pending_upload(material, request.user, title, context_category)
+
+    send_first_upload_thanks(request.user, material, profile)
 
     return _ok({
         "id": material.id, "title": material.title,

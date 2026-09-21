@@ -73,6 +73,20 @@
     return labels[value] || value || '资料';
   }
 
+  // 推荐卡是四列横向队列，标题不能用无界文件名把卡片撑高或挤窄。
+  // 按 Unicode 字符截断，避免中文、英文扩展字符和 emoji 被半截切开；完整标题
+  // 仍通过 title/aria-label 保留给悬停与辅助技术，不改变资料详情页的原始标题。
+  var COMPACT_RECOMMENDATION_TITLE_LIMIT = 36;
+
+  function compactRecommendationTitle(value) {
+    var full = String(value == null ? '' : value).replace(/\s+/g, ' ').trim() || '未命名资料';
+    var chars = Array.from(full);
+    var display = chars.length > COMPACT_RECOMMENDATION_TITLE_LIMIT
+      ? chars.slice(0, COMPACT_RECOMMENDATION_TITLE_LIMIT - 1).join('') + '…'
+      : full;
+    return { display: htmlEscape(display), full: htmlEscape(full) };
+  }
+
   function recentMetaMarkup(item) {
     var course = item.course_name || item.course_code || '未分类';
     var uploader = item.uploader_name || '匿名';
@@ -83,11 +97,11 @@
     var id = Number(item.id) || 0;
     var favorite = recommended && !!item.is_favorited;
     var reason = recommended ? (item.reason || '') : '';
-    var title = htmlEscape(item.title || '未命名资料');
+    var title = compactRecommendationTitle(item.title);
     var course = htmlEscape(item.course_name || item.course_code || '');
     return '<article class="h8-card compact-material-card" data-material-id="' + id + '">' +
       '<div class="h8-card-head"><a href="/file/' + id + '" data-material-link="' + id + '">' + course + '</a><span>' + htmlEscape(materialTypeLabel(item.material_type || item.file_type)) + '</span></div>' +
-      '<a class="h8-card-title" href="/file/' + id + '" data-material-link="' + id + '">' + title + '</a>' +
+      '<a class="h8-card-title" href="/file/' + id + '" data-material-link="' + id + '" title="' + title.full + '" aria-label="' + title.full + '">' + title.display + '</a>' +
       (reason ? '<p>' + htmlEscape(reason) + '</p>' : '<p>' + htmlEscape(item.file_name || '已审核资料') + '</p>') +
       '<div class="h8-card-bottom"><span>' + (item.download_count != null ? htmlEscape(item.download_count) + ' 次下载' : '') + (item.created_at ? ' · ' + htmlEscape(String(item.created_at).slice(0, 10)) : '') + '</span>' +
       (recommended ? '<button type="button" class="icon-btn bookmark compact-material-favorite' + (favorite ? ' is-favorited' : '') + '" data-favorite-id="' + id + '" aria-label="' + (favorite ? '取消收藏' : '收藏资料') + '">' + icon('star', favorite) + '</button>' : '') + '</div>' +

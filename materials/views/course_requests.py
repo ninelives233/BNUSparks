@@ -26,6 +26,7 @@ from .utils import (
 from ..monitoring_events import record_request_event
 from .operations import _can_create_under
 from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
+from .utils_email import send_first_upload_thanks
 from ..models import (
     Course, CourseCategory, CourseCreationRequest, UserProfile, Material,
     MaterialType, Notification, FolderOperation,
@@ -730,6 +731,7 @@ def api_course_request_upload_file(request, request_id):
         )
     except Exception:
         pass
+    send_first_upload_thanks(req.user, material)
     return _ok({"id": material.id, "title": material.title, "file_size": file_size})
 
 

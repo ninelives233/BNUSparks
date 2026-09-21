@@ -3199,6 +3199,28 @@
     box-shadow: none;
     transition: border-color 160ms ease-out, background-color 160ms ease-out;
   }
+  .home-eight .h8-card-head a {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .home-eight .h8-card-title {
+    display: -webkit-box;
+    overflow: hidden;
+    max-height: calc(1.55em * 2);
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .home-eight .compact-material-card > p {
+    display: -webkit-box;
+    overflow: hidden;
+    max-height: calc(1.65em * 2);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
   .home-eight #compactRecommendations > .h8-card:first-child {
     border-color: var(--border);
     background: var(--raised);
@@ -3297,6 +3319,43 @@
     .home-eight .compact-discovery-block {
       border-top: 1px solid var(--border-light);
       background: var(--raised);
+    }
+  }
+
+  /* ═══ 紧凑首页 v317：按窗口比例分档，而非只看宽度 ═══════════════
+     截图所在的 1.9:1 左右桌面视口属于「宽而矮」档：保留四列推荐队列，
+     用视口高度收紧纵向留白，把首屏内容往上托；较高/偏竖的桌面视口则切成
+     两列，让标题获得稳定的阅读宽度。移动端仍由 max-width:700px 规则接管。 */
+  @media (min-width: 701px) and (min-aspect-ratio: 8/5) {
+    .home-eight {
+      padding-top: clamp(20px, 4.2vh, 28px);
+      padding-bottom: clamp(32px, 5.5vh, 48px);
+    }
+    .home-eight .h8-heading {
+      margin-bottom: clamp(16px, 2.8vh, 22px);
+    }
+    .home-eight .h8-top {
+      gap: clamp(12px, 1.4vw, 16px);
+    }
+    .home-eight .h8-recommend {
+      margin-block: clamp(16px, 2.6vh, 22px);
+      padding-top: clamp(20px, 3.1vh, 26px);
+      padding-bottom: clamp(18px, 2.9vh, 24px);
+    }
+    .home-eight .h8-recommend > .h8-section-head {
+      margin-bottom: clamp(14px, 2.5vh, 20px);
+    }
+    .home-eight .h8-card {
+      min-height: clamp(142px, 23vh, 158px);
+    }
+  }
+
+  @media (min-width: 1101px) and (max-aspect-ratio: 8/5) {
+    .home-eight .h8-cards {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .home-eight .h8-card {
+      min-height: 174px;
     }
   }
 
