@@ -325,6 +325,34 @@
     }, true);
   }
 
+  // 触控板双指横扫 / 横向滚轮走的是 wheel 事件（没有 pointerdown），横向占优时
+  // 翻帧并 preventDefault（同时挡掉 macOS 触控板横扫误触浏览器前进/后退）；
+  // 纵向占优放行页面滚动。每次手势只翻一帧：惯性尾巴由 latch 拦截，
+  // 200ms 无事件视为手势结束，累积量清零后可接下一次滑动。
+  function compactCarouselBindWheel(carousel) {
+    var acc = 0, latch = false, idle = null;
+    carousel.addEventListener('wheel', function (e) {
+      var dx = e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX;
+      var dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      if (Math.abs(dx) < 4 || Math.abs(dx) <= Math.abs(dy)) {
+        acc = 0; latch = false;
+        if (idle) { clearTimeout(idle); idle = null; }
+        return;
+      }
+      e.preventDefault();
+      if (idle) clearTimeout(idle);
+      idle = setTimeout(function () { acc = 0; latch = false; idle = null; }, 200);
+      if (latch) return;
+      acc += dx;
+      if (Math.abs(acc) >= 60) {
+        var dir = acc > 0 ? 1 : -1;
+        latch = true; acc = 0;
+        compactCarouselGo(_carouselIndex + dir);
+        compactCarouselRestartTimer();
+      }
+    }, { passive: false });
+  }
+
   function compactCarouselBind(carousel) {
     carousel.addEventListener('mouseenter', function () { _carouselHover = true; compactCarouselRestartTimer(); });
     carousel.addEventListener('mouseleave', function () { _carouselHover = false; compactCarouselRestartTimer(); });
@@ -333,6 +361,7 @@
       if (!carousel.contains(event.relatedTarget)) { _carouselHover = false; compactCarouselRestartTimer(); }
     });
     compactCarouselBindDrag(carousel, carousel.querySelector('.h8-carousel-track'));
+    compactCarouselBindWheel(carousel);
     Array.prototype.forEach.call(carousel.querySelectorAll('.h8-carousel-ticks button'), function (tick) {
       tick.addEventListener('click', function () {
         compactCarouselGo(Number(tick.getAttribute('data-index')) || 0);
