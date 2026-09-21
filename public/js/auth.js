@@ -100,6 +100,8 @@
       btn.setAttribute('aria-pressed', String(isVisible));
     }
   }
+  // 认证表单仍有内联控件入口；显式暴露，避免脚本加载方式变化时按钮找不到函数。
+  window.togglePwdVisibility = togglePwdVisibility;
 
   function showLoginModal() {
     var modal = document.getElementById('loginModal');
