@@ -11,7 +11,7 @@ document.addEventListener('click', function(e) {
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
       + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
       + '.guest-appearance-trigger, .compact-campus-link, .compact-campus-more, .compact-announcement-link, '
-      + '.compact-recommend-more, .recommendations-page, .h8-carousel-ticks button')) return;
+      + '.compact-recommend-more, .recommendations-page, .h8-carousel, .h8-carousel-ticks button')) return;
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -140,11 +140,11 @@ function armViewEnter(el) {
 }
 
 // 数字 count-up：0 → target，500ms 三次方缓出；同值不重播（回首页数字不重转）。
-function animateCount(el, target) {
+function animateCount(el, target, shouldAnimate) {
   if (!el) return;
   if (typeof target !== 'number' || !isFinite(target)) { el.textContent = '—'; return; }
   var finalText = String(target);
-  if (_motionReduced.matches || el.dataset.countValue === finalText) {
+  if (shouldAnimate === false || _motionReduced.matches || el.dataset.countValue === finalText) {
     el.dataset.countValue = finalText;
     el.textContent = finalText;
     return;

@@ -5,6 +5,9 @@
   'use strict';
 
   var _compactRequest = null;
+  // 同一账号的首页二次进入使用 stale-while-revalidate：保留已有内容，
+  // 后台刷新只校准数据，不再把推荐/榜单当成新内容重新闪入。
+  var _compactReadyKey = null;
   var _recommendationRefreshIndex = 0;
   var _compactData = {
     stats: null, announcements: [], campus: [], campusPayload: null, campusExpanded: false, recommendations: [], recommendationMeta: null, recommendationPageMeta: null,
@@ -107,19 +110,21 @@
   // v306：渲染结果与当前 DOM 一致时跳过赋值（回首页/resize 不重播动效）；
   // 有变化才替换，并在替换「之前」探测骨架预态（数据首到→无动画直接呈现，
   // 内容→内容→整块 swap），探测逻辑见 app.js revealListItems。
-  function renderHtmlWithMotion(host, html) {
+  function renderHtmlWithMotion(host, html, animate) {
     if (!host) return;
     if (host.innerHTML === html) return;
     var isInitialLoad = !!host.querySelector('.h8-skeleton-card, .h8-skeleton-row, .compact-loading');
     host.innerHTML = html;
-    if (typeof revealListItems === 'function') revealListItems(host, isInitialLoad);
+    if (animate !== false && typeof revealListItems === 'function') revealListItems(host, isInitialLoad);
+    else host.removeAttribute('aria-busy');
   }
 
-  function renderCompactStats(stats, error) {
+  function renderCompactStats(stats, error, options) {
+    var animate = !options || options.animate !== false;
     var fields = ['total_courses', 'total_files', 'total_users', 'college_with_data_count'];
     document.querySelectorAll('#compactHomeLayout [data-stat]').forEach(function (element) {
       var value = stats && stats[element.getAttribute('data-stat')];
-      if (typeof value === 'number' && typeof animateCount === 'function') animateCount(element, value);
+      if (typeof value === 'number' && typeof animateCount === 'function') animateCount(element, value, animate);
       else element.textContent = typeof value === 'number' ? value : '—';
     });
     if (error) {
@@ -162,14 +167,18 @@
   }
 
   // ── 公告卡头条轮换：首帧 = 最新公告（复用公告行解剖），后两帧 = 交流群/反馈常青内容 ──
-  // 展开面板、数据刷新都会重走渲染：轮播 DOM 只在帧内容变化时重建，当前帧序号
-  // 跨渲染保留（展开后轮播仍在卡片顶部原位继续）；点击促销帧跳「关于 → 联系我们」。
+  // 无缝循环：轨道首尾各克隆一帧，越过边缘后瞬间归位到真实帧，正反向都不回跳；
+  // 支持指针拖拽换页（touch-action: pan-y，纵向滚动不受影响）。展开面板、数据刷新
+  // 都会重走渲染：轮播 DOM 只在帧内容变化时重建，当前帧序号跨渲染保留（展开后
+  // 轮播仍在卡片顶部原位继续）；点击促销帧跳「关于 → 联系我们」。
   var _carouselIndex = 0;
   var _carouselTimer = null;
   var _carouselHover = false;
   var _carouselBoundDoc = false;
   var _carouselReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   var _carouselInterval = 5500;
+  var _carouselSnapTimer = null;
+  var _carouselSuppressClick = false;
 
   function compactCarouselSlides(items) {
     var slides = [];
@@ -189,16 +198,21 @@
     return document.querySelector('#compactAnnouncement .h8-carousel');
   }
 
-  function compactCarouselGo(index) {
-    var host = _carouselHost();
-    var track = host && host.querySelector('.h8-carousel-track');
-    if (!track || !track.children.length) return;
-    var count = track.children.length;
-    _carouselIndex = ((index % count) + count) % count;
-    track.style.transform = 'translateX(-' + _carouselIndex * 100 + '%)';
+  // 轨道 DOM = [克隆末帧, 真实帧×N, 克隆首帧]；domIndex = 真实序号 + 1
+  function _carouselRealCount(track) {
+    return Math.max(track.children.length - 2, 0);
+  }
+
+  function _carouselCancelSnap() {
+    if (_carouselSnapTimer) { clearTimeout(_carouselSnapTimer); _carouselSnapTimer = null; }
+  }
+
+  function _carouselSyncAria(host, track) {
+    var realCount = _carouselRealCount(track);
     Array.prototype.forEach.call(track.children, function (slide, i) {
-      var current = i === _carouselIndex;
-      slide.setAttribute('aria-hidden', current ? 'false' : 'true');
+      var isClone = i === 0 || i === realCount + 1;
+      var current = !isClone && i - 1 === _carouselIndex;
+      slide.setAttribute('aria-hidden', isClone || !current ? 'true' : 'false');
       if (current) slide.removeAttribute('tabindex');
       else slide.setAttribute('tabindex', '-1');
     });
@@ -208,15 +222,107 @@
     });
   }
 
+  // 边缘越界后的瞬间归位：关过渡 → 跳到真实帧 → 强制回流 → 恢复过渡。
+  // 期间若用户开始拖拽，拖拽侧会先同步冲销这份挂起归位，不会跳帧。
+  function _carouselQueueEdgeSnap(track) {
+    _carouselCancelSnap();
+    _carouselSnapTimer = setTimeout(function () {
+      _carouselSnapTimer = null;
+      track.style.transition = 'none';
+      _carouselMoveTo(track, _carouselIndex + 1);
+      void track.offsetWidth;
+      track.style.transition = '';
+    }, 370);
+  }
+
+  function _carouselMoveTo(track, domIndex) {
+    track.style.transform = 'translateX(-' + domIndex * 100 + '%)';
+  }
+
+  function compactCarouselGo(index) {
+    var host = _carouselHost();
+    var track = host && host.querySelector('.h8-carousel-track');
+    if (!track || !track.children.length) return;
+    var realCount = _carouselRealCount(track);
+    if (!realCount) return;
+    _carouselCancelSnap();
+    var prev = _carouselIndex;
+    _carouselIndex = ((index % realCount) + realCount) % realCount;
+    var atDom;
+    if (prev === realCount - 1 && _carouselIndex === 0) {
+      atDom = realCount + 1;            // 末帧再前进 → 滑入克隆首帧，落定后归位
+      _carouselMoveTo(track, atDom);
+      _carouselQueueEdgeSnap(track);
+    } else if (prev === 0 && _carouselIndex === realCount - 1) {
+      atDom = 0;                        // 首帧再后退 → 滑入克隆末帧，落定后归位
+      _carouselMoveTo(track, atDom);
+      _carouselQueueEdgeSnap(track);
+    } else {
+      atDom = _carouselIndex + 1;
+      _carouselMoveTo(track, atDom);
+    }
+    _carouselSyncAria(host, track);
+  }
+
   function compactCarouselRestartTimer() {
     if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
     var host = _carouselHost();
     if (!host || !host.isConnected) return;
     var track = host.querySelector('.h8-carousel-track');
-    if (!track || track.children.length < 2) return;
-    // reduced-motion 用户不自动轮换，只经刻度线手动切换
+    if (!track || track.children.length < 3) return;
+    // reduced-motion 用户不自动轮换，只经刻度线/拖拽手动切换
     if (_carouselReduced.matches || _carouselHover || document.hidden) return;
     _carouselTimer = setInterval(function () { compactCarouselGo(_carouselIndex + 1); }, _carouselInterval);
+  }
+
+  // 指针拖拽换页：超过 6px 才算拖拽（期间接管指针、暂停自动轮换），
+  // 按宽度 15%（≤72px）阈值决定翻页或弹回；拖拽后的点击一律吞掉防误触。
+  function compactCarouselBindDrag(carousel, track) {
+    var startX = 0, dx = 0, pointerId = null, dragging = false, baseDom = 0;
+    carousel.addEventListener('dragstart', function (e) { e.preventDefault(); });
+    carousel.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      pointerId = e.pointerId; startX = e.clientX; dx = 0; dragging = false;
+      baseDom = _carouselIndex + 1;
+    });
+    carousel.addEventListener('pointermove', function (e) {
+      if (pointerId === null || e.pointerId !== pointerId) return;
+      dx = e.clientX - startX;
+      if (!dragging && Math.abs(dx) > 6) {
+        dragging = true;
+        carousel.classList.add('is-dragging');
+        // 冲销挂起的边缘归位，让拖拽基准落在真实帧上
+        if (_carouselSnapTimer) {
+          _carouselCancelSnap();
+          track.style.transition = 'none';
+          _carouselMoveTo(track, _carouselIndex + 1);
+          void track.offsetWidth;
+          track.style.transition = '';
+        }
+        track.style.transition = 'none';
+        if (carousel.setPointerCapture) { try { carousel.setPointerCapture(e.pointerId); } catch (err) {} }
+        if (_carouselTimer) { clearInterval(_carouselTimer); _carouselTimer = null; }
+      }
+      if (dragging) track.style.transform = 'translateX(calc(' + (-baseDom * 100) + '% + ' + dx + 'px))';
+    });
+    function endDrag(e) {
+      if (pointerId === null || (e.pointerId !== undefined && e.pointerId !== pointerId)) return;
+      pointerId = null;
+      if (!dragging) return;
+      dragging = false;
+      carousel.classList.remove('is-dragging');
+      track.style.transition = '';
+      var w = carousel.clientWidth || 1;
+      var moved = Math.abs(dx) > Math.min(72, w * 0.15) ? (dx < 0 ? 1 : -1) : 0;
+      _carouselSuppressClick = true;
+      compactCarouselGo(_carouselIndex + moved);
+      compactCarouselRestartTimer();
+    }
+    carousel.addEventListener('pointerup', endDrag);
+    carousel.addEventListener('pointercancel', endDrag);
+    carousel.addEventListener('click', function (e) {
+      if (_carouselSuppressClick) { e.preventDefault(); e.stopPropagation(); _carouselSuppressClick = false; }
+    }, true);
   }
 
   function compactCarouselBind(carousel) {
@@ -226,6 +332,7 @@
     carousel.addEventListener('focusout', function (event) {
       if (!carousel.contains(event.relatedTarget)) { _carouselHover = false; compactCarouselRestartTimer(); }
     });
+    compactCarouselBindDrag(carousel, carousel.querySelector('.h8-carousel-track'));
     Array.prototype.forEach.call(carousel.querySelectorAll('.h8-carousel-ticks button'), function (tick) {
       tick.addEventListener('click', function () {
         compactCarouselGo(Number(tick.getAttribute('data-index')) || 0);
@@ -273,6 +380,22 @@
         '<div class="h8-notice-rest"></div>';
       carousel = host.querySelector('.h8-carousel');
       carousel.dataset.signature = signature;
+      // 首尾克隆帧实现无缝循环：克隆去交互属性，仅作越界过渡的画面
+      var track = carousel.querySelector('.h8-carousel-track');
+      var stripClone = function (node) {
+        node.classList.add('h8-carousel-clone');
+        node.setAttribute('aria-hidden', 'true');
+        node.setAttribute('tabindex', '-1');
+        ['href', 'data-announcement-id', 'data-about-contact'].forEach(function (attr) { node.removeAttribute(attr); });
+      };
+      if (track.children.length >= 2) {
+        var cloneLast = track.lastElementChild.cloneNode(true);
+        stripClone(cloneLast);
+        track.insertBefore(cloneLast, track.firstChild);
+        var cloneFirst = track.children[1].cloneNode(true);
+        stripClone(cloneFirst);
+        track.appendChild(cloneFirst);
+      }
       compactCarouselBind(carousel);
     }
     compactCarouselGo(_carouselIndex);
@@ -296,7 +419,7 @@
     return !!(user && user.role === 'super_admin' && active);
   }
 
-  function renderCompactCampus(result) {
+  function renderCompactCampus(result, options) {
     var host = document.getElementById('compactCampusLinks');
     var block = document.querySelector('.compact-campus-block');
     var button = document.getElementById('campusManageButton');
@@ -330,7 +453,7 @@
       ? visibleItems.map(function (item) {
           return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
         }).join('')
-      : '<p class="h8-shortcut-note">还没有配置校园入口。</p>');
+      : '<p class="h8-shortcut-note">还没有配置校园入口。</p>', options && options.animate);
     // 「展开入口」收进区块头部，并与公告面板共享同一个展开状态。
     if (moreLink) {
       var hasMore = items.length > 6 || _compactData.announcements.length > 1;
@@ -340,7 +463,7 @@
     updateHelperVisibility();
   }
 
-  function renderCompactRecommendations(result) {
+  function renderCompactRecommendations(result, options) {
     var host = document.getElementById('compactRecommendations');
     if (!host) return;
     if (result && result.error) {
@@ -357,7 +480,7 @@
       host.innerHTML = '<div class="compact-empty"><span>' + emptyText + '</span><a href="/explorer/通识课" data-home-action="courses">查看全部课程</a></div>';
       return;
     }
-    renderRecommendationItems(true);
+    renderRecommendationItems(!options || options.animate !== false);
   }
 
   function renderRecommendationItems(animate) {
@@ -370,6 +493,7 @@
     host.innerHTML = html;
     // 仅数据到达路径触发动画决策；resize 触发的重建（animate=false）静默替换
     if (animate !== false && typeof revealListItems === 'function') revealListItems(host, isInitialLoad);
+    else host.removeAttribute('aria-busy');
   }
 
   function recommendationIndexMarkup(item, index) {
@@ -509,7 +633,7 @@
     else if (typeof showTopDownloaded === 'function') showTopDownloaded(undefined, kind === 'favorite' ? 'favorite' : 'download');
   }
 
-  function renderCompactHot(kind) {
+  function renderCompactHot(kind, animate) {
     var host = document.getElementById('compactHotList');
     var more = document.getElementById('compactHotMore');
     var note = document.getElementById('compactHotNote');
@@ -535,10 +659,10 @@
       var id = Number(item.id) || 0;
       var count = _compactData.hotKind === 'favorite' ? (item.favorite_count || 0) : (item.download_count || 0);
       return '<article class="h8-rank-row compact-rank-row"><span class="h8-rank-num">' + String(index + 1).padStart(2, '0') + '</span><div><a href="/file/' + id + '" data-material-link="' + id + '">' + htmlEscape(item.title || '未命名资料') + '</a><small>' + htmlEscape(item.course_name || '') + '</small></div><span class="h8-metric">' + htmlEscape(count) + '<small>' + (_compactData.hotKind === 'favorite' ? '收藏' : '下载') + '</small></span></article>';
-    }).join(''));
+    }).join(''), animate);
   }
 
-  function renderCompactRecent() {
+  function renderCompactRecent(animate) {
     var host = document.getElementById('compactRecentList');
     if (!host) return;
     var stats = _compactData.stats || {};
@@ -552,10 +676,10 @@
       var id = Number(item.id) || 0;
       var date = String(item.created_at || '').slice(0, 10).slice(5).replace('-', ' / ');
       return '<article class="h8-rank-row compact-rank-row"><div><a href="/file/' + id + '" data-material-link="' + id + '">' + htmlEscape(item.title || '未命名资料') + '</a><small>' + recentMetaMarkup(item) + '</small></div><time>' + htmlEscape(date) + '</time></article>';
-    }).join(''));
+    }).join(''), animate);
   }
 
-  function renderCompactDesktopLists(stats, error) {
+  function renderCompactDesktopLists(stats, error, options) {
     var hotHost = document.getElementById('compactHotList');
     var recentHost = document.getElementById('compactRecentList');
     if (!hotHost || !recentHost) return;
@@ -564,11 +688,11 @@
       setHostError(recentHost, '最近上传暂时无法读取。', 'stats');
       return;
     }
-    renderCompactHot(_compactData.hotKind || 'download');
-    renderCompactRecent();
+    renderCompactHot(_compactData.hotKind || 'download', options && options.animate);
+    renderCompactRecent(options && options.animate);
   }
 
-  function renderCompactDiscovery(kind, error) {
+  function renderCompactDiscovery(kind, error, animate) {
     var host = document.getElementById('compactDiscoveryList');
     var more = document.getElementById('compactDiscoveryMore');
     var note = document.getElementById('compactDiscoveryNote');
@@ -601,10 +725,11 @@
       var marker = kind === 'recent' ? '' : '<span class="compact-discovery-rank">' + String(index + 1).padStart(2, '0') + '</span>';
       var count = kind === 'favorite' ? ((item.favorite_count || 0) + ' 收藏') : kind === 'download' ? ((item.download_count || 0) + ' 下载') : String(item.created_at || '').slice(0, 10);
       return '<button type="button" class="compact-discovery-item" data-material-id="' + (Number(item.id) || 0) + '">' + marker + '<span class="compact-discovery-info"><strong>' + htmlEscape(item.title || '未命名资料') + '</strong><small>' + (kind === 'recent' ? recentMetaMarkup(item) : htmlEscape(item.course_name || '')) + '</small></span><span class="compact-discovery-count">' + htmlEscape(count) + '</span></button>';
-    }).join(''));
+    }).join(''), animate);
   }
 
   function clearCompactData() {
+    _compactReadyKey = null;
     _compactData.stats = null;
     _compactData.announcements = [];
     _compactData.campus = [];
@@ -634,6 +759,9 @@
     restoreCompactViewState();
     var context = currentContext();
     var key = contextKey(context);
+    // 首次打开需要把真实内容和区块入场编排合在一起；回到首页时内容已在屏幕上，
+    // 只做后台校准，避免推荐接口晚到又单独触发一次 swap。
+    var animateResponse = _compactReadyKey !== key;
     // 没有可靠的后端身份字段时保守隐藏 2026 新生入口，不根据用户名猜测。
     var entry = document.getElementById('compact2026Link');
     if (entry) entry.style.display = 'none';
@@ -642,7 +770,7 @@
     // （此前推荐链在刚需数据之后，导致推荐永远最后到达、在整页动效结束后才换内容。）
     var recommendationPromise = requestPart('/api/recommendations/?limit=4').then(function (recommendations) {
       if (!isCurrent(context) || (document.body && document.body.dataset.homeLayout !== 'compact')) return false;
-      renderCompactRecommendations(recommendations);
+      renderCompactRecommendations(recommendations, { animate: animateResponse });
       return !recommendations.error;
     });
     var criticalPromise = Promise.all([
@@ -652,17 +780,20 @@
       if (!isCurrent(context) || (document.body && document.body.dataset.homeLayout !== 'compact')) return false;
       var stats = result[0], announcements = result[1], campus = result[2];
       _compactData.stats = stats.value;
-      renderCompactStats(stats.value, stats.error);
-      renderCompactDesktopLists(stats.value, stats.error);
+      renderCompactStats(stats.value, stats.error, { animate: animateResponse });
+      renderCompactDesktopLists(stats.value, stats.error, { animate: animateResponse });
       renderCompactAnnouncement(announcements);
-      renderCompactCampus(campus);
-      renderCompactDiscovery(_compactData.discoveryKind || 'recent', stats.error);
+      renderCompactCampus(campus, { animate: animateResponse });
+      renderCompactDiscovery(_compactData.discoveryKind || 'recent', stats.error, animateResponse);
       var note = document.getElementById('compactDataNote');
       var failed = result.some(function (part) { return !!part.error; });
       if (note && !stats.error) note.innerHTML = failed ? '<span>部分数据暂时无法读取，页面未使用估算值。</span> <button type="button" data-compact-retry="all">重试</button>' : '';
       return true;
     });
     var promise = Promise.all([criticalPromise, recommendationPromise]).then(function (result) {
+      if (isCurrent(context) && document.body && document.body.dataset.homeLayout === 'compact') {
+        _compactReadyKey = key;
+      }
       // 首屏数据（含推荐）渲染完毕：放行被 data-motion-hold 扣住的入场编排，
       // 让级联动画带着真实内容起播，而不是演完骨架再等内容弹入。
       if (typeof releaseHeldReveals === 'function') releaseHeldReveals();
