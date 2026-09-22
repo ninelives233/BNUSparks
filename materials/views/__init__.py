@@ -100,6 +100,7 @@ from .announcements import api_announcements, api_announcement_delete
 from .campus_links import (
     api_campus_links, api_campus_link_create,
     api_campus_link_update, api_campus_links_reorder,
+    api_campus_links_preferences,
 )
 
 # 可解释资料推荐

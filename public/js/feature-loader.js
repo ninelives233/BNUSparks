@@ -49,7 +49,8 @@
   //       footer「投稿与建议」改为「意见反馈」指向问卷；group-qr.png 进部署包。
   // v318：宽屏管理后台放宽内容轨道；用户名单桌面端固定列宽并在单元格内省略，
   //       避免宽屏仍出现不必要的表格横向滚动。
-  var VERSION = '318';
+  // v319：校园入口开放账号级自定义；个人入口与总管理员精选分层，缓存键同步推进。
+  var VERSION = '319';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

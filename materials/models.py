@@ -42,6 +42,10 @@ class UserProfile(models.Model):
         CENTER = "center", "居中"
         RIGHT = "right", "靠右"
 
+    class CampusLinksMode(models.TextChoices):
+        FEATURED = "featured", "管理员精选"
+        PERSONAL = "personal", "我的入口"
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.USER)
     moderated_sections = models.ManyToManyField(
@@ -128,6 +132,10 @@ class UserProfile(models.Model):
     timetable_text_align = models.CharField(
         "课程卡片文字对齐", max_length=6, choices=TimetableTextAlign.choices,
         blank=True, default="",
+    )
+    campus_links_mode = models.CharField(
+        "校园入口显示模式", max_length=8, choices=CampusLinksMode.choices,
+        default=CampusLinksMode.FEATURED,
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -572,6 +580,32 @@ class CampusLink(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class UserCampusLink(models.Model):
+    """用户自己维护的校园外部快捷入口，仅对该账号生效。"""
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="campus_links",
+        verbose_name="用户",
+    )
+    name = models.CharField("入口名称", max_length=40)
+    url = models.URLField("网址", max_length=500)
+    order = models.PositiveIntegerField("排序", default=0)
+    is_enabled = models.BooleanField("启用", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "用户校园快捷入口"
+        verbose_name_plural = "用户校园快捷入口"
+        ordering = ["order", "id"]
+        indexes = [
+            models.Index(fields=["user", "order"], name="user_campus_link_order"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.name}"
 
 
 class Favorite(models.Model):

@@ -458,6 +458,11 @@
 
   function canManageCampus() {
     var user = typeof currentUser !== 'undefined' ? currentUser : null;
+    return !!user;
+  }
+
+  function canManageFeaturedCampus() {
+    var user = typeof currentUser !== 'undefined' ? currentUser : null;
     var active = typeof isMgmtActive === 'function' ? isMgmtActive() : true;
     return !!(user && user.role === 'super_admin' && active);
   }
@@ -466,11 +471,14 @@
     var host = document.getElementById('compactCampusLinks');
     var block = document.querySelector('.compact-campus-block');
     var button = document.getElementById('campusManageButton');
+    var featuredButton = document.getElementById('campusFeaturedButton');
+    var title = document.getElementById('compactCampusTitle');
     var moreLink = document.getElementById('compactCampusMore');
     if (!host) return;
     if (result && result.error) {
       if (block) block.hidden = false;
       if (button) button.style.display = canManageCampus() ? '' : 'none';
+      if (featuredButton) featuredButton.style.display = 'none';
       if (moreLink) moreLink.hidden = true;
       setHostError(host, '校园入口暂时无法读取。', 'campus');
       updateHelperVisibility();
@@ -479,10 +487,21 @@
     var data = result && result.value || {};
     var items = Array.isArray(data.items) ? data.items : [];
     var canEdit = !!data.can_manage && canManageCampus();
+    var mode = data.mode === 'personal' ? 'personal' : 'featured';
+    var featuredItems = Array.isArray(data.featured_items) ? data.featured_items : [];
     _compactData.campus = items;
     _compactData.campusPayload = data;
-    if (button) button.style.display = canEdit ? '' : 'none';
-    // 访客/普通用户无入口时不显示内部配置流程；管理员在管理模式保留轻量入口。
+    if (title) title.textContent = mode === 'personal' ? '我的入口' : '校园入口';
+    if (button) {
+      button.style.display = canEdit ? '' : 'none';
+      button.textContent = mode === 'personal' ? '编辑我的入口' : '自定义入口';
+    }
+    if (featuredButton) {
+      var showFeaturedAction = canEdit && ((mode === 'personal' && featuredItems.length) || canManageFeaturedCampus());
+      featuredButton.style.display = showFeaturedAction ? '' : 'none';
+      featuredButton.textContent = canManageFeaturedCampus() ? '管理精选' : '管理员精选';
+    }
+    // 访客没有可显示入口时隐藏模块；登录用户即使个人清单为空也保留编辑落点。
     if (!items.length && !canEdit) {
       if (block) block.hidden = true;
       host.innerHTML = '';
@@ -499,7 +518,7 @@
       ? visibleItems.map(function (item) {
           return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
         }).join('')
-      : '<p class="h8-shortcut-note">还没有配置校园入口。</p>', options && options.animate);
+      : '<p class="h8-shortcut-note">还没有自定义入口，点击“编辑我的入口”开始。</p>', options && options.animate);
     // 「展开入口」收进区块头部，并与公告面板共享同一个展开状态。
     if (moreLink) {
       var hasMore = items.length > campusLimit || _compactData.announcements.length > 1;
@@ -864,21 +883,71 @@
     status.className = kind ? 'is-' + kind : '';
   }
 
-  function campusManagerMarkup(items) {
-    return '<div class="campus-manager-overlay" role="dialog" aria-modal="true" aria-labelledby="campusManagerTitle"><div class="campus-manager-dialog">' +
-      '<div class="campus-manager-head"><div><span class="compact-kicker">ADMIN · LINKS</span><h2 id="campusManagerTitle">管理校园入口</h2></div><button type="button" class="campus-manager-close" onclick="closeCampusManager()" aria-label="关闭">×</button></div>' +
-      '<form id="campusLinkForm" class="campus-link-form" novalidate><input type="hidden" name="id"><label>名称<input name="name" maxlength="40" required placeholder="如：教务系统"></label><label>网址<input name="url" type="url" maxlength="500" required placeholder="https://example.edu.cn"></label><div class="campus-form-actions"><button type="submit">保存入口</button><button type="button" class="secondary" onclick="resetCampusForm()">清空表单</button></div><p id="campusFormStatus" role="status" aria-live="polite"></p></form>' +
-      '<div class="campus-manager-list" id="campusManagerList">' + (items.length ? items.map(function (item, index) {
-        return '<div class="campus-manager-row" data-campus-id="' + item.id + '"><span class="campus-drag-handle" aria-hidden="true">≡</span><div><strong>' + htmlEscape(item.name) + '</strong><small>' + htmlEscape(item.url) + '</small></div><span class="campus-enabled-status ' + (item.is_enabled ? 'is-enabled' : 'is-disabled') + '">' + (item.is_enabled ? '启用' : '停用') + '</span><button type="button" data-campus-action="edit">编辑</button><button type="button" data-campus-action="toggle">' + (item.is_enabled ? '停用' : '启用') + '</button><button type="button" data-campus-action="up"' + (index === 0 ? ' disabled' : '') + '>上移</button><button type="button" data-campus-action="down"' + (index === items.length - 1 ? ' disabled' : '') + '>下移</button></div>';
-      }).join('') : '<p class="compact-empty">还没有入口。</p>') + '</div>' +
-      '<p class="campus-manager-hint">管理列表包含停用项；普通首页只显示启用项。</p></div></div>';
+  function campusItemsForScope(scope) {
+    var data = _compactData.campusPayload || {};
+    var items = scope === 'featured' ? data.featured_items : data.personal_items;
+    return Array.isArray(items) ? items.slice() : [];
   }
 
-  function renderManager(data, statusMessage) {
+  function campusManagerListMarkup(items, scope, adminEditor) {
+    if (!items.length) return '<p class="compact-empty">还没有入口。</p>';
+    return items.map(function (item, index) {
+      var extra = adminEditor
+        ? '<button type="button" data-campus-action="toggle">' + (item.is_enabled ? '停用' : '启用') + '</button>'
+        : '<button type="button" data-campus-action="delete">删除</button>';
+      return '<div class="campus-manager-row" data-campus-id="' + item.id + '" data-campus-scope="' + scope + '">' +
+        '<span class="campus-drag-handle" aria-hidden="true">≡</span><div><strong>' + htmlEscape(item.name) + '</strong><small>' + htmlEscape(item.url) + '</small></div>' +
+        '<span class="campus-enabled-status ' + (item.is_enabled ? 'is-enabled' : 'is-disabled') + '">' + (item.is_enabled ? '启用' : '停用') + '</span>' +
+        '<button type="button" data-campus-action="edit">编辑</button>' + extra +
+        '<button type="button" data-campus-action="up"' + (index === 0 ? ' disabled' : '') + '>上移</button>' +
+        '<button type="button" data-campus-action="down"' + (index === items.length - 1 ? ' disabled' : '') + '>下移</button></div>';
+    }).join('');
+  }
+
+  function campusFeaturedIdeasMarkup(items, personalItems) {
+    if (!items.length) return '<p class="compact-empty">总管理员还没有发布精选入口。</p>';
+    var personalUrls = Object.create(null);
+    personalItems.forEach(function (item) { personalUrls[item.url] = true; });
+    return items.map(function (item) {
+      var adopted = !!personalUrls[item.url];
+      return '<div class="campus-featured-row" data-campus-id="' + item.id + '"><div class="campus-featured-copy"><span class="campus-featured-mark" aria-hidden="true">✦</span><span><strong>' + htmlEscape(item.name) + '</strong><small>' + htmlEscape(item.url) + '</small></span></div>' +
+        '<button type="button" data-campus-action="adopt"' + (adopted ? ' disabled' : '') + '>' + (adopted ? '已在我的入口' : '加入我的入口') + '</button></div>';
+    }).join('');
+  }
+
+  function campusManagerMarkup(data, requestedScope) {
+    var adminEditor = requestedScope === 'featured' && canManageFeaturedCampus();
+    var scope = adminEditor ? 'featured' : 'personal';
+    var personalItems = Array.isArray(data.personal_items) ? data.personal_items : [];
+    var featuredItems = Array.isArray(data.featured_items) ? data.featured_items : [];
+    var items = scope === 'featured' ? featuredItems : personalItems;
+    var mode = data.mode === 'personal' ? 'personal' : 'featured';
+    var modeAction = mode === 'personal' ? 'use-featured' : 'use-personal';
+    var modeButton = mode === 'personal' ? '恢复管理员精选' : '开始使用我的入口';
+    var title = adminEditor ? '管理总管理员精选' : '入口工作台';
+    var kicker = adminEditor ? 'ADMIN · IDEAS' : 'MY · LINKS';
+    var intro = adminEditor
+      ? '这里的入口会展示给全站用户；你的个人入口仍然只对自己的账号生效。'
+      : '我的入口只对自己的账号生效；总管理员精选可以随时一键加入。';
+    var sectionTitle = adminEditor ? '总管理员精选' : '我的入口';
+    var sectionNote = adminEditor ? '全站默认展示的入口' : '只影响你的账号';
+    var form = '<form id="campusLinkForm" class="campus-link-form" data-campus-scope="' + scope + '" novalidate><input type="hidden" name="id"><label>名称<input name="name" maxlength="40" required placeholder="如：教务系统"></label><label>网址<input name="url" type="url" maxlength="500" required placeholder="https://example.edu.cn"></label><div class="campus-form-actions"><button type="submit">保存入口</button><button type="button" class="secondary" onclick="resetCampusForm()">清空表单</button></div><p id="campusFormStatus" role="status" aria-live="polite"></p></form>';
+    var modeBar = '<div class="campus-manager-modebar"><div><span class="compact-kicker">首页当前显示</span><strong>' + (mode === 'personal' ? '我的入口' : '总管理员精选') + '</strong><small>' + intro + '</small></div>' +
+      (adminEditor ? '<button type="button" data-campus-open-personal>编辑我的入口</button>' : '<button type="button" data-campus-mode-action="' + modeAction + '">' + modeButton + '</button>') + '</div>';
+    var featuredIdeas = adminEditor ? '' : '<section class="campus-manager-section campus-ideas-section"><div class="campus-manager-section-head"><div><span class="compact-kicker">CURATED BY ADMIN</span><h3>总管理员的小巧思</h3></div><span>可一键采用</span></div><div class="campus-featured-list">' + campusFeaturedIdeasMarkup(featuredItems, personalItems) + '</div></section>';
+    return '<div class="campus-manager-overlay" data-campus-scope="' + scope + '" role="dialog" aria-modal="true" aria-labelledby="campusManagerTitle"><div class="campus-manager-dialog">' +
+      '<div class="campus-manager-head"><div><span class="compact-kicker">' + kicker + '</span><h2 id="campusManagerTitle">' + title + '</h2><p class="campus-manager-intro">' + intro + '</p></div><button type="button" class="campus-manager-close" onclick="closeCampusManager()" aria-label="关闭">×</button></div>' +
+      modeBar + '<section class="campus-manager-section"><div class="campus-manager-section-head"><div><span class="compact-kicker">' + (adminEditor ? 'PUBLIC DEFAULT' : 'PERSONAL SHORTCUTS') + '</span><h3>' + sectionTitle + '</h3></div><span>' + sectionNote + '</span></div>' + form +
+      '<div class="campus-manager-list" id="campusManagerList" data-campus-scope="' + scope + '">' + campusManagerListMarkup(items, scope, adminEditor) + '</div></section>' + featuredIdeas +
+      '<p class="campus-manager-hint">最多保存 12 个入口；网址仅接受 http / https。' + (adminEditor ? '停用的精选入口不会出现在普通用户首页。' : '删除个人入口不会影响总管理员精选。') + '</p></div></div>';
+  }
+
+  function renderManager(data, statusMessage, requestedScope) {
     renderCompactCampus({ value: data, error: null });
     var old = document.querySelector('.campus-manager-overlay');
     if (!old) return;
-    old.outerHTML = campusManagerMarkup(data.items || []);
+    var scope = requestedScope || old.dataset.campusScope || 'personal';
+    old.outerHTML = campusManagerMarkup(data, scope);
     var next = document.querySelector('.campus-manager-overlay');
     bindCampusManager();
     if (next && typeof activateDialog === 'function') activateDialog(next);
@@ -887,27 +956,30 @@
 
   function refreshCampusManager(statusMessage) {
     var context = currentContext();
+    var overlay = document.querySelector('.campus-manager-overlay');
+    var scope = overlay ? (overlay.dataset.campusScope || 'personal') : 'personal';
     return api('/api/campus-links/').then(function (data) {
-      if (isCurrent(context) && document.querySelector('.campus-manager-overlay')) renderManager(data, statusMessage);
+      if (isCurrent(context) && document.querySelector('.campus-manager-overlay')) renderManager(data, statusMessage, scope);
       return data;
     });
   }
 
-  function openCampusManager() {
+  function openCampusManager(requestedScope) {
     if (!canManageCampus()) return;
     var context = currentContext();
+    var scope = requestedScope === 'featured' && canManageFeaturedCampus() ? 'featured' : 'personal';
     api('/api/campus-links/').then(function (data) {
       if (!isCurrent(context)) return;
       closeCampusManager();
       var wrapper = document.createElement('div');
-      wrapper.innerHTML = campusManagerMarkup(data.items || []);
+      wrapper.innerHTML = campusManagerMarkup(data, scope);
       var overlay = wrapper.firstChild;
       document.body.appendChild(overlay);
       bindCampusManager();
       lockScroll();
       if (typeof _pushModalHistory === 'function') _pushModalHistory(overlay);
       var input = overlay.querySelector('input[name="name"]');
-      if (input) input.focus();
+      if (input && scope !== 'featured') input.focus();
     }).catch(function (error) {
       setCompactNote('入口管理加载失败：' + (error.message || '请稍后重试'));
     });
@@ -966,13 +1038,14 @@
 
   function bindCampusManager() {
     var form = document.getElementById('campusLinkForm');
-    var list = document.getElementById('campusManagerList');
-    if (!form || !list || form.dataset.bound) return;
+    var overlay = document.querySelector('.campus-manager-overlay');
+    if (!form || !overlay || form.dataset.bound) return;
     form.dataset.bound = '1';
-      form.addEventListener('submit', function (event) {
-        event.preventDefault();
-        var id = form.querySelector('[name="id"]').value;
-        var body = { name: form.querySelector('[name="name"]').value.trim(), url: form.querySelector('[name="url"]').value.trim() };
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var id = form.querySelector('[name="id"]').value;
+      var scope = form.dataset.campusScope || 'personal';
+      var body = { scope: scope, name: form.querySelector('[name="name"]').value.trim(), url: form.querySelector('[name="url"]').value.trim() };
       if (!body.name || body.name.length > 40) {
         setManagerStatus('请填写 1–40 个字符的入口名称', 'error');
         form.querySelector('[name="name"]').focus();
@@ -985,22 +1058,46 @@
         form.querySelector('[name="url"]').focus();
         return;
       }
-        setManagerStatus('正在保存…', 'saving');
+      setManagerStatus('正在保存…', 'saving');
       var context = currentContext();
       api(id ? '/api/campus-links/' + id + '/' : '/api/campus-links/create/', { method: id ? 'PATCH' : 'POST', body: body })
         .then(function () { return refreshCampusManager('已保存'); })
         .then(function () { if (!isCurrent(context)) return; })
         .catch(function (error) { if (isCurrent(context)) setManagerStatus(error.message || '保存失败，请检查输入后重试', 'error'); });
     });
-    list.addEventListener('click', function (event) {
+    overlay.addEventListener('click', function (event) {
+      var modeAction = event.target.closest('[data-campus-mode-action]');
+      if (modeAction) {
+        var nextMode = modeAction.dataset.campusModeAction === 'use-personal' ? 'personal' : 'featured';
+        setManagerStatus('正在切换首页显示…', 'saving');
+        api('/api/campus-links/preferences/', { method: 'PATCH', body: { mode: nextMode } })
+          .then(function () { return refreshCampusManager('首页显示已切换'); })
+          .catch(function (error) { setManagerStatus(error.message || '切换失败，请重试', 'error'); });
+        return;
+      }
+      var openPersonal = event.target.closest('[data-campus-open-personal]');
+      if (openPersonal) {
+        openCampusManager('personal');
+        return;
+      }
       var action = event.target.closest('[data-campus-action]');
       var row = event.target.closest('[data-campus-id]');
       if (!action || !row) return;
       var id = row.getAttribute('data-campus-id');
-      var items = _compactData.campus.slice();
+      var actionName = action.dataset.campusAction;
+      if (actionName === 'adopt') {
+        var featured = campusItemsForScope('featured').find(function (item) { return String(item.id) === String(id); });
+        if (!featured) return;
+        setManagerStatus('正在加入我的入口…', 'saving');
+        api('/api/campus-links/create/', { method: 'POST', body: { scope: 'personal', name: featured.name, url: featured.url } })
+          .then(function () { return refreshCampusManager('已加入我的入口'); })
+          .catch(function (error) { setManagerStatus(error.message || '加入失败，请重试', 'error'); });
+        return;
+      }
+      var scope = row.dataset.campusScope || form.dataset.campusScope || 'personal';
+      var items = campusItemsForScope(scope);
       var index = items.findIndex(function (item) { return String(item.id) === String(id); });
       if (index < 0) return;
-      var actionName = action.dataset.campusAction;
       if (actionName === 'edit') {
         form.querySelector('[name="id"]').value = items[index].id;
         form.querySelector('[name="name"]').value = items[index].name;
@@ -1011,9 +1108,16 @@
       }
       if (actionName === 'toggle') {
         setManagerStatus('正在更新…', 'saving');
-        api('/api/campus-links/' + id + '/', { method: 'PATCH', body: { is_enabled: !items[index].is_enabled } })
+        api('/api/campus-links/' + id + '/', { method: 'PATCH', body: { scope: scope, is_enabled: !items[index].is_enabled } })
           .then(function () { return refreshCampusManager('已更新'); })
           .catch(function (error) { setManagerStatus(error.message || '更新失败，请重试', 'error'); });
+        return;
+      }
+      if (actionName === 'delete') {
+        setManagerStatus('正在删除…', 'saving');
+        api('/api/campus-links/' + id + '/', { method: 'DELETE', body: { scope: scope } })
+          .then(function () { return refreshCampusManager('已删除'); })
+          .catch(function (error) { setManagerStatus(error.message || '删除失败，请重试', 'error'); });
         return;
       }
       if (actionName === 'up' || actionName === 'down') {
@@ -1022,7 +1126,7 @@
         var moved = items.splice(index, 1)[0];
         items.splice(target, 0, moved);
         setManagerStatus('正在保存顺序…', 'saving');
-        api('/api/campus-links/reorder/', { method: 'POST', body: { ids: items.map(function (entry) { return entry.id; }) } })
+        api('/api/campus-links/reorder/', { method: 'POST', body: { scope: scope, ids: items.map(function (entry) { return entry.id; }) } })
           .then(function () { return refreshCampusManager('顺序已保存'); })
           .catch(function (error) { setManagerStatus(error.message || '排序失败，请重试', 'error'); });
       }

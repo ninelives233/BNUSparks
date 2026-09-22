@@ -78,9 +78,10 @@ urlpatterns = [
     path("announcements/", views.api_announcements, name="api_announcements"),
     path("announcements/<int:aid>/", views.api_announcement_delete, name="api_announcement_delete"),
 
-    # 全站校园快捷入口（读取公开；写入仅总管理员）
+    # 校园快捷入口：精选公开；个人入口和显示模式按账号隔离
     path("campus-links/", views.api_campus_links, name="api_campus_links"),
     path("campus-links/create/", views.api_campus_link_create, name="api_campus_link_create"),
+    path("campus-links/preferences/", views.api_campus_links_preferences, name="api_campus_links_preferences"),
     path("campus-links/<int:link_id>/", views.api_campus_link_update, name="api_campus_link_update"),
     path("campus-links/reorder/", views.api_campus_links_reorder, name="api_campus_links_reorder"),
 
