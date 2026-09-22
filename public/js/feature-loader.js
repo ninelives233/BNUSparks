@@ -47,7 +47,9 @@
   //       课程列表行移动端收紧（图标 28px/间距 10px/标题单行省略号）。
   // v304：关于页「联系我们」新增用户交流群二维码入口与反馈问卷卡片；
   //       footer「投稿与建议」改为「意见反馈」指向问卷；group-qr.png 进部署包。
-  var VERSION = '313';
+  // v318：宽屏管理后台放宽内容轨道；用户名单桌面端固定列宽并在单元格内省略，
+  //       避免宽屏仍出现不必要的表格横向滚动。
+  var VERSION = '318';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

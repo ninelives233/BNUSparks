@@ -43,6 +43,14 @@
   padding: 24px 0;
 }
 
+/* v318：宽屏后台使用主内容区的横向余量；窄屏仍沿用原有紧凑轨道。 */
+@media (min-width: 1280px) {
+  .admin-panel {
+    width: calc(100% - 48px);
+    max-width: 1440px;
+  }
+}
+
 /* ── Tab 导航 ── */
 .admin-tabs {
   display: flex;
@@ -1271,6 +1279,64 @@ html[data-bnu-theme="dark"] .campus-donut-seg { filter: brightness(1.2); }
 .admin-table-card .admin-table td:last-child { white-space: nowrap; }
 /* 删除记录表：标题下副行（文件名/课程代码） */
 .ft-meta { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 400; }
+
+/*
+ * v318：用户名单是后台最宽的一张表。桌面端给每列明确轨道，
+ * 让可用宽度决定内容密度；长文本在自己的列内省略，不再制造横向滚动。
+ * 低于桌面断点时回到通用表格规则，保留触屏横向查看能力。
+ */
+@media (min-width: 1180px) {
+  .admin-users-table-card .admin-table-wrap {
+    overflow-x: hidden;
+  }
+  .admin-users-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .admin-users-table th,
+  .admin-users-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .admin-users-table th:nth-child(1) { width: 5%; }
+  .admin-users-table th:nth-child(2) { width: 18%; }
+  .admin-users-table th:nth-child(3) { width: 19%; }
+  .admin-users-table th:nth-child(4) { width: 12%; }
+  .admin-users-table th:nth-child(5) { width: 17%; }
+  .admin-users-table th:nth-child(6),
+  .admin-users-table th:nth-child(7),
+  .admin-users-table th:nth-child(8) { width: 6%; }
+  .admin-users-table th:nth-child(9) { width: 11%; }
+  .admin-users-table.admin-users-table-super th:nth-child(1) { width: 5%; }
+  .admin-users-table.admin-users-table-super th:nth-child(2) { width: 16%; }
+  .admin-users-table.admin-users-table-super th:nth-child(3) { width: 18%; }
+  .admin-users-table.admin-users-table-super th:nth-child(4) { width: 11%; }
+  .admin-users-table.admin-users-table-super th:nth-child(5) { width: 15%; }
+  .admin-users-table.admin-users-table-super th:nth-child(6) { width: 10%; }
+  .admin-users-table.admin-users-table-super th:nth-child(7),
+  .admin-users-table.admin-users-table-super th:nth-child(8),
+  .admin-users-table.admin-users-table-super th:nth-child(9) { width: 5%; }
+  .admin-users-table.admin-users-table-super th:nth-child(10) { width: 10%; }
+  .admin-users-table .admin-user-name-stack { overflow: hidden; }
+  .admin-users-table .admin-user-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .admin-users-table .admin-user-identity { max-width: none; }
+  .admin-users-table .section-link {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    white-space: nowrap;
+  }
+  .admin-users-table .admin-role-select { max-width: 100%; }
+}
 
 /* ── 问答区记录卡（qa-admin.js：qa-records tab 已表格化；此卡仍被
       pending tab 问答区段 _qaForumPendingCardHtml 使用，勿删）── */

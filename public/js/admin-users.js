@@ -477,7 +477,8 @@
         '<button onclick="adminSearchUsers()">搜索</button>' +
         '</div>';
       var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
-      html += '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
+      var userTableClass = isSuperAdmin ? ' admin-users-table-super' : '';
+      html += '<div class="admin-table-card admin-users-table-card"><div class="admin-table-wrap"><table class="admin-table admin-users-table' + userTableClass + '">' +
         '<thead><tr>' +
           '<th></th><th>昵称</th><th>邮箱</th><th>角色</th><th>管辖板块</th>' + (isSuperAdmin ? '<th>自动托管</th>' : '') + '<th>资料数</th><th>下载数</th><th>预览数</th><th>注册时间</th>' +
         '</tr></thead><tbody>';
