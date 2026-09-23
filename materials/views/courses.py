@@ -403,44 +403,81 @@ def api_stats(request):
         course_type="major", materials__review_status="approved"
     ).distinct().count()
 
-    popular = Material.objects.filter(review_status="approved") \
+    popular = list(Material.objects.filter(review_status="approved") \
         .annotate(favorite_count=Count("favorited_by", distinct=True)) \
         .order_by("-download_count", "-created_at", "id") \
-        .select_related("course", "course__college")[:limit]
+        .select_related("course", "course__college")[:limit])
+
+    favorited = list(Material.objects.filter(review_status="approved") \
+        .annotate(favorite_count=Count("favorited_by", distinct=True)) \
+        .order_by("-favorite_count", "-download_count", "-created_at", "id") \
+        .select_related("course", "course__college")[:limit])
+
+    recent = list(Material.objects.filter(review_status="approved") \
+        .order_by("-created_at") \
+        .select_related("course", "course__college", "uploader")[:limit])
+
+    # 首页课程名应与详情页面包屑一致。CourseCategory.name 是实际显示在
+    # 导航树中的名称；管理员重命名目录不会同步改 Course.name。
+    course_ids = {
+        material.course_id
+        for material in popular + favorited + recent
+        if material.course_id
+    }
+    course_name_by_id = {}
+    if course_ids:
+        categories = list(CourseCategory.objects.only(
+            "id", "parent_id", "order", "name", "course_id", "is_divider"
+        ).order_by("order", "id"))
+        children_by_parent = {}
+        for category in categories:
+            children_by_parent.setdefault(category.parent_id, []).append(category)
+
+        def collect_course_names(nodes):
+            for category in nodes:
+                children = children_by_parent.get(category.id, [])
+                if (not category.is_divider and not children
+                        and category.course_id in course_ids and category.name):
+                    course_name_by_id.setdefault(category.course_id, category.name)
+                if children:
+                    collect_course_names(children)
+
+        for root in children_by_parent.get(None, []):
+            # api_course_tree exposes each root's children, not the root itself.
+            collect_course_names(children_by_parent.get(root.id, []))
+
+    def displayed_course_name(material):
+        if not material.course_id:
+            return ""
+        return course_name_by_id.get(material.course_id) or material.course.name or ""
+
     top_downloaded = [{
         "id": m.id,
         "title": m.title,
         "course_code": m.course.code if m.course_id else "",
-        "course_name": m.course.name if m.course_id else "",
+        "course_name": displayed_course_name(m),
         "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
         "download_count": m.download_count,
         "favorite_count": m.favorite_count,
         "file_type": m.file_type,
     } for m in popular]
 
-    favorited = Material.objects.filter(review_status="approved") \
-        .annotate(favorite_count=Count("favorited_by", distinct=True)) \
-        .order_by("-favorite_count", "-download_count", "-created_at", "id") \
-        .select_related("course", "course__college")[:limit]
     top_favorited = [{
         "id": m.id,
         "title": m.title,
         "course_code": m.course.code if m.course_id else "",
-        "course_name": m.course.name if m.course_id else "",
+        "course_name": displayed_course_name(m),
         "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
         "download_count": m.download_count,
         "favorite_count": m.favorite_count,
         "file_type": m.file_type,
     } for m in favorited]
 
-    recent = Material.objects.filter(review_status="approved") \
-        .order_by("-created_at") \
-        .select_related("course", "course__college", "uploader")[:limit]
     recent_uploads = [{
         "id": m.id,
         "title": m.title,
         "course_code": m.course.code if m.course_id else "",
-        "course_name": m.course.name if m.course_id else "",
+        "course_name": displayed_course_name(m),
         "college": m.course.college.short_name if m.course_id and m.course.college_id else "",
         "file_type": m.file_type,
         "uploader_name": (m.uploader.first_name if m.uploader else m.uploader_name) or "",

@@ -898,9 +898,9 @@ class Report(models.Model):
 
 
 # ═══════════════════════════════════════════════════════════════
-# 课程树缓存失效信号
+# 课程树与首页统计缓存失效信号
 # CourseCategory 任何增删改（新建/删除/移动/改名/绑定课程等）→
-# 清除 /api/courses/tree/ 缓存，管理员改树即时生效（TTL 10min 兜底）
+# 清除课程树和首页统计缓存；Course 变更也可能影响首页课程展示名。
 # ═══════════════════════════════════════════════════════════════
 
 COURSE_TREE_CACHE_KEY = "api_course_tree_data"
@@ -934,8 +934,10 @@ from django.dispatch import receiver
 @receiver(post_save, sender=CourseCategory)
 @receiver(post_delete, sender=CourseCategory)
 @receiver(post_save, sender=Course)
-def _invalidate_course_tree_cache(sender, **kwargs):
+@receiver(post_delete, sender=Course)
+def _invalidate_course_and_stats_caches(sender, **kwargs):
     cache.delete(COURSE_TREE_CACHE_KEY)
+    invalidate_stats_cache()
 
 
 # ═══════════════════════════════════════════════════════════════
