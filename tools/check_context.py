@@ -31,6 +31,10 @@ FORBIDDEN = {
 }
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 WIKI_LINK = re.compile(r"\[\[[^\]]+\]\]")
+POTENTIAL_REAL_BNU_ACCOUNT = re.compile(
+    r"\b(?!2099)\d{8,12}@(mail\.)?bnu\.edu\.cn\b",
+    re.IGNORECASE,
+)
 
 
 def line_count(path: Path) -> int:
@@ -102,6 +106,27 @@ def validate_docs() -> list[str]:
     return errors
 
 
+def validate_test_fixtures() -> list[str]:
+    errors: list[str] = []
+    test_dir = ROOT / "materials/tests"
+    if not test_dir.is_dir():
+        return ["missing public test suite: materials/tests"]
+    for path in sorted(test_dir.glob("*")):
+        if path.suffix not in {".py", ".sh", ".md"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        relative = path.relative_to(ROOT)
+        if POTENTIAL_REAL_BNU_ACCOUNT.search(text):
+            errors.append(
+                f"{relative}: numeric BNU test accounts must use the synthetic 2099 prefix"
+            )
+        if "bnusparks-tests" in text or "git@github.com:ninelives233" in text:
+            errors.append(f"{relative}: stale private test repository reference")
+        if "/Users/" in text:
+            errors.append(f"{relative}: local absolute user path is not portable")
+    return errors
+
+
 def current_facts() -> dict[str, object]:
     js = sorted((ROOT / "public/js").glob("*.js"))
     css = sorted((ROOT / "public/css").glob("*.css"))
@@ -115,13 +140,13 @@ def current_facts() -> dict[str, object]:
         "javascript_lines": python_lines(js),
         "css_files": len(css),
         "css_lines": python_lines(css),
-        "private_tests_available": test_count() is not None,
+        "tests_available": test_count() is not None,
         "tests": test_count(),
     }
 
 
 def main() -> int:
-    errors = validate_docs()
+    errors = validate_docs() + validate_test_fixtures()
     print(json.dumps(current_facts(), ensure_ascii=False, indent=2))
     if errors:
         for error in errors:

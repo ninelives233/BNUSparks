@@ -137,7 +137,7 @@ python tools/check_context.py
 git diff --check
 ```
 
-获得私密测试仓库后，运行相关测试和：
+运行相关测试和：
 ```bash
 bash materials/tests/run_tests.sh
 ```

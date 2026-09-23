@@ -24,7 +24,7 @@
 | 前端 API、认证与共用工具 | `public/js/utils.js`、`auth.js`、`profile.js`、`notifications.js` |
 | 课程浏览和资料详情 | `public/js/explorer-*.js`、`public/css/course.css`、`files.css` |
 | 首页、外观和推荐 | `public/js/home.js`、`appearance.js`、`public/css/base.css`、`tokens.css` |
-| 测试 | 私密仓库克隆到 `materials/tests/` 后使用其 `run_tests.sh` |
+| 测试 | `materials/tests/`、`materials/tests/run_tests.sh` |
 | 部署、备份和回滚 | `docs/OPERATIONS.md`、`deploy.sh.template`、`deploy/nginx/`、`scripts/deploy_verify.sh` |
 
 ## 关键契约

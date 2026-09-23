@@ -6,7 +6,7 @@
 ## 项目边界
 
 - 后端为 Django，前端为无构建步骤的 Vanilla JS SPA，生产使用 SQLite、本地文件存储、Nginx 与 Gunicorn。
-- 公开仓库是生产代码的唯一事实源；私密 `bnusparks-tests` 仓库保存完整测试套件和测试专属资料。
+- 公开仓库是生产代码与自动化测试的唯一事实源；功能修改与对应回归测试在同一个 PR 提交。
 - 不建立长期校区代码分支。各校区共享代码，域名、密钥、数据库、上传目录和站点配置独立。
 - 当前事实以源码、迁移、Git 和测试结果为准；文档中的自然语言不能覆盖代码事实。
 
@@ -40,7 +40,7 @@ python tools/check_context.py
 git diff --check
 ```
 
-获得私密测试仓库权限并将其克隆到 `materials/tests/` 后运行：
+完整回归测试：
 
 ```bash
 bash materials/tests/run_tests.sh

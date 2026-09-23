@@ -69,10 +69,6 @@ artifacts/
 # ── 服务器运行产物 ──
 *.pid
 
-# ── 测试（测试套件在私人仓库 bnusparks-tests；克隆到 materials/tests/ 使用）──
-materials/tests.py
-materials/tests/
-
 # ── Django 旧模板时代遗留（SPA 已废弃）──
 materials/templates/
 materials/static/

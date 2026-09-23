@@ -162,6 +162,6 @@ timetable.js → /api/user/timetable/ → user_timetable.py → UserTimetable.re
 ## 8. 测试与维护
 
 - 公开 CI 负责 Django system check、迁移完整性、静态收集和上下文文档校验。
-- 完整测试在私密 `bnusparks-tests` 仓库维护，克隆到 `materials/tests/` 后运行。
+- 完整测试在 `materials/tests/` 中随源码维护，通过 `run_tests.sh` 统一运行。
 - 改模型、权限、审核、文件生命周期、令牌或并发逻辑时必须补相应回归。
 - 普通功能修复不更新本地图；只有本文件所描述的结构或契约改变时才更新。
