@@ -14,7 +14,7 @@
 
 1. 检查 `git status --short --branch`、当前分支和远端。
 2. 工作区不干净时，不得覆盖、清理、暂存或提交不属于本任务的改动。
-3. 每个问题使用从最新 `origin/main` 创建的短期分支或独立 worktree。
+3. 每个问题使用从最新上游 `main` 创建的短期分支或独立 worktree；fork 克隆中上游远端为 `upstream`。
 4. 先读 `project-map.md`，再按任务只读取相关模块；不要默认加载全部文档。
 
 ## 修改原则

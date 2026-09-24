@@ -18,12 +18,13 @@
 
 ## 本地开发
 
-本校区协作者需先获得公开仓库的写入权限；分校区协作者可以 fork 后提出 PR。
-以下命令在全新 clone 中执行，测试不依赖生产数据或服务器：
+本校区和分校区协作者都先在 GitHub fork 本仓库，再克隆自己的 fork；
+不需要主仓库写入权限。以下命令在全新 clone 中执行，测试不依赖生产数据或服务器：
 
 ```bash
-git clone https://github.com/ninelives233/BNUSparks.git
+git clone https://github.com/你的用户名/BNUSparks.git
 cd BNUSparks
+git remote add upstream https://github.com/ninelives233/BNUSparks.git
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 bash materials/tests/run_tests.sh
@@ -53,11 +54,12 @@ bash materials/tests/run_tests.sh materials.tests.test_pin # 单文件
 
 ## 从问题到 PR
 
-每个问题从最新 `main` 建一个短期分支；不要直接在 `main` 上改：
+每个问题从上游最新 `main` 建一个短期分支；不要直接在 `main` 上改：
 
 ```bash
 git switch main
-git pull --ff-only origin main
+git fetch upstream
+git merge --ff-only upstream/main
 git switch -c fix/简短问题名
 # 修改代码和对应测试
 bash materials/tests/run_tests.sh
@@ -66,9 +68,9 @@ git commit -m "fix: 简述问题"
 git push -u origin fix/简短问题名
 ```
 
-在 GitHub 上选择「Compare & pull request」，目标分支为本仓库的 `main`。
-没有本仓库写权限的贡献者先 fork，将分支推到自己的 fork，再向本仓库 `main` 提 PR。
+在 GitHub 上从自己的 fork 向 `ninelives233/BNUSparks` 的 `main` 发起 PR。
 PR 应写明问题、改动、测试结果和可能影响的数据/权限；CI 通过后由仓库维护者审核并合并。
+协作者只推送到自己的 fork，不要获得主仓库写权限，也不能自行合并或部署。
 
 合并后由维护者在本地执行 `git pull --ff-only origin main`，再按
 [运维手册](docs/OPERATIONS.md) 部署固定提交。协作者无须接触服务器或生产配置。
