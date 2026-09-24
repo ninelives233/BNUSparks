@@ -62,6 +62,7 @@ docs/*
 !docs/OPERATIONS.md
 !docs/PROJECT_MAP.md
 !docs/BUG_TROUBLESHOOTING.md
+!docs/COLLABORATOR_AGENT_PROMPT.md
 ANNOUNCEMENT_*.md
 demo.html
 artifacts/
