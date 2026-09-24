@@ -172,8 +172,8 @@ def api_folder_set_course(request, folder_id):
     """POST /api/folders/<id>/set-course/ — 设置/修改课程代码
 
     返回 situation 供前端选择：
-      new_code          — 新代码不存在（重命名当前课程）
-      exists_single     — 新代码存在且唯一（链接/合并二选一）
+      new_code          — 新代码不存在（未共享课程改码；共享课程则拆分当前叶子）
+      exists_single     — 新代码存在且唯一（链接；安全时可另选合并）
       exists_multiple   — 新代码存在多个（选一个再走链接）
     """
     if request.method != "POST":
@@ -213,6 +213,7 @@ def api_folder_set_course(request, folder_id):
                 "name": current_course.name,
                 "college": current_course.college.short_name if current_course.college_id else "",
                 "file_count": Material.objects.filter(course=current_course).count(),
+                "ref_count": CourseCategory.objects.filter(course=current_course).count(),
             }
 
         matched_courses = list(Course.objects.filter(code=course_code))
@@ -226,8 +227,12 @@ def api_folder_set_course(request, folder_id):
                 "options": [
                     {
                         "id": "rename_self",
-                        "label": "重命名当前课程",
-                        "desc": f"将当前课程代码改为 {course_code}，文件路径同步迁移",
+                        "label": "修改当前目录课程代码",
+                        "desc": (
+                            "当前课程只被此目录使用，改码时同步迁移资料"
+                            if not current_course_info or current_course_info["ref_count"] <= 1
+                            else "当前课程被多个目录共用，只拆分当前目录；原资料留在旧课程"
+                        ),
                     },
                 ],
             })
@@ -248,16 +253,17 @@ def api_folder_set_course(request, folder_id):
                 {
                     "id": "link",
                     "label": "链接到此课程",
-                    "desc": f"当前节点指向已有课程 {target.code}（{ref_count}个节点已引用它）",
+                    "desc": f"只修改当前目录叶子指向 {target.code}；其他目录和资料不变",
                 },
             ]
-            # 只有当前有关联课程且不是同一个课程时，才可合并
-            if current_course and current_course.id != target.id:
+            # 只有当前课程只被此目录引用、且与目标不同，才允许合并资料。
+            current_ref_count = (current_course_info or {}).get("ref_count", 0)
+            if current_course and current_course.id != target.id and current_ref_count <= 1:
                 current_file_count = Material.objects.filter(course=current_course).count()
                 options.append({
                     "id": "merge",
-                    "label": "合并到此课程",
-                    "desc": f"将当前课程下的 {current_file_count} 个文件迁移到 {target.code}，删除当前课程",
+                    "label": "合并资料并链接",
+                    "desc": f"将当前课程的 {current_file_count} 个文件迁移到 {target.code}，再删除原课程",
                 })
             return _ok({
                 "situation": "exists_single",
@@ -286,12 +292,46 @@ def api_folder_set_course(request, folder_id):
 
     # 阶段 2：管理员已选择 action，执行操作
     if action_id == "rename_self":
-        # 重命名当前课程代码 + 迁移文件
+        # 新代码必须在执行时再次确认不存在，避免阶段 1 查询后被其他操作占用。
         if not cat.course_id:
             return _err("当前节点未关联课程，无法重命名", 400)
         old_course = cat.course
         old_code = old_course.code
+        if Course.objects.filter(code=course_code).exists():
+            return _err("该课程代码刚被创建，请重新查询后选择要链接的课程", 409)
 
+        # 同一课程可能被多个目录叶子引用。此时不能改共享 Course，也无法判断已有
+        # Material 属于哪个叶子；只为当前叶子创建独立 Course，资料继续留在旧课程。
+        ref_count = CourseCategory.objects.filter(course=old_course).count()
+        if ref_count > 1:
+            with transaction.atomic():
+                if Course.objects.filter(code=course_code).exists():
+                    return _err("该课程代码刚被创建，请重新查询后选择要链接的课程", 409)
+                new_course = Course.objects.create(
+                    college_id=old_course.college_id,
+                    name=cat.name or old_course.name,
+                    code=course_code,
+                    course_type=old_course.course_type,
+                    description=old_course.description,
+                )
+                cat.course = new_course
+                cat.save(update_fields=["course"])
+                FolderOperation.objects.create(
+                    user=request.user, action="set_course", folder_type="",
+                    category_id=cat.id, category_name=cat.name or f"#{cat.id}",
+                    reason=(
+                        f"从共享课程 {old_code} 独立改码为 {course_code}；"
+                        "原课程及资料保留给其他目录"
+                    ),
+                )
+            return _ok({
+                "message": f"当前目录已独立设为 {course_code}；原课程资料仍保留在 {old_code}",
+                "course_code": course_code,
+                "detached": True,
+                "materials_moved": 0,
+            })
+
+        # 当前课程只被此叶子引用，保留原有的课程改码和文件迁移行为。
         # 迁移物理文件
         old_dir = Path(settings.MEDIA_ROOT) / old_code
         new_dir = Path(settings.MEDIA_ROOT) / course_code
@@ -329,6 +369,8 @@ def api_folder_set_course(request, folder_id):
         if not target_id:
             return _err("请指定目标课程", 400)
         target = get_object_or_404(Course, id=target_id)
+        if target.code != course_code:
+            return _err("目标课程代码与输入不一致，请重新查询", 409)
         cat.course = target
         cat.save(update_fields=["course"])
         FolderOperation.objects.create(
@@ -347,11 +389,15 @@ def api_folder_set_course(request, folder_id):
         if not target_id:
             return _err("请指定目标课程", 400)
         target = get_object_or_404(Course, id=target_id)
+        if target.code != course_code:
+            return _err("目标课程代码与输入不一致，请重新查询", 409)
         if not cat.course_id:
             return _err("当前节点未关联课程，无法合并", 400)
         old_course = cat.course
         if old_course.id == target.id:
             return _err("不能合并到自身")
+        if CourseCategory.objects.filter(course=old_course).count() > 1:
+            return _err("当前课程被多个目录叶子共用，无法合并资料；请只链接当前叶子", 409)
 
         old_code = old_course.code
         old_name = old_course.name
@@ -364,6 +410,8 @@ def api_folder_set_course(request, folder_id):
 
         try:
             with transaction.atomic():
+                if CourseCategory.objects.filter(course=old_course).count() > 1:
+                    return _err("当前课程被多个目录叶子共用，无法合并资料；请只链接当前叶子", 409)
                 materials = list(Material.objects.select_for_update().filter(course=old_course))
                 if old_dir != new_dir:
                     new_dir.mkdir(parents=True, exist_ok=True)

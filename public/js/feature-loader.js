@@ -50,7 +50,8 @@
   // v318：宽屏管理后台放宽内容轨道；用户名单桌面端固定列宽并在单元格内省略，
   //       避免宽屏仍出现不必要的表格横向滚动。
   // v319：校园入口开放账号级自定义；个人入口与总管理员精选分层，缓存键同步推进。
-  var VERSION = '319';
+  // v320：课程代码操作默认只链接当前叶子；共享课程禁止被单叶合并或全局改码。
+  var VERSION = '320';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

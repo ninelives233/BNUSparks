@@ -182,6 +182,60 @@ class SetCourseTest(BnuTestCase):
         m.refresh_from_db()
         self.assertEqual(m.file_path, "NEW10001/test.pdf")
 
+    def test_shared_course_rename_detaches_only_current_leaf(self):
+        other_leaf = create_category(
+            name="统计学导论B", parent=self.cat.parent, course=self.course,
+        )
+        material = create_material(self.course, self.user, review_status="approved")
+
+        query = self._query("NEW10001")
+        self.assertEqual(query.status_code, 200)
+        self.assertEqual(query.json()["data"]["current_course"]["ref_count"], 2)
+
+        response = self._exec("NEW10001", "rename_self")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["data"]["detached"])
+        self.cat.refresh_from_db()
+        other_leaf.refresh_from_db()
+        self.course.refresh_from_db()
+        material.refresh_from_db()
+        self.assertEqual(self.cat.course.code, "NEW10001")
+        self.assertEqual(other_leaf.course_id, self.course.id)
+        self.assertEqual(self.course.code, "STA01801")
+        self.assertEqual(material.course_id, self.course.id)
+        self.assertEqual(material.file_path, "STA01801/test.pdf")
+
+    def test_shared_course_cannot_merge_all_its_materials(self):
+        other_leaf = create_category(
+            name="统计学导论B", parent=self.cat.parent, course=self.course,
+        )
+        target = create_course(
+            "TGT001", "其他课程", college=self.college, course_type="major",
+        )
+        material = create_material(self.course, self.user, review_status="approved")
+
+        query = self._query("TGT001")
+        self.assertEqual(query.status_code, 200)
+        self.assertEqual([option["id"] for option in query.json()["data"]["options"]], ["link"])
+
+        response = self._exec("TGT001", "merge", target.id)
+        self.assertEqual(response.status_code, 409)
+        self.cat.refresh_from_db()
+        other_leaf.refresh_from_db()
+        material.refresh_from_db()
+        self.assertEqual(self.cat.course_id, self.course.id)
+        self.assertEqual(other_leaf.course_id, self.course.id)
+        self.assertEqual(material.course_id, self.course.id)
+
+    def test_link_rejects_target_id_for_a_different_code(self):
+        target = create_course(
+            "TGT001", "其他课程", college=self.college, course_type="major",
+        )
+        response = self._exec("TGT002", "link", target.id)
+        self.assertEqual(response.status_code, 409)
+        self.cat.refresh_from_db()
+        self.assertEqual(self.cat.course_id, self.course.id)
+
     def test_merge_persists_to_existing_course(self):
         target = create_course("TGT001", "统计学导论B",
             college=self.college, course_type="major")
