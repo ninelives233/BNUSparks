@@ -8,6 +8,14 @@
 - 前端：纯 Vanilla JS SPA（无构建步骤），入口 `public/index.html`
 - 部署：Supervisor + Nginx（模板见 `deploy/nginx/bnusparks.conf.example`）
 
+## 开始改代码前
+
+- 先读 [AGENTS.md](AGENTS.md) 了解协作边界和验证要求；
+- 用 [project-map.md](project-map.md) 按任务定位文件；
+- 架构与关键流程见 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)，排障顺序见 [docs/BUG_TROUBLESHOOTING.md](docs/BUG_TROUBLESHOOTING.md)。
+
+这些文件只记录当前稳定事实。任务进度、临时调查结论和发布记录应留在 Issue、PR 或 Release 中。
+
 ## 本地开发
 
 ```bash
@@ -23,13 +31,14 @@ python3 manage.py runserver
 
 ## 测试
 
-测试套件维护在**私人仓库 `bnusparks-tests`**（含 500+ 用例与运行器）。获得仓库权限后：
+完整测试套件随源码维护：
 
 ```bash
-git clone git@github.com:ninelives233/bnusparks-tests.git materials/tests
 bash materials/tests/run_tests.sh                          # 全量回归
 bash materials/tests/run_tests.sh materials.tests.test_pin # 单文件
 ```
+
+功能修复应在同一个 PR 中包含对应回归测试；测试只能使用合成账号、临时目录和测试数据库。
 
 ## 提交规范
 

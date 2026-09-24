@@ -1,9 +1,6 @@
 name: CI
 
-# 主仓库 CI 只做「无密钥、无数据库」级别的检查。
-# 全量测试套件（537 例）在私人仓库 bnusparks-tests 维护，
-# 克隆到 materials/tests/ 后本地运行：
-#   bash materials/tests/run_tests.sh
+# CI 只使用一次性密钥、测试数据库与合成数据，不接触任何生产资源。
 on:
   push:
     branches: [main]
@@ -22,6 +19,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: 协作上下文完整性
+        run: python tools/check_context.py
+
       - name: 安装依赖
         run: pip install -r requirements.txt
 
@@ -33,3 +33,6 @@ jobs:
 
       - name: collectstatic（静态资源可完整收集）
         run: python manage.py collectstatic --noinput --settings=bnusparks.settings_test
+
+      - name: 完整回归测试
+        run: bash materials/tests/run_tests.sh

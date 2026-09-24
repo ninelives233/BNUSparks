@@ -47,7 +47,8 @@ scripts/*
 .vscode/
 .obsidian/
 CLAUDE.md
-AGENTS.md
+
+# AGENTS.md 是脱敏后的项目级协作规则，随代码共享。
 
 # ── 文档与历史存档（仅白名单文档入库）──
 history/
@@ -59,17 +60,14 @@ design-requirements-*.md
 implementation-plan-*.md
 docs/*
 !docs/OPERATIONS.md
-project-map.md
+!docs/PROJECT_MAP.md
+!docs/BUG_TROUBLESHOOTING.md
 ANNOUNCEMENT_*.md
 demo.html
 artifacts/
 
 # ── 服务器运行产物 ──
 *.pid
-
-# ── 测试（测试套件在私人仓库 bnusparks-tests；克隆到 materials/tests/ 使用）──
-materials/tests.py
-materials/tests/
 
 # ── Django 旧模板时代遗留（SPA 已废弃）──
 materials/templates/

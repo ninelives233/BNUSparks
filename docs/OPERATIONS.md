@@ -1,12 +1,20 @@
-# 运维手册（最小集）
+---
+status: current
+audience: operator
+purpose: deployment backup and recovery source of truth
+---
+
+# 运维手册
 
 > 只记录「无法从代码直接推导、但日常运维必需」的事实。本文件不含任何密钥与站点专属地址。
 
 ## 部署
 
-- 日常发布：本机运行 `bash deploy.sh`（rsync 前端与配置 → 远端 `migrate` / `createcachetable django_cache` / `collectstatic --clear` / `check`，见脚本尾部回显）
+- 日常发布：仅由维护者从已审查并合并的固定 commit/tag 运行受控 `deploy.sh`。脚本以归档方式传输应用文件，再执行迁移、缓存表创建、静态收集和 Django 检查。
 - 部署参数：`source deploy.sh.template` 后按需导出 `BNUSPARKS_DEPLOY_HOST` / `BNUSPARKS_DEPLOY_ROOT` / `BNUSPARKS_KNOWN_HOSTS`
-- 部署后验证：`bash scripts/deploy_verify.sh`
+- 部署后验证：`bash scripts/deploy_verify.sh https://站点域名`
+- 各校区使用相同代码 tag，但部署参数、域名、`.env`、数据库、上传目录和备份完全独立。
+- 不从个人功能分支部署，也不把服务器真实配置回传仓库。
 - 首次建站：空库 `python3 manage.py migrate` → `createcachetable django_cache` → `collectstatic` → Nginx 用 `deploy/nginx/bnusparks.conf.example` 模板 → gunicorn：
   `gunicorn bnusparks.wsgi:application --env DJANGO_SETTINGS_MODULE=bnusparks.settings_prod --bind 127.0.0.1:8000 --workers 2 --timeout 120`
 
@@ -55,3 +63,5 @@ python3 manage.py purge_trash --settings=bnusparks.settings_prod
 
 - 备份：低峰期 `sqlite3 /opt/bnusparks/data/db.sqlite3 ".backup '/opt/bnusparks/backups/db.sqlite3'"`（在线安全）；`data/materials/` 用户上传文件随机器快照同步
 - 恢复：停 gunicorn → 替换 db 文件 → `python3 manage.py migrate --settings=bnusparks.settings_prod` → 启动
+- 恢复前确认代码版本、迁移状态和文件备份属于同一站点；不得把一个校区的数据恢复到另一个校区。
+- 数据库已经执行的破坏性迁移不能仅靠回退代码撤销，必须使用经过验证的数据恢复方案。
