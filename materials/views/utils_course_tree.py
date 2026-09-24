@@ -156,7 +156,7 @@ def _get_courses_in_category_preloaded(cat, preload):
 # 课程树
 # ═══════════════════════════════════════════════════════════════
 
-def _build_tree_node(qs, *, preload=None):
+def _build_tree_node(qs, *, preload=None, parent_path=()):
     """递归构建课程树节点
 
     当提供 preload 参数时，使用预加载数据避免 N+1 查询。
@@ -203,7 +203,11 @@ def _build_tree_node(qs, *, preload=None):
             children = list(cat.children.all())
 
         if children:
-            built = _build_tree_node(children, preload=preload)
+            built = _build_tree_node(
+                children,
+                preload=preload,
+                parent_path=(*parent_path, cat.name),
+            )
             node["children"] = built
             # 从子节点传播 collegeId 向上
             if "collegeId" not in node:
@@ -289,9 +293,14 @@ def _build_tree_node(qs, *, preload=None):
     # 显示次序：中间文件夹与空分类目录按原 order 显示，真正的课程叶子（含 courseId）置后。
     # 空分类目录（无 children、无 courseId 的命名分类）也是结构节点——如尚未导入课程的
     # 通识课大类（艺术鉴赏与审美体验/经典研读与文化传承），不应被当叶子排到末尾。
+    # 课程文件夹按既有 order 排列；纯课程列表通常按资料数/名称整理，
+    # 但生物科学专业拓展课需要保留培养方案表中的顺序。
     if result and any("children" in r for r in result):
         result.sort(key=lambda r: 1 if ("courseId" in r and "children" not in r) else 0)
-    elif result:
+    elif result and parent_path != (
+        "专业课", "生命科学学院", "生物科学", "分流培养课程",
+        "拔尖创新人才模块", "专业选修课Ⅱ", "专业拓展课",
+    ):
         result.sort(key=lambda r: (0 if r.get("fileCount", 0) else 1, r.get("name", "")))
 
     return result
@@ -374,4 +383,3 @@ def _unique_college_names(colleges):
             seen.add(c.name)
             result.append({"id": c.id, "name": c.short_name or c.name})
     return result
-

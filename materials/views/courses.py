@@ -258,7 +258,13 @@ def api_course_tree(request):
     for root in roots:
         children = child_map.get(root.id, [])
         if children:
-            tree[root.name] = {"children": _build_tree_node(children, preload=preload)}
+            tree[root.name] = {
+                "children": _build_tree_node(
+                    children,
+                    preload=preload,
+                    parent_path=(root.name,),
+                )
+            }
 
     payload = _tree_cache_payload(tree)
     cache.set(CACHE_KEY, payload, 600)

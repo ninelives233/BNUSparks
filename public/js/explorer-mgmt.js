@@ -65,7 +65,7 @@
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:440px">' +
         '<h3>📎 修改课程代码</h3>' +
-        '<p style="font-size:0.82rem;color:var(--ink-mid);margin:2px 0 10px">输入新的课程代码。若已存在同代码的课程文件夹，将自动合并其中的文件；否则仅在原文件夹上修改课程代码。</p>' +
+        '<p style="font-size:0.82rem;color:var(--ink-mid);margin:2px 0 10px">输入要链接或改成的课程代码。代码已存在时可只链接当前叶子；合并资料需要单独选择。若原课程被多个目录共用，改成新代码只会拆分当前叶子，资料仍留在原课程。</p>' +
         '<div style="margin:10px 0"><label>新课程代码</label>' +
           '<input type="text" id="mgmtCourseCode" maxlength="20" placeholder="如 PSY30201" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box">' +
           '<div style="font-size:0.75rem;color:var(--ink-faint);margin-top:4px">仅允许字母和数字</div></div>' +
@@ -79,6 +79,18 @@
     document.body.appendChild(overlay);
     overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
     lockScroll();
+    var codeInput = document.getElementById('mgmtCourseCode');
+    if (codeInput) codeInput.addEventListener('input', function() {
+      var btn = document.getElementById('mgmtSetCourseBtn');
+      var area = document.getElementById('mgmtSituationArea');
+      if (btn && btn.dataset.mode) {
+        delete btn.dataset.mode;
+        delete btn.dataset.targetCourseId;
+        btn.disabled = false;
+        btn.textContent = '确认';
+        if (area) area.innerHTML = '';
+      }
+    });
     setTimeout(function() { var el = document.getElementById('mgmtCourseCode'); if (el) el.focus(); }, 100);
   }
 
@@ -111,7 +123,7 @@
       return;
     }
 
-    // 修改课程代码 — 主按钮（查询 → 自动重命名/合并；多课程时选择后执行）
+    // 修改课程代码 — 查询后选择链接/合并；共享课程的新代码需明确确认
     var setCourseBtn = e.target.closest('#mgmtSetCourseBtn');
     if (setCourseBtn) {
       var codeEl = document.getElementById('mgmtCourseCode');
@@ -121,7 +133,13 @@
       var catIdInput = document.getElementById('mgmtCatId');
       var targetCatId = catIdInput ? parseInt(catIdInput.value) : 0;
       if (!targetCatId) { alert('缺少目标节点'); return; }
-      if (setCourseBtn.dataset.mode === 'pick') {
+      if (setCourseBtn.dataset.mode === 'new_shared') {
+        _mgmtSetCourseExec(targetCatId, code, 'rename_self', null);
+      } else if (setCourseBtn.dataset.mode === 'action') {
+        var action = document.querySelector('input[name="mgmtSetCourseAction"]:checked');
+        if (!action) { alert('请选择操作'); return; }
+        _mgmtSetCourseExec(targetCatId, code, action.value, parseInt(setCourseBtn.dataset.targetCourseId));
+      } else if (setCourseBtn.dataset.mode === 'pick') {
         // 多课程已展示选择列表 → 确认执行链接
         var sel = document.querySelector('input[name="mgmtTargetCourse"]:checked');
         if (!sel) { alert('请选择要指向的课程'); return; }
@@ -134,19 +152,21 @@
     }
   });
 
-  // 阶段1：查询课程代码存在情况 → 自动执行（重命名/合并/链接），多课程时展示选择列表
+  // 阶段1：查询代码情况；已有代码时选择“只链接”或“合并”，多课程时选择目标
   function _mgmtSetCoursePhase1(catId, code, btn) {
     if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
     api('/api/folders/' + catId + '/set-course/', { method: 'POST', body: { course_code: code } })
       .then(function(r) {
         if (r.situation === 'new_code') {
-          // 无同代码文件夹 → 原文件夹上仅改课程代码（重命名 + 文件路径迁移）
-          _mgmtSetCourseExec(catId, code, 'rename_self', null);
+          var shared = r.current_course && Number(r.current_course.ref_count) > 1;
+          if (shared) {
+            _renderSharedCourseRename(r);
+          } else {
+            // 无同代码课程且原课程仅此目录使用 → 改码并迁移资料
+            _mgmtSetCourseExec(catId, code, 'rename_self', null);
+          }
         } else if (r.situation === 'exists_single') {
-          // 存在同代码课程 → 自动合并（有文件迁移）；无可合并时链接到已有课程
-          var hasMerge = (r.options || []).some(function(o) { return o.id === 'merge'; });
-          var targetId = r.existing_course && r.existing_course.id;
-          _mgmtSetCourseExec(catId, code, hasMerge ? 'merge' : 'link', targetId);
+          _renderSetCourseActions(r);
         } else if (r.situation === 'exists_multiple') {
           // 同代码对应多个课程 → 展示列表让管理员选择指向哪个
           _renderSetCoursePicker(r);
@@ -159,6 +179,50 @@
         _showScopeError('查询失败', err);
         if (btn) { btn.disabled = false; btn.textContent = '确认'; }
       });
+  }
+
+  function _renderSharedCourseRename(r) {
+    var area = document.getElementById('mgmtSituationArea');
+    if (!area) return;
+    var current = r.current_course || {};
+    var refs = Number(current.ref_count) || 0;
+    area.innerHTML = '<div class="mgmt-situation">' + esc(r.note) + '</div>' +
+      '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-mid)">当前课程被 ' + refs +
+      ' 个目录共用。继续后只给当前叶子创建新课程；原课程和已有资料继续留给其他目录。</div>';
+    var btn = document.getElementById('mgmtSetCourseBtn');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '只修改当前叶子';
+      btn.dataset.mode = 'new_shared';
+    }
+  }
+
+  function _renderSetCourseActions(r) {
+    var area = document.getElementById('mgmtSituationArea');
+    if (!area) return;
+    var html = '<div class="mgmt-situation">' + esc(r.note) + '</div>';
+    html += '<div class="mgmt-course-list">';
+    (r.options || []).forEach(function(option, idx) {
+      html += '<div class="mgmt-course-item" onclick="this.querySelector(\'input\').checked=true">' +
+        '<input type="radio" name="mgmtSetCourseAction" value="' + esc(option.id) + '"' + (idx === 0 ? ' checked' : '') + '>' +
+        ' <strong>' + esc(option.label) + '</strong>' +
+        '<div style="margin:3px 0 0 22px;font-size:0.78rem;color:var(--ink-faint)">' + esc(option.desc || '') + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    var current = r.current_course || {};
+    if (Number(current.ref_count) > 1) {
+      html += '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-mid)">当前课程由 ' +
+        Number(current.ref_count) + ' 个目录共用；这里只能链接当前叶子，避免影响其他目录。</div>';
+    }
+    area.innerHTML = html;
+    var btn = document.getElementById('mgmtSetCourseBtn');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = (r.options || []).length > 1 ? '执行所选操作' : '只链接当前叶子';
+      btn.dataset.mode = 'action';
+      btn.dataset.targetCourseId = r.existing_course && r.existing_course.id;
+    }
   }
 
   function _renderSetCoursePicker(r) {
@@ -174,7 +238,7 @@
       '</div>';
     });
     html += '</div>';
-    html += '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-mid)">该代码对应多个课程，请选择要指向的课程后点击「确认执行」</div>';
+    html += '<div style="margin-top:8px;font-size:0.82rem;color:var(--ink-mid)">该代码对应多个课程，请选择目标。操作只会修改当前叶子的关联。</div>';
     area.innerHTML = html;
     var btn = document.getElementById('mgmtSetCourseBtn');
     if (btn) { btn.disabled = false; btn.textContent = '确认执行'; btn.dataset.mode = 'pick'; }
