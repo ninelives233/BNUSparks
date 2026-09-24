@@ -18,10 +18,21 @@
 
 ## 本地开发
 
+本校区协作者需先获得公开仓库的写入权限；分校区协作者可以 fork 后提出 PR。
+以下命令在全新 clone 中执行，测试不依赖生产数据或服务器：
+
 ```bash
+git clone https://github.com/ninelives233/BNUSparks.git
+cd BNUSparks
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # 填入 SECRET_KEY
+bash materials/tests/run_tests.sh
+```
+
+需要启动本地网站时，再创建仅供开发使用的 `.env` 与本地数据库：
+
+```bash
+cp .env.example .env        # 将 SECRET_KEY 改成随机生成的本地值
 python3 manage.py migrate
 python3 manage.py createsuperuser
 python3 manage.py runserver
@@ -39,6 +50,28 @@ bash materials/tests/run_tests.sh materials.tests.test_pin # 单文件
 ```
 
 功能修复应在同一个 PR 中包含对应回归测试；测试只能使用合成账号、临时目录和测试数据库。
+
+## 从问题到 PR
+
+每个问题从最新 `main` 建一个短期分支；不要直接在 `main` 上改：
+
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c fix/简短问题名
+# 修改代码和对应测试
+bash materials/tests/run_tests.sh
+git add 相关文件
+git commit -m "fix: 简述问题"
+git push -u origin fix/简短问题名
+```
+
+在 GitHub 上选择「Compare & pull request」，目标分支为本仓库的 `main`。
+没有本仓库写权限的贡献者先 fork，将分支推到自己的 fork，再向本仓库 `main` 提 PR。
+PR 应写明问题、改动、测试结果和可能影响的数据/权限；CI 通过后由仓库维护者审核并合并。
+
+合并后由维护者在本地执行 `git pull --ff-only origin main`，再按
+[运维手册](docs/OPERATIONS.md) 部署固定提交。协作者无须接触服务器或生产配置。
 
 ## 提交规范
 
