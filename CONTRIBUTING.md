@@ -16,6 +16,9 @@
 
 这些文件只记录当前稳定事实。任务进度、临时调查结论和发布记录应留在 Issue、PR 或 Release 中。
 
+使用开发 Agent 的合作者，可将 [合作者 Agent 初始化提示词](docs/COLLABORATOR_AGENT_PROMPT.md) 完整交给 Agent；
+提示词中的“主仓库维护者”固定指 `ninelives233`，“合作者”指使用该 Agent 的开发者。
+
 ## 本地开发
 
 本校区和分校区协作者都先在 GitHub fork 本仓库，再克隆自己的 fork；
