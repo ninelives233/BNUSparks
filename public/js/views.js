@@ -125,44 +125,44 @@
     introduction: {
       title: '平台介绍',
       sections: [
-        { heading: '🌟 我们的使命', text: '致力于贯彻开源精神，抹平信息差，让每一位北师大同学都能免费获取优质学习资源。' },
-        { heading: '⚠️ 免责声明', text: '木铎星火由学生自发创建和维护，与北京师范大学及其任何官方机构无关，也不代表学校立场。本站内容主要由用户贡献，仅供学习交流参考。' },
-        { heading: '📚 平台内容', text: '课程笔记、复习资料、考试真题、学术论文、软件教程等一切对学习有帮助的资源。' },
-        { heading: '🤝 贡献方式', text: '任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！' },
+        { icon: 'sparkle', heading: '我们的使命', text: '致力于贯彻开源精神，抹平信息差，让每一位北师大同学都能免费获取优质学习资源。' },
+        { icon: 'alert', heading: '免责声明', text: '木铎星火由学生自发创建和维护，与北京师范大学及其任何官方机构无关，也不代表学校立场。本站内容主要由用户贡献，仅供学习交流参考。' },
+        { icon: 'book', heading: '平台内容', text: '课程笔记、复习资料、考试真题、学术论文、软件教程等一切对学习有帮助的资源。' },
+        { icon: 'handshake', heading: '贡献方式', text: '任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！' },
       ]
     },
     help: {
       title: '使用帮助',
       sections: [
-        { heading: '📖 浏览资料', text: '通过左侧导航栏选择通识课或专业课分类，逐层进入课程页面，即可浏览和下载资料。' },
-        { heading: '🔍 搜索功能', text: '在顶栏搜索框输入课程名、课程代码或资料标题，按回车或点击搜索按钮即可快速查找。' },
-        { heading: '📤 上传资料', text: '登录后在任意课程页面点击"上传资料"按钮，填写信息并选择文件即可分享你的学习资源。' },
+        { icon: 'book', heading: '浏览资料', text: '通过左侧导航栏选择通识课或专业课分类，逐层进入课程页面，即可浏览和下载资料。' },
+        { icon: 'search', heading: '搜索功能', text: '在顶栏搜索框输入课程名、课程代码或资料标题，按回车或点击搜索按钮即可快速查找。' },
+        { icon: 'upload', heading: '上传资料', text: '登录后在任意课程页面点击"上传资料"按钮，填写信息并选择文件即可分享你的学习资源。' },
       ]
     },
     contact: {
       title: '联系我们',
       sections: [
-        { heading: '📬 邮箱', text: 'bnusparks@163.com — 欢迎投稿、建议与合作。' },
-        { heading: '🐙 GitHub', text: '在 <a href="https://github.com/ninelives233/BNUSparks" target="_blank">github.com/ninelives233/BNUSparks</a> 提交 Issue 或 PR。' },
-        { heading: '👥 用户交流群', text: '微信扫码加入 BNUSparks-preview 群聊，和同学、维护者直接交流。点击二维码可查看大图。<a class="qr-thumb-link" href="/static/group-qr.png?v=312" target="_blank" rel="noopener"><img class="qr-thumb" src="/static/group-qr.png?v=312" width="112" height="112" alt="用户交流群二维码，点击查看大图"></a>' },
-        { heading: '📝 用户反馈', text: '<a href="https://wj.qq.com/s2/27532661/uiui/" target="_blank" rel="noopener">填写反馈问卷 →</a> 任何问题或建议都会被认真看到；也欢迎通过邮箱或 GitHub 告诉我们。' },
+        { icon: 'mail', heading: '邮箱', text: 'bnusparks@163.com — 欢迎投稿、建议与合作。' },
+        { icon: 'code', heading: 'GitHub', text: '在 <a href="https://github.com/ninelives233/BNUSparks" target="_blank">github.com/ninelives233/BNUSparks</a> 提交 Issue 或 PR。' },
+        { icon: 'users', heading: '用户交流群', text: '微信扫码加入 BNUSparks-preview 群聊，和同学、维护者直接交流。点击二维码可查看大图。<a class="qr-thumb-link" href="/static/group-qr.png?v=312" target="_blank" rel="noopener"><img class="qr-thumb" src="/static/group-qr.png?v=312" width="112" height="112" alt="用户交流群二维码，点击查看大图"></a>' },
+        { icon: 'edit', heading: '用户反馈', text: '<a href="https://wj.qq.com/s2/27532661/uiui/" target="_blank" rel="noopener">填写反馈问卷 →</a> 任何问题或建议都会被认真看到；也欢迎通过邮箱或 GitHub 告诉我们。' },
       ]
     },
     agreement: {
       title: '用户协议',
       sections: [
-        { heading: '📜 适用范围', text: '本站是学生或个人自发维护的学习交流平台，与北京师范大学及其官方机构无关。访问、注册或使用本站，即表示用户同意遵守用户协议与隐私政策。' },
-        { heading: '📚 资料与问答', text: '用户应只上传有权分享或依法可以使用的内容，不得发布侵权、违法、泄露他人个人信息或危害网络安全的内容。资料仅供学习交流参考。' },
-        { heading: '🔗 查看完整文本', text: '<a href="/static/legal/user-agreement.html?v=291" target="_blank" rel="noopener">在新页面阅读完整《用户协议》 →</a>' },
+        { icon: 'document', heading: '适用范围', text: '本站是学生或个人自发维护的学习交流平台，与北京师范大学及其官方机构无关。访问、注册或使用本站，即表示用户同意遵守用户协议与隐私政策。' },
+        { icon: 'book', heading: '资料与问答', text: '用户应只上传有权分享或依法可以使用的内容，不得发布侵权、违法、泄露他人个人信息或危害网络安全的内容。资料仅供学习交流参考。' },
+        { icon: 'link', heading: '查看完整文本', text: '<a href="/static/legal/user-agreement.html?v=291" target="_blank" rel="noopener">在新页面阅读完整《用户协议》 →</a>' },
       ]
     },
     privacy: {
       title: '隐私政策',
       sections: [
-        { heading: '🔒 收集范围', text: '本站只处理提供服务所需的校园邮箱、昵称、身份标签、资料/问答内容、下载与预览记录、收藏、课表数据，以及根据 IP 地址判断的所在地区信息。' },
-        { heading: '🛡️ 谁能看到', text: '公开发布的资料、问答和个人主页信息可能被其他用户看到；课表默认仅用户本人可见，但授权总管理员可能为运维、安全或服务治理目的只读查看。本站使用网易 163 SMTP 发送验证和找回密码邮件。' },
-        { heading: '🗑️ 行使权利', text: '用户可以修改个人资料、关闭身份公开、清除课表、删除有权限删除的内容，或通过 <a href="mailto:bnusparks@163.com">bnusparks@163.com</a> 申请查阅、更正、删除、注销账号等。' },
-        { heading: '📖 查看完整文本', text: '<a href="/static/legal/privacy-policy.html?v=291" target="_blank" rel="noopener">在新页面阅读完整《隐私政策》 →</a>' },
+        { icon: 'lock', heading: '收集范围', text: '本站只处理提供服务所需的校园邮箱、昵称、身份标签、资料/问答内容、下载与预览记录、收藏、课表数据，以及根据 IP 地址判断的所在地区信息。' },
+        { icon: 'shield', heading: '谁能看到', text: '公开发布的资料、问答和个人主页信息可能被其他用户看到；课表默认仅用户本人可见，但授权总管理员可能为运维、安全或服务治理目的只读查看。本站使用网易 163 SMTP 发送验证和找回密码邮件。' },
+        { icon: 'trash', heading: '行使权利', text: '用户可以修改个人资料、关闭身份公开、清除课表、删除有权限删除的内容，或通过 <a href="mailto:bnusparks@163.com">bnusparks@163.com</a> 申请查阅、更正、删除、注销账号等。' },
+        { icon: 'book', heading: '查看完整文本', text: '<a href="/static/legal/privacy-policy.html?v=291" target="_blank" rel="noopener">在新页面阅读完整《隐私政策》 →</a>' },
       ]
     }
   };
@@ -171,7 +171,7 @@
     const data = aboutContent[sectionKey] || aboutContent.introduction;
     const container = document.getElementById('aboutSectionContent');
     container.innerHTML = data.sections.map(s =>
-      '<section class="about-section"><h3>' + esc(s.heading) + '</h3><p>' + s.text + '</p></section>'
+      '<section class="about-section"><h3>' + iconSvg(s.icon, 'about-section-icon') + esc(s.heading) + '</h3><p>' + s.text + '</p></section>'
     ).join('');
     // Update tabs
     document.querySelectorAll('.about-tab').forEach(function(t) {
@@ -197,27 +197,27 @@
     tutorial: {
       title: '使用教程',
       sections: [
-        { heading: '👋 欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享课程教材、笔记、讲义、PPT、试卷、论文和软件教程，也可以在问答区交流新生指南类问题。未登录时可以浏览课程、搜索资料、查看公告和排行榜；注册并验证北师大邮箱后，才能上传、下载、收藏、参与问答和使用个人中心。' },
-        { heading: '🔑 注册与登录', text: '平台使用北师大校内邮箱注册：点击「注册」，填写 @bnu.edu.cn 或 @mail.bnu.edu.cn 邮箱、昵称和至少 8 位密码。提交后前往校园邮箱查收验证邮件，点击邮件链接激活账号。登录时可以输入完整邮箱或学号；勾选「记住我」可以延长登录状态。忘记密码时点击「忘记密码」，按邮件中的链接设置新密码；修改或重置密码后需要重新登录。' },
-        { heading: '🗓️ 我的课程', text: '注册并验证北师大邮箱、登录后，左侧导航栏会在「首页」下方显示「我的课程」；所有注册用户都可以使用。首次进入后可导入教务系统导出的「按列表方式显示」课程表，或手动添加课程；之后可在「课程列表」与「周课表」之间切换，课程代码匹配到平台课程时可直接查看资料。导入文件只在浏览器本地解析，解析出的课程数据会同步到本人账号，换设备登录同一账号即可查看。' },
-        { heading: '🔍 搜索课程和资料', text: '顶部搜索框支持按课程名称、课程代码、资料标题、任课教师或资料描述搜索。点击课程结果进入课程目录，点击资料结果直接打开资料详情；记不清代码时直接搜索课程名即可，通识课代码通常以 GEN 开头。进入问答区后，搜索框会自动切换为搜索问题和回答。' },
-        { heading: '📁 浏览课程', text: '从首页或左侧导航进入「通识课」或「专业课」，按课程树逐层展开：通识课通常是「通识分类 → 课程 → 资料」，专业课通常是「学院 → 专业/方向 → 课程 → 资料」。课程资料列表支持按资料类型筛选，并按上传时间、下载量、收藏量或任课教师排序；管理员置顶资料会优先显示。' },
-        { heading: '📄 查看、预览和收藏', text: '点击资料行或文件名可查看标题、课程、文件大小、资料类型、教师、上传者、简介、下载量和收藏量。可在线预览 PDF、图片和常见文本/代码文件；ZIP 文件可以查看内部目录结构。PPT/PPTX 等暂不支持在线渲染，可直接下载。觉得资料有用时点击「收藏」，之后从右上角头像菜单 →「我的收藏」查看课程、资料和问答帖子。' },
-        { heading: '⬇️ 下载资料', text: '登录后点击资料右侧「下载」即可保存。普通用户每天最多下载 15 个不同资料，管理员角色不限额；待审核资料通过后才会对其他用户开放。一次要下多份时，可在列表中勾选多行后点「批量下载」。部分浏览器（如 Edge）会限制连续多文件下载，建议允许本站的多文件下载权限，或使用 Chrome、分小批下载。' },
-        { heading: '⬆️ 上传资料', text: '登录后进入课程页面，点击「上传资料」；首页的「上传文件」按钮会先搜索课程。上传时选择资料类型并填写任课教师，可补充简介；单个文件不超过 50 MB，也可以切换到「文字录入」模式提交文本。普通用户上传后进入审核队列，通过后对所有人可见；被驳回时，通知和「我的上传」会显示原因，点击「重新上传」即可修改后再次提交。' },
-        { heading: '🆕 找不到课程？申请新建课程', text: '在上传入口中点击「新建课程」。通识课需要填写课程名称、课程代码和通识分类；专业课需要选择学院、专业和课程归属层级。可以在申请中附带文件或文字资料。系统会检查课程代码：如果该位置已有课程，应直接进入课程上传；如果课程已在其他位置存在，申请通过后会链接到原有课程。普通用户的新建课程申请需要管理员审核。' },
-        { heading: '🔔 通知中心和个人中心', text: '点击右上角头像：「通知中心」会显示审核、资料删除、举报处理、公告和问答互动等消息；「我的上传」可按已发布、审核中、已驳回、已删除查看资料；「我的下载」可查看正式下载记录；「我的收藏」可管理课程、资料和问答收藏；「个人中心」可修改昵称、简介、联系方式、头像、培养层次/学院/专业身份标签和密码。普通用户每天可修改一次完整身份标签，也可以决定这些身份是否显示在公开主页。' },
-        { heading: '💬 问答区', text: '进入左侧「问答区」后，首次访问的未登录访客需要填写学号完成当前标签页验证。登录用户可以在站点开放提问/回答时参与内容创作。问答区支持两级标签筛选、默认/最新/最热排序、搜索、精选置顶、收藏问题或回答、回答点赞和采纳最佳回答。普通用户发布的问题和回答会先进入审核；被驳回后编辑内容即可重新提交。作者删除内容时需要填写理由，已有回答、点赞或收藏的内容会转为管理员审核的删除申请。' },
-        { heading: '🚩 举报与反馈', text: '资料详情和问答内容中都有「举报」入口。至少选择一个举报原因；选择「其他原因」时必须填写详细说明。普通用户每天最多提交 15 次举报。网站问题、课程树缺失、课程申请建议或合作事项，可通过 bnusparks@163.com 联系维护者，也可以在 GitHub 项目提交 Issue 或 PR。' },
-        { heading: '📱 移动端', text: '手机上点击左上角 ☰ 打开导航抽屉，即可浏览课程、搜索、查看资料、上传和下载。资料筛选、批量操作、问答编辑和文件预览在电脑或平板上显示更完整；批量下载也更适合在电脑浏览器中使用。' },
+        { icon: 'user', heading: '欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享课程教材、笔记、讲义、PPT、试卷、论文和软件教程，也可以在问答区交流新生指南类问题。未登录时可以浏览课程、搜索资料、查看公告和排行榜；注册并验证北师大邮箱后，才能上传、下载、收藏、参与问答和使用个人中心。' },
+        { icon: 'lock', heading: '注册与登录', text: '平台使用北师大校内邮箱注册：点击「注册」，填写 @bnu.edu.cn 或 @mail.bnu.edu.cn 邮箱、昵称和至少 8 位密码。提交后前往校园邮箱查收验证邮件，点击邮件链接激活账号。登录时可以输入完整邮箱或学号；勾选「记住我」可以延长登录状态。忘记密码时点击「忘记密码」，按邮件中的链接设置新密码；修改或重置密码后需要重新登录。' },
+        { icon: 'calendar', heading: '我的课程', text: '注册并验证北师大邮箱、登录后，左侧导航栏会在「首页」下方显示「我的课程」；所有注册用户都可以使用。首次进入后可导入教务系统导出的「按列表方式显示」课程表，或手动添加课程；之后可在「课程列表」与「周课表」之间切换，课程代码匹配到平台课程时可直接查看资料。导入文件只在浏览器本地解析，解析出的课程数据会同步到本人账号，换设备登录同一账号即可查看。' },
+        { icon: 'search', heading: '搜索课程和资料', text: '顶部搜索框支持按课程名称、课程代码、资料标题、任课教师或资料描述搜索。点击课程结果进入课程目录，点击资料结果直接打开资料详情；记不清代码时直接搜索课程名即可，通识课代码通常以 GEN 开头。进入问答区后，搜索框会自动切换为搜索问题和回答。' },
+        { icon: 'folder', heading: '浏览课程', text: '从首页或左侧导航进入「通识课」或「专业课」，按课程树逐层展开：通识课通常是「通识分类 → 课程 → 资料」，专业课通常是「学院 → 专业/方向 → 课程 → 资料」。课程资料列表支持按资料类型筛选，并按上传时间、下载量、收藏量或任课教师排序；管理员置顶资料会优先显示。' },
+        { icon: 'document', heading: '查看、预览和收藏', text: '点击资料行或文件名可查看标题、课程、文件大小、资料类型、教师、上传者、简介、下载量和收藏量。可在线预览 PDF、图片和常见文本/代码文件；ZIP 文件可以查看内部目录结构。PPT/PPTX 等暂不支持在线渲染，可直接下载。觉得资料有用时点击「收藏」，之后从右上角头像菜单 →「我的收藏」查看课程、资料和问答帖子。' },
+        { icon: 'arrow-down', heading: '下载资料', text: '登录后点击资料右侧「下载」即可保存。普通用户每天最多下载 15 个不同资料，管理员角色不限额；待审核资料通过后才会对其他用户开放。一次要下多份时，可在列表中勾选多行后点「批量下载」。部分浏览器（如 Edge）会限制连续多文件下载，建议允许本站的多文件下载权限，或使用 Chrome、分小批下载。' },
+        { icon: 'upload', heading: '上传资料', text: '登录后进入课程页面，点击「上传资料」；首页的「上传文件」按钮会先搜索课程。上传时选择资料类型并填写任课教师，可补充简介；单个文件不超过 50 MB，也可以切换到「文字录入」模式提交文本。普通用户上传后进入审核队列，通过后对所有人可见；被驳回时，通知和「我的上传」会显示原因，点击「重新上传」即可修改后再次提交。' },
+        { icon: 'sparkle', heading: '找不到课程？申请新建课程', text: '在上传入口中点击「新建课程」。通识课需要填写课程名称、课程代码和通识分类；专业课需要选择学院、专业和课程归属层级。可以在申请中附带文件或文字资料。系统会检查课程代码：如果该位置已有课程，应直接进入课程上传；如果课程已在其他位置存在，申请通过后会链接到原有课程。普通用户的新建课程申请需要管理员审核。' },
+        { icon: 'bell', heading: '通知中心和个人中心', text: '点击右上角头像：「通知中心」会显示审核、资料删除、举报处理、公告和问答互动等消息；「我的上传」可按已发布、审核中、已驳回、已删除查看资料；「我的下载」可查看正式下载记录；「我的收藏」可管理课程、资料和问答收藏；「个人中心」可修改昵称、简介、联系方式、头像、培养层次/学院/专业身份标签和密码。普通用户每天可修改一次完整身份标签，也可以决定这些身份是否显示在公开主页。' },
+        { icon: 'comment', heading: '问答区', text: '进入左侧「问答区」后，首次访问的未登录访客需要填写学号完成当前标签页验证。登录用户可以在站点开放提问/回答时参与内容创作。问答区支持两级标签筛选、默认/最新/最热排序、搜索、精选置顶、收藏问题或回答、回答点赞和采纳最佳回答。普通用户发布的问题和回答会先进入审核；被驳回后编辑内容即可重新提交。作者删除内容时需要填写理由，已有回答、点赞或收藏的内容会转为管理员审核的删除申请。' },
+        { icon: 'flag', heading: '举报与反馈', text: '资料详情和问答内容中都有「举报」入口。至少选择一个举报原因；选择「其他原因」时必须填写详细说明。普通用户每天最多提交 15 次举报。网站问题、课程树缺失、课程申请建议或合作事项，可通过 bnusparks@163.com 联系维护者，也可以在 GitHub 项目提交 Issue 或 PR。' },
+        { icon: 'mobile', heading: '移动端', text: '手机上点击左上角 ☰ 打开导航抽屉，即可浏览课程、搜索、查看资料、上传和下载。资料筛选、批量操作、问答编辑和文件预览在电脑或平板上显示更完整；批量下载也更适合在电脑浏览器中使用。' },
       ]
     },
     announcements: {
       title: '公告',
       sections: [
-        { heading: '🎉 平台上线', text: 'BNU Sparks 现已正式上线！欢迎访问 bnu.icu，获取和分享学习资料。' },
-        { heading: '📢 招募贡献者', text: '我们正在招募平台维护者和内容贡献者。如果你对开源、教育资源开放感兴趣，欢迎通过邮箱联系我们。' },
-        { heading: '📋 后续规划', text: '平台将持续更新课程数据，逐步覆盖全校所有专业的培养方案课程。同时将开发更多实用功能，如个人收藏、资料评论等。' },
+        { icon: 'sparkle', heading: '平台上线', text: 'BNU Sparks 现已正式上线！欢迎访问 bnu.icu，获取和分享学习资料。' },
+        { icon: 'megaphone', heading: '招募贡献者', text: '我们正在招募平台维护者和内容贡献者。如果你对开源、教育资源开放感兴趣，欢迎通过邮箱联系我们。' },
+        { icon: 'clipboard', heading: '后续规划', text: '平台将持续更新课程数据，逐步覆盖全校所有专业的培养方案课程。同时将开发更多实用功能，如个人收藏、资料评论等。' },
       ]
     },
     broad: {
@@ -233,7 +233,7 @@
     const container = document.getElementById(viewKey + 'Content');
     if (!container) return;
     container.innerHTML = data.sections.map(s =>
-      '<section class="about-section">' + (s.heading ? '<h3>' + esc(s.heading) + '</h3>' : '') + '<p>' + esc(s.text) + '</p></section>'
+      '<section class="about-section">' + (s.heading ? '<h3>' + iconSvg(s.icon, 'about-section-icon') + esc(s.heading) + '</h3>' : '') + '<p>' + esc(s.text) + '</p></section>'
     ).join('');
   }
 
@@ -808,7 +808,7 @@
           ? '<img src="' + esc(a.publisher_avatar) + '" class="ai-avatar" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">'
           : '<span class="ai-avatar-placeholder" onclick="showUserPublic(' + a.publisher_id + ')" title="查看发布者主页">' + esc((a.publisher_name || '?').charAt(0).toUpperCase()) + '</span>';
         var canDelete = currentUser && (currentUser.id === a.publisher_id || currentUser.role === 'super_admin');
-        var deleteBtn = canDelete ? '<button class="ai-delete" onclick="deleteAnnouncement(' + a.id + ')" title="删除公告">🗑</button>' : '';
+        var deleteBtn = canDelete ? '<button class="ai-delete" onclick="deleteAnnouncement(' + a.id + ')" title="删除公告">' + iconSvg('trash') + '</button>' : '';
         html += '<div class="announcement-item" id="announcement-' + a.id + '">' +
           '<div class="ai-header">' +
             avatarHtml +
@@ -839,7 +839,7 @@
         '<input type="text" id="aeTitle" placeholder="公告标题" maxlength="200">' +
         '<textarea id="aeContent" placeholder="公告内容..."></textarea>' +
         '<div class="ae-actions">' +
-          '<button class="ae-publish" onclick="submitAnnouncement(this)">📢 发布</button>' +
+          '<button class="ae-publish" onclick="submitAnnouncement(this)">' + iconSvg('megaphone') + ' 发布</button>' +
           '<button class="ae-cancel" onclick="_removeOverlay(this.closest(\'.announcement-editor-overlay\'))">取消</button>' +
         '</div>' +
       '</div>';
@@ -927,12 +927,12 @@
       '<div class="search-overlay-inner" onclick="event.stopPropagation()">' +
         '<button type="button" class="search-overlay-close" aria-label="关闭课程搜索" onclick="_removeOverlay(this.closest(\'.search-overlay\'))">✕</button>' +
         '<div class="so-header">' +
-          '<div class="so-icon">📤</div>' +
+          '<div class="so-icon">' + iconSvg('upload') + '</div>' +
           '<div class="so-title">上传资料</div>' +
           '<div class="so-sub">搜索课程，找到你希望贡献资料的课程</div>' +
         '</div>' +
         '<div class="so-input-group">' +
-          '<span class="so-input-icon">🔍</span>' +
+          '<span class="so-input-icon">' + iconSvg('search') + '</span>' +
           '<input type="text" id="courseSearchInput" placeholder="课程名称或代码…" autofocus>' +
         '</div>' +
         '<div class="so-new-course">' +
@@ -941,7 +941,7 @@
         '</div>' +
         '<div class="search-overlay-results" id="courseSearchResults">' +
           '<div class="so-hint">' +
-            '<div class="so-hint-text">💡 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div>' +
+            '<div class="so-hint-text">' + iconSvg('info') + ' 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -960,7 +960,7 @@
       var q = this.value.trim();
       if (q.length < 1) {
         document.getElementById('courseSearchResults').innerHTML =
-          '<div class="so-hint"><div class="so-hint-text">💡 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div></div>';
+          '<div class="so-hint"><div class="so-hint-text">' + iconSvg('info') + ' 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div></div>';
         return;
       }
       timer = setTimeout(function() { searchCourses(q, overlay, seq, function() { return searchSeq; }); }, 300);
@@ -980,7 +980,7 @@
         if (!courses.length) window.BnuMonitoring.track('search.no_result');
       }
       if (!courses.length) {
-        resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">🔍</div><div class="so-empty-text">未找到相关课程，试试其他关键词</div></div>';
+        resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">' + iconSvg('search') + '</div><div class="so-empty-text">未找到相关课程，试试其他关键词</div></div>';
         return;
       }
       var html = '<div class="so-results-list">';
@@ -995,7 +995,7 @@
       resultsEl.innerHTML = html;
     } catch(e) {
       if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
-      resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">⚠️</div><div class="so-empty-text">搜索失败</div></div>';
+      resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">' + iconSvg('alert') + '</div><div class="so-empty-text">搜索失败</div></div>';
     }
   }
 

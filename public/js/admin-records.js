@@ -8,23 +8,23 @@
     try {
       var data = await api('/api/moderation/deletions/?page=' + page + '&per_page=' + _delPerPage);
       if (!data.items || !data.items.length) {
-        content.innerHTML = '<div class="admin-empty">🗑️ 暂无文件删除记录</div>';
+        content.innerHTML = '<div class="admin-empty">' + iconSvg('trash') + ' 暂无文件删除记录</div>';
         return;
       }
       var _esc = escapeHtml || function(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       };
-      var html = '<div class="admin-section-label">🗑️ 删除记录</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('trash') + ' 删除记录</div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>资料标题</th><th>课程</th><th>大小</th><th>上传者</th><th>删除人</th><th>删除时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(r) {
         var restoreBtn = '';
         if (r.can_restore && !r.is_restored) {
-          restoreBtn = '<button class="admin-btn admin-btn-sm admin-btn-approve" data-deleter="' + _esc(r.deleted_by_name) + '" onclick="restoreDeletion(' + r.id + ', this)">↩ 撤销</button>';
+          restoreBtn = '<button class="admin-btn admin-btn-sm admin-btn-approve" data-deleter="' + _esc(r.deleted_by_name) + '" onclick="restoreDeletion(' + r.id + ', this)">' + iconSvg('reply') + ' 撤销</button>';
         } else if (r.is_restored) {
-          restoreBtn = '<span class="status-restored">✅ 已恢复</span>';
+          restoreBtn = '<span class="status-restored">' + iconSvg('check-circle') + ' 已恢复</span>';
         } else {
-          restoreBtn = '<span class="status-expired">⏰ 已过期</span>';
+          restoreBtn = '<span class="status-expired">' + iconSvg('clock') + ' 已过期</span>';
         }
         html += '<tr>' +
           '<td>' + _esc(r.title) + '<br><span class="ft-meta">' + _esc(r.file_name) + '</span></td>' +
@@ -70,7 +70,7 @@
       if (!confirm('确定撤销此删除操作？文件将被恢复。')) return;
       if (btn) btn.disabled = true;
       api('/api/moderation/deletions/' + delId + '/restore/', { method: 'POST', body: {} }).then(function() {
-        alert('✅ 文件已恢复');
+        alert('文件已恢复');
         if (typeof refreshCourseTree === 'function') refreshCourseTree();
         renderAdminDeletions(document.getElementById('adminContent'), _delPage);
       }).catch(function(err) {
@@ -88,7 +88,7 @@
     overlay.className = 'admin-reject-overlay';
     overlay.innerHTML =
       '<div class="admin-reject-dialog">' +
-        '<h3>↩ 撤销删除</h3>' +
+        '<h3>' + iconSvg('reply') + ' 撤销删除</h3>' +
         '<p class="dlg-hint">你正在撤销他人的删除操作，请填写撤销理由。</p>' +
         '<textarea id="restoreReason" rows="3" placeholder="请填写撤销理由"></textarea>' +
         '<div class="ar-actions">' +
@@ -109,7 +109,7 @@
     try {
       await api('/api/moderation/deletions/' + delId + '/restore/', { method: 'POST', body: { reason: reason } });
       _removeOverlay(overlay);
-      alert('✅ 文件已恢复，撤销理由已通知相关用户');
+      alert('文件已恢复，撤销理由已通知相关用户');
       if (typeof refreshCourseTree === 'function') refreshCourseTree();
       renderAdminDeletions(document.getElementById('adminContent'), _delPage);
     } catch(err) {
@@ -127,20 +127,20 @@
     try {
       var data = await api('/api/operations/?page=' + _opPage + '&per_page=' + _opPerPage);
       if (!data.items || !data.items.length) {
-        content.innerHTML = '<div class="admin-empty">📋 暂无操作记录</div>';
+        content.innerHTML = '<div class="admin-empty">' + iconSvg('clipboard') + ' 暂无操作记录</div>';
         return;
       }
-      var html = '<div class="admin-section-label">📋 操作记录</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('clipboard') + ' 操作记录</div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>操作人</th><th>操作</th><th>文件夹</th><th>路径</th><th>类型</th><th>时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(op) {
         var restoreBtn = '';
         if (op.can_restore && !op.is_restored) {
-          restoreBtn = '<button class="admin-btn admin-btn-sm admin-btn-approve" onclick="restoreFolderOp(' + op.id + ', this)">↩ 撤销</button>';
+          restoreBtn = '<button class="admin-btn admin-btn-sm admin-btn-approve" onclick="restoreFolderOp(' + op.id + ', this)">' + iconSvg('reply') + ' 撤销</button>';
         } else if (op.is_restored) {
-          restoreBtn = '<span class="status-restored">✅ 已撤销</span>';
+          restoreBtn = '<span class="status-restored">' + iconSvg('check-circle') + ' 已撤销</span>';
         } else {
-          restoreBtn = '<span class="status-expired">⏰ 已过期</span>';
+          restoreBtn = '<span class="status-expired">' + iconSvg('clock') + ' 已过期</span>';
         }
         var isCreate = op.action === 'create';
         html += '<tr>' +
@@ -196,7 +196,7 @@
   function _reportCardHtml(g) {
     // v183 问答区举报（问题/回答）
     if (g.kind === 'question' || g.kind === 'answer') {
-      var qaKindIcon = g.kind === 'answer' ? '💬' : '❓';
+      var qaKindIcon = iconSvg(g.kind === 'answer' ? 'comment' : 'question');
       var qaKindLabel = g.kind === 'answer' ? '回答举报' : '问题举报';
       var viewBtn = g.kind === 'question'
         ? '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="qaOpenDetail(' + g.target_id + ')" title="跳转到该问题核实"><span>详情</span></button>'
@@ -204,9 +204,9 @@
       return '<div class="admin-pending-card report-card">' +
         '<div class="pc-title">' + qaKindIcon + ' ' + esc(g.target_title) + ' <span class="report-count-pill">' + g.reporter_count + ' 人举报</span></div>' +
         '<div class="pc-meta">' +
-          '<span>💬 ' + qaKindLabel + '</span>' +
-          '<span>👤 ' + esc(g.author_name) + '</span>' +
-          '<span>📅 ' + esc(g.latest_reported_at) + '</span>' +
+          '<span>' + iconSvg('comment') + ' ' + qaKindLabel + '</span>' +
+          '<span>' + iconSvg('user') + ' ' + esc(g.author_name) + '</span>' +
+          '<span>' + iconSvg('calendar') + ' ' + esc(g.latest_reported_at) + '</span>' +
         '</div>' +
         _reportReasonTags(g.reason_labels) +
         '<div class="pc-meta report-reporters">举报人：' + g.reporter_names.map(esc).join('、') + '</div>' +
@@ -223,9 +223,9 @@
       return '<div class="admin-pending-card report-card">' +
         '<div class="pc-title">' + esc(g.material_title) + ' ' + directTag + ' <span class="report-count-pill">' + g.reporter_count + ' 人举报</span></div>' +
         '<div class="pc-meta">' +
-          '<span>📚 ' + esc(g.course_name) + ' (' + esc(g.course_code) + ')</span>' +
-          '<span>📅 ' + g.latest_reported_at + '</span>' +
-          (g.material_exists ? '' : '<span class="report-gone">⚠ 资料已删除</span>') +
+          '<span>' + iconSvg('book') + ' ' + esc(g.course_name) + ' (' + esc(g.course_code) + ')</span>' +
+          '<span>' + iconSvg('calendar') + ' ' + g.latest_reported_at + '</span>' +
+          (g.material_exists ? '' : '<span class="report-gone">' + iconSvg('alert') + ' 资料已删除</span>') +
         '</div>' +
         _reportReasonTags(g.reason_labels) +
         '<div class="pc-meta report-reporters">举报人：' + g.reporter_names.map(esc).join('、') + '</div>' +
@@ -243,7 +243,7 @@
       : '<button class="admin-btn admin-btn-primary" onclick="openReportHandleDialog(\'' + g.group_key + '\')">处理</button>';
     return '<div class="admin-pending-card report-card">' +
       '<div class="pc-title">用户：' + esc(g.target_user_name) + ' <span class="report-count-pill">' + g.reporter_count + ' 人举报</span> ' + stTag + '</div>' +
-      '<div class="pc-meta"><span>📅 ' + g.latest_reported_at + '</span></div>' +
+      '<div class="pc-meta"><span>' + iconSvg('calendar') + ' ' + g.latest_reported_at + '</span></div>' +
       _reportReasonTags(g.reason_labels) +
       '<div class="pc-meta report-reporters">举报人：' + g.reporter_names.map(esc).join('、') + '</div>' +
       (g.latest_detail ? '<div class="report-detail">' + esc(g.latest_detail) + '</div>' : '') +
@@ -465,7 +465,7 @@
         content.innerHTML = '<div class="admin-empty">暂无举报记录</div>';
         return;
       }
-      var html = '<div class="admin-section-label">📄 举报记录</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('document') + ' 举报记录</div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>类型</th><th>被举报</th><th>课程</th><th>举报人</th><th>原因</th><th>状态</th><th>处理人</th><th>举报时间</th><th>处理时间</th></tr></thead><tbody>';
       data.items.forEach(function(r) {
@@ -509,11 +509,10 @@
     if (!confirm('确定撤销此操作？')) return;
     if (btn) btn.disabled = true;
     api('/api/operations/' + opId + '/restore/', { method: 'POST', body: {} }).then(function() {
-      alert('✅ 操作已撤销');
+      alert('操作已撤销');
       renderAdminOperations(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert('撤销失败：' + err.message);
       if (btn) btn.disabled = false;
     });
   }
-

@@ -151,7 +151,7 @@ function buildQaEditor(container, initialHtml, opts) {
         '<button type="button" class="qe-btn" data-cmd="insertUnorderedList" title="无序列表">• ≡</button>' +
         '<button type="button" class="qe-btn" data-cmd="insertOrderedList" title="有序列表">1. ≡</button>' +
         '<span class="qe-sep"></span>' +
-        '<button type="button" class="qe-btn" data-cmd="insertImage" title="插入图片">🖼</button>' +
+        '<button type="button" class="qe-btn" data-cmd="insertImage" title="插入图片">' + iconSvg('image') + '</button>' +
         '<button type="button" class="qe-btn" data-cmd="removeFormat" title="清除格式">⌫</button>' +
       '</div>' +
       '<div class="qa-editor-content" contenteditable="true" data-placeholder="' + placeholder + '">' +

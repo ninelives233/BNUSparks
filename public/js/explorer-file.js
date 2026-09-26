@@ -18,7 +18,7 @@
       || (file.can_delete && currentUser.role !== 'user')
     );
 
-    var penIcon = '<span class="fi-pen" onclick="fiEditField(this)" title="点击编辑">✏️</span>';
+    var penIcon = '<span class="fi-pen" onclick="fiEditField(this)" title="点击编辑">' + iconSvg('edit') + '</span>';
     var titleHtml = canEdit
       ? '<span class="fi-editable" data-field="title" data-fid="' + file.id + '">' + esc(file.title) + '</span>' + penIcon
       : esc(file.title);
@@ -47,9 +47,9 @@
           '<div class="fi-row fi-row-desc"><span class="fi-label">简介</span><span class="fi-value">' + descHtml + '</span></div>' +
           '<div class="fi-actions">' +
             (currentUser
-              ? '<button class="fi-preview-btn" onclick="event.stopPropagation();showPreview(' + file.id + ')">预览文件</button><button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>'
-              : '<button class="fi-download-btn" onclick="event.stopPropagation();handleDownloadClick(' + file.id + ',this,event)">⬇ 下载文件</button>') +
-            (file.can_delete && !_civilianMode ? '<button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">🗑️ 删除此资料</button>' : '') +
+              ? '<button class="fi-preview-btn" onclick="event.stopPropagation();showPreview(' + file.id + ')">预览文件</button><button class="fi-download-btn" onclick="handleDownloadClick(' + file.id + ',this,event)">' + iconSvg('arrow-down') + ' 下载文件</button>'
+              : '<button class="fi-download-btn" onclick="event.stopPropagation();handleDownloadClick(' + file.id + ',this,event)">' + iconSvg('arrow-down') + ' 下载文件</button>') +
+            (file.can_delete && !_civilianMode ? '<button class="admin-btn admin-btn-reject" onclick="deleteFileConfirm(' + file.id + ',this)">' + iconSvg('trash') + ' 删除此资料</button>' : '') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -81,21 +81,23 @@
     span.appendChild(input);
     input.focus();
     input.select();
-    penEl.textContent = '💾';
+    penEl.innerHTML = iconSvg('check');
+    penEl.dataset.iconState = 'edit';
     penEl.onclick = function(e) {
       e.stopPropagation();
       fiSaveField(span, fid, field, input, penEl);
     };
     input.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter') { fiSaveField(span, fid, field, input, penEl); }
-      if (ev.key === 'Escape') { span.textContent = original; penEl.textContent = '✏️'; penEl.onclick = function(){fiEditField(penEl);}; }
+      if (ev.key === 'Escape') { span.textContent = original; penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fiEditField(penEl);}; }
     });
     input.addEventListener('blur', function() {
       // small delay to allow click on save button
       setTimeout(function() {
-        if (!penEl.textContent.includes('✅')) {
+        if (penEl.dataset.iconState !== 'saved') {
           span.textContent = original;
-          penEl.textContent = '✏️';
+          penEl.innerHTML = iconSvg('edit');
+          penEl.dataset.iconState = 'edit';
           penEl.onclick = function(){fiEditField(penEl);};
         }
       }, 200);
@@ -106,9 +108,10 @@
     var val = input.value.trim();
     api('/api/files/' + fid + '/update/', { method: 'PATCH', body: (function(){var o={};o[field]=val;return o;})() }).then(function(data) {
       spanEl.textContent = data[field] || val || '未填写';
-      penEl.textContent = '✅';
+      penEl.innerHTML = iconSvg('check');
+      penEl.dataset.iconState = 'saved';
       penEl.onclick = function(){};
-      setTimeout(function() { penEl.textContent = '✏️'; penEl.onclick = function(){fiEditField(penEl);}; }, 1500);
+      setTimeout(function() { penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fiEditField(penEl);}; }, 1500);
     }).catch(function(err) {
       alert('保存失败：' + err.message);
     });
@@ -426,7 +429,7 @@
       }
     }
     var canEdit = currentUser && !_civilianMode && (file.is_uploader || (file.can_delete && currentUser.role !== 'user'));
-    var penIcon = '<button class="fd-pen" onclick="fdEditField(this)" title="点击编辑">\u270f\ufe0f</button>';
+    var penIcon = '<button class="fd-pen" onclick="fdEditField(this)" title="点击编辑">' + iconSvg('edit') + '</button>';
     var typeDropdownHtml = canEdit
       ? '<span class="fd-type-dropdown-wrap"><select class="fd-type-select" onchange="fdChangeType(' + (file.id || 0) + ',this)">' +
           MATERIAL_TYPES.map(function(t) {
@@ -440,7 +443,7 @@
       var titleHtml = canEdit
         ? '<span class="fd-editable" data-field="title" data-fid="' + (file.id || 0) + '">' + esc(file.title || '') + '</span>' + penIcon
         : esc(file.title || '');
-      if (file.is_pinned) titleHtml += ' <span class="file-pin-badge" title="已置顶">📌</span>';
+      if (file.is_pinned) titleHtml += ' <span class="file-pin-badge" title="已置顶">' + iconSvg('pin') + '</span>';
       titleEl.innerHTML = titleHtml;
     }
     var meta1 = document.querySelector('.fd-meta1');
@@ -566,7 +569,7 @@
           return;
         }
       } catch(e) {}
-      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">📦</div><div class="pv-unsupported-text">压缩包文件结构读取失败，文件可能已损坏</div></div>';
+      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">' + iconSvg('archive') + '</div><div class="pv-unsupported-text">压缩包文件结构读取失败，文件可能已损坏</div></div>';
       return;
     }
 
@@ -579,7 +582,7 @@
     // 可预览类型：确保预览区域可见
     if (area) area.style.display = '';
 
-    body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon" style="font-size:1rem">\u27f3</div><div class="pv-unsupported-text" style="font-size:0.85rem">正在加载预览…</div></div>';
+    body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon" style="font-size:1rem">' + iconSvg('refresh') + '</div><div class="pv-unsupported-text" style="font-size:0.85rem">正在加载预览…</div></div>';
     try {
       var previewUrl = await _previewUrl(fileId);
       if (extType === 'pdf') {
@@ -606,7 +609,7 @@
         });
       }
     } catch(e) {
-      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">\u26a0\ufe0f</div><div class="pv-unsupported-text">预览加载失败，请尝试下载后查看</div></div>';
+      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">' + iconSvg('alert') + '</div><div class="pv-unsupported-text">预览加载失败，请尝试下载后查看</div></div>';
     }
   }
 
@@ -785,20 +788,22 @@
     span.appendChild(input);
     input.focus();
     input.select();
-    penEl.textContent = '\U0001f4be';
+    penEl.innerHTML = iconSvg('save');
+    penEl.dataset.iconState = 'editing';
     penEl.onclick = function(e) {
       e.stopPropagation();
       fdSaveField(span, fid, field, input, penEl);
     };
     input.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter') { fdSaveField(span, fid, field, input, penEl); }
-      if (ev.key === 'Escape') { span.textContent = original; penEl.textContent = '\u270f\ufe0f'; penEl.onclick = function(){fdEditField(penEl);}; }
+      if (ev.key === 'Escape') { span.textContent = original; penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fdEditField(penEl);}; }
     });
     input.addEventListener('blur', function() {
       setTimeout(function() {
-        if (!penEl.textContent.includes('\u2705')) {
+        if (penEl.dataset.iconState !== 'saved') {
           span.textContent = original;
-          penEl.textContent = '\u270f\ufe0f';
+          penEl.innerHTML = iconSvg('edit');
+          penEl.dataset.iconState = 'edit';
           penEl.onclick = function(){fdEditField(penEl);};
         }
       }, 200);
@@ -809,9 +814,10 @@
     var val = input.value.trim();
     api('/api/files/' + fid + '/update/', { method: 'PATCH', body: (function(){var o={};o[field]=val;return o;})() }).then(function(data) {
       spanEl.textContent = data[field] || val || '未填写';
-      penEl.textContent = '\u2705';
+      penEl.innerHTML = iconSvg('check-circle');
+      penEl.dataset.iconState = 'saved';
       penEl.onclick = function(){};
-      setTimeout(function() { penEl.textContent = '\u270f\ufe0f'; penEl.onclick = function(){fdEditField(penEl);}; }, 1500);
+      setTimeout(function() { penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fdEditField(penEl);}; }, 1500);
     }).catch(function(err) {
       alert('保存失败：' + err.message);
     });

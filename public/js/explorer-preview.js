@@ -41,10 +41,10 @@
 
   function _mobilePdfFallbackHtml(fileId, fileName) {
     return '<div class="pv-unsupported pv-mobile-pdf">' +
-      '<div class="pv-unsupported-icon">📄</div>' +
+      '<div class="pv-unsupported-icon">' + iconSvg('document') + '</div>' +
       '<div class="pv-unsupported-text">手机浏览器暂不支持内嵌 PDF 预览</div>' +
       '<div class="pv-unsupported-sub">请点击下方按钮，由系统查看器打开或下载文件</div>' +
-      '<button class="pv-dl-btn" onclick="doDirectDownload(' + fileId + ')">⬇ 下载 PDF</button>' +
+      '<button class="pv-dl-btn" onclick="doDirectDownload(' + fileId + ')">' + iconSvg('arrow-down') + ' 下载 PDF</button>' +
       '</div>';
   }
 
@@ -97,10 +97,10 @@
           bodyHtml = '<div class="pv-text-wrap"><pre class="pv-text" id="pvTextContent">加载中…</pre></div>';
         } else if (extType === 'ppt') {
           bodyHtml = '<div class="pv-unsupported">' +
-            '<div class="pv-unsupported-icon">📊</div>' +
+            '<div class="pv-unsupported-icon">' + iconSvg('chart') + '</div>' +
             '<div class="pv-unsupported-text">此格式暂不支持在线预览</div>' +
             '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
-            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
+            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">' + iconSvg('arrow-down') + ' 下载文件</button>' +
           '</div>';
         } else if (extType === 'zip') {
           bodyHtml = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
@@ -113,10 +113,10 @@
           }).catch(function() {});
         } else {
           bodyHtml = '<div class="pv-unsupported">' +
-            '<div class="pv-unsupported-icon">📄</div>' +
+            '<div class="pv-unsupported-icon">' + iconSvg('document') + '</div>' +
             '<div class="pv-unsupported-text">此格式暂不支持在线预览</div>' +
             '<div class="pv-unsupported-sub">' + esc(fn || '') + '</div>' +
-            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">⬇ 下载文件</button>' +
+            '<button class="pv-dl-btn" onclick="closePreview();doDirectDownload(' + fileId + ')">' + iconSvg('arrow-down') + ' 下载文件</button>' +
           '</div>';
         }
 
@@ -127,7 +127,7 @@
           '<div class="preview-header">' +
             '<span class="pv-badge">' + extBadgeHtml + '</span>' +
             '<span class="pv-title" title="' + esc(fn) + '">' + esc(fileTitle || fn || '文件预览') + '</span>' +
-            '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">⬇ 下载</button>' +
+            '<button class="pv-dl-btn pv-dl-btn-hdr" onclick="doDirectDownload(' + fileId + ')">' + iconSvg('arrow-down') + ' 下载</button>' +
           '</div>' +
           '<div class="preview-body" id="previewBody">' + bodyHtml + '</div>';
         overlay.addEventListener('click', function(e) {
@@ -154,7 +154,7 @@
             }
           }).catch(function() {
             var pre = document.getElementById('pvTextContent');
-            if (pre) pre.textContent = '⚠️ 无法加载文件内容';
+            if (pre) setIconText(pre, 'alert', '无法加载文件内容');
           });
         }
       }).catch(function() {
@@ -214,7 +214,7 @@
     // 空压缩包
     if (!fileCount) {
       container.innerHTML =
-        '<div class="pv-zip-header"><span class="pv-zip-filename">📦 ' + esc(fileName || '') + '</span></div>' +
+        '<div class="pv-zip-header"><span class="pv-zip-filename">' + iconSvg('archive') + ' ' + esc(fileName || '') + '</span></div>' +
         '<div class="pv-zip-empty">压缩包内没有文件</div>';
       return;
     }
@@ -230,7 +230,7 @@
     }
 
     var html = '<div class="pv-zip-header">' +
-      '<span class="pv-zip-filename" title="' + esc(fileName || '') + '">📦 ' + esc(fileName || '') + '</span>' +
+      '<span class="pv-zip-filename" title="' + esc(fileName || '') + '">' + iconSvg('archive') + ' ' + esc(fileName || '') + '</span>' +
       '<span class="pv-zip-stats">' + fileCount + ' 个文件 · 共 ' + formatSize(totalSize) + '</span>' +
       (truncated ? '<span class="pv-zip-trunc">仅显示前 ' + items.length + ' 项</span>' : '') +
     '</div><div class="pv-zip-tree">';
@@ -245,13 +245,13 @@
           // 目录：<details> 原生折叠，顶层两级默认展开
           out += '<details class="pv-zip-dir"' + (depth < 2 ? ' open' : '') + '>' +
             '<summary><span class="pzd-arrow">▸</span>' +
-            '<span class="pzd-icon">📁</span><span class="pzd-name">' + esc(key) + '</span>' +
+            '<span class="pzd-icon">' + iconSvg('folder') + '</span><span class="pzd-name">' + esc(key) + '</span>' +
             '<span class="pzd-meta">' + val.__count + ' 项 · ' + formatSize(val.__size) + '</span></summary>' +
             '<div class="pzd-children">' + renderNode(val.__children, depth + 1) + '</div>' +
           '</details>';
         } else {
           out += '<div class="pv-zip-file" title="' + esc(key) + '">' +
-            '<span class="pzf-icon">📄</span>' +
+            '<span class="pzf-icon">' + iconSvg('document') + '</span>' +
             '<span class="pv-zip-fname">' + esc(key) + '</span>' +
             '<span class="pv-zip-fsize">' + formatSize(val.__size) + '</span>' +
           '</div>';
@@ -263,7 +263,7 @@
     html += renderNode(root.__children, 0);
     html += '</div>' +
       '<div class="pv-zip-footer"><button class="pv-dl-btn" onclick="' +
-        (inOverlay ? 'closePreview();' : '') + 'doDirectDownload(' + fileId + ')">⬇ 下载文件</button></div>';
+        (inOverlay ? 'closePreview();' : '') + 'doDirectDownload(' + fileId + ')">' + iconSvg('arrow-down') + ' 下载文件</button></div>';
 
     container.innerHTML = html;
   }

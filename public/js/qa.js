@@ -153,7 +153,7 @@ function _qaListHtml(data) {
   // 列表
   if (!listItems.length) {
     html += '<div class="qa-empty">' +
-      '<div class="qa-empty-icon">🔍</div>' +
+      '<div class="qa-empty-icon">' + iconSvg('search') + '</div>' +
       '<div class="qa-empty-title">' + (pinnedItems.length ? '暂无其他问答' : '暂无相关问答') + '</div>' +
       '<div class="qa-empty-desc">换个筛选条件或关键词试试</div>' +
     '</div>';
@@ -299,12 +299,12 @@ function _qaPaginationHtml() {
   if (_qaTotalPages <= 1) return '';
   var html = '<div class="file-pagination" style="justify-content:center">';
   var pages = getPageNumbers(_qaPage, _qaTotalPages);
-  html += '<button class="fp-btn fp-prev' + (_qaPage <= 1 ? ' fp-disabled' : '') + '" onclick="qaGoPage(' + (_qaPage - 1) + ')">◀</button>';
+  html += '<button class="fp-btn fp-prev' + (_qaPage <= 1 ? ' fp-disabled' : '') + '" aria-label="上一页" onclick="qaGoPage(' + (_qaPage - 1) + ')">' + iconSvg('chevron-left') + '</button>';
   pages.forEach(function(n) {
     if (n === '…') { html += '<button class="fp-btn fp-ellipsis">⋯</button>'; }
     else { html += '<button class="fp-btn fp-num' + (n === _qaPage ? ' fp-active' : '') + '" onclick="qaGoPage(' + n + ')">' + n + '</button>'; }
   });
-  html += '<button class="fp-btn fp-next' + (_qaPage >= _qaTotalPages ? ' fp-disabled' : '') + '" onclick="qaGoPage(' + (_qaPage + 1) + ')">▶</button>';
+  html += '<button class="fp-btn fp-next' + (_qaPage >= _qaTotalPages ? ' fp-disabled' : '') + '" aria-label="下一页" onclick="qaGoPage(' + (_qaPage + 1) + ')">' + iconSvg('chevron-right') + '</button>';
   html += '</div>';
   return html;
 }
@@ -394,7 +394,7 @@ function _qaDetailHtml(d) {
 
   // v183 状态 banner（作者视角：待审核/已驳回）
   if (d.status === 'pending') {
-    html += '<div class="qa-status-banner qa-status-banner--pending">⏳ 内容审核中，通过后将公开展示</div>';
+    html += '<div class="qa-status-banner qa-status-banner--pending">' + iconSvg('clock') + ' 内容审核中，通过后将公开展示</div>';
   } else if (d.status === 'rejected') {
     html += '<div class="qa-status-banner qa-status-banner--rejected">已驳回，编辑后可重新提交审核</div>';
   }
@@ -558,7 +558,7 @@ async function qaSearch(q) {
     var html = '<div class="search-overlay-inner sg-inner">';
     html += '<div class="sg-header">';
     html += '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>';
-    html += '<div class="sg-title-row"><span class="sg-title-icon">🔍</span><h3 class="sg-title">' + esc(q) + '</h3></div>';
+    html += '<div class="sg-title-row"><span class="sg-title-icon">' + iconSvg('search') + '</span><h3 class="sg-title">' + esc(q) + '</h3></div>';
     html += '<p class="sg-subtitle">问答区搜索结果</p>';
     html += '</div>';
     html += '<div class="sg-body">';
@@ -577,7 +577,7 @@ async function qaSearch(q) {
       });
       html += '</div></div>';
     } else {
-      html += '<div class="sg-empty"><div class="sg-empty-icon">🔍</div>' +
+      html += '<div class="sg-empty"><div class="sg-empty-icon">' + iconSvg('search') + '</div>' +
         '<div class="sg-empty-title">未找到相关问答</div>' +
         '<div class="sg-empty-desc">试试其他关键词</div></div>';
     }

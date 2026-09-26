@@ -516,7 +516,7 @@
     var visibleItems = (!mobileCampus && _compactData.campusExpanded) ? items : items.slice(0, campusLimit);
     renderHtmlWithMotion(host, items.length
       ? visibleItems.map(function (item) {
-          return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
+          return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span>' + iconSvg('link') + '</a>';
         }).join('')
       : '<p class="h8-shortcut-note">还没有自定义入口，点击“编辑我的入口”开始。</p>', options && options.animate);
     // 「展开入口」收进区块头部，并与公告面板共享同一个展开状态。
@@ -1006,7 +1006,7 @@
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-labelledby', 'campusMoreTitle');
     overlay.innerHTML = '<div class="campus-more-dialog"><div class="campus-more-head"><h2 id="campusMoreTitle">校园入口</h2><button type="button" class="campus-more-close" aria-label="关闭" onclick="closeCampusLinksPanel()">✕</button></div><div class="campus-more-links">' + items.map(function (item) {
-      return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span><span aria-hidden="true">↗</span></a>';
+      return '<a href="' + htmlEscape(item.url) + '" target="_blank" rel="noopener noreferrer" class="h8-campus-link compact-campus-link"><span>' + htmlEscape(item.name) + '</span>' + iconSvg('link') + '</a>';
     }).join('') + '</div></div>';
     overlay.addEventListener('click', function (event) { if (event.target === overlay) closeCampusLinksPanel(); });
     document.body.appendChild(overlay);

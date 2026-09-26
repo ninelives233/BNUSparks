@@ -30,11 +30,12 @@
       roleEl.textContent = data.role_label;
       joinedEl.textContent = data.date_joined;
       // 头像：有真实图片则显示 img，否则首字母
-      var initial = data.nickname.charAt(0) || '🧑';
+      var initial = (data.nickname || '').charAt(0);
       if (data.avatar_url) {
         avatarEl.innerHTML = '<img src="' + esc(data.avatar_url) + '" alt="avatar" style="width:80px;height:80px;border-radius:50%;object-fit:cover">';
       } else {
-        avatarEl.textContent = initial;
+        if (initial) avatarEl.textContent = initial;
+        else avatarEl.innerHTML = iconSvg('user');
       }
       quotaEl.textContent = data.daily_download_limit < 0 ? '不限' : (data.daily_download_used || 0) + ' / ' + data.daily_download_limit + ' 次';
       // 管辖板块
@@ -334,7 +335,7 @@
         var actions = '';
         if (m.review_status === 'rejected') {
           actions = '<button class="reupload-btn" onclick="event.stopPropagation();showReUploadDialog(' + m.id + ',\'' + escJs(m.course_code) + '\',\'' + escJs(m.course_name) + '\',\'' + escJs(m.title) + '\',\'' + escJs(m.review_notes||'') + '\',\'' + escJs(m.teacher||'') + '\')">↻ 重新上传</button>' +
-            '<button class="delete-rejected-btn" onclick="event.stopPropagation();deleteRejected(' + m.id + ', this)">🗑 删除记录</button>';
+            '<button class="delete-rejected-btn" onclick="event.stopPropagation();deleteRejected(' + m.id + ', this)">' + iconSvg('trash') + ' 删除记录</button>';
         }
         var ctype = m.course_type === 'general' ? '通识课' : '专业课';
         var meta = esc(m.course_name) + ' · ' + formatSize(m.file_size) + ' · ' + m.download_count + ' 次下载' +
@@ -462,7 +463,7 @@
           ? '<span class="pc-dead-label" style="margin-left:6px;font-size:0.7rem;color:var(--ink-faint)">（已删除）</span>' : '';
         var meta = [r.tag_l1, r.tag_l2].filter(Boolean).join(' · ') + ' · ' + esc(r.favorited_at);
         return _pcItem(
-          '<span class="pc-glyph pc-glyph-star">★</span>',
+          '<span class="pc-glyph pc-glyph-star">' + iconSvg('star') + '</span>',
           esc(r.title) + statusHtml, meta, '',
           '<span class="pc-side-icon">' + _IC_STAR + '</span>',
           "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ");}).catch(function(){alert('问答模块加载失败，请刷新重试。')})"
@@ -483,7 +484,7 @@
       list.innerHTML = items.map(function(r) {
         var meta = esc(r.course_code) + (r.college_name ? ' · ' + esc(r.college_name) : '') + ' · ' + esc(r.favorited_at);
         return _pcItem(
-          '<span class="pc-glyph pc-glyph-star">★</span>',
+          '<span class="pc-glyph pc-glyph-star">' + iconSvg('star') + '</span>',
           esc(r.course_name),
           meta,
           '',
@@ -501,7 +502,7 @@
     api('/api/user/favorites/').then(function(data) {
       var items = data.items || [];
       if (!items.length) {
-        list.innerHTML = _pcEmpty('还没有收藏的文件', '打开文件详情页，点击 ⭐ 就能收藏这份资料。',
+        list.innerHTML = _pcEmpty('还没有收藏的文件', '打开文件详情页，点击「收藏」就能收藏这份资料。',
           '<button class="pc-empty-cta" onclick="showExplorer(\'通识课\')">去课程目录</button>');
         return;
       }
@@ -541,7 +542,7 @@
           ? ' <span class="review-badge review-badge-approved">已恢复</span>'
           : ' <span class="review-badge review-badge-rejected">已删除</span>');
         var actions = canRestore
-          ? '<button class="admin-btn admin-btn-approve" onclick="restoreMyDeletion(' + r.id + ', this)">↩ 撤销删除</button>'
+          ? '<button class="admin-btn admin-btn-approve" onclick="restoreMyDeletion(' + r.id + ', this)">' + iconSvg('reply') + ' 撤销删除</button>'
           : '';
         var side = (!canRestore && !r.is_restored) ? '已过期' : '';
         html += _pcItem(
@@ -563,7 +564,7 @@
     if (btn) btn.disabled = true;
     try {
       await api('/api/moderation/deletions/' + delId + '/restore/', { method: 'POST', body: { reason: reason } });
-      alert('✅ 文件已恢复');
+      alert('文件已恢复');
       renderMyUploadsPage();
     } catch(err) {
       alert('恢复失败：' + err.message);
@@ -601,7 +602,7 @@
       notesEl.className = 'reupload-info';
       document.querySelector('#uploadForm .mf-group').before(notesEl);
     }
-    notesEl.innerHTML = '📌 上次驳回原因：' + esc(reviewNotes) + '<br><small>修改后重新提交，将重新进入审核流程。旧驳回记录将自动删除。</small>';
+    notesEl.innerHTML = iconSvg('pin') + ' 上次驳回原因：' + esc(reviewNotes) + '<br><small>修改后重新提交，将重新进入审核流程。旧驳回记录将自动删除。</small>';
     notesEl.style.display = 'block';
   }
 
@@ -652,7 +653,8 @@
       // 有真实头像时保留 <img>，否则更新首字母
       const avatarEl = document.getElementById('profileAvatar');
       if (avatarEl && !avatarEl.querySelector('img')) {
-        avatarEl.textContent = nick.charAt(0) || '🧑';
+        if (nick.charAt(0)) avatarEl.textContent = nick.charAt(0);
+        else avatarEl.innerHTML = iconSvg('user');
       }
       cancelEditNickname();
       // 更新全局 currentUser 和头部显示

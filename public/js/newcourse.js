@@ -299,7 +299,7 @@
     overlay.innerHTML =
       '<div class="search-overlay-inner lp-inner">' +
         '<button class="search-overlay-close" onclick="_closeLevelPicker()" aria-label="关闭">✕</button>' +
-        '<div class="so-header"><div class="so-icon">🗂️</div>' +
+        '<div class="so-header"><div class="so-icon">' + iconSvg('layers') + '</div>' +
           '<div class="so-title">选择课程层级</div>' +
           '<div class="so-sub">' + esc(major.name) + ' 目录下，选择该课程应归属的文件夹</div>' +
         '</div>' +
@@ -352,7 +352,7 @@
       var caretHtml = hasSubs
         ? '<span class="lp-caret is-caret">▸</span>'
         : '<span class="lp-caret lp-caret-none"></span>';
-      var iconHtml = '<span class="lp-node-icon">' + (hasCourses ? '🗂' : (hasSubs ? '📁' : '📄')) + '</span>';
+      var iconHtml = '<span class="lp-node-icon">' + iconSvg(hasCourses ? 'layers' : (hasSubs ? 'folder-open' : 'document')) + '</span>';
       var nameHtml = '<span class="lp-node-name">' + esc(n.name) + '</span>';
       var countHtml = hasCourses ? '<span class="lp-count">' + _countDirectCourses(n) + ' 门课</span>' : '';
       row.innerHTML = caretHtml + iconHtml + nameHtml + countHtml;
@@ -438,10 +438,10 @@
         hint.style.display = '';
         if (d.in_target) {
           hint.className = 'nc-code-hint nc-code-hint-error';
-          hint.textContent = '⚠ 该课程已在本专业课程树「' + (d.locations[0] || '该位置') + '」中，请直接到对应目录上传资料';
+          setIconText(hint, 'alert', '该课程已在本专业课程树「' + (d.locations[0] || '该位置') + '」中，请直接到对应目录上传资料');
         } else {
           hint.className = 'nc-code-hint nc-code-hint-warn';
-          hint.textContent = 'ℹ 该课程已存在于别处（' + (d.locations.length || 1) + ' 处）。提交后批准将链接到既有课程目录，不新建独立文件夹';
+          setIconText(hint, 'info', '该课程已存在于别处（' + (d.locations.length || 1) + ' 处）。提交后批准将链接到既有课程目录，不新建独立文件夹');
         }
       } else {
         hint.style.display = 'none';
