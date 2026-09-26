@@ -1589,8 +1589,8 @@ function ttShowSlotPop() {
       '</button>' +
       (isActive ? '' :
         '<span class="tt-slot-ops">' +
-          '<button type="button" class="tt-slot-op" data-slot-act="rename" data-slot="' + esc(s.id) + '" title="重命名">✎</button>' +
-          '<button type="button" class="tt-slot-op is-danger" data-slot-act="del" data-slot="' + esc(s.id) + '" title="删除">🗑</button>' +
+          '<button type="button" class="tt-slot-op" data-slot-act="rename" data-slot="' + esc(s.id) + '" title="重命名">' + iconSvg('edit') + '</button>' +
+          '<button type="button" class="tt-slot-op is-danger" data-slot-act="del" data-slot="' + esc(s.id) + '" title="删除">' + iconSvg('trash') + '</button>' +
         '</span>') +
     '</div>';
   }).join('');
@@ -1701,7 +1701,7 @@ function ttDeleteSlot(sid, btn) {
     btn.classList.add('armed');
     btn.textContent = '确认删除';
     setTimeout(function () {
-      if (btn.isConnected) { btn.classList.remove('armed'); btn.textContent = '🗑'; }
+      if (btn.isConnected) { btn.classList.remove('armed'); btn.innerHTML = iconSvg('trash'); }
     }, 2600);
     return;
   }
@@ -2220,21 +2220,21 @@ function ttRenderConfirmModal(parsed) {
           '<span><b>' + courses.length + '</b> 门课程</span>' +
           (credits ? '<span>共 <b>' + esc(String(credits)) + '</b> 学分</span>' : '') +
         '</div>' +
-        '<div class="tt-privacy-note">🔒 文件本地解析，课表默认仅自己可见：文件本身不会上传；解析出的课表数据会同步到你的账号，换设备登录即可查看。为处理运维、安全或服务治理问题，授权总管理员可能只读查看。</div>' +
+        '<div class="tt-privacy-note">' + iconSvg('lock') + ' 文件本地解析，课表默认仅自己可见：文件本身不会上传；解析出的课表数据会同步到你的账号，换设备登录即可查看。为处理运维、安全或服务治理问题，授权总管理员可能只读查看。</div>' +
         (ttState.data && ttState.data.courses.length
           ? (ttState.data.courses.some(function (c) { return c.src === 'manual'; })
-            ? '<div class="tt-privacy-note tt-manual-note">⚠ 导入将替换现有教务课程与手动编辑。检测到 <b>' +
+            ? '<div class="tt-privacy-note tt-manual-note">' + iconSvg('alert') + ' 导入将替换现有教务课程与手动编辑。检测到 <b>' +
               ttState.data.courses.filter(function (c) { return c.src === 'manual'; }).length +
               '</b> 门手动添加的课程：<label class="tt-keep-manual"><input type="checkbox" id="ttKeepManual" checked> 保留这些课程（自学 / 补修）</label>' +
               '<span class="tt-keep-sub">取消勾选则导入时一并移除；与本次导入同代码或同名的，始终以导入为准。</span></div>'
-            : '<div class="tt-privacy-note">⚠ 导入将整表替换现有课程与手动编辑。</div>')
+            : '<div class="tt-privacy-note">' + iconSvg('alert') + ' 导入将整表替换现有课程与手动编辑。</div>')
           : '') +
         (missing.length
-          ? '<div class="tt-privacy-note">ℹ 有 <b>' + missing.length + '</b> 门课程需要建立资料目录' +
+          ? '<div class="tt-privacy-note">' + iconSvg('info') + ' 有 <b>' + missing.length + '</b> 门课程需要建立资料目录' +
             (rejectedCount ? '，其中 <b>' + rejectedCount + '</b> 门上次申请被驳回，可重新选择位置' : '') +
             '（通识 ' + genCount + ' 门）。导入后将提交新建/重新申请，管理员批准前点击课程不会跳转。</div>'
           : (pendingCount
-            ? '<div class="tt-privacy-note">⏳ 有 <b>' + pendingCount + '</b> 门课程的建课申请正在审核，批准后会自动恢复课程链接。</div>'
+            ? '<div class="tt-privacy-note">' + iconSvg('clock') + ' 有 <b>' + pendingCount + '</b> 门课程的建课申请正在审核，批准后会自动恢复课程链接。</div>'
             : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>')) +
         '<div class="tt-mlist">' + rows + '</div>' +
       '</div>' +

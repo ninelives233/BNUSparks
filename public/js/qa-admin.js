@@ -24,7 +24,7 @@ function renderAdminQaRecords(content, page) {
     { v: 'rejected', label: '已驳回' },
     { v: 'deleted', label: '已删除' }
   ];
-  var segHtml = '<div class="pc-type-bar"><span class="pc-type-label">💬 论坛记录</span>' +
+  var segHtml = '<div class="pc-type-bar"><span class="pc-type-label">' + iconSvg('comment') + ' 论坛记录</span>' +
     '<div class="pc-seg" role="tablist">';
   segs.forEach(function(s) {
     segHtml += '<button class="pc-seg-btn' + (_qaRecordsStatus === s.v ? ' active' : '') + '" data-status="' + s.v +
@@ -47,9 +47,9 @@ function renderAdminQaRecords(content, page) {
       html += '</tbody></table></div></div>';
       if (data.total_pages > 1) {
         html += '<div class="file-pagination" style="justify-content:center;margin-top:14px">' +
-          '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" onclick="qaRecordsGoPage(' + (page - 1) + ')">◀</button>' +
+          '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" aria-label="上一页" onclick="qaRecordsGoPage(' + (page - 1) + ')">' + iconSvg('chevron-left') + '</button>' +
           '<span class="fp-btn fp-num fp-active">' + page + ' / ' + data.total_pages + '</span>' +
-          '<button class="fp-btn fp-next' + (page >= data.total_pages ? ' fp-disabled' : '') + '" onclick="qaRecordsGoPage(' + (page + 1) + ')">▶</button>' +
+          '<button class="fp-btn fp-next' + (page >= data.total_pages ? ' fp-disabled' : '') + '" aria-label="下一页" onclick="qaRecordsGoPage(' + (page + 1) + ')">' + iconSvg('chevron-right') + '</button>' +
         '</div>';
       }
     }
@@ -84,7 +84,7 @@ function _qaRecordRowHtml(it) {
     actions += '<button class="admin-btn admin-btn-reject admin-btn-sm" onclick="qaAdminDelete(\'' + it.kind + '\',' + it.id + ')">删除</button>';
   }
   return '<tr>' +
-    '<td>' + (it.kind === 'question' ? '❓ ' : '💬 ') + esc(it.title) + pinHtml + '</td>' +
+    '<td>' + iconSvg(it.kind === 'question' ? 'question' : 'comment') + ' ' + esc(it.title) + pinHtml + '</td>' +
     '<td>' + esc(it.author) + '</td>' +
     '<td><span class="status-tag ' + statusCls + '">' + statusLabel + '</span></td>' +
     '<td>' + esc(it.created_at) + '</td>' +
@@ -95,7 +95,7 @@ function _qaRecordRowHtml(it) {
 // ── 论坛管理待审（v175：真实 pending 列表 + 通过/驳回）──
 function _qaForumPendingCardHtml(item) {
   var statusLabel = _QA_STATUS_LABEL[item.status] || item.status;
-  var kindIcon = item.kind === 'answer' ? '💬' : '❓';
+  var kindIcon = iconSvg(item.kind === 'answer' ? 'comment' : 'question');
   var reasonBtn = '驳回原因（可选）';
   return '<div class="qa-record-card qa-status-' + (item.status || '') + '">' +
     '<div class="qa-record-main">' +
@@ -143,7 +143,7 @@ function _qaDeleteRequestCardHtml(req) {
   var kindLabel = req.target_type === 'answer' ? '回答' : '问题';
   return '<div class="qa-record-card qa-delete-req-card">' +
     '<div class="qa-record-main">' +
-      '<div class="qa-record-title">🗑️ 删除申请 · ' + kindLabel +
+      '<div class="qa-record-title">' + iconSvg('trash') + ' 删除申请 · ' + kindLabel +
         '<span class="review-badge review-badge-pending" style="margin-left:6px">待批准</span></div>' +
       '<div class="qa-record-meta">目标：' + esc(req.target_title || '') + '</div>' +
       '<div class="qa-record-meta">申请人：' + esc(req.requester || '') + ' · ' + esc(req.created_at || '') + '</div>' +

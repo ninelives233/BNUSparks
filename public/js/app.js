@@ -481,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
               else currentUser = data.user;
             }
             history.replaceState(null, '', '/');
-            alert('✅ ' + (data.message || '邮箱验证成功！'));
+            alert(data.message || '邮箱验证成功！');
             showHome();
             updateAuthUI();
           })

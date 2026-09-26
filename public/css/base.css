@@ -2001,7 +2001,7 @@
   .file-table thead th.th-size { width: 85px; }
   .file-table thead th.th-download { width: 120px; position: relative; text-align: center; }
 
-  /* ── 下载按钮 ↔ 多选复选框 切换（绝对定位叠层，不影响行高） ── */
+  /* ── 下载按钮与多选复选框切换（绝对定位叠层，不影响行高） ── */
   .ft-download {
     position: relative;
     text-align: right;

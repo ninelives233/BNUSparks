@@ -287,7 +287,7 @@ class Course(models.Model):
 class MaterialType(models.Model):
     name = models.CharField("类型名称", max_length=50)
     slug = models.SlugField("URL标识", max_length=50, unique=True)
-    icon = models.CharField("图标", max_length=20, blank=True, default="📄")
+    icon = models.CharField("图标", max_length=20, blank=True, default="")
 
     class Meta:
         verbose_name = "资料类型"
@@ -295,7 +295,7 @@ class MaterialType(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"{self.icon} {self.name}"
+        return self.name
 
 
 class Material(models.Model):

@@ -168,11 +168,11 @@
         }
 
         fill.style.width = '100%';
-        text.textContent = '✅ 文字录入成功！';
+        setIconText(text, 'check-circle', '文字录入成功！');
         setTimeout(function() { closeUploadModal(); refreshCourseTree(); }, 1500);
       } catch (err) {
         fill.style.width = '100%';
-        text.textContent = '❌ 失败: ' + err.message;
+        setIconText(text, 'alert', '失败: ' + err.message);
       }
       return false;
     }
@@ -258,4 +258,3 @@
 
   // 课程导航树现在由后端 API /api/courses/tree 提供
   // ── Card SVG Icons ─────────────────────────
-

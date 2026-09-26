@@ -126,8 +126,8 @@
       if (profile.can_auto_approve && _pendingType !== 'report' && _pendingType !== 'forum') {
         var isOn = profile.auto_approve;
         html += '<div class="admin-auto-toggle">' +
-          '<span><strong>🤖 自动托管审核</strong><br><span class="at-hint">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
-          '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + (isOn ? '✅ 已开启' : '⏸ 已关闭') + '</button>' +
+          '<span><strong>' + iconSvg('shield') + ' 自动托管审核</strong><br><span class="at-hint">开启后自动通过管辖板块内所有新上传的资料</span></span>' +
+          '<button class="admin-btn ' + (isOn ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleAutoApprove(this)">' + iconSvg(isOn ? 'check-circle' : 'pause') + (isOn ? ' 已开启' : ' 已关闭') + '</button>' +
         '</div>';
       }
 
@@ -137,10 +137,10 @@
       html += '<div class="pc-type-bar">' +
         '<span class="pc-type-label">审核类型</span>' +
         '<div class="pc-seg" role="tablist">' +
-          '<button class="pc-seg-btn' + (_pendingType === 'file' ? ' active' : '') + '" data-type="file" onclick="switchPendingType(\'file\')">📄 文件上传<span class="pc-seg-count">' + fileCount + '</span></button>' +
-          '<button class="pc-seg-btn' + (_pendingType === 'course' ? ' active' : '') + '" data-type="course" onclick="switchPendingType(\'course\')">✏️ 课程创建<span class="pc-seg-count">' + courseRequests.length + '</span></button>' +
-          (canQA ? '<button class="pc-seg-btn' + (_pendingType === 'forum' ? ' active' : '') + '" data-type="forum" onclick="switchPendingType(\'forum\')">💬 论坛管理<span class="pc-seg-count">' + (forumItems.length + forumDelReqs.length) + '</span></button>' : '') +
-          '<button class="pc-seg-btn' + (_pendingType === 'report' ? ' active' : '') + '" data-type="report" onclick="switchPendingType(\'report\')">🚩 举报受理<span class="pc-seg-count">' + reportGroups.length + '</span></button>' +
+          '<button class="pc-seg-btn' + (_pendingType === 'file' ? ' active' : '') + '" data-type="file" onclick="switchPendingType(\'file\')">' + iconSvg('document') + ' 文件上传<span class="pc-seg-count">' + fileCount + '</span></button>' +
+          '<button class="pc-seg-btn' + (_pendingType === 'course' ? ' active' : '') + '" data-type="course" onclick="switchPendingType(\'course\')">' + iconSvg('edit') + ' 课程创建<span class="pc-seg-count">' + courseRequests.length + '</span></button>' +
+          (canQA ? '<button class="pc-seg-btn' + (_pendingType === 'forum' ? ' active' : '') + '" data-type="forum" onclick="switchPendingType(\'forum\')">' + iconSvg('comment') + ' 论坛管理<span class="pc-seg-count">' + (forumItems.length + forumDelReqs.length) + '</span></button>' : '') +
+          '<button class="pc-seg-btn' + (_pendingType === 'report' ? ' active' : '') + '" data-type="report" onclick="switchPendingType(\'report\')">' + iconSvg('flag') + ' 举报受理<span class="pc-seg-count">' + reportGroups.length + '</span></button>' +
         '</div>';
       if (isMod && _pendingType !== 'report' && _pendingType !== 'forum') {
         html += '<span class="pc-seg-right">' +
@@ -157,7 +157,7 @@
       // ── 举报受理视图（v173：作为待审核第 3 个 seg，与文件上传/课程创建并列）──
       if (_pendingType === 'report') {
         if (!reportGroups.length) {
-          html += '<div class="admin-empty">🎉 没有待处理的举报</div>';
+          html += '<div class="admin-empty">' + iconSvg('sparkle') + ' 没有待处理的举报</div>';
         } else {
           _reportGroups = {};
           var mg = reportData.material_groups || [];
@@ -167,19 +167,19 @@
           ug.forEach(function(g) { _reportGroups[g.group_key] = g; });
           qg.forEach(function(g) { _reportGroups[g.group_key] = g; });
           if (mg.length) {
-            html += '<div class="pc-section-label">🚩 待处理资料举报</div><div class="admin-pending-list">';
+            html += '<div class="pc-section-label">' + iconSvg('flag') + ' 待处理资料举报</div><div class="admin-pending-list">';
             mg.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }
           if (ug.length) {
             if (mg.length) html += '<div class="pc-section-divider"></div>';
-            html += '<div class="pc-section-label">🚩 待处理连带举报</div><div class="admin-pending-list">';
+            html += '<div class="pc-section-label">' + iconSvg('flag') + ' 待处理连带举报</div><div class="admin-pending-list">';
             ug.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }
           if (qg.length) {
             if (mg.length || ug.length) html += '<div class="pc-section-divider"></div>';
-            html += '<div class="pc-section-label">🚩 待处理问答区举报</div><div class="admin-pending-list">';
+            html += '<div class="pc-section-label">' + iconSvg('flag') + ' 待处理问答区举报</div><div class="admin-pending-list">';
             qg.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }
@@ -193,7 +193,7 @@
         if (courseRequests.length) {
           html += _courseRequestsSectionHtml(courseRequests);
         } else {
-          html += '<div class="admin-empty">🎉 没有待审核的课程创建申请</div>';
+          html += '<div class="admin-empty">' + iconSvg('sparkle') + ' 没有待审核的课程创建申请</div>';
         }
         content.innerHTML = html;
         return;
@@ -205,21 +205,21 @@
         if (currentUser && currentUser.role === 'super_admin') {
           var userOpen = !!window._qaUserOpen;
           html += '<div class="admin-auto-toggle">' +
-            '<span><strong>👥 普通用户提问/回答</strong><br><span class="at-hint">开启后普通用户可以提问、回答；提交内容需审核后公开，删除需留痕</span></span>' +
-            '<button class="admin-btn ' + (userOpen ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleQaUserOpen(this)">' + (userOpen ? '✅ 已开放' : '⏸ 已关闭') + '</button>' +
+            '<span><strong>' + iconSvg('users') + ' 普通用户提问/回答</strong><br><span class="at-hint">开启后普通用户可以提问、回答；提交内容需审核后公开，删除需留痕</span></span>' +
+            '<button class="admin-btn ' + (userOpen ? 'admin-btn-approve' : 'admin-btn-secondary') + '" onclick="toggleQaUserOpen(this)">' + iconSvg(userOpen ? 'check-circle' : 'pause') + (userOpen ? ' 已开放' : ' 已关闭') + '</button>' +
           '</div>';
         }
         if (forumItems.length) {
-          html += '<div class="pc-section-label">💬 待审核的问答区内容</div><div class="admin-pending-list">';
+          html += '<div class="pc-section-label">' + iconSvg('comment') + ' 待审核的问答区内容</div><div class="admin-pending-list">';
           forumItems.forEach(function(item) { html += _qaForumPendingCardHtml(item); });
           html += '</div>';
         } else {
-          html += '<div class="admin-empty">🎉 没有待审核的问答区内容</div>';
+          html += '<div class="admin-empty">' + iconSvg('sparkle') + ' 没有待审核的问答区内容</div>';
         }
         // v183：用户提交的删除申请（有互动的内容删除需管理员批准）
         if (forumDelReqs.length) {
           html += '<div class="pc-section-divider"></div>';
-          html += '<div class="pc-section-label">🗑️ 待批准的删除申请</div><div class="admin-pending-list">';
+          html += '<div class="pc-section-label">' + iconSvg('trash') + ' 待批准的删除申请</div><div class="admin-pending-list">';
           forumDelReqs.forEach(function(req) { html += _qaDeleteRequestCardHtml(req); });
           html += '</div>';
         }
@@ -231,11 +231,11 @@
       // 一键过审（仅当有待审核且非自己的上传时显示）
       var hasApprovable = list && list.some(function(m) { return !m.is_peer_approved && !m.is_own; });
       if (hasApprovable) {
-        html += '<div class="pc-toolbar"><button class="admin-btn admin-btn-approve" onclick="batchApprovePending(this)">⚡ 一键通过全部</button></div>';
+        html += '<div class="pc-toolbar"><button class="admin-btn admin-btn-approve" onclick="batchApprovePending(this)">' + iconSvg('bolt') + ' 一键通过全部</button></div>';
       }
 
       if (!list || list.length === 0) {
-        html += '<div class="admin-empty">🎉 没有待审核的资料</div>';
+        html += '<div class="admin-empty">' + iconSvg('sparkle') + ' 没有待审核的资料</div>';
         content.innerHTML = html;
         return;
       }
@@ -253,7 +253,7 @@
 
       // ─── 所有待审核（含下级版主分流内容，上级可越级操作） ───
       if (hasMyPending) {
-        if (hasPeerApproved) html += '<div class="pc-section-label">⏳ 待审核</div>';
+        if (hasPeerApproved) html += '<div class="pc-section-label">' + iconSvg('clock') + ' 待审核</div>';
         pageList.forEach(function(m) {
           if (m.is_peer_approved) return;
           var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
@@ -262,19 +262,19 @@
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
               _userPill(m.uploader_name, m.uploader_avatar, m.uploader_id) +
-              '<span>📚 ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
-              '<span>📅 ' + m.created_at + '</span>' +
-              '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
+              '<span>' + iconSvg('book') + ' ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
+              '<span>' + iconSvg('calendar') + ' ' + m.created_at + '</span>' +
+              '<span>' + iconSvg('document') + ' ' + formatFileSize(m.file_size) + '</span>' +
             '</div>';
           if (m.is_own) {
             html += '<div class="pc-own">你的上传，等待其他审核员处理</div>';
           } else {
             html += '<div class="pc-actions">' +
               '<button class="admin-btn admin-btn-secondary pc-btn-detail" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">' + (window.ICONS ? ICONS.file : '') + '<span>详情</span></button>' +
-              '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件进行审核">⬇ 下载</button>' +
+              '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件进行审核">' + iconSvg('arrow-down') + ' 下载</button>' +
               '<button class="admin-btn admin-btn-approve" onclick="quickApprove(' + m.id + ', this)">✓ 通过</button>' +
               '<button class="admin-btn admin-btn-reject" onclick="showRejectDialog(' + m.id + ')">✗ 驳回</button>' +
-              (isMod ? '<button class="admin-btn admin-btn-secondary" onclick="showReassignDialog(' + m.id + ')" title="手动指派审核人">↗ 指派</button>' : '') +
+              (isMod ? '<button class="admin-btn admin-btn-secondary" onclick="showReassignDialog(' + m.id + ')" title="手动指派审核人">' + iconSvg('user') + ' 指派</button>' : '') +
             '</div>';
           }
           html += '</div>';
@@ -284,22 +284,22 @@
       // ─── 同僚已通过（24h 内可提出异议） ───
       if (hasPeerApproved && !_pendingHidePeerApproved) {
         if (hasMyPending) html += '<div class="pc-section-divider"></div>';
-        html += '<div class="pc-section-label">✅ 同僚已通过（24h 内可提出异议）</div>';
+        html += '<div class="pc-section-label">' + iconSvg('check-circle') + ' 同僚已通过（24h 内可提出异议）</div>';
         pageList.forEach(function(m) {
           if (!m.is_peer_approved) return;
           html += '<div class="admin-pending-card pc-peer-approved" id="pc-' + m.id + '">' +
             '<div class="pc-title">' + escapeHtml(m.title) + '</div>' +
             '<div class="pc-meta">' +
               _userPill(m.uploader_name, m.uploader_avatar, m.uploader_id) +
-              '<span>📚 ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
-              '<span>📅 ' + m.created_at + '</span>' +
-              '<span>📄 ' + formatFileSize(m.file_size) + '</span>' +
+              '<span>' + iconSvg('book') + ' ' + escapeHtml(m.course_name) + ' (' + escapeHtml(m.course_code) + ')</span>' +
+              '<span>' + iconSvg('calendar') + ' ' + m.created_at + '</span>' +
+              '<span>' + iconSvg('document') + ' ' + formatFileSize(m.file_size) + '</span>' +
             '</div>' +
-            '<div class="pc-peer-approved-badge">✅ 已被 ' + escapeHtml(m.approved_by_name) + ' 于 ' + m.approved_at + ' 审核通过</div>' +
+            '<div class="pc-peer-approved-badge">' + iconSvg('check-circle') + ' 已被 ' + escapeHtml(m.approved_by_name) + ' 于 ' + m.approved_at + ' 审核通过</div>' +
             '<div class="pc-actions pc-actions--spaced">' +
               '<button class="admin-btn admin-btn-secondary" onclick="showPendingFileDetail(' + m.id + ')" title="查看文件详情">' + (window.ICONS ? ICONS.file : '') + '<span>详情</span></button>' +
-              '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件查看">⬇ 下载查看</button>' +
-              '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">💬 提出异议</button>' +
+              '<button class="admin-btn admin-btn-secondary" onclick="doDirectDownload(' + m.id + ')" title="下载文件查看">' + iconSvg('arrow-down') + ' 下载查看</button>' +
+              '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">' + iconSvg('comment') + ' 提出异议</button>' +
             '</div>' +
           '</div>';
         });
@@ -319,7 +319,7 @@
     var approvable = requests.filter(function(r) { return r.status === 'pending' && !r.is_own; });
     var html = '';
     if (approvable.length) {
-      html += '<div class="cr-batch-bar"><button class="admin-btn admin-btn-approve" onclick="batchApproveCourseRequests(this)">⚡ 一键通过全部申请</button></div>';
+      html += '<div class="cr-batch-bar"><button class="admin-btn admin-btn-approve" onclick="batchApproveCourseRequests(this)">' + iconSvg('bolt') + ' 一键通过全部申请</button></div>';
     }
     // 课程创建卡片较大，每页 8 条客户端分页
     var _courseTotal = Math.max(1, Math.ceil((requests || []).length / 8));
@@ -360,11 +360,11 @@
     }).join('');
 
     var meta = _userPill(req.uploader_name, req.uploader_avatar, req.uploader_id) +
-      '<span>📅 ' + esc(req.created_at) + '</span>';
-    if (req.college_name) meta += '<span>🏫 ' + esc(req.college_name) + '</span>';
-    if (req.assigned_moderator_name) meta += '<span>↗ ' + esc(req.assigned_moderator_name) + '</span>';
+      '<span>' + iconSvg('calendar') + ' ' + esc(req.created_at) + '</span>';
+    if (req.college_name) meta += '<span>' + iconSvg('building') + ' ' + esc(req.college_name) + '</span>';
+    if (req.assigned_moderator_name) meta += '<span>' + iconSvg('user') + ' ' + esc(req.assigned_moderator_name) + '</span>';
 
-    var body = '<div class="cr-path">📂 <span>' + esc(req.target_path || '（目标位置缺失）') + '</span></div>';
+    var body = '<div class="cr-path">' + iconSvg('folder-open') + ' <span>' + esc(req.target_path || '（目标位置缺失）') + '</span></div>';
     if (files) {
       body += '<div class="cr-files">' +
         '<div class="cr-files-label">随附文件（' + mats.length + '）</div>' +
@@ -382,12 +382,12 @@
         '<button class="admin-btn admin-btn-reject" onclick="showCourseRequestReject(' + req.id + ')">✗ 驳回</button>' +
       '</div>';
     } else if (req.is_waiting_files) {
-      actions = '<div class="cr-waiting">⏳ 申请已批准，课程文件夹已创建；待随附文件全部审核通过后本申请自动消失</div>';
+      actions = '<div class="cr-waiting">' + iconSvg('clock') + ' 申请已批准，课程文件夹已创建；待随附文件全部审核通过后本申请自动消失</div>';
     }
 
-    var waitingTag = req.is_waiting_files ? '<span class="cr-waiting-tag">⏳ 等待随附文件</span>' : '';
+    var waitingTag = req.is_waiting_files ? '<span class="cr-waiting-tag">' + iconSvg('clock') + ' 等待随附文件</span>' : '';
     var linkTag = req.will_link
-      ? '<span class="cr-link-tag" title="批准后不会新建独立文件夹，树节点将指向既有课程目录">🔗 将链接到既有课程「' + esc(req.existing_course_name || '') + '」</span>'
+      ? '<span class="cr-link-tag" title="批准后不会新建独立文件夹，树节点将指向既有课程目录">' + iconSvg('link') + ' 将链接到既有课程「' + esc(req.existing_course_name || '') + '」</span>'
       : '';
 
     return '<div class="admin-pending-card cr-card' + (req.is_waiting_files ? ' cr-waiting-card' : '') + '" data-request-id="' + req.id + '">' +
@@ -406,17 +406,17 @@
 
   function _setPendingActionProcessing(btn, label) {
     if (!btn) return;
-    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+    if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.textContent = label || '处理中…';
+    setIconText(btn, 'clock', label || '处理中…');
   }
 
   function _restorePendingAction(btn) {
     if (!btn) return;
     btn.disabled = false;
-    if (btn.dataset.originalText) {
-      btn.textContent = btn.dataset.originalText;
-      delete btn.dataset.originalText;
+    if (btn.dataset.originalHtml) {
+      btn.innerHTML = btn.dataset.originalHtml;
+      delete btn.dataset.originalHtml;
     }
   }
 
@@ -440,7 +440,7 @@
       _updatePendingSegmentCount('course', -1, false);
     }
     if (list && list.classList.contains('admin-pending-list') && !list.querySelector('.admin-pending-card')) {
-      list.innerHTML = '<div class="admin-empty">🎉 没有待审核的内容</div>';
+      list.innerHTML = '<div class="admin-empty">' + iconSvg('sparkle') + ' 没有待审核的内容</div>';
     }
   }
 
@@ -503,7 +503,7 @@
       var actions = card.querySelector('.pc-actions');
       if (actions) {
         actions.className = 'cr-waiting';
-        actions.textContent = '⏳ 申请已批准，课程文件夹已创建；待随附文件全部审核通过后本申请自动消失';
+        setIconText(actions, 'clock', '申请已批准，课程文件夹已创建；待随附文件全部审核通过后本申请自动消失');
       }
       return;
     }
@@ -558,7 +558,7 @@
   }
 
   function batchApproveCourseRequests(btn) {
-    _setPendingActionProcessing(btn, '⏳ 处理中…');
+    _setPendingActionProcessing(btn, '处理中…');
     var cards = Array.from(document.querySelectorAll('#adminContent .cr-card')).filter(function(card) {
       return !!card.querySelector('.pc-actions .admin-btn-approve');
     });
@@ -584,7 +584,7 @@
   }
 
   function batchApprovePending(btn) {
-    _setPendingActionProcessing(btn, '⏳ 处理中…');
+    _setPendingActionProcessing(btn, '处理中…');
     api('/api/moderation/batch-approve/', { method: 'POST' }).then(function(result) {
       Object.keys(_pendingItems).forEach(function(id) {
         if (!_pendingItems[id].is_peer_approved) delete _pendingItems[id];
@@ -595,7 +595,7 @@
       _updatePendingSegmentCount('file', Object.keys(_pendingItems).length, true);
       var list = document.querySelector('#adminContent .admin-pending-list');
       if (list && !list.querySelector('.admin-pending-card')) {
-        list.innerHTML = '<div class="admin-empty">🎉 没有待审核的内容</div>';
+        list.innerHTML = '<div class="admin-empty">' + iconSvg('sparkle') + ' 没有待审核的内容</div>';
       }
       var toolbar = btn && btn.closest ? btn.closest('.pc-toolbar') : null;
       if (toolbar) toolbar.remove();
@@ -725,19 +725,19 @@
         content.innerHTML = '<div class="admin-empty">暂无审核历史</div>';
         return;
       }
-      var html = '<div class="admin-section-label">📋 审核历史</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('clipboard') + ' 审核历史</div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>资料</th><th>课程</th><th>上传者</th><th>审核人</th><th>结果</th><th>备注</th><th>审核时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(m) {
         var statusClass = m.review_status === 'approved' ? 'status-approved' : 'status-rejected';
         var statusText = m.review_status === 'approved' ? '✓ 通过' : '✗ 驳回';
-        var adminBadge = m.is_admin_uploaded ? '<span class="admin-uploaded-badge">🛡️ 管理员自传</span>' : '';
+        var adminBadge = m.is_admin_uploaded ? '<span class="admin-uploaded-badge">' + iconSvg('shield') + ' 管理员自传</span>' : '';
         var reviewerName = m.is_admin_uploaded ? escapeHtml(m.uploader_name) + ' (自传)' : escapeHtml(m.reviewed_by_name);
         var objHtml = '';
         if (m.can_object && m.review_status === 'approved') {
-          objHtml = '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">💬 异议</button>';
+          objHtml = '<button class="admin-btn admin-btn-sm" onclick="showObjectionDialog(' + m.id + ', \'' + escJs(m.title) + '\')">' + iconSvg('comment') + ' 异议</button>';
         } else {
-          objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">💬 查看异议</button>';
+          objHtml = '<button class="admin-btn admin-btn-sm admin-btn-secondary" onclick="toggleComments(' + m.id + ', this, true)" title="查看异议记录">' + iconSvg('comment') + ' 查看异议</button>';
         }
         html += '<tr>' +
           '<td>' + escapeHtml(m.title) + adminBadge + '</td>' +

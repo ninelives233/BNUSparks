@@ -500,7 +500,7 @@
             names = names.concat(secNames);
           }
           var display = names.length ? names.join('、') : '—';
-          if (u.can_moderate_qa) display = (display === '—' ? '' : display + '、') + '💬 问答区';
+          if (u.can_moderate_qa) display = (display === '—' ? '' : display + '、') + iconSvg('comment') + ' 问答区';
           if (canChange) {
             sections = '<a href="javascript:void(0)" class="section-link" onclick="onRoleChange(' + u.id + ',\'moderator\',\'' + escJs(u.nickname) + '\')">' + display + '</a>';
           } else {
@@ -511,7 +511,7 @@
           var allIds = info.map(function(s) { return s.id; });
           // 仅显示最高层级的节点（父节点不在管辖范围内则不显示子节点）
           var display = [...new Set(info.filter(function(s) { return allIds.indexOf(s.parent_id) === -1; }).map(function(s) { return s.name; }))].join('、') || '—';
-          if (u.can_moderate_qa) display = (display === '—' ? '' : display + '、') + '💬 问答区';
+          if (u.can_moderate_qa) display = (display === '—' ? '' : display + '、') + iconSvg('comment') + ' 问答区';
           if (canChange) {
             sections = '<a href="javascript:void(0)" class="section-link" onclick="onRoleChange(' + u.id + ',\'sub_moderator\',\'' + escJs(u.nickname) + '\')">' + display + '</a>';
           } else {
@@ -521,7 +521,7 @@
         var autoApproveCell = '';
         if (isSuperAdmin) {
           if (u.role === 'moderator' || u.role === 'sub_moderator') {
-            var aaState = u.auto_approve ? '🟢 开' : '🔴 关';
+            var aaState = iconSvg(u.auto_approve ? 'check-circle' : 'close') + (u.auto_approve ? ' 开' : ' 关');
             var caaState = u.can_auto_approve ? '允许' : '禁止';
             autoApproveCell = '<td class="td-muted">' +
               '<span>' + aaState + '</span>' +
@@ -618,7 +618,7 @@
         // 通识课（父复选框 + 子复选框列表，无需展开）
         var genSection = sections.find(function(s) { return s.name === '通识课'; });
         html += '<div class="mod-gen-block">';
-        html += '<label class="college-check-item is-parent"><input type="checkbox" id="modGenCheck_' + uid + '" value="general" onchange="modGenToggle(this,' + uid + ')"> 📖 通识课（全部）</label>';
+        html += '<label class="college-check-item is-parent"><input type="checkbox" id="modGenCheck_' + uid + '" value="general" onchange="modGenToggle(this,' + uid + ')"> ' + iconSvg('book') + ' 通识课（全部）</label>';
         if (genSection && genSection.children) {
           genSection.children.forEach(function(child) {
             if (child.is_divider) return;
@@ -629,7 +629,7 @@
         // 问答区（独立大类，不进课程树；版主勾选即授予问答区审核权，v175 视觉提级）
         html += '<div class="mod-qa-block mod-qa-block--major">';
         html += '<div class="mod-qa-head">' +
-          '<span class="mod-qa-title">💬 问答区</span>' +
+          '<span class="mod-qa-title">' + iconSvg('comment') + ' 问答区</span>' +
           '<span class="mod-qa-desc">审核问答区（新生指南）内容，勾选后该版主同时管理问答区</span>' +
         '</div>';
         html += '<label class="college-check-item is-parent"><input type="checkbox" id="modQaCheck_' + uid + '" value="qa"> 问答区（全部）</label>';
@@ -664,11 +664,11 @@
           revertRoleSelect(uid);
           return;
         }
-        var html = '<div class="admin-reject-dialog"><h3>选择「' + nickname + '」的管辖范围</h3><p class="dlg-hint">小版主可审核具体专业层级及以下目录的资料。<br>📌 上级分类节点仅作导航，具体专业层级以下可选。<br>💡 选中上级分类将自动勾选所有下级，防止冲突。</p>';
+        var html = '<div class="admin-reject-dialog"><h3>选择「' + nickname + '」的管辖范围</h3><p class="dlg-hint">小版主可审核具体专业层级及以下目录的资料。<br>' + iconSvg('pin') + ' 上级分类节点仅作导航，具体专业层级以下可选。<br>' + iconSvg('info') + ' 选中上级分类将自动勾选所有下级，防止冲突。</p>';
         // 问答区（独立大类，置于课程树上方，不混入自动抓取；v175 视觉提级）
         html += '<div class="mod-qa-block mod-qa-block--major" style="margin-bottom:10px">';
         html += '<div class="mod-qa-head">' +
-          '<span class="mod-qa-title">💬 问答区</span>' +
+          '<span class="mod-qa-title">' + iconSvg('comment') + ' 问答区</span>' +
           '<span class="mod-qa-desc">审核问答区（新生指南）内容，勾选后该小版主同时管理问答区</span>' +
         '</div>';
         html += '<label class="college-check-item is-parent"><input type="checkbox" id="subQaCheck_' + uid + '" value="qa"> 问答区（全部）</label>';
@@ -686,7 +686,7 @@
             } else {
               html += '<span class="tree-expand-btn is-leaf">·</span>';
             }
-            html += '<span class="tree-node-icon">' + (hasChildren ? '📁' : '📄') + '</span>';
+            html += '<span class="tree-node-icon">' + iconSvg(hasChildren ? 'folder' : 'document') + '</span>';
             if (selectable) {
               html += '<input type="checkbox" value="' + s.id + '" onchange="treeCheckPropagate(this)"> ';
               html += '<label>' + esc(s.name) + '</label>';
@@ -879,7 +879,7 @@
     overlay.className = 'admin-reject-overlay objection-overlay';
     overlay.innerHTML =
       '<div class="admin-reject-dialog">' +
-        '<h3>💬 对资料提出异议</h3>' +
+        '<h3>' + iconSvg('comment') + ' 对资料提出异议</h3>' +
         '<p class="dlg-hint">该异议将发送给原审核人，并在审核记录中留存。</p>' +
         '<p class="obj-title">' + escapeHtml(title) + '</p>' +
         '<textarea id="objInput" placeholder="请说明异议原因…（必填）" rows="3"></textarea>' +
@@ -944,7 +944,7 @@
             '<span class="pcc-name">' + esc(c.commenter_name) + '</span>' +
             '<span class="pcc-time">' + esc(c.created_at) + '</span>' +
             '<div class="pcc-content">' + esc(c.content) + '</div>' +
-            '<button class="pcc-reply-btn" onclick="showReplyForm(' + fileId + ', ' + c.id + ', this)">↩ 回复</button>' +
+            '<button class="pcc-reply-btn" onclick="showReplyForm(' + fileId + ', ' + c.id + ', this)">' + iconSvg('reply') + ' 回复</button>' +
             '</div>';
           // 渲染子评论（回复）
           if (replies[c.id]) {
@@ -1067,9 +1067,9 @@
       if (!btn) return;
       var td = btn.closest('td');
       if (td) {
-        // 更新 🟢🔴 标识（回收授权时后端会强制关 auto_approve）
+        // 更新自动审核状态标识（回收授权时后端会强制关闭）
         var span = td.querySelector('span');
-        if (span) span.textContent = result.auto_approve ? '🟢 开' : '🔴 关';
+        if (span) setIconText(span, result.auto_approve ? 'check-circle' : 'close', result.auto_approve ? '开' : '关');
       }
       // 更新按钮本身（gate 状态）
       btn.textContent = result.can_auto_approve ? '允许' : '禁止';

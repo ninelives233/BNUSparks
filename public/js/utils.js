@@ -462,11 +462,11 @@
   // ── 下载按钮即时反馈 ──
   function _showDownloadFeedback(el) {
     if (!el) return;
-    var orig = el.textContent || el.innerText || '';
-    el.textContent = '⏳';
+    var originalHtml = el.innerHTML;
+    setIconText(el, 'clock', '');
     el.style.pointerEvents = 'none';
     setTimeout(function() {
-      el.textContent = orig;
+      el.innerHTML = originalHtml;
       el.style.pointerEvents = '';
     }, 3000);
   }
@@ -540,22 +540,22 @@
     var selected = Object.keys(_selectedIds).map(Number);
     if (!selected.length) { alert('请先选择文件'); return; }
     var btn = document.getElementById('batchDlBtn');
-    if (btn) { btn.textContent = '⏳ 下载中 0/' + selected.length; btn.disabled = true; }
+    if (btn) { setIconText(btn, 'clock', '下载中 0/' + selected.length); btn.disabled = true; }
     var done = 0;
     selected.reduce(function(promise, fid, idx) {
       return promise.then(function() {
         return new Promise(function(resolve) {
           doDirectDownload(fid);
           done++;
-          if (btn) btn.textContent = '⏳ 下载中 ' + done + '/' + selected.length;
+          if (btn) setIconText(btn, 'clock', '下载中 ' + done + '/' + selected.length);
           // 每个文件下载间隔 500ms，避免浏览器拦截
           setTimeout(resolve, 500);
         });
       });
     }, Promise.resolve()).then(function() {
-      if (btn) { btn.textContent = '⬇ 下载选中'; btn.disabled = false; }
+      if (btn) { setIconText(btn, 'arrow-down', '下载选中'); btn.disabled = false; }
     }).catch(function() {
-      if (btn) { btn.textContent = '⬇ 下载选中'; btn.disabled = false; }
+      if (btn) { setIconText(btn, 'arrow-down', '下载选中'); btn.disabled = false; }
     });
   }
 
@@ -567,7 +567,7 @@
     // 非本人操作需填理由
     if (!confirm('确定删除选中的 ' + selected.length + ' 个文件？')) return;
     var btn = document.getElementById('batchDeleteBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ 处理中…'; }
+    if (btn) { btn.disabled = true; setIconText(btn, 'clock', '处理中…'); }
     api('/api/files/batch-delete/', { method: 'POST', body: { file_ids: selected, reason: reason } }).then(function(result) {
       alert('已删除 ' + (result.deleted || 0) + ' 个文件' + (result.errors && result.errors.length ? '，' + result.errors.length + ' 个失败' : ''));
       // 刷新当前视图（课程树 fileCount 同步更新）
@@ -576,7 +576,7 @@
       renderExplorer();
     }).catch(function(err) {
       alert('批量删除失败：' + err.message);
-      if (btn) { btn.disabled = false; btn.textContent = '🗑 删除选中'; }
+      if (btn) { btn.disabled = false; setIconText(btn, 'trash', '删除选中'); }
     });
   }
 
@@ -588,7 +588,7 @@
     overlay.className = 'admin-reject-overlay';
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:420px">' +
-        '<h3>✏️ 批量编辑选中文件</h3>' +
+        '<h3>' + iconSvg('edit') + ' 批量编辑选中文件</h3>' +
         '<p style="font-size:0.8rem;color:var(--text-muted);margin:4px 0 12px">将统一应用到选中的 ' + selected.length + ' 个文件</p>' +
         '<div style="margin-bottom:10px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">任课教师</label>' +
           '<input type="text" id="batchEditTeacher" placeholder="留空不修改" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.85rem;box-sizing:border-box"></div>' +
@@ -712,10 +712,10 @@
       errOverlay.innerHTML =
         '<div class="search-overlay-inner sg-inner"><div class="sg-header">' +
         '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>' +
-        '<div class="sg-title-row"><span class="sg-title-icon">🔍</span><h3 class="sg-title">' + esc(q) + '</h3></div>' +
+        '<div class="sg-title-row"><span class="sg-title-icon">' + iconSvg('search') + '</span><h3 class="sg-title">' + esc(q) + '</h3></div>' +
         '<p class="sg-subtitle">' + esc((e && e.message) || '搜索失败') + '</p></div>' +
         '<div class="sg-body"><div class="sg-empty">' +
-        '<div class="sg-empty-icon">⚠️</div><div class="sg-empty-title">搜索失败</div>' +
+        '<div class="sg-empty-icon">' + iconSvg('alert') + '</div><div class="sg-empty-title">搜索失败</div>' +
         '<div class="sg-empty-desc">请检查网络后重试</div></div></div></div>';
       document.body.appendChild(errOverlay);
       return;
@@ -738,7 +738,7 @@
       html += '<div class="sg-header">';
       html += '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>';
       html += '<div class="sg-title-row">';
-      html += '<span class="sg-title-icon">🔍</span>';
+      html += '<span class="sg-title-icon">' + iconSvg('search') + '</span>';
       html += '<h3 class="sg-title">' + esc(q) + '</h3>';
       html += '</div>';
       html += '<p class="sg-subtitle">搜索结果</p>';
@@ -805,7 +805,7 @@
       /* ── 空状态 ── */
       if (!results.courses.length && !results.materials.length) {
         html += '<div class="sg-empty">';
-        html += '<div class="sg-empty-icon">🔍</div>';
+        html += '<div class="sg-empty-icon">' + iconSvg('search') + '</div>';
         html += '<div class="sg-empty-title">未找到相关结果</div>';
         html += '<div class="sg-empty-desc">试试其他关键词，或使用课程代码搜索</div>';
         html += '</div>';
@@ -925,3 +925,22 @@
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>',
     logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>'
   };
+
+  // Shared flat icon sprite for controls and status labels across lazily loaded views.
+  var UI_ICON_NAMES = 'alert archive arrow-down bell book bolt building calendar camera check check-circle clock close code comment document edit flag folder folder-open globe handshake help image info layers link lock mail megaphone mobile package pause pin question search shield sparkle star trash upload user users chart clipboard chevron-left chevron-right reply save refresh'.split(' ');
+
+  function iconSvg(name, className) {
+    if (UI_ICON_NAMES.indexOf(name) < 0) return '';
+    var extraClasses = String(className || '').split(/\s+/).filter(function(token) {
+      return /^[a-zA-Z0-9_-]+$/.test(token);
+    });
+    var classes = ['ui-icon'].concat(extraClasses).join(' ');
+    return '<svg class="' + classes + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#ui-icon-' + name + '"></use></svg>';
+  }
+
+  function setIconText(element, name, label) {
+    if (!element) return;
+    var template = document.createElement('template');
+    template.innerHTML = iconSvg(name);
+    element.replaceChildren(template.content.firstElementChild, document.createTextNode(String(label || '')));
+  }

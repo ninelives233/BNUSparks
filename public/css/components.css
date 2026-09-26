@@ -316,9 +316,13 @@
 .header-login .login-icon svg { width: 20px; height: 20px; display: block; }
 .empty-state .es-icon svg { width: 40px; height: 40px; }
 
-/* ── v160 反馈修复：待审卡片「详情」按钮 SVG 图标实体（原 📄 emoji 渲染弱） ── */
+/* ── v160 反馈修复：待审卡片「详情」按钮统一使用 SVG 图标 ── */
 .admin-pending-card .pc-actions .admin-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 .admin-pending-card .pc-actions .admin-btn { gap: 6px; }
+
+/* 共用扁平 SVG 图标：统一尺寸与描边，颜色继承控件及主题。 */
+.ui-icon { display: inline-block; width: 1em; height: 1em; flex: 0 0 auto; vertical-align: -0.16em; }
+.ui-icon use { pointer-events: none; }
 
 /* 共享分段控件随主题变化，避免暗色/冷色仍露出浅色硬编码底。 */
 .pc-seg { background: var(--surface) !important; border-color: var(--border-light) !important; }

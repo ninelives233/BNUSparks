@@ -24,6 +24,7 @@ class CourseAdmin(admin.ModelAdmin):
 class MaterialTypeAdmin(admin.ModelAdmin):
     list_display = ["name", "slug"]
     prepopulated_fields = {"slug": ["name"]}
+    exclude = ["icon"]
 
 
 @admin.register(Material)

@@ -9,7 +9,7 @@
     var items = isCourse ? ['rename', 'set_course', 'delete']
                          : ['rename', 'delete'];
     return items.map(function(a) {
-      var label = { rename: '✏️ 重命名', set_course: '📎 修改课程代码', delete: '🗑 删除' }[a] || a;
+      var label = { rename: iconSvg('edit') + ' 重命名', set_course: iconSvg('link') + ' 修改课程代码', delete: iconSvg('trash') + ' 删除' }[a] || a;
       var cls = a === 'delete' ? 'fc-menu-item danger' : 'fc-menu-item';
       return '<div class="' + cls + '" data-action="' + a + '">' + label + '</div>';
     }).join('');
@@ -64,7 +64,7 @@
     overlay.className = 'admin-reject-overlay';
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:440px">' +
-        '<h3>📎 修改课程代码</h3>' +
+        '<h3>' + iconSvg('link') + ' 修改课程代码</h3>' +
         '<p style="font-size:0.82rem;color:var(--ink-mid);margin:2px 0 10px">输入要链接或改成的课程代码。代码已存在时可只链接当前叶子；合并资料需要单独选择。若原课程被多个目录共用，改成新代码只会拆分当前叶子，资料仍留在原课程。</p>' +
         '<div style="margin:10px 0"><label>新课程代码</label>' +
           '<input type="text" id="mgmtCourseCode" maxlength="20" placeholder="如 PSY30201" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem;box-sizing:border-box">' +
@@ -271,7 +271,7 @@
       : '';
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:360px">' +
-        '<h3>🗑 确认删除</h3>' +
+        '<h3>' + iconSvg('trash') + ' 确认删除</h3>' +
         '<p>将删除文件夹 <strong>' + esc(name) + '</strong></p>' +
         peelNote +
         '<p style="font-size:0.8rem;color:var(--ink-faint)">仅删除目录节点，关联课程和文件不受影响</p>' +
@@ -317,7 +317,7 @@
     overlay.className = 'admin-reject-overlay';
     overlay.innerHTML =
       '<div class="admin-reject-dialog" style="max-width:420px">' +
-        '<h3>📁 新建文件夹</h3>' +
+        '<h3>' + iconSvg('folder') + ' 新建文件夹</h3>' +
         '<div style="margin-bottom:8px"><label style="font-size:0.85rem;display:block;margin-bottom:4px">文件夹类型</label>' +
           '<select id="newFolderType" onchange="updateNewFolderFields()" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-light);font-size:0.9rem">' +
             '<option value="intermediate">中间节点（可建子文件夹，不绑定课程）</option>' +

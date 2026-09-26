@@ -140,7 +140,7 @@
     _multiSelectMode = !_multiSelectMode;
     var btn = document.getElementById('multiSelectToggle');
     var mgmt = isMgmtActive();
-    btn.textContent = _multiSelectMode ? '✕ 取消' : (mgmt ? '📋 批量操作' : '⬇ 批量下载');
+    setIconText(btn, _multiSelectMode ? 'close' : (mgmt ? 'clipboard' : 'arrow-down'), _multiSelectMode ? '取消' : (mgmt ? '批量操作' : '批量下载'));
     if (!_multiSelectMode) {
       // 退出模式时清空选择
       _selectedIds = {};
@@ -197,7 +197,7 @@
     _multiSelectMode = false;
     _selectedIds = {};
     var btn = document.getElementById('multiSelectToggle');
-    if (btn) btn.textContent = '⬇ 批量下载';
+    if (btn) setIconText(btn, 'arrow-down', '批量下载');
     var allChk = document.getElementById('selectAllChkHead');
     if (allChk) allChk.checked = false;
     syncMultiSelectUI();
@@ -261,17 +261,17 @@
     container.innerHTML =
         '<div class="file-area-main">' +
           (returnState ? '<div class="fa-back-bar"><a href="#" onclick="returnToPreviousView();return false">← 返回' + (returnState.view === 'rankings' ? '排行榜' : returnState.view === 'home' ? '首页' : '最近上传') + '</a></div>' : '') +
-          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3>' + mergeCodes + '<span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + (isMgmtActive() ? '📋 批量操作' : '⬇ 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>' +
+          '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3>' + mergeCodes + '<span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + iconSvg(isMgmtActive() ? 'clipboard' : 'arrow-down') + (isMgmtActive() ? ' 批量操作' : ' 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>' +
           '<div class="file-table-wrap"><div class="batch-dl-bar" id="batchDlBar"><span id="selectedCount">已选 0 个</span>' +
-            '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">🗑 删除选中</button>' +
-            '<button class="admin-btn admin-btn-sm" onclick="showBatchEditDialog()" id="batchEditBtn" style="display:none">✏️ 编辑选中</button>' +
-            '<button class="admin-btn admin-btn-sm" onclick="batchDownloadSelected()" id="batchDlBtn" style="margin-left:auto">⬇ 下载选中</button>' +
+            '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">' + iconSvg('trash') + ' 删除选中</button>' +
+            '<button class="admin-btn admin-btn-sm" onclick="showBatchEditDialog()" id="batchEditBtn" style="display:none">' + iconSvg('edit') + ' 编辑选中</button>' +
+            '<button class="admin-btn admin-btn-sm" onclick="batchDownloadSelected()" id="batchDlBtn" style="margin-left:auto">' + iconSvg('arrow-down') + ' 下载选中</button>' +
           '</div>' +
           '<div class="file-table-scroll"><table class="file-table" id="fileTable"><thead><tr><th class="th-name">文件名</th><th class="th-type">类型</th><th class="th-size">大小</th><th class="th-uploader">上传者</th><th class="th-teacher">任课教师</th><th class="th-favcount">收藏量</th><th class="th-dlcount">下载量</th><th class="th-download"><span class="dl-normal">下载</span><span class="dl-check"><input type="checkbox" id="selectAllChkHead" onchange="toggleSelectAll(this)"> <span id="selectedCountHead"></span></span></th></tr></thead><tbody id="fileTableBody">' +
           '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">加载中...</td></tr>' +
           '</tbody></table></div></div>' +
         '</div>' +
-        (Object.keys(sameNameGroups).length ? '<div class="file-area-side-bottom"><div class="fasb-title">📚 同名课程（相同名称的不同课程代码）</div><div class="fasb-list">' +
+        (Object.keys(sameNameGroups).length ? '<div class="file-area-side-bottom"><div class="fasb-title">' + iconSvg('book') + ' 同名课程（相同名称的不同课程代码）</div><div class="fasb-list">' +
           Object.values(sameNameGroups).map(g =>
             '<span class="fasb-item" onclick="navToCourse(\'' + escJs(g.type) + '\',\'' + escJs(g.courseId) + '\')">' +
               '<span class="fasb-code">' + esc(g.courseId) + '</span>' +
@@ -328,7 +328,7 @@
         if (!filteredFiles.length) {
           tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:40px">暂无资料，欢迎上传</td></tr>';
           hidePagination();
-          if (_multiSelectMode) { _multiSelectMode = false; _selectedIds = {}; var mBtn = document.getElementById('multiSelectToggle'); if (mBtn) mBtn.textContent = '⬇ 批量下载'; }
+          if (_multiSelectMode) { _multiSelectMode = false; _selectedIds = {}; var mBtn = document.getElementById('multiSelectToggle'); if (mBtn) setIconText(mBtn, 'arrow-down', '批量下载'); }
           var batchBar = document.getElementById('batchDlBar');
           if (batchBar) { batchBar.classList.remove('is-visible'); batchBar.style.display = ''; }
           var ft = document.getElementById('fileTable');
@@ -353,26 +353,26 @@
           }
           var dlLink = currentUser
             ? (f.can_download !== false
-                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a><button type="button" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</button>'
-                : '<span class="dl-link dl-disabled" title="审核通过后可下载">⏳ 待审核</span>')
-            : '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">⬇ 下载</a>';
+                ? '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">' + iconSvg('arrow-down') + ' 下载</a><button type="button" class="pv-link" onclick="event.stopPropagation();showPreview(' + f.id + ')">预览</button>'
+                : '<span class="dl-link dl-disabled" title="审核通过后可下载">' + iconSvg('clock') + ' 待审核</span>')
+            : '<a href="javascript:void(0)" class="dl-link" onclick="handleDownloadClick(' + f.id + ',this,event)">' + iconSvg('arrow-down') + ' 下载</a>';
           var isChecked = !!_selectedIds[f.id];
           var mgmt = isMgmtActive();
           // 管理模式：文件名和教师旁加铅笔（屏幕宽度 > 768px），仅在可编辑时显示
           var selfOrInScope = mgmt && (f.is_uploader || f.can_delete);
           var mgmtPens = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'title\',\'' + escJs(f.title) + '\')">✏️</span>')
+            ? ('<span class="mgmt-pen" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'title\',\'' + escJs(f.title) + '\')">' + iconSvg('edit') + '</span>')
             : '';
           var teacherPen = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen mgmt-pen-sm" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'teacher\',\'' + escJs(f.teacher || '') + '\')">✏️</span>')
+            ? ('<span class="mgmt-pen mgmt-pen-sm" onclick="event.stopPropagation();quickEditField(' + f.id + ',\'teacher\',\'' + escJs(f.teacher || '') + '\')">' + iconSvg('edit') + '</span>')
             : '';
           var mgmtDel = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen mgmt-del" onclick="event.stopPropagation();deleteFileConfirm(' + f.id + ',this)" title="删除此文件">🗑️</span>')
+            ? ('<span class="mgmt-pen mgmt-del" onclick="event.stopPropagation();deleteFileConfirm(' + f.id + ',this)" title="删除此文件">' + iconSvg('trash') + '</span>')
             : '';
           // 置顶：徽章对全体用户可见；图钉仅管理模式（铅笔左侧）
-          var pinBadge = f.is_pinned ? '<span class="file-pin-badge" title="已置顶">📌</span>' : '';
+          var pinBadge = f.is_pinned ? '<span class="file-pin-badge" title="已置顶">' + iconSvg('pin') + '</span>' : '';
           var mgmtPin = mgmt && selfOrInScope && window.innerWidth > 768
-            ? ('<span class="mgmt-pen mgmt-pin" onclick="event.stopPropagation();toggleFilePin(' + f.id + ',' + (f.is_pinned ? 1 : 0) + ',this)" title="' + (f.is_pinned ? '取消置顶' : '置顶此文件') + '">📌</span>')
+            ? ('<span class="mgmt-pen mgmt-pin" onclick="event.stopPropagation();toggleFilePin(' + f.id + ',' + (f.is_pinned ? 1 : 0) + ',this)" title="' + (f.is_pinned ? '取消置顶' : '置顶此文件') + '">' + iconSvg('pin') + '</span>')
             : '';
           return '<tr data-file-id="' + f.id + '"' + (f.is_pinned ? ' class="file-pinned"' : '') + '><td class="ft-name"><span class="fn-wrap">' + extBadge(f.file_name) + '<span class="fn-text" title="' + esc(f.title) + '">' + esc(f.title) + '</span>' + pinBadge + badgeHtml + mgmtPin + mgmtPens + mgmtDel + '</span></td>' +
             '<td class="ft-type-cell">' + esc(f.user_material_type || f.file_type) + (mgmt && selfOrInScope ? '<span class="mgmt-type-dropdown-wrap"><select class="mgmt-type-select" onchange="mgmtChangeType(' + f.id + ',this)">' + MATERIAL_TYPES.map(function(t) { var sel = (f.user_material_type || '') === t.name ? ' selected' : ''; return '<option value="' + t.id + '"' + sel + '>' + t.name + '</option>'; }).join('') + '</select></span>' : '') + '</td>' +
@@ -397,7 +397,7 @@
         if (mainArea && sidePanel) mainArea.classList.add('file-area-compact');
         else if (mainArea) mainArea.classList.remove('file-area-compact');
 
-        // ── 同步多选模式 UI（下载列 ↔ 复选框，CSS 控制可见性，无布局抖动） ──
+        // ── 同步多选模式 UI（下载列与复选框切换，CSS 控制可见性，无布局抖动） ──
         if (_multiSelectMode) {
           syncMultiSelectUI();
         } else {
@@ -438,7 +438,7 @@
 
         const numbers = getPageNumbers(page, total);
 
-        let html = '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" data-page="' + (page - 1) + '">◀</button>';
+        let html = '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" data-page="' + (page - 1) + '" aria-label="上一页">' + iconSvg('chevron-left') + '</button>';
 
         numbers.forEach(function(n) {
           if (n === '…') {
@@ -448,7 +448,7 @@
           }
         });
 
-        html += '<button class="fp-btn fp-next' + (page >= total ? ' fp-disabled' : '') + '" data-page="' + (page + 1) + '">▶</button>';
+        html += '<button class="fp-btn fp-next' + (page >= total ? ' fp-disabled' : '') + '" data-page="' + (page + 1) + '" aria-label="下一页">' + iconSvg('chevron-right') + '</button>';
 
         pag.innerHTML = html;
         pag.style.display = 'flex';
