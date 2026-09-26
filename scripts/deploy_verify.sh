@@ -34,7 +34,7 @@ check_status() {
     if [ "$actual" = "$expected" ]; then
         pass "$description"
     else
-        fail "$description（期望 $expected，实际 ${actual:-请求失败}）"
+        fail "${description}（期望 $expected，实际 ${actual:-请求失败}）"
     fi
 }
 
@@ -44,7 +44,7 @@ check_status_pattern() {
     if [[ "$actual" =~ $pattern ]]; then
         pass "$description"
     else
-        fail "$description（实际 ${actual:-请求失败}）"
+        fail "${description}（实际 ${actual:-请求失败}）"
     fi
 }
 
@@ -98,8 +98,8 @@ check_header "静态缓存头 max-age=2592000" "/static/css/tokens.css" 'Cache-C
 check_header "静态资源安全头" "/static/css/tokens.css" '^X-Content-Type-Options:[[:space:]]*nosniff'
 check_request_header "静态资源启用压缩" "/static/css/tokens.css" "Accept-Encoding: gzip" '^Content-Encoding:[[:space:]]*gzip'
 
-MISSING_PATH="${BNUSPARKS_VERIFY_MISSING_PATH:-/__deploy_verify_missing__}"
-check_status_pattern "不存在资源未被公开" "$MISSING_PATH" '^(403|404)$'
+MISSING_PATH="${BNUSPARKS_VERIFY_MISSING_PATH:-/static/__deploy_verify_missing__.css}"
+check_status_pattern "不存在静态资源未被公开" "$MISSING_PATH" '^(403|404)$'
 check_status_pattern "媒体目录不能直接列出" "/media/__deploy_verify_missing__" '^(403|404)$'
 check_status "受保护文件不能直接访问" "/protected/__deploy_verify_missing__" "404"
 check_status "管理入口要求边缘认证" "/admin/" "401"
