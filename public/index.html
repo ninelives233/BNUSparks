@@ -1111,7 +1111,7 @@
           </div>
           <div class="mf-group">
             <label for="ncGMaterialType">资料类型</label>
-            <select id="ncGMaterialType" class="mf-input"><option value="">请选择类型…</option></select>
+            <select id="ncGMaterialType" class="mf-input" onchange="warnIfCoursewareType(this)"><option value="">请选择类型…</option></select>
           </div>
           <div class="mf-group">
             <label for="ncGTeacher">任课教师</label>
@@ -1208,7 +1208,7 @@
             </div>
             <div class="mf-group">
               <label for="ncMMaterialType">资料类型</label>
-              <select id="ncMMaterialType" class="mf-input"><option value="">请选择类型…</option></select>
+              <select id="ncMMaterialType" class="mf-input" onchange="warnIfCoursewareType(this)"><option value="">请选择类型…</option></select>
             </div>
             <div class="mf-group">
               <label for="ncMTeacher">任课教师</label>
@@ -1556,7 +1556,7 @@
       </div>
       <div class="mf-group">
         <label for="uploadMaterialType">类型 <span class="label-required">*</span></label>
-        <select id="uploadMaterialType" class="mf-input" required>
+        <select id="uploadMaterialType" class="mf-input" required onchange="warnIfCoursewareType(this)">
           <option value="">请选择类型…</option>
         </select>
       </div>
@@ -1579,7 +1579,7 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=307" defer></script>
+<script src="/static/js/utils.js?v=308" defer></script>
 <script src="/static/js/monitoring-events.js?v=300" defer></script>
 <script src="/static/js/appearance.js?v=10" defer></script>
 <script src="/static/js/auth.js?v=316" defer></script>

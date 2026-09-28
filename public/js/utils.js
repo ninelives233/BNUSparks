@@ -358,6 +358,23 @@
   }
   window._removeOverlay = _removeOverlay;
 
+  // ── 上传表单选择「课件」类型的风险提示（上传弹窗与新建课程表单共用）──
+  // 必须由首屏 utils 提供；课件按名称识别而非写死 id（MATERIAL_TYPES 的 id 取决于各校区数据库）。
+  var COURSEWARE_WARN_MSG = '课件是风险较高且效益较低的资料类型，请在上传前确定该课件为可达性较强的公开资源，或确保已征求任课教师同意。\n\n点击「确定」继续上传，点击「取消」重新选择类型。';
+
+  function warnIfCoursewareType(sel) {
+    if (!sel || !sel.value || typeof MATERIAL_TYPES === 'undefined') return true;
+    var picked = null;
+    for (var i = 0; i < MATERIAL_TYPES.length; i++) {
+      if (String(MATERIAL_TYPES[i].id) === String(sel.value)) { picked = MATERIAL_TYPES[i]; break; }
+    }
+    if (!picked || picked.name !== '课件') return true;
+    if (confirm(COURSEWARE_WARN_MSG)) return true;
+    sel.value = '';
+    return false;
+  }
+  window.warnIfCoursewareType = warnIfCoursewareType;
+
   // ── SPA 干净 URL 路由（v=171）：每个视图对应一个可分享/可刷新/可返回的路径 ──
   // 静态视图名 → 路径；explorer/userPublic/fileDetail 是动态路径，在 routeToPath 里单独处理；
   // drawer 是叠在当前视图上的浮层，不占 URL。
