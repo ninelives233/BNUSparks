@@ -128,7 +128,7 @@
         { icon: 'sparkle', heading: '我们的使命', text: '致力于贯彻开源精神，抹平信息差，让每一位北师大同学都能免费获取优质学习资源。' },
         { icon: 'alert', heading: '免责声明', text: '木铎星火由学生自发创建和维护，与北京师范大学及其任何官方机构无关，也不代表学校立场。本站内容主要由用户贡献，仅供学习交流参考。' },
         { icon: 'book', heading: '平台内容', text: '课程笔记、复习资料、考试真题、学术论文、软件教程等一切对学习有帮助的资源。' },
-        { icon: 'handshake', heading: '贡献方式', text: '任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！' },
+        { icon: 'handshake', heading: '贡献方式', text: '任何同学都可以上传资料。我们鼓励每人都贡献一份自己的力量——星星之火，可以燎原！觉得网站有帮助的话，也欢迎 <a href="/static/donate-qr.png?v=1" target="_blank" rel="noopener">资助我们</a>（微信扫码，点击二维码可查看大图）。<a class="qr-thumb-link" href="/static/donate-qr.png?v=1" target="_blank" rel="noopener"><img class="qr-thumb" src="/static/donate-qr.png?v=1" width="112" height="112" alt="赞赏码，点击查看大图"></a>' },
       ]
     },
     help: {
@@ -997,10 +997,6 @@
       if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
       resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">' + iconSvg('alert') + '</div><div class="so-empty-text">搜索失败</div></div>';
     }
-  }
-
-  function showSupportMessage() {
-    alert('当前还没有准备收款码，您对网站的合理使用就是对我们最大的支持！');
   }
 
   /* ═══════════════════════════════════════════════════════════
