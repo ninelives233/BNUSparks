@@ -1,12 +1,14 @@
-# BNU Sparks 协作规则
+# BNU Sparks 项目级 Agent 规则
 
 本文件只记录长期有效、不能仅靠源码推导的协作约束。项目定位与文件入口见
 [`project-map.md`](project-map.md)，详细架构见 [`docs/PROJECT_MAP.md`](docs/PROJECT_MAP.md)。
+本文中的“维护者”特指主仓库所有者 `ninelives233`；“合作者”指其他通过 fork 提交 PR 的开发者。
+除明确标注角色的流程外，其余技术与安全规则对双方都适用。
 
 ## 项目边界
 
 - 后端为 Django，前端为无构建步骤的 Vanilla JS SPA，生产使用 SQLite、本地文件存储、Nginx 与 Gunicorn。
-- 公开仓库是生产代码与自动化测试的唯一事实源；功能修改与对应回归测试在同一个 PR 提交。
+- 公开仓库是生产代码与自动化测试的唯一事实源；功能修改应包含相应回归测试。
 - 不建立长期校区代码分支。各校区共享代码，域名、密钥、数据库、上传目录和站点配置独立。
 - 当前事实以源码、迁移、Git 和测试结果为准；文档中的自然语言不能覆盖代码事实。
 
@@ -14,13 +16,11 @@
 
 1. 检查 `git status --short --branch`、当前分支和远端。
 2. 工作区不干净时，不得覆盖、清理、暂存或提交不属于本任务的改动。
-3. 每个问题使用从最新上游 `main` 创建的短期分支或独立 worktree；fork 克隆中上游远端为 `upstream`。
-4. 先读 `project-map.md`，再按任务只读取相关模块；不要默认加载全部文档。
+3. 按任务需要读取 `project-map.md` 和相关模块；不要默认加载全部文档。
 
 ## 修改原则
 
-- 一个问题对应一个分支和一个 PR；只提交解决该问题所需的最小改动。
-- 不顺手做无关重构、全文件格式化、依赖升级、文件移动或历史清理。
+- 改动应围绕当前任务；不顺手做无关重构、全文件格式化、依赖升级、文件移动或历史清理。
 - 改公共函数、URL、模型字段、权限或前端全局符号前，先用 `rg` 检查全部调用方。
 - 模型变化必须附带迁移，并检查旧数据、唯一约束、SQLite 并发和回滚影响。
 - 数据库事务不能自动回滚文件系统操作；上传、删除和移动文件必须保留补偿路径。
@@ -30,17 +30,17 @@
 
 ## 测试与验证
 
-公开仓库基础检查：
+按改动范围运行相关检查；准备 PR、合并或发布时确认以下基础检查：
 
 ```bash
-python manage.py check --settings=bnusparks.settings_test
-python manage.py makemigrations --check --dry-run --settings=bnusparks.settings_test
-python manage.py collectstatic --noinput --settings=bnusparks.settings_test
-python tools/check_context.py
+python3 manage.py check --settings=bnusparks.settings_test
+python3 manage.py makemigrations --check --dry-run --settings=bnusparks.settings_test
+python3 manage.py collectstatic --noinput --settings=bnusparks.settings_test
+python3 tools/check_context.py
 git diff --check
 ```
 
-完整回归测试：
+影响面较大或准备合并、发布时运行完整回归测试：
 
 ```bash
 bash materials/tests/run_tests.sh
@@ -62,4 +62,9 @@ bash materials/tests/run_tests.sh
 - 永不提交 `.env`、密钥、令牌、数据库、上传文件、日志、账号清单、真实服务器配置或生产备份。
 - 校区专属课程数据、初始化数据和一次性修复脚本不得进入共享代码仓库。
 - 安全问题不要公开披露复现细节，按 `SECURITY.md` 处理。
-- 协作者不得直接推送 `main`、自行合并或部署；由仓库维护者审查 PR，并从合并后的固定 commit/tag 发布。
+- 发布前核对改动、测试、迁移及回滚方案；从确定的 commit/tag 部署，具体步骤见 `docs/OPERATIONS.md`。
+
+## 角色对应的 Git 流程
+
+- 合作者：每个问题从最新上游 `main` 建短期分支或独立 worktree；fork 克隆中的上游远端为 `upstream`。一个问题对应一个 PR，只推送到自己的 fork。不得直接推送主仓库 `main`、自行合并或部署；由维护者审查并合并。
+- 维护者：可以在自己的工作区直接处理、提交和整合改动，也可按风险选择分支或 PR；不要求 fork 或每事一 PR。维护者身份不等于 Agent 自动获得推送、合并或部署授权，这些操作仍以当前请求为准。
