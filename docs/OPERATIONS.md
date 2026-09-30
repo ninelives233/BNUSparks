@@ -28,8 +28,11 @@ purpose: deployment backup and recovery source of truth
 ## 定时任务（服务器 `crontab -e`）
 
 ```cron
-# 每日 03:00 数据库备份，保留 30 天（SQLite 建议低峰期；更稳妥用 sqlite3 ".backup"）
-0 3 * * * cp /opt/bnusparks/data/db.sqlite3 /opt/bnusparks/backups/db_$(date +\%Y\%m\%d).sqlite3 && find /opt/bnusparks/backups -name "db_*.sqlite3" -mtime +30 -delete
+# 每日 03:00 数据库在线备份（python sqlite3 backup API，对运行中的库安全；先写 .part 再原子改名），保留 30 天
+0 3 * * * /opt/bnusparks/venv/bin/python -c 'import sqlite3,os,datetime; f="/opt/bnusparks/backups/db_"+datetime.date.today().strftime("\%Y\%m\%d")+".sqlite3"; s=sqlite3.connect("/opt/bnusparks/data/db.sqlite3",timeout=30); d=sqlite3.connect(f+".part"); s.backup(d); d.close(); s.close(); os.replace(f+".part",f); os.chmod(f,0o600)' && find /opt/bnusparks/backups -name "db_*.sqlite3" -mtime +30 -delete
+
+# 每日 04:00 清理部署回滚快照，仅保留最近 10 个
+0 4 * * * cd /opt/bnusparks/.deploy-backups && ls -1t | tail -n +11 | xargs -r rm -rf --
 
 # 每日 06:00 问答区「我要提问」点击日报（通知超管 + 问答区版主）
 0 6 * * * /opt/bnusparks/venv/bin/python /opt/bnusparks/manage.py qa_daily_report --settings=bnusparks.settings_prod >> /opt/bnusparks/logs/qa_cron.log 2>&1
@@ -37,6 +40,12 @@ purpose: deployment backup and recovery source of truth
 # 每日 06:10 硬删软删除超过 48h 的问答内容（兜底；漏配会导致只软删不真删）
 10 6 * * * /opt/bnusparks/venv/bin/python /opt/bnusparks/manage.py qa_purge --settings=bnusparks.settings_prod >> /opt/bnusparks/logs/qa_cron.log 2>&1
 ```
+
+## 日志与快照保留
+
+- gunicorn 日志：`/etc/logrotate.d/bnusparks` 每日轮转（超 100M 提前触发），`copytruncate`，压缩保留 14 天。
+- journald：`/etc/systemd/journald.conf` 设 `SystemMaxUse=200M`。
+- 部署回滚快照：仅保留最近 10 个，由每日 04:00 cron 清理（见上）。
 
 ## 资料删除暂存区（trash）
 
