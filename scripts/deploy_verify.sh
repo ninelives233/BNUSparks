@@ -34,7 +34,9 @@ check_status() {
     if [ "$actual" = "$expected" ]; then
         pass "$description"
     else
-        fail "${description}（期望 $expected，实际 ${actual:-请求失败}）"
+        # macOS 自带的 bash 3.2 会把 $var 后紧邻的全角字符吞进变量名，
+        # set -u 下报 unbound variable；与全角标点相邻的引用必须加花括号。
+        fail "${description}（期望 ${expected}，实际 ${actual:-请求失败}）"
     fi
 }
 
