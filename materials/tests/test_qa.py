@@ -605,14 +605,33 @@ class QaV175ReviewTests(QaBaseTestCase):
         self.assertTrue(notif.exists())
         self.assertIn("驳回原因：内容不合规", notif.first().message)
 
-    def test_reject_without_reason_no_notification(self):
+    def test_reject_without_reason_rejected_s05(self):
+        """S05：空原因驳回被拒绝——内容保持待审核、不发通知，防止无回执的 rejected"""
         q, _ = self._make_pending()
         self.client.set_token(self.qa_mod)
         r = self.client.post_json(f"/api/admin/qa/questions/{q.id}/reject/", {})
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 400)
         q.refresh_from_db()
-        self.assertEqual(q.status, "rejected")
+        self.assertEqual(q.status, "pending")
         self.assertFalse(Notification.objects.filter(recipient=self.user).exists())
+        # 回答同样必填原因
+        _, a = self._make_pending()
+        r2 = self.client.post_json(f"/api/admin/qa/answers/{a.id}/reject/", {"reason": "  "})
+        self.assertEqual(r2.status_code, 400)
+        a.refresh_from_db()
+        self.assertEqual(a.status, "pending")
+
+    def test_reject_notification_carries_title_and_reason(self):
+        """S05：驳回通知包含标题与原因，作者能定位要修改的内容"""
+        q, _ = self._make_pending()
+        self.client.set_token(self.qa_mod)
+        r = self.client.post_json(f"/api/admin/qa/questions/{q.id}/reject/", {"reason": "描述不清晰"})
+        self.assertEqual(r.status_code, 200)
+        notif = Notification.objects.filter(recipient=self.user, type=Notification.Type.OPERATION)
+        self.assertTrue(notif.exists())
+        msg = notif.first().message
+        self.assertIn(q.title, msg)
+        self.assertIn("描述不清晰", msg)
 
     def test_records_status_filter(self):
         self._make_pending()
@@ -1320,3 +1339,218 @@ class QaV183ReportTests(QaV183BaseTestCase):
         self.assertGreaterEqual(len(rows), 1)
         self.assertEqual(rows[0]["qa_question_title"], self.q1.title)
         self.assertEqual(rows[0]["kind"], "question")
+
+
+# ── v186 缺陷修复回归（F04/F07/F08/S04/S05/S06）──
+
+class QaDetailOwnPendingAnswerTests(QaBaseTestCase):
+    """F04：作者可见自己的待审核/已驳回回答；他人不可见"""
+
+    def setUp(self):
+        super().setUp()
+        QaConfig.objects.update_or_create(pk=1, defaults={"user_open": True})
+        self.student = create_user("qastudent1")
+
+    def _own_pending_answer(self):
+        return QaAnswer.objects.create(
+            question=self.q1, author=self.student, content="<p>我的待审回答</p>",
+            status=QaAnswer.Status.PENDING)
+
+    def test_author_sees_own_pending_answer_with_status(self):
+        a = self._own_pending_answer()
+        self.client.set_token(self.student)
+        r = self.client.get_json(f"/api/qa/questions/{self.q1.id}/")
+        answers = r.json()["data"]["answers"]
+        ids = {x["id"] for x in answers}
+        self.assertIn(a.id, ids)
+        item = next(x for x in answers if x["id"] == a.id)
+        self.assertEqual(item["status"], "pending")
+
+    def test_others_do_not_see_pending_answer(self):
+        a = self._own_pending_answer()
+        other = create_user("qastudent2")
+        self.client.set_token(other)
+        r = self.client.get_json(f"/api/qa/questions/{self.q1.id}/")
+        ids = {x["id"] for x in r.json()["data"]["answers"]}
+        self.assertNotIn(a.id, ids)
+
+    def test_anonymous_do_not_see_pending_answer(self):
+        a = self._own_pending_answer()
+        r = self.client.get_json(f"/api/qa/questions/{self.q1.id}/")
+        ids = {x["id"] for x in r.json()["data"]["answers"]}
+        self.assertNotIn(a.id, ids)
+        self.assertFalse(QaAnswer.objects.filter(id=a.id, status="published").exists())
+
+
+class QaSearchAnswersTests(QaBaseTestCase):
+    """F08：搜索覆盖已发布回答，带命中类型/片段/分页；未公开内容不可搜"""
+
+    def _search(self, q, **params):
+        return self.client.get_json("/api/qa/search/", {"q": q, **params})
+
+    def test_answer_only_keyword_hits_answer(self):
+        r = self._search("身份证")
+        items = r.json()["data"]["items"]
+        self.assertTrue(items)
+        hit = items[0]
+        self.assertEqual(hit["id"], self.q1.id)
+        self.assertEqual(hit["hit"], "answer")
+        self.assertEqual(hit["answer_id"], self.ans1.id)
+        self.assertIn("身份证", hit["snippet"])
+
+    def test_question_keyword_hits_question(self):
+        r = self._search("图书馆")
+        items = r.json()["data"]["items"]
+        self.assertTrue(items)
+        self.assertEqual(items[0]["id"], self.q2.id)
+        self.assertEqual(items[0]["hit"], "question")
+        self.assertNotIn("answer_id", items[0])
+
+    def test_pending_answer_not_searchable(self):
+        QaAnswer.objects.create(
+            question=self.q2, author=self.admin, content="<p>独家暗号芝麻开门</p>",
+            status=QaAnswer.Status.PENDING)
+        data = self._search("芝麻开门").json()["data"]
+        self.assertEqual(data["total"], 0)
+
+    def test_deleted_question_not_searchable(self):
+        self.q2.status = QaQuestion.Status.DELETED
+        self.q2.save()
+        data = self._search("图书馆").json()["data"]
+        self.assertEqual(data["total"], 0)
+
+    def test_pagination(self):
+        for i in range(13):
+            QaQuestion.objects.create(
+                title=f"分页样本问题 {i} 关键词独有", content=f"<p>第{i}题</p>",
+                author=self.admin, tag_l1=self.general, tag_l2=self.t_life)
+        page1 = self._search("关键词独有", page=1, pageSize=10).json()["data"]
+        page2 = self._search("关键词独有", page=2, pageSize=10).json()["data"]
+        self.assertEqual(page1["total"], 13)
+        self.assertEqual(page1["total_pages"], 2)
+        self.assertEqual(len(page1["items"]), 10)
+        self.assertEqual(len(page2["items"]), 3)
+        ids1 = {i["id"] for i in page1["items"]}
+        ids2 = {i["id"] for i in page2["items"]}
+        self.assertFalse(ids1 & ids2)
+
+    def test_empty_keyword_returns_empty(self):
+        data = self._search("").json()["data"]
+        self.assertEqual(data["total"], 0)
+        self.assertEqual(data["items"], [])
+
+
+class QaUserUploadImageTests(QaBaseTestCase):
+    """F07：普通用户插图上传端点——开关与登录把关，能力与管理端一致"""
+
+    def _post_image(self):
+        png = SimpleUploadedFile("t.png", _make_png_bytes(), content_type="image/png")
+        return self.client.post("/api/qa/upload-image/", {"image": png})
+
+    def test_requires_login(self):
+        r = self._post_image()
+        self.assertEqual(r.status_code, 401)
+
+    def test_forbidden_when_closed(self):
+        QaConfig.objects.update_or_create(pk=1, defaults={"user_open": False})
+        self.client.set_token(self.user)
+        r = self._post_image()
+        self.assertEqual(r.status_code, 403)
+
+    def test_open_allows_user_upload(self):
+        QaConfig.objects.update_or_create(pk=1, defaults={"user_open": True})
+        self.client.set_token(self.user)
+        r = self._post_image()
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["data"]["url"].startswith("/media/qa_images/"))
+
+    def test_admin_endpoint_still_restricted_to_qa_managers(self):
+        QaConfig.objects.update_or_create(pk=1, defaults={"user_open": True})
+        png = SimpleUploadedFile("t.png", _make_png_bytes(), content_type="image/png")
+        self.client.set_token(self.user)
+        r = self.client.post("/api/admin/qa/upload-image/", {"image": png})
+        self.assertEqual(r.status_code, 403)
+
+
+class QaUserFavoritesAnswerIdTests(QaBaseTestCase):
+    """S04：同题两条回答收藏逐条返回且带 answer_id，可直达"""
+
+    def test_two_answer_favorites_kept_separately(self):
+        a2 = QaAnswer.objects.create(
+            question=self.q1, author=self.admin, content="<p>第二条回答。</p>")
+        self.client.set_token(self.user)
+        self.client.post_json(f"/api/qa/answers/{self.ans1.id}/favorite/")
+        self.client.post_json(f"/api/qa/answers/{a2.id}/favorite/")
+        data = self.client.get_json("/api/qa/user/favorites/").json()["data"]
+        answer_rows = [i for i in data["items"] if i["kind"] == "answer"]
+        self.assertEqual(len(answer_rows), 2)
+        got_ids = {i["answer_id"] for i in answer_rows}
+        self.assertEqual(got_ids, {self.ans1.id, a2.id})
+        for row in answer_rows:
+            self.assertEqual(row["id"], self.q1.id)
+            self.assertTrue(row["answer_author"])
+            self.assertTrue(row["answer_snippet"])
+
+
+class QaApproveAnswerNotifyAskerTests(QaBaseTestCase):
+    """S06：回答过审通知提问者；自答与提问者本人审核不重复通知"""
+
+    def _open(self):
+        QaConfig.objects.update_or_create(pk=1, defaults={"user_open": True})
+
+    def test_asker_notified_of_new_public_answer(self):
+        self._open()
+        asker = create_user("qaasker1")
+        q = QaQuestion.objects.create(
+            title="提问者的新回答通知", content="<p>正文</p>",
+            author=asker, tag_l1=self.general, tag_l2=self.t_life)
+        answerer = create_user("qaanswerer1")
+        a = QaAnswer.objects.create(
+            question=q, author=answerer, content="<p>回答</p>",
+            status=QaAnswer.Status.PENDING)
+        self.client.set_token(self.qa_mod)
+        r = self.client.post_json(f"/api/admin/qa/answers/{a.id}/approve/")
+        self.assertEqual(r.status_code, 200)
+        # 回答作者 + 提问者各一条
+        self.assertTrue(Notification.objects.filter(
+            recipient=answerer, title="你的回答已通过审核").exists())
+        self.assertTrue(Notification.objects.filter(
+            recipient=asker, title="你的问题有了新回答").exists())
+
+    def test_self_answer_notifies_neither_dup(self):
+        self._open()
+        asker = create_user("qaasker2")
+        q = QaQuestion.objects.create(
+            title="自答回答去重", content="<p>正文</p>",
+            author=asker, tag_l1=self.general, tag_l2=self.t_life)
+        a = QaAnswer.objects.create(
+            question=q, author=asker, content="<p>自答</p>",
+            status=QaAnswer.Status.PENDING)
+        self.client.set_token(self.qa_mod)
+        r = self.client.post_json(f"/api/admin/qa/answers/{a.id}/approve/")
+        self.assertEqual(r.status_code, 200)
+        # 回答作者=提问者：只应有一条（通过审核通知），不叠加「新回答」
+        notifs = Notification.objects.filter(recipient=asker)
+        self.assertEqual(notifs.filter(title="你的回答已通过审核").count(), 1)
+        self.assertEqual(notifs.filter(title="你的问题有了新回答").count(), 0)
+
+    def test_asker_as_approver_not_self_notified(self):
+        self._open()
+        asker = create_user("qaasker3")
+        # 提问者本身是问答区版主：自己审核他人的回答，不应给自己发「新回答」
+        asker.profile.can_moderate_qa = True
+        asker.profile.save()
+        q = QaQuestion.objects.create(
+            title="提问者审核场景", content="<p>正文</p>",
+            author=asker, tag_l1=self.general, tag_l2=self.t_life)
+        answerer = create_user("qaanswerer3")
+        a = QaAnswer.objects.create(
+            question=q, author=answerer, content="<p>回答</p>",
+            status=QaAnswer.Status.PENDING)
+        self.client.set_token(asker)
+        r = self.client.post_json(f"/api/admin/qa/answers/{a.id}/approve/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            Notification.objects.filter(recipient=asker, title="你的问题有了新回答").count(), 0)
+        self.assertTrue(Notification.objects.filter(
+            recipient=answerer, title="你的回答已通过审核").exists())

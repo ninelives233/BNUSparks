@@ -30,6 +30,7 @@ from .qa_helpers import (
     _json_body,
     _qa_delete_needs_approval,
     _qa_moderator_audience,
+    _qa_save_upload_image,
     _qa_user_open,
     _sanitize_html,
     _strip_html,
@@ -380,6 +381,33 @@ def api_qa_answer_edit_user(request, aid):
     if back_to_pending:
         _qa_broadcast_new_pending(f"重新提交回答 · {a.question.title}", user)
     return _ok({"id": a.id, "status": a.status})
+
+
+# ═══════════════════════════════════════════════════════════════
+# 普通用户插图上传（新增 path：POST /api/qa/upload-image/）
+# ═══════════════════════════════════════════════════════════════
+
+@csrf_exempt
+def api_qa_user_upload_image(request):
+    """POST /api/qa/upload-image/ — 编辑器插图上传（F07：与管理端同能力、同校验）
+
+    与 F07 的产品能力对齐：普通用户编辑器可见上传入口，接口侧由「站点开关开启 +
+    已登录」把关；关闭时明确 403，而不是让用户选完文件才撞权限错误。
+    存储路径与净化约束与管理端一致（仅 /media/qa_images/ 下的重编码图片）。
+    """
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    user, err = _require_user(request)
+    if err:
+        return err
+    if not _qa_user_open():
+        return _err("图片上传功能暂未开放，可改用图片链接插入", 403)
+    if "image" not in request.FILES:
+        return _err("未接收到图片", 400)
+    url, error = _qa_save_upload_image(request.FILES["image"])
+    if error:
+        return _err(error, 500 if error == "图片处理失败" else 400)
+    return _ok({"url": url})
 
 
 # ═══════════════════════════════════════════════════════════════

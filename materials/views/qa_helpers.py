@@ -273,6 +273,27 @@ def _qa_question_summary(q):
     }
 
 
+def _qa_snippet(text, keyword, limit=120, window=40):
+    """返回包含首个命中关键词的正文片段（去标签后），无命中返回开头截断。
+
+    搜索结果展示命中片段用；keyword 大小写不敏感，位置按原文偏移计算。
+    """
+    plain = _strip_html(text).strip()
+    if not plain:
+        return ""
+    if not keyword:
+        return plain[:limit]
+    idx = plain.lower().find(keyword.lower())
+    if idx < 0:
+        return plain[:limit]
+    start = max(0, idx - window)
+    end = min(len(plain), idx + len(keyword) + window)
+    snippet = plain[start:end]
+    prefix = "…" if start > 0 else ""
+    suffix = "…" if end < len(plain) else ""
+    return prefix + snippet + suffix
+
+
 def _qa_answer_item(a, user=None, qa_fav_count=None, liked_set=None, fav_set=None):
     liked = False
     is_favorited = False
@@ -291,6 +312,8 @@ def _qa_answer_item(a, user=None, qa_fav_count=None, liked_set=None, fav_set=Non
     return {
         "id": a.id,
         "content": a.content,
+        # F04：作者可见自己的待审核/已驳回回答，前端需要 status 区分展示
+        "status": a.status,
         "author": _nickname(a.author),
         "author_id": a.author_id,
         "avatar_url": _avatar_url(a.author),
@@ -315,3 +338,35 @@ def _ensure_qa_l1_tags():
     """新学院自动补一级标签（migration 0024 只跑一次，后台后续新增学院靠此兜底）"""
     if QaTag.objects.filter(level=1).count() < College.objects.count() + 1:
         seed_qa_tags(QaTag, College)
+
+
+def _qa_save_upload_image(img_file):
+    """问答区插图上传的共享落盘逻辑（F07：管理端与普通用户端点共用校验与存储）。
+
+    校验扩展名并用 PIL 重编码后再写盘，成功返回 (url, None)，失败返回 (None, 错误文案)。
+    """
+    from pathlib import Path
+    from uuid import uuid4
+
+    from django.conf import settings
+    from PIL import Image as PILImage
+
+    ext = Path(img_file.name).suffix.lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        return None, "仅支持 JPG/PNG/WebP/GIF 图片"
+    try:
+        img = PILImage.open(img_file)
+        img.load()
+        fmt = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.png': 'PNG', '.webp': 'WEBP', '.gif': 'GIF'}[ext]
+        filename = f"qa_{uuid4().hex[:8]}{ext}"
+        save_path = Path(settings.MEDIA_ROOT) / "qa_images" / filename
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        if img.mode not in ("RGB", "RGBA", "P"):
+            img = img.convert("RGB")
+        save_kwargs = {"format": fmt}
+        if fmt == "JPEG":
+            save_kwargs["quality"] = 85
+        img.save(save_path, **save_kwargs)
+    except Exception:
+        return None, "图片处理失败"
+    return f"/media/qa_images/{filename}", None

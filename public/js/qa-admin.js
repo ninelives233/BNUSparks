@@ -96,7 +96,6 @@ function _qaRecordRowHtml(it) {
 function _qaForumPendingCardHtml(item) {
   var statusLabel = _QA_STATUS_LABEL[item.status] || item.status;
   var kindIcon = iconSvg(item.kind === 'answer' ? 'comment' : 'question');
-  var reasonBtn = '驳回原因（可选）';
   return '<div class="qa-record-card qa-status-' + (item.status || '') + '">' +
     '<div class="qa-record-main">' +
       '<div class="qa-record-title">' + kindIcon + ' ' + esc(item.title || '') +
@@ -105,14 +104,78 @@ function _qaForumPendingCardHtml(item) {
       (item.content_preview ? '<div class="qa-record-meta">' + esc(item.content_preview) + '</div>' : '') +
     '</div>' +
     '<div class="qa-record-actions">' +
+      '<button class="admin-btn admin-btn-secondary admin-btn-sm" onclick="qaAdminReview(\'' + item.kind + '\',' + item.id + ',\'' + escJs(item.title || '') + '\',\'' + escJs(item.author || '') + '\',\'' + escJs(item.created_at || '') + '\')">全文审阅</button>' +
       '<button class="admin-btn admin-btn-approve admin-btn-sm" onclick="qaAdminApprove(\'' + item.kind + '\',' + item.id + ')">通过</button>' +
       '<button class="admin-btn admin-btn-reject admin-btn-sm" onclick="qaAdminReject(\'' + item.kind + '\',' + item.id + ')">驳回</button>' +
     '</div>' +
   '</div>';
 }
 
-// 通过 / 驳回待审内容（后端原子条件更新防双审；驳回带原因则通知作者）
+// S07：审核队列全文审阅——读取完整内容（含图片、所属问题上下文）后决策。
+// 列表侧传入标题/作者/时间（admin 详情端点对回答不返回这些元信息）。
+function qaAdminReview(kind, id, title, author, createdAt) {
+  var seg = kind === 'answer' ? 'answers' : 'questions';
+  var meta = { title: title || '', author: author || '', createdAt: createdAt || '' };
+  api('/api/admin/qa/' + seg + '/' + id + '/').then(function(data) {
+    // 回答：附所属问题全文作为审阅上下文
+    var qPromise = (kind === 'answer' && data.question_id)
+      ? api('/api/admin/qa/questions/' + data.question_id + '/').catch(function() { return null; })
+      : Promise.resolve(null);
+    return qPromise.then(function(q) { return { item: data, question: q }; });
+  }).then(function(payload) {
+    _renderQaReviewModal(kind, id, payload.item, payload.question, meta);
+  }).catch(function(err) {
+    alert('加载全文失败：' + ((err && (err.message || err.error)) || '请稍后再试'));
+  });
+}
+
+function _renderQaReviewModal(kind, id, item, question, meta) {
+  meta = meta || {};
+  var old = document.querySelector('.qa-review-overlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay qa-review-overlay';
+  var kindLabel = kind === 'answer' ? '回答' : '问题';
+  var displayTitle = item.title || (kind === 'answer' && question ? question.title : '') || meta.title || ('#' + id);
+  var metaText = [meta.author || (kind === 'question' ? (item.author || '') : '') || '', meta.createdAt ? '提交于 ' + meta.createdAt : '']
+    .filter(Boolean).join(' · ');
+  var contextHtml = '';
+  if (kind === 'answer' && question) {
+    contextHtml = '<div class="qa-review-context">' +
+      '<div class="qa-review-context-label">所属问题</div>' +
+      '<div class="qa-review-context-title">' + esc(question.title || '') + '</div>' +
+      '<div class="qa-rich">' + qaSafeHtml(question.content || '') + '</div>' +
+    '</div>';
+  }
+  overlay.innerHTML =
+    '<div class="modal-card qa-review-card">' +
+      '<button type="button" class="modal-close" aria-label="关闭审阅窗口" onclick="closeQaReview()">✕</button>' +
+      '<h3 class="modal-title">审阅' + kindLabel + ' · ' + esc(displayTitle) + '</h3>' +
+      (metaText ? '<div class="qa-review-meta">' + esc(metaText) + '</div>' : '') +
+      contextHtml +
+      '<div class="qa-review-content-label">' + kindLabel + '全文</div>' +
+      '<div class="qa-review-body"><div class="qa-rich">' + qaSafeHtml(item.content || '') + '</div></div>' +
+      '<div class="qa-review-hint">通过后公开展示；驳回时请填写可执行的原因，作者将收到通知并可修改后重新提交。</div>' +
+      '<div class="qa-review-actions">' +
+        '<button class="admin-btn admin-btn-approve" onclick="qaAdminApprove(\'' + kind + '\',' + id + ')">通过</button>' +
+        '<button class="admin-btn admin-btn-reject" onclick="qaAdminReject(\'' + kind + '\',' + id + ')">驳回…</button>' +
+        '<button class="admin-btn admin-btn-secondary" onclick="closeQaReview()">关闭</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  lockScroll();
+  _pushModalHistory(overlay);
+  overlay.onclick = function(e) { if (e.target === overlay) closeQaReview(); };
+}
+
+function closeQaReview() {
+  var el = document.querySelector('.qa-review-overlay');
+  if (el) { el.remove(); unlockScroll(); _popModalHistory(); }
+}
+
+// 通过 / 驳回待审内容（后端原子条件更新防双审；S05：驳回原因必填并通知作者）
 function qaAdminApprove(kind, id) {
+  closeQaReview(); // 从全文审阅弹窗决策后关闭弹窗
   api(kind === 'question'
       ? '/api/admin/qa/questions/' + id + '/approve/'
       : '/api/admin/qa/answers/' + id + '/approve/', { method: 'POST' })
@@ -125,12 +188,21 @@ function qaAdminApprove(kind, id) {
 }
 
 function qaAdminReject(kind, id) {
-  var reason = prompt('请输入驳回原因（可选，填写后将通知作者）：', '');
-  if (reason === null) return; // 用户取消
+  // S05：驳回必须给出可执行原因（作者将收到通知并据此修改）
+  var reason = '';
+  for (;;) {
+    var input = prompt('请输入驳回原因（必填，将通知作者并保存在内容状态中）：', '');
+    if (input === null) return; // 用户取消
+    reason = input.trim();
+    if (reason) break;
+    alert('驳回原因不能为空：作者需要据此修改内容');
+  }
+  closeQaReview();
   api(kind === 'question'
       ? '/api/admin/qa/questions/' + id + '/reject/'
       : '/api/admin/qa/answers/' + id + '/reject/', { method: 'POST', body: { reason: reason } })
     .then(function() {
+      alert('已驳回，作者将收到通知');
       renderAdminPending(document.getElementById('adminContent'));
     }).catch(function(err) {
       alert((err && (err.message || err.error)) || '操作失败');

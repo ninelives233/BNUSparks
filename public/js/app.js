@@ -343,12 +343,15 @@ window.addEventListener('popstate', async function(e) {
     if (state.view === 'myfavorites' && typeof renderMyFavoritesPage === 'function') renderMyFavoritesPage();
     // 问答区：返回时重新渲染；qa.js 未加载（跨刷新边界的旧条目）时走 showQa
     // 完整入口补齐（内部自带懒加载与失败提示），并压掉其 pushViewState 防止返回时入栈。
+    // F05：详情条目带 qaId 直达详情（含回答锚点）；列表条目恢复筛选/页码/滚动位置。
     if (state.view === 'qa') {
       if (typeof renderQaView === 'function') {
-        renderQaView();
+        if (typeof _qaApplyListState === 'function') _qaApplyListState(state);
+        if (state.qaId) renderQaDetail(state.qaId, { answerId: state.answerId, scrollY: state.scrollY });
+        else renderQaView(state.qaId ? 0 : state.scrollY);
       } else if (typeof showQa === 'function') {
         _suppressingPushState = true;
-        try { showQa(state.qaId); } finally { _suppressingPushState = false; }
+        try { showQa(state.qaId, state); } finally { _suppressingPushState = false; }
       }
     }
     // 问答区发布/编辑：从历史状态恢复 mode 后重渲染（v175）；qa-compose.js 未加载时
@@ -547,7 +550,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
         // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑
         case 'rankings': showTopDownloaded(undefined, saved.rankingType); break;
-        case 'qa': showQa(saved.qaId); break;
+        // F02：初始恢复携带筛选/页码状态（/qa?scope=&topic=&sort=&page= 深链）
+        case 'qa': showQa(saved.qaId, saved); break;
         case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
         case 'leaderboard': showLeaderboard(saved.leaderboardType); break;
         case 'other': showOther(); break;

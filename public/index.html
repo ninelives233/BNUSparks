@@ -53,7 +53,7 @@
     document.documentElement.dataset.bnuTimetableTextAlign = 'left';
   }
 </script>
-<link rel="stylesheet" href="/static/css/tokens.css?v=306">
+<link rel="stylesheet" href="/static/css/tokens.css?v=307">
 <link rel="stylesheet" href="/static/css/base.css?v=319">
 <link rel="stylesheet" href="/static/css/user.css?v=212">
 <link rel="stylesheet" href="/static/css/files.css?v=200">
@@ -597,7 +597,7 @@
           <p class="about-subtitle">常见问题与解答</p>
         </div>
         <div class="qa-head-actions">
-          <button class="qa-filter-btn" id="qaFilterBtn" onclick="toggleQaFilter()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>筛选</button>
+          <button class="qa-filter-btn" id="qaFilterBtn" aria-expanded="false" aria-controls="qaToolbar" onclick="toggleQaFilter()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>筛选</button>
           <button class="qa-ask-btn" id="qaAskBtn" onclick="ensureFeature('qa').then(function(){qaAskClick();}).catch(function(){alert('问答模块加载失败，请刷新重试。')})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="14" height="14" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>我要提问</button>
         </div>
       </div>
@@ -1579,20 +1579,20 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=308" defer></script>
+<script src="/static/js/utils.js?v=309" defer></script>
 <script src="/static/js/monitoring-events.js?v=300" defer></script>
 <script src="/static/js/appearance.js?v=10" defer></script>
 <script src="/static/js/auth.js?v=316" defer></script>
-<script src="/static/js/profile.js?v=221" defer></script>
+<script src="/static/js/profile.js?v=222" defer></script>
 <script src="/static/js/notifications.js?v=305" defer></script>
 <script src="/static/js/admin-core.js?v=301" defer></script>
-<script src="/static/js/views.js?v=315" defer></script>
+<script src="/static/js/views.js?v=316" defer></script>
 <script src="/static/js/explorer-core.js?v=224" defer></script>
 <script src="/static/js/explorer-file.js?v=189" defer></script>
 <script src="/static/js/explorer-preview.js?v=188" defer></script>
 <script src="/static/js/home.js?v=321" defer></script>
 <script src="/static/js/feature-loader.js?v=321" defer></script>
-<script src="/static/js/app.js?v=314" defer></script>
+<script src="/static/js/app.js?v=315" defer></script>
 
 </body>
 </html>

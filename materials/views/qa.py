@@ -21,6 +21,7 @@ from .qa_helpers import (
     _qa_delete_needs_approval,
     _qa_moderator_audience,
     _qa_question_summary,
+    _qa_snippet,
     _qa_user_open,
     _sanitize_html,
     _strip_html,
@@ -34,6 +35,7 @@ from .qa_user import (
     api_qa_config,
     api_qa_question_create_user,
     api_qa_question_edit_user,
+    api_qa_user_upload_image,
 )
 from .qa_public import (
     _ensure_question_fav,
@@ -45,6 +47,7 @@ from .qa_public import (
     api_qa_question_favorite,
     api_qa_question_view,
     api_qa_questions,
+    api_qa_search,
     api_qa_tags,
     api_qa_user_favorites,
 )

@@ -37,6 +37,9 @@
     --primary-dark: oklch(0.32 0.13 250);
     --primary-light: oklch(0.86 0.065 250);
     --primary-surface: oklch(0.93 0.04 250);
+    /* 主色按钮/徽章专用前景（V03）：浅色主题主色深 → 白字；
+       暗色主题主色变浅蓝 → 深墨字，保证 ≥4.5:1。 */
+    --on-primary: #ffffff;
 
     /* 首页上传入口保留历史蓝色：避免全局主色调色时改变品牌 CTA 的熟悉观感。 */
     --home-upload: oklch(0.40 0.09 250);
@@ -203,6 +206,8 @@
     --primary-dark: oklch(0.82 0.10 250);
     --primary-light: oklch(0.38 0.10 250);
     --primary-surface: oklch(0.25 0.045 250);
+    /* V03：暗色主色为浅蓝，主色按钮改用深墨前景（白字对比度仅约 2.5:1） */
+    --on-primary: oklch(0.22 0.05 250);
     --home-upload: oklch(0.70 0.12 250);
     --home-upload-hover: oklch(0.78 0.11 250);
     --accent: oklch(0.76 0.13 70);

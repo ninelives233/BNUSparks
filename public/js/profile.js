@@ -461,12 +461,22 @@
       list.innerHTML = items.map(function(r) {
         var statusHtml = r.status === 'deleted'
           ? '<span class="pc-dead-label" style="margin-left:6px;font-size:0.7rem;color:var(--ink-faint)">（已删除）</span>' : '';
-        var meta = [r.tag_l1, r.tag_l2].filter(Boolean).join(' · ') + ' · ' + esc(r.favorited_at);
+        // S04：回答收藏保留 answerId，同题多条回答逐条直达；问题收藏不变
+        var isAnswer = r.kind === 'answer' && r.answer_id;
+        var kindHtml = isAnswer
+          ? '<span class="pc-dead-label" style="margin-left:6px;font-size:0.7rem;color:var(--primary)">回答</span>' : '';
+        var metaParts = [r.tag_l1, r.tag_l2].filter(Boolean);
+        if (isAnswer && r.answer_author) metaParts.push('回答者 ' + r.answer_author);
+        metaParts.push(r.favorited_at);
+        var meta = metaParts.map(esc).join(' · ');
+        var openCall = isAnswer
+          ? "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ",{answerId:" + r.answer_id + "});}).catch(function(){alert('问答模块加载失败，请刷新重试。')})"
+          : "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ");}).catch(function(){alert('问答模块加载失败，请刷新重试。')})";
         return _pcItem(
           '<span class="pc-glyph pc-glyph-star">' + iconSvg('star') + '</span>',
-          esc(r.title) + statusHtml, meta, '',
+          esc(r.title) + kindHtml + statusHtml, meta, '',
           '<span class="pc-side-icon">' + _IC_STAR + '</span>',
-          "ensureFeature('qa').then(function(){qaOpenDetail(" + r.id + ");}).catch(function(){alert('问答模块加载失败，请刷新重试。')})"
+          openCall
         );
       }).join('');
     }).catch(function() { list.innerHTML = _pcEmpty('加载失败', '请检查网络后重试。'); });

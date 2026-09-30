@@ -26,7 +26,9 @@ from .qa_helpers import (
     _qa_answer_item,
     _qa_bump_heat,
     _qa_question_summary,
+    _qa_snippet,
     _qa_user_open,
+    _strip_html,
 )
 from .qa_user import (
     api_qa_question_create_user,
@@ -149,11 +151,20 @@ def api_qa_question_detail(request, qid):
         is_favorited = QaFavorite.objects.filter(
             user=user, question=q, answer__isnull=True).exists()
 
-    # v183：annotate 收藏总数消除 N+1；排序最佳回答前置
+    # v183：annotate 收藏总数消除 N+1；排序最佳回答前置。
+    # F04：作者本人的 PENDING/REJECTED 回答随详情返回（仅作者可见），作为提交回执
+    # 与「我的待审内容」回访入口；其他用户仍只能看到已发布回答。
     answers = list(QaAnswer.objects.filter(
         question=q, status=QaAnswer.Status.PUBLISHED,
     ).select_related("author", "author__profile").annotate(fav_n=Count("qa_favorited_by"))
         .order_by("-is_pinned", "-is_accepted", "-created_at"))
+    if user is not None:
+        own_unpublished = list(QaAnswer.objects.filter(
+            question=q, author=user,
+            status__in=(QaAnswer.Status.PENDING, QaAnswer.Status.REJECTED),
+        ).select_related("author", "author__profile").annotate(fav_n=Count("qa_favorited_by"))
+            .order_by("-created_at"))
+        answers.extend(own_unpublished)
 
     # F08：当前用户对整页回答的点赞/收藏按 ID 集合两次查完，替代逐条 exists
     liked_set = set()
@@ -319,19 +330,21 @@ def api_qa_answer_like(request, aid):
 
 @require_login
 def api_qa_user_favorites(request):
-    """GET /api/qa/user/favorites/ — 我的收藏·帖子（问题/回答按问题合并去重）"""
+    """GET /api/qa/user/favorites/ — 我的收藏·帖子（S04：每条收藏一行，回答保留 answer_id）
+
+    同一问题下的多条回答收藏逐条返回并可直达；不再按问题合并丢失定位信息。
+    """
     if request.method != "GET":
         return _err("仅支持 GET", 405)
     favs = QaFavorite.objects.filter(user=request.user).select_related(
         "question", "question__author", "question__tag_l1", "question__tag_l2",
+        "answer", "answer__author",
     ).order_by("-created_at")
 
-    seen = {}
+    items = []
     for fav in favs:
         q = fav.question
-        if q.id in seen:
-            continue
-        seen[q.id] = {
+        item = {
             "id": q.id,
             "title": q.title,
             "status": q.status,
@@ -341,7 +354,73 @@ def api_qa_user_favorites(request):
             "tag_l2": q.tag_l2.name if q.tag_l2_id else "",
             "favorited_at": fav.created_at.strftime("%Y-%m-%d"),
         }
-    return _ok({"items": list(seen.values())})
+        if fav.answer:
+            item["answer_id"] = fav.answer_id
+            item["answer_author"] = _nickname(fav.answer.author)
+            item["answer_snippet"] = _qa_snippet(fav.answer.content, "", limit=80)
+        items.append(item)
+    return _ok({"items": items})
+
+
+@csrf_exempt
+def api_qa_search(request):
+    """GET /api/qa/search/?q=&page=&pageSize= — 搜索问答（F08）
+
+    覆盖已发布问题的标题/描述与已发布回答的正文；只搜公开内容（待审/已删不进结果）。
+    每条结果带 hit（question|answer）、answer_id（回答命中时）与 snippet 命中片段，
+    支持分页；排序沿用列表默认（置顶优先、新在前）。
+    """
+    if request.method != "GET":
+        return _err("仅支持 GET", 405)
+    keyword = (request.GET.get("q") or request.GET.get("keyword") or "").strip()
+    if not keyword:
+        return _ok({"total": 0, "page": 1, "pageSize": 10, "total_pages": 1, "items": []})
+    page = _safe_int(request.GET.get("page"), 1, lo=1)
+    page_size = _safe_int(request.GET.get("pageSize"), 10, lo=1, hi=50)
+
+    hit_answer = Q(answers__status=QaAnswer.Status.PUBLISHED,
+                   answers__content__icontains=keyword)
+    qs = QaQuestion.objects.filter(status=QaQuestion.Status.PUBLISHED).filter(
+        Q(title__icontains=keyword) | Q(content__icontains=keyword) | hit_answer,
+    ).distinct().select_related("tag_l1", "tag_l2").order_by("-is_pinned", "-created_at")
+
+    total = qs.count()
+    questions = qs[(page - 1) * page_size: page * page_size]
+
+    # 命中定位：问题自身命中 → hit=question；否则找该题下第一条命中的已发布回答
+    items = []
+    for q in questions:
+        hit_in_question = keyword.lower() in q.title.lower() or keyword.lower() in _strip_html(q.content).lower()
+        answer_hit = None
+        if not hit_in_question:
+            answer_hit = QaAnswer.objects.filter(
+                question=q, status=QaAnswer.Status.PUBLISHED,
+                content__icontains=keyword,
+            ).select_related("author").order_by("-is_accepted", "-created_at").first()
+        if not hit_in_question and answer_hit is None:
+            continue  # distinct 命中但内容已变化等边界：跳过，避免展示无片段条目
+        item = {
+            "id": q.id,
+            "title": q.title,
+            "hit": "question" if hit_in_question else "answer",
+            "author": _nickname(q.author),
+            "tag_l1": q.tag_l1.name if q.tag_l1_id else "",
+            "tag_l2": q.tag_l2.name if q.tag_l2_id else "",
+            "created_at": q.created_at.strftime("%Y-%m-%d %H:%M"),
+            "snippet": _qa_snippet(q.content, keyword) if hit_in_question
+                else _qa_snippet(answer_hit.content, keyword),
+        }
+        if answer_hit is not None:
+            item["answer_id"] = answer_hit.id
+        items.append(item)
+
+    return _ok({
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+        "items": items,
+    })
 
 
 @csrf_exempt

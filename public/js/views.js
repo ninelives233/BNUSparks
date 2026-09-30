@@ -438,6 +438,8 @@
 
   function showQa() {
     var initialQuestionId = arguments.length ? arguments[0] : null;
+    // F02/F05：深链/刷新恢复时携带列表筛选状态（scope/topic/sort/page）
+    var savedListState = arguments.length > 1 ? arguments[1] : null;
     pushViewState('qa', initialQuestionId ? { qaId: initialQuestionId } : {});
     switchView('qa');
     updateSidebar('qa');
@@ -448,6 +450,7 @@
       return;
     }
     if (typeof renderQaView === 'function') {
+      if (savedListState && typeof _qaApplyListState === 'function') _qaApplyListState(savedListState);
       renderQaView();
       return;
     }
@@ -457,6 +460,7 @@
       ensureFeature('qa').then(function() {
         var qaView = document.getElementById('qaView');
         if (qaView && qaView.classList.contains('active')) {
+          if (savedListState && typeof _qaApplyListState === 'function') _qaApplyListState(savedListState);
           if (initialQuestionId && typeof renderQaDetail === 'function') renderQaDetail(initialQuestionId);
           else renderQaView();
         }

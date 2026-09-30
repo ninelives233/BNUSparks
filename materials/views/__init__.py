@@ -112,6 +112,7 @@ from .qa import (
     api_qa_question_view, api_qa_question_favorite,
     api_qa_answer_favorite, api_qa_answer_like, api_qa_user_favorites,
     api_qa_guest_verify, api_qa_ask_click,
+    api_qa_search, api_qa_user_upload_image,
     api_qa_config, api_qa_admin_config_toggle,
     api_qa_question_create_user, api_qa_question_edit_user,
     api_qa_answer_create_user, api_qa_answer_edit_user, api_qa_answer_accept,

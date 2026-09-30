@@ -378,7 +378,10 @@ class FrontendAuditContractTest(SimpleTestCase):
         self.assertIn("function clearAuthToken()", utils)
         self.assertIn("clearAuthToken();", auth)
         self.assertIn("Object.assign({ _bnusparks: true }, route)", app)
-        self.assertIn("cm[segs[2] === 'answer' ? 'aid' : 'qid']", utils)
+        # S01：回答编辑路径 id=aid，回答创建路径 id=所属问题 qid
+        self.assertIn("cm[segs[3] === 'edit' ? 'aid' : 'qid']", utils)
+        # F05：问题详情独立地址 /qa/questions/{id}
+        self.assertIn("'/qa/questions/' + state.qaId", utils)
         self.assertIn('role="dialog" aria-modal="true"', html)
         self.assertIn('class="skip-link"', html)
         self.assertIn(":focus-visible", css)

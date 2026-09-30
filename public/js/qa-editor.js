@@ -244,7 +244,10 @@ function submitQaImageInsert() {
   if (fileInput && fileInput.files && fileInput.files.length) {
     var fd = new FormData();
     fd.append('image', fileInput.files[0]);
-    api('/api/admin/qa/upload-image/', { method: 'POST', body: fd }).then(function(data) {
+    // F07：上传端点与权限一致——管理端走 admin 端点；普通用户走开放端点
+    //（站点关闭时后端 403，用户改用图片链接，而不是选完文件才撞权限错误）
+    var isManager = currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa);
+    api(isManager ? '/api/admin/qa/upload-image/' : '/api/qa/upload-image/', { method: 'POST', body: fd }).then(function(data) {
       finish(data.url);
     }).catch(function(err) {
       if (errEl) { errEl.style.display = 'block'; errEl.textContent = (err && (err.message || err.error)) || '上传失败'; }

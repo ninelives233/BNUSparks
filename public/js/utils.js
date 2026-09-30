@@ -396,17 +396,40 @@
     if (view === 'fileDetail') return state && state.fileId ? '/file/' + state.fileId : null;
     if (view === 'drawer') return null;
     // qaCompose 动态子路径：/qa/compose[/<type>[/<action>[/<id>]]]，可分享/可刷新（v175）
+    // S01：回答创建路径携带所属问题 qid（/qa/compose/answer/create/<qid>），编辑才用 aid
     if (view === 'qaCompose') {
       var qp = '/qa/compose';
       if (state && state.type) {
         qp += '/' + state.type;
         if (state.action) {
           qp += '/' + state.action;
-          var qpid = state.type === 'answer' ? (state.aid || 0) : (state.qid || 0);
+          var qpid = 0;
+          if (state.type === 'answer') {
+            qpid = state.action === 'edit' ? (state.aid || 0) : (state.qid || 0);
+          } else {
+            qpid = state.qid || 0;
+          }
           if (qpid) qp += '/' + qpid;
         }
       }
       return qp;
+    }
+    // F05：问题详情独立地址 /qa/questions/{id}（可分享/刷新/新标签）；
+    // 回答命中带 #answer-{aid} 锚点；列表条件放查询参数（F02）
+    if (view === 'qa') {
+      if (state && state.qaId) {
+        var qdp = '/qa/questions/' + state.qaId;
+        if (state.answerId) qdp += '#answer-' + state.answerId;
+        return qdp;
+      }
+      var qlist = '/qa';
+      var qparams = [];
+      if (state && state.tagL1) qparams.push('scope=' + encodeURIComponent(state.tagL1));
+      if (state && state.tagL2) qparams.push('topic=' + encodeURIComponent(state.tagL2));
+      if (state && state.sort && state.sort !== 'default') qparams.push('sort=' + encodeURIComponent(state.sort));
+      if (state && state.page && state.page > 1) qparams.push('page=' + state.page);
+      if (qparams.length) qlist += '?' + qparams.join('&');
+      return qlist;
     }
     if (view === 'rankings' && state && state.rankingType === 'favorite') return '/rankings?type=favorite';
     return VIEW_ROUTES[view] || null;
@@ -431,16 +454,41 @@
       var timetableUid = parseInt(segs[2], 10);
       return timetableUid ? { view: 'timetable', userId: timetableUid } : null;
     }
-    // /qa/compose 必须在通用 VIEW_ROUTES 查找前处理，否则被 /qa 吃掉（v175）
-    if (head === 'qa' && segs[1] === 'compose') {
-      var cm = { view: 'qaCompose' };
-      if (segs[2]) cm.type = segs[2];
-      if (segs[3]) cm.action = segs[3];
-      if (segs[3] && segs[4]) {
-        var cmid = parseInt(segs[4], 10);
-        if (cmid) cm[segs[2] === 'answer' ? 'aid' : 'qid'] = cmid;
+    // /qa 深链必须在通用 VIEW_ROUTES 查找前处理，否则被 /qa 吃掉（v175）
+    if (head === 'qa') {
+      // F05：问题详情独立地址 /qa/questions/{id}
+      if (segs[1] === 'questions') {
+        var qdetailId = parseInt(segs[2], 10);
+        return { view: 'qa', qaId: qdetailId || undefined };
       }
-      return cm;
+      if (segs[1] === 'compose') {
+        var cm = { view: 'qaCompose' };
+        if (segs[2]) cm.type = segs[2];
+        if (segs[3]) cm.action = segs[3];
+        if (segs[3] && segs[4]) {
+          var cmid = parseInt(segs[4], 10);
+          if (cmid) {
+            // S01：回答编辑路径的 id 是 aid；回答创建路径的 id 是所属问题 qid
+            if (segs[2] === 'answer') cm[segs[3] === 'edit' ? 'aid' : 'qid'] = cmid;
+            else cm.qid = cmid;
+          }
+        }
+        return cm;
+      }
+      // F02：/qa 列表查询参数恢复筛选条件（scope/topic/sort/page）
+      var qroute = { view: 'qa' };
+      try {
+        var qsp = new URLSearchParams(location.search);
+        var scope = qsp.get('scope');
+        var topic = qsp.get('topic');
+        var sort = qsp.get('sort');
+        var page = qsp.get('page');
+        if (scope) qroute.tagL1 = scope;
+        if (topic) qroute.tagL2 = topic;
+        if (sort) qroute.sort = sort;
+        if (page) qroute.page = parseInt(page, 10) || 1;
+      } catch (e) { /* URLSearchParams 不可用时忽略查询参数 */ }
+      return qroute;
     }
     var v = Object.keys(VIEW_ROUTES).find(function(k) { return VIEW_ROUTES[k] === '/' + head; });
     return v ? { view: v } : null;

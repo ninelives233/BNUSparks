@@ -41,7 +41,8 @@
   position: absolute; right: 0; top: 0;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 18px; font-size: 0.9rem; font-weight: 600;
-  color: #fff; background: var(--primary); border: none; border-radius: var(--radius-md);
+  /* V03：主色按钮前景用专用 token（暗色主题切换为深墨字） */
+  color: var(--on-primary); background: var(--primary); border: none; border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm); cursor: pointer;
   transition: background var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
 }
@@ -75,7 +76,9 @@
 }
 .qa-toolbar-collapsed .qa-toolbar-inner {
   opacity: 0; transform: translateY(6px); margin-bottom: 0;
-  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  /* F09：收起后整块移出焦点顺序与可访问树（visibility 过渡保证动画期间可见） */
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s 0.2s;
 }
 .qa-filter-row { display: flex; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-xs); }
 .qa-filter-label { flex-shrink: 0; font-size: 0.78rem; color: var(--ink-faint); padding-top: 6px; width: 3.5em; }
@@ -113,10 +116,11 @@
 .qa-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 
 /* ── 列表卡：一张索引卡 ──
-   头行 = 标签徽章 + 回答叫号牌；标题/预览居中；脚行 = 作者 · 日期 | 浏览/收藏 */
+   V01 密度重构：标题行内联回答状态牌（去掉独立头行），元信息收为一行，
+   桌面单卡目标 100–120px。标题为真实链接（F09），hover 染墨蓝。 */
 .qa-card {
   background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
-  padding: var(--space-md) var(--space-lg); cursor: pointer;
+  padding: 13px 16px; cursor: pointer;
   transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
 }
 /* 悬浮拿起仅限精确指针设备；触屏不产生粘滞位移态（review-animations a11y 门控） */
@@ -126,6 +130,7 @@
     box-shadow: var(--shadow-md); transform: translateY(-1px);
   }
   .qa-card:hover .qa-card-title { color: var(--primary); }
+  .qa-card:hover a.qa-card-title { text-decoration: none; }
 }
 .qa-card:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
 
@@ -145,19 +150,28 @@
 .qa-list .qa-card:nth-child(n+8) { animation-delay: 0.21s; }
 
 .qa-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+/* V01：标题行 = 标题链接 + 置顶徽章 + 回答状态牌 */
+.qa-card-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 3px; }
+.qa-card-row .qa-pin-badge { flex-shrink: 0; margin-top: 2px; }
+.qa-card-row .qa-answer-chip { margin-left: auto; margin-top: 1px; }
 .qa-card-date { font-size: 0.75rem; color: var(--ink-faint); }
 .qa-card-foot .qa-card-date::before { content: '·'; margin: 0 6px; }
 .qa-card-title {
-  font-size: 1.05rem; font-weight: 650; color: var(--ink);
-  margin-bottom: 5px; line-height: 1.45;
+  flex: 1 1 auto; min-width: 0;
+  font-size: 1.02rem; font-weight: 650; color: var(--ink);
+  line-height: 1.45; text-decoration: none;
   transition: color var(--t-fast);
 }
+a.qa-card-title:hover { color: var(--primary); text-decoration: none; }
+a.qa-card-title:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
 .qa-card-preview { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: var(--space-sm); line-height: 1.6;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .qa-card-foot {
   display: flex; align-items: center; gap: var(--space-sm);
-  padding-top: 9px; border-top: 1px solid var(--border-light);
+  padding-top: 7px; border-top: 1px solid var(--border-light);
+  flex-wrap: wrap;
 }
+.qa-card-foot .qa-card-tags { margin-right: 2px; }
 .qa-card-author { font-size: 0.78rem; color: var(--ink-faint); }
 .qa-card-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 10px;
   font-size: 0.75rem; color: var(--ink-faint); }
@@ -255,7 +269,8 @@
 .qa-rich s { text-decoration: line-through; }
 
 /* ── 回答卡 ──
-   展开收起：0fr→1fr 高度过渡（同筛选面板模式），visibility 兜住键盘焦点 */
+   V02：收起态不再整块隐藏——保留约 4 行可读预览 + 底部渐隐提示；
+   展开过渡用 max-height；收起正文由 JS 同步 inert（链接不可聚焦） */
 .qa-answers { display: flex; flex-direction: column; gap: var(--space-sm); }
 .qa-answer {
   background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
@@ -263,17 +278,30 @@
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 .qa-answer:hover { border-color: var(--border); }
-.qa-answer-body {
-  display: grid; grid-template-rows: 1fr;
-  transition: grid-template-rows 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, visibility 0.26s;
+.qa-answer-body { position: relative; }
+.qa-answer-body > .qa-rich {
+  overflow: hidden; max-height: 52rem;
+  transition: max-height 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.qa-answer-body > .qa-rich { min-height: 0; overflow: hidden; }
-.qa-answer:not(.expanded) .qa-answer-body {
-  grid-template-rows: 0fr; opacity: 0; visibility: hidden;
-  transition: grid-template-rows 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.16s ease, visibility 0s 0.2s;
+.qa-answer:not(.expanded) .qa-answer-body > .qa-rich {
+  max-height: 7.4em;
 }
+/* 收起预览底部的渐隐，暗示下方还有正文 */
+.qa-answer:not(.expanded) .qa-answer-body::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2.4em;
+  background: linear-gradient(oklch(from var(--surface) l c h / 0), var(--surface));
+  pointer-events: none;
+}
+.qa-answer:not(.expanded) .qa-answer-actions { border-top: 1px dashed var(--border-light); padding-top: var(--space-xs); }
+/* F05：收藏/搜索直达回答时的轻量定位高亮 */
+@keyframes qa-answer-flash {
+  0% { box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.35); }
+  100% { box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0); }
+}
+.qa-answer--flash { animation: qa-answer-flash 1.6s ease-out; }
 .qa-answer-head { display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-sm);
-  padding-bottom: var(--space-xs); border-bottom: 1px solid var(--border-light); }
+  padding-bottom: var(--space-xs); border-bottom: 1px solid var(--border-light);
+  flex-wrap: wrap; }
 .qa-answer-author { font-size: 0.82rem; font-weight: 600; color: var(--ink); }
 .qa-answer-date { font-size: 0.75rem; color: var(--ink-faint); }
 .qa-answer-toggle {
@@ -282,6 +310,7 @@
   transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
 }
 .qa-answer-toggle:hover { border-color: var(--primary); background: var(--primary-surface); }
+.qa-answer-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* 最佳回答：常青左缘轨 + 极浅绿晕底，与「已解决」叫号牌同语言 */
 .qa-answer--accepted {
@@ -324,11 +353,30 @@
 .qa-gate-error { margin-top: var(--space-xs); font-size: 0.8rem; color: var(--danger); }
 .qa-gate-actions { margin-top: var(--space-md); }
 .qa-gate-btn {
-  width: 100%; padding: 10px; font-size: 0.9rem; font-weight: 600; color: #fff;
+  width: 100%; padding: 10px; font-size: 0.9rem; font-weight: 600;
+  /* V03：主色按钮前景用专用 token——暗色主题主色变浅蓝时切换为深墨字 */
+  color: var(--on-primary);
   background: var(--primary); border: none; border-radius: var(--radius-md); cursor: pointer;
   transition: background var(--t-fast);
 }
 .qa-gate-btn:hover { background: var(--primary-dark); }
+.qa-gate-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* F04：作者可见的待审/驳回回答状态条 */
+.qa-answer-status {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px; margin-bottom: var(--space-sm);
+  font-size: 0.8rem; font-weight: 500; border-radius: var(--radius-sm);
+}
+.qa-answer-status svg { width: 13px; height: 13px; flex-shrink: 0; }
+.qa-answer-status--pending {
+  color: var(--primary); background: var(--primary-surface);
+  border: 1px solid oklch(from var(--primary) l c h / 0.25);
+}
+.qa-answer-status--rejected {
+  color: var(--danger-dark); background: var(--danger-light);
+  border: 1px solid var(--danger-border);
+}
 
 /* ═══════════════════════════════════════════════════════════
    v175 问答区 · 置顶精选区 / 标签徽章 / 卡片层级
@@ -389,7 +437,11 @@
   }
   .qa-pin-card:hover .qa-pin-title { color: var(--primary); }
 }
-.qa-pin-title { font-size: 1rem; font-weight: 700; color: var(--ink); transition: color var(--t-fast); }
+.qa-pin-title-row { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.qa-pin-title-row .qa-accepted-badge { flex-shrink: 0; margin-top: 2px; }
+.qa-pin-title { font-size: 1rem; font-weight: 700; color: var(--ink); transition: color var(--t-fast); text-decoration: none; min-width: 0; }
+a.qa-pin-title:hover { color: var(--primary); text-decoration: none; }
+a.qa-pin-title:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
 .qa-pin-preview {
   font-size: 0.82rem; color: var(--ink-faint); margin-top: 2px;
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
@@ -398,28 +450,33 @@
 .qa-pin-badges { display: inline-flex; gap: 6px; }
 .qa-pin-meta { display: flex; align-items: center; gap: 12px; }
 
-/* 移动端列表收紧：压内边距与字号、缩间距，提高单屏信息密度 */
+/* 移动端列表收紧：压内边距与间距提高密度；字号保底可读（V03：元信息 ≥12px） */
 @media (max-width: 640px) {
   .qa-list { gap: 8px; }
   .qa-card { padding: 12px 14px; border-radius: var(--radius-md); }
-  .qa-card-head { gap: 6px; margin-bottom: 7px; }
-  .qa-card-date { font-size: 0.68rem; }
-  .qa-card-title { font-size: 0.95rem; margin-bottom: 3px; }
-  .qa-card-preview { font-size: 0.78rem; margin-bottom: 8px; }
-  .qa-card-foot { gap: 8px; padding-top: 7px; }
-  .qa-card-author { font-size: 0.7rem; }
-  .qa-card-meta { gap: 8px; font-size: 0.68rem; }
-  .qa-badge { padding: 1px 8px; font-size: 0.66rem; }
-  .qa-answer-chip { padding: 2px 9px; font-size: 0.66rem; }
+  .qa-card-row { gap: 6px; }
+  .qa-card-title { font-size: 0.95rem; }
+  .qa-card-preview { font-size: 0.8rem; margin-bottom: 8px; -webkit-line-clamp: 2; }
+  .qa-card-foot { gap: 8px; padding-top: 6px; }
+  .qa-card-author { font-size: 0.75rem; }
+  .qa-card-date { font-size: 0.72rem; }
+  .qa-card-meta { gap: 8px; font-size: 0.75rem; }
+  .qa-badge { padding: 1px 8px; font-size: 0.7rem; }
+  .qa-answer-chip { padding: 2px 9px; font-size: 0.7rem; }
   .qa-pinned-section { margin-bottom: var(--space-md); padding: 10px 12px 12px; }
   .qa-pin-card { gap: 10px; padding: 8px 10px; }
   .qa-pin-title { font-size: 0.9rem; }
   .qa-pin-preview { font-size: 0.74rem; }
   .qa-pin-meta { gap: 8px; }
+  .qa-pin-meta .qa-card-meta { margin-left: 0; }
   .qa-toolbar-inner { padding: var(--space-sm) var(--space-md); }
   .qa-sort-row .qa-pill { padding: 5px 14px; }
   .qa-q-card { padding: var(--space-md) var(--space-md); }
   .qa-answer { padding: var(--space-sm) var(--space-md); }
+  /* V03：回答头部不挤压——头像缩小、作者行换行留白 */
+  .qa-avatar { width: 28px; height: 28px; flex: 0 0 28px; font-size: 0.75rem; }
+  .qa-person { flex-wrap: wrap; }
+  .qa-answer-toggle { padding: 4px 12px; }
 }
 
 /* 详情卡标签行 + 发布回答入口 */
@@ -558,7 +615,7 @@ html[data-bnu-theme="dark"] .qa-l1-chip.on {
   width: 18px; height: 18px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; line-height: 1;
-  color: #fff; background: var(--primary);
+  color: var(--on-primary); background: var(--primary);
   box-shadow: var(--shadow-xs);
 }
 .qa-theme-name { font-weight: 600; padding-right: 10px; }
@@ -578,14 +635,28 @@ html[data-bnu-theme="dark"] .qa-l1-chip.on {
 }
 .qc-answer-context-label { font-size: 0.72rem; font-weight: 600; color: var(--primary); letter-spacing: 0.05em; }
 .qc-answer-qtitle { font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+/* F03：只读的问题描述参考（限高 + 渐隐，不与回答正文混淆） */
+.qc-answer-qdesc {
+  margin-top: 4px; font-size: 0.85rem; line-height: 1.7; color: var(--ink-soft);
+  max-height: 7em; overflow: hidden; position: relative; word-break: break-word;
+}
+.qc-answer-qdesc::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2em;
+  background: linear-gradient(oklch(from var(--primary-surface) l c h / 0), var(--primary-surface));
+}
 
 .qe-pin-row {
   display: inline-flex; align-items: center; gap: 6px;
   margin-top: var(--space-md); font-size: 0.82rem; color: var(--ink-soft); cursor: pointer;
 }
 .qe-pin-row input { accent-color: var(--accent-hover); }
-.qc-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: var(--space-lg); }
+.qc-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: var(--space-lg); }
 .qc-submit { width: auto; min-width: 120px; }
+/* F06：草稿状态提示（actions 行左侧，aria-live 播报） */
+.qc-draft-status {
+  margin-right: auto; font-size: 0.75rem; color: var(--ink-faint);
+  min-height: 1.2em;
+}
 
 /* 移动端编辑页收紧：卡片留白让位内容，标签更小更贴、圆角调小，正文框加高 */
 @media (max-width: 640px) {
@@ -723,3 +794,53 @@ html[data-bnu-theme="dark"] .qa-l1-chip.on {
 @media (max-width: 640px) {
   .qa-history-meta { flex-direction: column; gap: 2px; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   v186 缺陷修复 · S07 全文审阅弹窗 / F08 搜索命中片段与分页
+   ═══════════════════════════════════════════════════════════ */
+
+/* S07：全文审阅（待审问题/回答的完整内容 + 所属问题上下文） */
+.qa-review-card { max-width: 680px; width: calc(100% - 32px); }
+.qa-review-meta { font-size: 0.78rem; color: var(--ink-faint); margin-top: -6px; }
+.qa-review-context {
+  margin-top: var(--space-md); padding: var(--space-sm) var(--space-md);
+  background: var(--bg-subtle, var(--surface-alt)); border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.qa-review-context-label { font-size: 0.7rem; font-weight: 600; color: var(--ink-faint); letter-spacing: 0.05em; margin-bottom: 2px; }
+.qa-review-context-title { font-size: 0.9rem; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.qa-review-context .qa-rich { font-size: 0.85rem; line-height: 1.7; }
+.qa-review-content-label { margin: var(--space-md) 0 6px; font-size: 0.72rem; font-weight: 600; color: var(--ink-faint); letter-spacing: 0.05em; }
+.qa-review-body {
+  max-height: 46vh; overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-light); border-radius: var(--radius-md);
+  background: var(--bg-subtle, var(--surface-alt));
+}
+.qa-review-body .qa-rich img { max-width: 100%; }
+.qa-review-hint { margin-top: var(--space-sm); font-size: 0.75rem; color: var(--ink-faint); line-height: 1.6; }
+.qa-review-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: var(--space-md); flex-wrap: wrap; }
+
+/* F08：搜索结果命中片段 / 命中来源 / 浮层内分页 */
+.sg-item-snippet {
+  display: block; margin-top: 3px;
+  font-size: 0.8rem; line-height: 1.55; color: var(--ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sg-item-hit {
+  flex-shrink: 0; padding: 1px 8px; font-size: 0.68rem; font-weight: 600;
+  color: var(--primary); background: var(--primary-surface);
+  border: 1px solid oklch(from var(--primary) l c h / 0.25); border-radius: 999px;
+}
+.sg-pagination {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 12px 4px 4px;
+}
+.sg-page-btn {
+  padding: 5px 14px; font-size: 0.8rem; color: var(--primary);
+  background: transparent; border: 1px solid var(--border); border-radius: 999px; cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+.sg-page-btn:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-surface); }
+.sg-page-btn:disabled { opacity: 0.45; cursor: default; }
+.sg-page-info { font-size: 0.75rem; color: var(--ink-faint); }

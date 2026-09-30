@@ -2,15 +2,10 @@
 BNU Sparks · 木铎星火 — 问答区管理 API（问答区版主 / 超管：发布/编辑/审核/留痕/插图）
 """
 
-from pathlib import Path
-from uuid import uuid4
-
-from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from PIL import Image as PILImage
 
 from ..models import (
     Notification,
@@ -26,6 +21,7 @@ from .qa_helpers import (
     _json_body,
     _nickname,
     _qa_bump_heat,
+    _qa_save_upload_image,
     _sanitize_html,
     _strip_html,
     require_qa_manager,
@@ -651,24 +647,30 @@ def _qa_approve_question(qid, approver=None):
 
 
 def _qa_reject_question(qid, reason=""):
-    """原子条件更新防双审：仅 pending 可置 rejected；带原因则通知作者。返回 (ok, err)"""
+    """原子条件更新防双审：仅 pending 可置 rejected。
+    S05：驳回必须给出可执行原因——空原因直接拒绝操作，内容保持待审核；
+    带原因驳回时通知作者（附标题，便于作者回到内容修改后重新提交）。返回 (ok, err)"""
+    reason = (reason or "").strip()
+    if not reason:
+        return False, "请填写驳回原因，作者需要据此修改内容"
     updated = QaQuestion.objects.filter(id=qid, status=QaQuestion.Status.PENDING).update(
         status=QaQuestion.Status.REJECTED)
     if not updated:
         return False, "该内容已审核，不可重复操作"
-    if reason:
-        q = QaQuestion.objects.filter(id=qid).first()
-        if q:
-            _create_notification(
-                recipient=q.author, type=Notification.Type.OPERATION,
-                title="你的提问被驳回", message=f"驳回原因：{reason}",
-            )
+    q = QaQuestion.objects.filter(id=qid).first()
+    if q:
+        _create_notification(
+            recipient=q.author, type=Notification.Type.OPERATION,
+            title="你的提问被驳回",
+            message=f"「{q.title}」未通过审核。驳回原因：{reason}。你可以在问答区编辑该内容后重新提交。",
+        )
     return True, ""
 
 
 def _qa_approve_answer(aid, approver=None):
     """原子条件更新防双审：仅 pending 可置 published。返回 (ok, err)
-    通过后通知作者 + 热度 +5（v183 通知闭环/热度）"""
+    通过后通知回答作者（自审除外）+ 热度 +5；
+    S06：同时通知提问者「自己的问题有了新公开回答」（自答/提问者本人审核时跳过）"""
     updated = QaAnswer.objects.filter(id=aid, status=QaAnswer.Status.PENDING).update(
         status=QaAnswer.Status.PUBLISHED)
     if not updated:
@@ -681,21 +683,34 @@ def _qa_approve_answer(aid, approver=None):
                 recipient=a.author, type=Notification.Type.OPERATION,
                 title="你的回答已通过审核", message=f"你的回答已在「{a.question.title}」下发布。",
             )
+        # S06：提问者的新回答通知。去重：回答作者本人（自答）与提问者自己触发
+        # 的审核（提问者兼版主）不再重复通知。
+        if (a.question.author_id != a.author_id
+                and (approver is None or a.question.author_id != approver.id)):
+            _create_notification(
+                recipient=a.question.author, type=Notification.Type.OPERATION,
+                title="你的问题有了新回答",
+                message=f"「{a.question.title}」下有一条新回答已发布，点击查看。",
+            )
     return (True, "")
 
 
 def _qa_reject_answer(aid, reason=""):
+    """S05：驳回回答必须给出原因；带原因驳回时通知回答作者（附所属问题标题）。返回 (ok, err)"""
+    reason = (reason or "").strip()
+    if not reason:
+        return False, "请填写驳回原因，作者需要据此修改内容"
     updated = QaAnswer.objects.filter(id=aid, status=QaAnswer.Status.PENDING).update(
         status=QaAnswer.Status.REJECTED)
     if not updated:
         return False, "该内容已审核，不可重复操作"
-    if reason:
-        a = QaAnswer.objects.filter(id=aid).first()
-        if a:
-            _create_notification(
-                recipient=a.author, type=Notification.Type.OPERATION,
-                title="你的回答被驳回", message=f"驳回原因：{reason}",
-            )
+    a = QaAnswer.objects.select_related("question").filter(id=aid).first()
+    if a:
+        _create_notification(
+            recipient=a.author, type=Notification.Type.OPERATION,
+            title="你的回答被驳回",
+            message=f"你在「{a.question.title}」下的回答未通过审核。驳回原因：{reason}。你可以在问答区编辑该回答后重新提交。",
+        )
     return True, ""
 
 
@@ -744,28 +759,12 @@ def api_qa_admin_answer_reject(request, aid):
 @csrf_exempt
 @require_qa_manager
 def api_qa_admin_upload_image(request):
-    """POST /api/admin/qa/upload-image/ — 编辑器插图上传（存 MEDIA_ROOT/qa_images/）"""
+    """POST /api/admin/qa/upload-image/ — 编辑器插图上传（F07：落盘逻辑与用户端点共享）"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
     if "image" not in request.FILES:
         return _err("未接收到图片", 400)
-    img_file = request.FILES["image"]
-    ext = Path(img_file.name).suffix.lower()
-    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
-        return _err("仅支持 JPG/PNG/WebP/GIF 图片", 400)
-    try:
-        img = PILImage.open(img_file)
-        img.load()
-        fmt = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.png': 'PNG', '.webp': 'WEBP', '.gif': 'GIF'}[ext]
-        filename = f"qa_{uuid4().hex[:8]}{ext}"
-        save_path = Path(settings.MEDIA_ROOT) / "qa_images" / filename
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        if img.mode not in ("RGB", "RGBA", "P"):
-            img = img.convert("RGB")
-        save_kwargs = {"format": fmt}
-        if fmt == "JPEG":
-            save_kwargs["quality"] = 85
-        img.save(save_path, **save_kwargs)
-    except Exception:
-        return _err("图片处理失败", 500)
-    return _ok({"url": f"/media/qa_images/{filename}"})
+    url, error = _qa_save_upload_image(request.FILES["image"])
+    if error:
+        return _err(error, 500 if error == "图片处理失败" else 400)
+    return _ok({"url": url})
