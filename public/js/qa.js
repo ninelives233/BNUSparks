@@ -1,7 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
 // 问答区（新生指南）· 浏览端
 // 列表 / 筛选 / 搜索 / 详情 / 收藏 / 点赞 / 登录提示 / 「我要提问」埋点
-// 依赖：utils.js（api / esc / escJs / lockScroll / ICONS）
+// 依赖：utils.js（api / esc / escJs / lockScroll / ICONS）、qa-editor.js（qaSafeHtml）
+// 2026-10-02 视觉重构：常驻工具栏（总数 + 文字排序 + 筛选）、紧凑列表
+// 共享容器、精选问答标题区、详情单张阅读底板，回答默认全部展开。
 // ═══════════════════════════════════════════════════════════════
 
 var _QA_SEARCH_PLACEHOLDER = '搜索问题、回答…';
@@ -14,17 +16,17 @@ var _qaTagL1 = '';
 var _qaTagL2 = '';
 var _qaSort = 'default';
 var _qaTotalPages = 1;
-var _qaTags = null;       // 两级标签缓存
+var _qaTotalCount = null;  // 接口返回的筛选后可靠总数（工具栏「全部问题 · N」）
+var _qaTags = null;        // 两级标签缓存
 var _qaPhInitialized = false;
-var _qaFilterOpen = false;   // 筛选面板默认收起（v177：筛选按钮展开/收起）
+var _qaFilterOpen = false;   // 筛选面板默认收起
 
 // ── 图标（与全站 24×24 stroke 风格一致）──
 var _QA_IC_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" aria-hidden="true"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/></svg>';
-var _QA_IC_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
-var _QA_IC_ANSWER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 var _QA_IC_THUMB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M7 10v12"/><path d="M15 5.9L14 10h5a2 2 0 0 1 2 2.5l-1.7 7A2 2 0 0 1 17.3 21H8a1 1 0 0 1-1-1V11a1 1 0 0 1 .6-.9L12 8l1.2-4.3A2 2 0 0 1 15 5.9z"/></svg>';
 var _QA_IC_THUMB_FILLED = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M7 10v12H3a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h4zm2 12h8a2 2 0 0 0 1.9-1.4l1.7-7A2 2 0 0 0 18.6 10H14l1-4.3A2 2 0 0 0 12.9 3.2L12 8 8.9 10.6A1 1 0 0 0 9 12v10z"/></svg>';
-var _QA_IC_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+var _QA_IC_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+var _QA_IC_FILTER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>';
 
 // v183：普通用户提问/回答开放开关（renderQaView 从 /api/qa/config/ 拉取）
 // S02：配置改为四态 loading/open/closed/error——冷加载表单时守卫等待配置结果，
@@ -86,6 +88,13 @@ var _QA_REPORT_ITEMS = [
 
 function _qaIsManager() {
   return !!(currentUser && (currentUser.role === 'super_admin' || currentUser.can_moderate_qa));
+}
+
+// reduced-motion 下关闭平滑滚动（规范 §12）
+function _qaScrollBehavior() {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  } catch (e) { return 'auto'; }
 }
 
 function isQaViewActive() {
@@ -164,13 +173,15 @@ function _qaPatchListUrl() {
 async function renderQaList() {
   var container = document.getElementById('qaContent');
   if (!container) return;
+  var view = document.getElementById('qaView');
+  if (view) view.classList.remove('qa-detail-mode');
   var seq = ++_qaListSeq; // S03：快速切换筛选时，过期响应不得覆盖最新结果
-  container.innerHTML = '<div class="empty-state compact" style="padding:40px">加载中...</div>';
+  container.innerHTML = '<div class="qa-loading">加载中…</div>';
   try {
     if (!_qaTags) {
       _qaTags = await api('/api/qa/tags/');
     }
-    // v183 筛选修复：工具栏是 #qaContent 之外的常驻容器，列表刷新不重建它
+    // 工具栏是 #qaContent 之外的常驻容器，列表刷新不重建它
     _ensureQaToolbar();
     var params = '?page=' + _qaPage + '&pageSize=' + _qaPageSize + '&sort=' + encodeURIComponent(_qaSort);
     if (_qaTagL1) params += '&tag_l1=' + _qaTagL1;
@@ -178,17 +189,22 @@ async function renderQaList() {
     var data = await api('/api/qa/questions/' + params);
     if (seq !== _qaListSeq) return;
     _qaTotalPages = data.total_pages || 1;
+    _qaTotalCount = typeof data.total === 'number' ? data.total : null;
     container.innerHTML = _qaListHtml(data);
     _syncQaToolbarSelection();
     _updateQaFilterButton();
     _qaPatchListUrl();
   } catch (err) {
     if (seq !== _qaListSeq) return;
-    container.innerHTML = '<div class="empty-state compact" style="padding:40px">加载失败，请重试。</div>';
+    container.innerHTML = '<div class="qa-empty">' +
+      '<div class="qa-empty-title">加载失败</div>' +
+      '<div class="qa-empty-desc">网络似乎不太顺畅</div>' +
+      '<button type="button" class="qa-empty-action" onclick="renderQaList()">重试</button>' +
+    '</div>';
   }
 }
 
-// v183：常驻筛选工具栏（幂等渲染，展开/收起状态在列表刷新间保持）
+// 常驻筛选工具栏（幂等渲染，展开/收起状态在列表刷新间保持）
 function _ensureQaToolbar() {
   var holder = document.getElementById('qaToolbar');
   if (!holder) return;
@@ -199,8 +215,7 @@ function _ensureQaToolbar() {
 
 function _qaListHtml(data) {
   var html = '';
-  // 筛选工具栏在 #qaToolbar 常驻容器内渲染，不再随列表重建（v183 修复筛选整页刷新）
-  // 置顶精选区：仅无筛选且第一页时独立展示（上限 5 由后端保障）
+  // 精选区：仅无筛选且第一页时展示（后端保证置顶优先且上限 5 条）
   var showPinned = !_qaTagL1 && !_qaTagL2 && _qaPage === 1;
   var pinnedItems = [];
   var listItems = data.items;
@@ -209,79 +224,67 @@ function _qaListHtml(data) {
     listItems = data.items.filter(function(q) { return !q.is_pinned; });
   }
   if (pinnedItems.length) {
-    html += '<div class="qa-pinned-section">' +
-      '<div class="qa-pinned-head">' +
-        '<span class="qa-pinned-title">' + _QA_IC_PIN + ' 精选</span>' +
-        '<span class="qa-pinned-sub">置顶推荐 · 管理员精选</span>' +
-      '</div>' +
-      '<div class="qa-pinned-list">';
-    pinnedItems.forEach(function(q) { html += _qaPinCardHtml(q); });
-    html += '</div></div>';
+    html += _qaPinnedHtml(pinnedItems);
   }
-  // 列表
   if (!listItems.length) {
+    var hasFilter = !!_qaTagL1 || !!_qaTagL2;
     html += '<div class="qa-empty">' +
-      '<div class="qa-empty-icon">' + iconSvg('search') + '</div>' +
       '<div class="qa-empty-title">' + (pinnedItems.length ? '暂无其他问答' : '暂无相关问答') + '</div>' +
-      '<div class="qa-empty-desc">换个筛选条件或关键词试试</div>' +
+      '<div class="qa-empty-desc">' + (hasFilter ? '当前筛选条件下没有内容' : '换个关键词试试') + '</div>' +
+      (hasFilter ? '<button type="button" class="qa-empty-action" onclick="qaClearFilters()">清除筛选</button>' : '') +
     '</div>';
   } else {
     html += '<div class="qa-list">';
     listItems.forEach(function(q) {
-      html += _qaCardHtml(q);
+      html += _qaItemHtml(q);
     });
     html += '</div>';
-    // 分页
     html += _qaPaginationHtml();
   }
   return html;
 }
 
+// ── 工具栏（左：全部问题 · N；右：文字排序 + 筛选按钮）──
+// 排序文案服从接口真实语义：latest = 按提问时间倒序 → 「最新提问」
 function _qaFilterBarHtml() {
   var l1 = (_qaTags && _qaTags.l1) || [];
   var l2 = (_qaTags && _qaTags.l2) || [];
-  // 外层 qa-toolbar 是 grid 容器（动画高度），内层 qa-toolbar-inner 承载卡片样式（v178）
-  var html = '<div class="qa-toolbar' + (_qaFilterOpen ? '' : ' qa-toolbar-collapsed') + '"><div class="qa-toolbar-inner">';
-
-  // 一级标签（accent 系徽章，暖色层级更高）
-  // F02/F09：data-id + aria-pressed 支持选中态原位同步与可访问状态
-  var l1Html = '<button class="qa-pill qa-pill-l1' + (!_qaTagL1 ? ' on' : '') + '" data-id="" aria-pressed="' + (!_qaTagL1 ? 'true' : 'false') + '" onclick="qaFilterL1(\'\')">全部</button>';
-  l1.forEach(function(t) {
-    var on = String(_qaTagL1) === String(t.id);
-    l1Html += '<button class="qa-pill qa-pill-l1' + (on ? ' on' : '') + '" data-id="' + t.id + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="qaFilterL1(' + t.id + ')">' + esc(t.name) + '</button>';
-  });
-  html += '<div class="qa-filter-row">' +
-    '<span class="qa-filter-label">分类</span>' +
-    '<div class="qa-pills qa-pills-l1">' + l1Html + '</div>' +
-  '</div>';
-
-  // 二级标签（primary 系徽章）
-  var l2Html = '<button class="qa-pill qa-pill-l2' + (!_qaTagL2 ? ' on' : '') + '" data-id="" aria-pressed="' + (!_qaTagL2 ? 'true' : 'false') + '" onclick="qaFilterL2(\'\')">全部</button>';
-  l2.forEach(function(t) {
-    var on = String(_qaTagL2) === String(t.id);
-    l2Html += '<button class="qa-pill qa-pill-l2' + (on ? ' on' : '') + '" data-id="' + t.id + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="qaFilterL2(' + t.id + ')">' + esc(t.name) + '</button>';
-  });
-  html += '<div class="qa-filter-row">' +
-    '<span class="qa-filter-label">话题</span>' +
-    '<div class="qa-pills qa-pills-l2">' + l2Html + '</div>' +
-  '</div>';
-  if (_qaTagL2 && _qaTags) {
-    var sel = _qaTags.l2.find(function(t) { return t.id == _qaTagL2; });
-    if (sel && sel.description) {
-      html += '<div class="qa-tag-desc">' + esc(sel.name) + '（' + esc(sel.description) + '）</div>';
-    }
-  }
-
-  // 排序（v183 加「最热」）
-  var sorts = [['default', '默认'], ['latest', '最新'], ['heat', '最热']];
+  var sorts = [['default', '默认排序'], ['latest', '最新提问'], ['heat', '热度']];
   var sortHtml = '';
   sorts.forEach(function(s) {
     var on = _qaSort === s[0];
-    sortHtml += '<button class="qa-pill qa-sort' + (on ? ' on' : '') + '" data-sort="' + s[0] + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="qaSort(\'' + s[0] + '\')">' + s[1] + '</button>';
+    sortHtml += '<button type="button" class="qa-sort-btn" data-sort="' + s[0] + '"' +
+      ' aria-pressed="' + (on ? 'true' : 'false') + '" onclick="qaSort(\'' + s[0] + '\')">' + s[1] + '</button>';
   });
-  html += '<div class="qa-sort-row">' + sortHtml + '</div>';
 
-  html += '</div></div>';
+  var html = '<div class="qa-toolbar-row">' +
+    '<span class="qa-toolbar-title">全部问题<span class="qa-toolbar-total" id="qaToolbarTotal" hidden></span></span>' +
+    '<div class="qa-toolbar-actions">' +
+      '<div class="qa-sort-group" role="group" aria-label="排序方式">' + sortHtml + '</div>' +
+      '<button type="button" class="qa-filter-btn" id="qaFilterBtn"' +
+        ' aria-expanded="' + (_qaFilterOpen ? 'true' : 'false') + '" aria-controls="qaFilterPanel"' +
+        ' onclick="toggleQaFilter()">' + _QA_IC_FILTER +
+        '<span class="qa-filter-btn-label">筛选</span></button>' +
+    '</div>' +
+  '</div>';
+
+  // 筛选展开区：工具栏下方、列表上方；关闭时不占高度、不进焦点顺序
+  var l1Html = '<button type="button" class="qa-pill qa-pill-l1' + (!_qaTagL1 ? ' on' : '') + '" data-id="" aria-pressed="' + (!_qaTagL1 ? 'true' : 'false') + '" onclick="qaFilterL1(\'\')">全部</button>';
+  l1.forEach(function(t) {
+    var on = String(_qaTagL1) === String(t.id);
+    l1Html += '<button type="button" class="qa-pill qa-pill-l1' + (on ? ' on' : '') + '" data-id="' + t.id + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="qaFilterL1(' + t.id + ')">' + esc(t.name) + '</button>';
+  });
+  var l2Html = '<button type="button" class="qa-pill qa-pill-l2' + (!_qaTagL2 ? ' on' : '') + '" data-id="" aria-pressed="' + (!_qaTagL2 ? 'true' : 'false') + '" onclick="qaFilterL2(\'\')">全部</button>';
+  l2.forEach(function(t) {
+    var on = String(_qaTagL2) === String(t.id);
+    l2Html += '<button type="button" class="qa-pill qa-pill-l2' + (on ? ' on' : '') + '" data-id="' + t.id + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="qaFilterL2(' + t.id + ')">' + esc(t.name) + '</button>';
+  });
+  html += '<div class="qa-filter-panel' + (_qaFilterOpen ? '' : ' qa-filter-collapsed') + '" id="qaFilterPanel">' +
+    '<div class="qa-filter-panel-inner">' +
+      '<div class="qa-filter-row"><span class="qa-filter-label">分类</span><div class="qa-pills qa-pills-l1">' + l1Html + '</div></div>' +
+      '<div class="qa-filter-row"><span class="qa-filter-label">话题</span><div class="qa-pills qa-pills-l2">' + l2Html + '</div></div>' +
+    '</div>' +
+  '</div>';
   return html;
 }
 
@@ -299,58 +302,50 @@ function _syncQaToolbarSelection() {
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
-  holder.querySelectorAll('.qa-sort').forEach(function(b) {
+  holder.querySelectorAll('.qa-sort-btn').forEach(function(b) {
     var on = b.getAttribute('data-sort') === _qaSort;
-    b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
+  _updateQaToolbarTotal();
 }
 
-// 两级标签徽章（L1 accent 系 / L2 primary 系，v175 后 v177 互换）
-function _qaBadgesHtml(q) {
+function _updateQaToolbarTotal() {
+  var el = document.getElementById('qaToolbarTotal');
+  if (!el) return;
+  if (typeof _qaTotalCount === 'number') {
+    el.hidden = false;
+    el.textContent = ' · ' + _qaTotalCount;
+  } else {
+    el.hidden = true;
+  }
+}
+
+// ── 中性标签 ──
+function _qaTagsHtml(q) {
   var h = '';
-  if (q.tag_l1) h += '<span class="qa-badge qa-badge-l1">' + esc(q.tag_l1) + '</span>';
-  if (q.tag_l2) h += '<span class="qa-badge qa-badge-l2">' + esc(q.tag_l2) + '</span>';
+  if (q.tag_l1) h += '<span class="qa-tag">' + esc(q.tag_l1) + '</span>';
+  if (q.tag_l2) h += '<span class="qa-tag">' + esc(q.tag_l2) + '</span>';
   return h;
 }
 
-// 紧凑统计（去竖线，v175）
-function _qaStatHtml(q) {
-  return '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + q.view_count + '</b></span>' +
-    '<span class="qa-stat">' + window.ICONS.star + '<b>' + q.favorite_count + '</b></span>' +
-    '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + q.answer_count + '</b></span>';
+// 日期到日：跨年保留年份；完整时间通过 title 提供
+function _qaFormatDay(s) {
+  var str = String(s || '');
+  var m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return str;
+  try {
+    if (String(new Date().getFullYear()) === m[1]) return m[2] + '-' + m[3];
+  } catch (e) { /* 保持完整格式 */ }
+  return m[1] + '-' + m[2] + '-' + m[3];
 }
 
-// v185 回答叫号牌（列表卡专用）：三态编码「得到解答了吗」——
-// 已解决=常青勾 / 有回答=墨蓝计数 / 待回答=中性纸色
-function _qaAnswerChipHtml(q) {
-  var cls = q.has_accepted ? ' is-solved' : (q.answer_count > 0 ? ' has-answers' : '');
-  var text = q.has_accepted
-    ? _QA_IC_CHECK + ' 已解决'
-    : (q.answer_count > 0 ? q.answer_count + ' 回答' : '待回答');
-  return '<span class="qa-answer-chip' + cls + '">' + text + '</span>';
-}
-
-// 列表卡脚部统计（浏览/收藏；回答数由叫号牌承担，不重复展示）
-function _qaBrowseStatHtml(q) {
-  return '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + q.view_count + '</b></span>' +
-    '<span class="qa-stat">' + window.ICONS.star + '<b>' + q.favorite_count + '</b></span>';
-}
-
-function _qaAvatarHtml(name, url, role) {
-  var initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
-  var image = url
-    ? '<img src="' + esc(url) + '" alt="" loading="lazy">'
-    : '<span>' + esc(initial) + '</span>';
-  return '<span class="qa-avatar qa-avatar--' + (role || 'answer') + '" aria-hidden="true">' + image + '</span>';
-}
-
-function _qaPersonHtml(name, url, role, label) {
-  return '<div class="qa-person">' +
-    _qaAvatarHtml(name, url, role) +
-    '<div class="qa-person-copy"><span class="qa-person-name">' + esc(name) + '</span>' +
-      '<span class="qa-person-label">' + esc(label || '') + '</span></div>' +
-  '</div>';
+// 统计内联片段：回答数（零回答次要色，有回答主色）+ 已采纳状态
+function _qaItemStatsInner(q) {
+  var n = q.answer_count || 0;
+  var cls = q.has_accepted ? ' has-accepted' : (n > 0 ? ' has-answers' : '');
+  var accepted = q.has_accepted
+    ? '<span class="qa-item-accepted">' + _QA_IC_CHECK + ' 已采纳</span>' : '';
+  return '<span class="qa-item-count' + cls + '"><b>' + n + '</b><i>回答</i></span>' + accepted;
 }
 
 // F09：问题标题使用真实链接（可键盘聚焦、可新标签打开）；普通左键仍走 SPA 导航，
@@ -360,49 +355,69 @@ function _qaQuestionUrl(id) {
 }
 
 function _qaCardTitleLink(q, cls) {
-  return '<a class="' + (cls || 'qa-card-title') + '" href="' + _qaQuestionUrl(q.id) + '"' +
+  return '<a class="' + (cls || 'qa-item-title') + '" href="' + _qaQuestionUrl(q.id) + '"' +
     ' onclick="if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;' +
     ' event.preventDefault(); event.stopPropagation(); qaOpenDetail(' + q.id + ')">' + esc(q.title) + '</a>';
 }
 
-function _qaCardHtml(q) {
-  var badges = _qaBadgesHtml(q);
-  var pinHtml = q.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '';
-  // V01：标题行内联回答状态牌，去掉独立头行；元信息收为一行，压缩卡片高度
-  return '<div class="qa-card' + (q.is_pinned ? ' qa-card--pinned' : '') + '" onclick="qaOpenDetail(' + q.id + ')">' +
-    '<div class="qa-card-row">' +
+// 列表条目：桌面两列（72px 统计列 + 内容列），手机单列（状态并入辅助行）
+function _qaItemHtml(q) {
+  var preview = q.content_preview
+    ? '<div class="qa-item-preview">' + esc(q.content_preview) + '</div>' : '';
+  var tags = _qaTagsHtml(q);
+  return '<div class="qa-item">' +
+    '<div class="qa-item-stats">' + _qaItemStatsInner(q) + '</div>' +
+    '<div class="qa-item-main">' +
       _qaCardTitleLink(q) +
-      (pinHtml ? pinHtml : '') +
-      _qaAnswerChipHtml(q) +
-    '</div>' +
-    (q.content_preview ? '<div class="qa-card-preview">' + esc(q.content_preview) + '</div>' : '') +
-    '<div class="qa-card-foot">' +
-      (badges ? '<span class="qa-card-tags">' + badges + '</span>' : '') +
-      '<span class="qa-card-author">' + esc(q.author) + '</span>' +
-      '<span class="qa-card-date">' + esc(q.created_at) + '</span>' +
-      '<span class="qa-card-meta">' + _qaBrowseStatHtml(q) + '</span>' +
+      preview +
+      '<div class="qa-item-meta">' +
+        '<span class="qa-item-tags">' + tags + '</span>' +
+        '<span class="qa-item-stats qa-item-stats--inline">' + _qaItemStatsInner(q) + '</span>' +
+        '<span class="qa-item-byline">' +
+          '<span class="qa-item-author">' + esc(q.author) + '</span>' +
+          '<span class="qa-item-date" title="' + esc(q.created_at) + '">' + _qaFormatDay(q.created_at) + '</span>' +
+        '</span>' +
+      '</div>' +
     '</div>' +
   '</div>';
 }
 
-// 置顶精选卡（v175：accent 左边条 + 浅底，与普通卡形成权重差）
-function _qaPinCardHtml(q) {
-  return '<div class="qa-pin-card" onclick="qaOpenDetail(' + q.id + ')">' +
-    '<div class="qa-pin-main">' +
-      '<div class="qa-pin-title-row">' +
-        (q.has_accepted ? '<span class="qa-accepted-badge qa-accepted-badge--sm" title="已有最佳回答">' + _QA_IC_CHECK + '</span>' : '') +
-        _qaCardTitleLink(q, 'qa-pin-title') +
-      '</div>' +
-      (q.content_preview ? '<div class="qa-pin-preview">' + esc(q.content_preview) + '</div>' : '') +
-    '</div>' +
-    '<div class="qa-pin-side">' +
-      '<div class="qa-pin-badges">' + _qaBadgesHtml(q) + '</div>' +
-      '<div class="qa-pin-meta">' +
-        '<span class="qa-card-author">' + esc(q.author) + '</span>' +
-        '<span class="qa-card-meta">' + _qaStatHtml(q) + '</span>' +
-      '</div>' +
-    '</div>' +
+// ── 精选问答：紧凑标题链接，默认两项，其余可展开/收起 ──
+function _qaPinnedHtml(pinnedItems) {
+  var limit = 2;
+  var visible = pinnedItems.slice(0, limit);
+  var extra = pinnedItems.slice(limit);
+  var html = '<div class="qa-pinned-section">' +
+    '<div class="qa-pinned-head">' + _QA_IC_PIN + '<span class="qa-pinned-title">精选问答</span></div>' +
+    '<div class="qa-pinned-list">';
+  visible.forEach(function(q) { html += _qaPinnedItemHtml(q); });
+  html += '</div>';
+  if (extra.length) {
+    html += '<div class="qa-pinned-extra" hidden><div class="qa-pinned-list">';
+    extra.forEach(function(q) { html += _qaPinnedItemHtml(q); });
+    html += '</div></div>';
+    html += '<button type="button" class="qa-pinned-toggle" aria-expanded="false" onclick="toggleQaPinned(this)">展开其余 ' + extra.length + ' 条</button>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function _qaPinnedItemHtml(q) {
+  return '<div class="qa-pinned-item">' +
+    _qaCardTitleLink(q, 'qa-pinned-link') +
+    (q.has_accepted ? '<span class="qa-pinned-check" title="已采纳回答">' + _QA_IC_CHECK + '</span>' : '') +
   '</div>';
+}
+
+function toggleQaPinned(btn) {
+  var extra = btn.previousElementSibling;
+  if (!extra || !extra.classList.contains('qa-pinned-extra')) return;
+  var open = !extra.hidden;
+  extra.hidden = open;
+  btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+  btn.textContent = open
+    ? '展开其余 ' + extra.querySelectorAll('.qa-pinned-item').length + ' 条'
+    : '收起';
 }
 
 function _qaPaginationHtml() {
@@ -424,6 +439,7 @@ function qaFilterL1(id) {
   _qaTagL2 = ''; // 切一级时清空二级
   _qaPage = 1;
   _syncQaToolbarSelection(); // F02：点击即同步选中态，不等请求返回
+  _updateQaFilterButton();
   renderQaList();
 }
 
@@ -431,6 +447,7 @@ function qaFilterL2(id) {
   _qaTagL2 = id === '' ? '' : id;
   _qaPage = 1;
   _syncQaToolbarSelection();
+  _updateQaFilterButton();
   renderQaList();
 }
 
@@ -441,31 +458,41 @@ function qaSort(s) {
   renderQaList();
 }
 
+function qaClearFilters() {
+  _qaTagL1 = '';
+  _qaTagL2 = '';
+  _qaPage = 1;
+  _syncQaToolbarSelection();
+  _updateQaFilterButton();
+  renderQaList();
+}
+
 function qaGoPage(p) {
   if (p < 1 || p > _qaTotalPages || p === _qaPage) return;
   _qaPage = p;
   renderQaList();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: _qaScrollBehavior() });
 }
 
-// ── 筛选面板展开/收起（v177）──
+// ── 筛选面板展开/收起 ──
 function toggleQaFilter() {
   _qaFilterOpen = !_qaFilterOpen;
-  // v183：工具栏在常驻 #qaToolbar 内，选择器同步
-  var panel = document.querySelector('#qaToolbar .qa-toolbar');
-  if (panel) panel.classList.toggle('qa-toolbar-collapsed', !_qaFilterOpen);
-  // F09：展开状态暴露给辅助技术
+  var panel = document.getElementById('qaFilterPanel');
+  if (panel) panel.classList.toggle('qa-filter-collapsed', !_qaFilterOpen);
   var btn = document.getElementById('qaFilterBtn');
   if (btn) btn.setAttribute('aria-expanded', _qaFilterOpen ? 'true' : 'false');
   _updateQaFilterButton();
 }
 
+// 筛选按钮状态：展开高亮；有已选条件时显示数量
 function _updateQaFilterButton() {
   var b = document.getElementById('qaFilterBtn');
   if (!b) return;
-  var hasFilter = !!_qaTagL1 || !!_qaTagL2 || _qaSort !== 'default';
+  var condCount = (_qaTagL1 ? 1 : 0) + (_qaTagL2 ? 1 : 0);
   b.classList.toggle('open', _qaFilterOpen);
-  b.classList.toggle('active', hasFilter);
+  b.classList.toggle('active', condCount > 0);
+  var label = b.querySelector('.qa-filter-btn-label');
+  if (label) label.textContent = condCount > 0 ? '筛选 · ' + condCount : '筛选';
 }
 
 // ── 详情 ──
@@ -482,29 +509,21 @@ async function renderQaDetail(id, opts) {
   opts = opts || {};
   var container = document.getElementById('qaContent');
   if (!container) return;
+  var view = document.getElementById('qaView');
+  if (view) view.classList.add('qa-detail-mode');
   var seq = ++_qaDetailSeq; // S03：同题快速重渲时旧响应不得覆盖
   _qaCurrentDetailId = id;
-  container.innerHTML = '<div class="empty-state compact" style="padding:40px">加载中...</div>';
+  container.innerHTML = '<div class="qa-loading">加载中…</div>';
   try {
     var data = await api('/api/qa/questions/' + id + '/');
     if (seq !== _qaDetailSeq) return;
     if (data.deleted) {
-      container.innerHTML =
-        '<div class="qa-detail">' +
-          '<div class="qa-q-card">' +
-            '<div class="qa-deleted-hint">' + esc(data.deleted_hint) + '</div>' +
-            '<div class="qa-card-title">' + esc(data.title) + '</div>' +
-            '<div class="qa-card-foot"><span class="qa-card-author">' + esc(data.author) + '</span>' +
-            '<span class="qa-card-date">' + esc(data.created_at) + '</span></div>' +
-          '</div>' +
-          '<div class="qa-back-row"><button class="qa-back-btn" onclick="qaBackToList()">← 返回列表</button></div>' +
-        '</div>';
+      container.innerHTML = _qaDeletedHtml(data);
       return;
     }
     // 浏览量 +1（去重由后端处理）
     api('/api/qa/questions/' + id + '/view/', { method: 'POST' }).catch(function() {});
     container.innerHTML = _qaDetailHtml(data);
-    _qaSyncAllAnswerCollapse();
     if (opts.answerId) {
       _qaFocusAnswer(opts.answerId);
     } else if (opts.scrollY) {
@@ -512,88 +531,103 @@ async function renderQaDetail(id, opts) {
     }
   } catch (err) {
     if (seq !== _qaDetailSeq) return;
-    container.innerHTML = '<div class="empty-state compact" style="padding:40px">加载失败，请重试。</div>';
+    container.innerHTML = '<div class="qa-detail">' +
+      '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>' +
+      '<div class="qa-empty">' +
+        '<div class="qa-empty-title">加载失败</div>' +
+        '<div class="qa-empty-desc">网络似乎不太顺畅</div>' +
+        '<button type="button" class="qa-empty-action" onclick="renderQaDetail(' + parseInt(id, 10) + ')">重试</button>' +
+      '</div></div>';
   }
 }
 
-// V02：已采纳回答默认展开；收起态正文保留有意义的预览
+function _qaDeletedHtml(d) {
+  return '<div class="qa-detail">' +
+    '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>' +
+    '<div class="qa-thread"><div class="qa-q-section"><div class="qa-article-body">' +
+      '<div class="qa-deleted-hint">' + esc(d.deleted_hint) + '</div>' +
+      '<h1 class="qa-q-title">' + esc(d.title) + '</h1>' +
+      '<div class="qa-detail-meta"><span class="qa-detail-byline">' +
+        '<span>' + esc(d.author) + '</span>' +
+        '<span>' + esc(d.created_at) + '</span>' +
+      '</span></div>' +
+    '</div></div></div></div>';
+}
+
+// 详情：问题 + 操作 + 回答共享同一张阅读底板，回答全部展开
 function _qaDetailHtml(d) {
-  var html = '<div class="qa-detail">';
   var isManager = _qaIsManager();
   var isOwner = !!(currentUser && currentUser.id === d.owner_id);
+  var canAnswer = isManager || d.qa_user_open;
 
-  // v183 状态 banner（作者视角：待审核/已驳回）
+  var html = '<div class="qa-detail">';
+  html += '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>';
+
+  // 状态条（作者视角：待审核/已驳回，简短不占屏）
   if (d.status === 'pending') {
     html += '<div class="qa-status-banner qa-status-banner--pending">' + iconSvg('clock') + ' 内容审核中，通过后将公开展示</div>';
   } else if (d.status === 'rejected') {
     html += '<div class="qa-status-banner qa-status-banner--rejected">已驳回，编辑后可重新提交审核</div>';
   }
 
-  // 问题卡
-  var favState = d.is_favorited ? 'on' : '';
+  var favState = d.is_favorited ? ' on' : '';
   var favIcon = window.ICONS[d.is_favorited ? 'starFilled' : 'star'];
-  var badges = _qaBadgesHtml({ tag_l1: d.tag_l1, tag_l2: d.tag_l2 });
-  var solvedBadge = d.has_accepted ? '<span class="qa-accepted-badge" title="已有最佳回答">' + _QA_IC_CHECK + ' 已解决</span>' : '';
-  var stats = '<span class="qa-stat">' + _QA_IC_EYE + '<b>' + d.view_count + '</b></span>' +
-    '<span class="qa-stat">' + _QA_IC_ANSWER + '<b>' + d.answers.length + '</b></span>';
-  html += '<div class="qa-q-card">' +
-    (d.is_pinned ? '<span class="qa-pin-badge">' + _QA_IC_PIN + ' 置顶</span>' : '') +
-    solvedBadge +
-    '<h3 class="qa-q-title">' + esc(d.title) + '</h3>' +
-    (badges ? '<div class="qa-q-tags">' + badges + '</div>' : '') +
-    _qaPersonHtml(d.author, d.avatar_url, 'question', '提问者 · ' + d.created_at) +
-    '<div class="qa-rich">' + qaSafeHtml(d.content) + '</div>' +
-    '<div class="qa-q-meta">' + stats + '</div>' +
-    '<div class="qa-q-foot">' +
-      '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleQuestionFav(' + d.id + ', this)">' + favIcon + '<span>' + (d.is_favorited ? '已收藏' : '收藏') + '</span><b class="qa-count">' + d.favorite_count + '</b></button>' +
-      '<button class="qa-report-btn" onclick="openQaReportModal(\'question\', ' + d.id + ')">举报</button>' +
-    '</div>' +
-    // v183 作者操作栏（编辑/编辑历史/删除）
-    (isOwner ? '<div class="qa-owner-actions">' +
-      '<button class="qa-owner-btn" onclick="showQaCompose({ type: \'question\', action: \'edit\', qid: ' + d.id + ' })">编辑</button>' +
-      '<button class="qa-owner-btn" onclick="showQaEditHistory(\'question\', ' + d.id + ')">编辑历史</button>' +
-      '<button class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'question\', ' + d.id + ')">删除</button>' +
-    '</div>' : '') +
+  var tags = _qaTagsHtml({ tag_l1: d.tag_l1, tag_l2: d.tag_l2 });
+
+  html += '<div class="qa-thread">';
+  // 问题
+  html += '<article class="qa-q-section"><div class="qa-article-body">';
+  html += '<h1 class="qa-q-title">' + esc(d.title) + '</h1>';
+  html += '<div class="qa-detail-meta">' +
+    (tags ? '<span class="qa-detail-tags">' + tags + '</span>' : '') +
+    (d.is_pinned ? '<span class="qa-pin-badge qa-pin-badge-sm">' + _QA_IC_PIN + ' 置顶</span>' : '') +
+    '<span class="qa-detail-byline">' +
+      '<span>' + esc(d.author) + '</span>' +
+      '<span title="' + esc(d.created_at) + '">' + _qaFormatDay(d.created_at) + '</span>' +
+      '<span>浏览量 ' + d.view_count + '</span>' +
+    '</span>' +
+  '</div>';
+  html += '<div class="qa-rich">' + qaSafeHtml(d.content) + '</div>';
+  html += '<div class="qa-q-actions">' +
+    '<button type="button" class="qa-fav-btn' + favState + '" onclick="qaToggleQuestionFav(' + d.id + ', this)">' + favIcon + '<span>' + (d.is_favorited ? '已收藏' : '收藏') + '</span><b class="qa-count">' + d.favorite_count + '</b></button>' +
+    '<button type="button" class="qa-report-btn" onclick="openQaReportModal(\'question\', ' + d.id + ')">举报</button>' +
+    (isOwner
+      ? '<button type="button" class="qa-owner-btn" onclick="showQaCompose({ type: \'question\', action: \'edit\', qid: ' + d.id + ' })">编辑</button>' +
+        '<button type="button" class="qa-owner-btn" onclick="showQaEditHistory(\'question\', ' + d.id + ')">编辑历史</button>' +
+        '<button type="button" class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'question\', ' + d.id + ')">删除</button>'
+      : '') +
+  '</div>';
+  html += '</div></article>';
+
+  // 回答区头部：左「N 个回答」，右「写回答」（仅有权限时呈现）
+  html += '<div class="qa-answers-head">' +
+    '<h2 class="qa-answers-title">' + d.answers.length + ' 个回答</h2>' +
+    (canAnswer
+      ? '<button type="button" class="qa-write-btn" onclick="showQaCompose({ type: \'answer\', action: \'create\', qid: ' + d.id + ' })">写回答</button>'
+      : '') +
   '</div>';
 
-  // 发布回答入口（问答区版主/超管 或 站点开放时普通用户，v183）
-  if (isManager || d.qa_user_open) {
-    html += '<div class="qa-answer-publish">' +
-      '<span class="qa-answer-publish-hint">' + (isManager ? '你是问答区版主' : '分享你的回答') + '</span>' +
-      '<button class="qa-gate-btn qa-answer-publish-btn" onclick="showQaCompose({ type: \'answer\', action: \'create\', qid: ' + d.id + ' })">发布回答</button>' +
-    '</div>';
-  }
-
-  // 回答列表
+  // 回答列表：连续阅读流（1px 分隔线），不再折叠
   if (d.answers.length) {
     html += '<div class="qa-answers">';
-    d.answers.forEach(function(a, idx) {
-      // V02：唯一回答或已采纳回答默认展开，其余收起但保留预览
-      var expanded = (d.answers.length === 1 || a.is_accepted) ? ' expanded' : '';
-      html += _qaAnswerHtml(a, idx, expanded, d.answers.length, d);
+    d.answers.forEach(function(a) {
+      html += _qaAnswerHtml(a, d);
     });
     html += '</div>';
   } else {
-    html += '<div class="qa-empty" style="border:1px dashed var(--border)">' +
-      '<div class="qa-empty-title">还没有回答</div>' +
-      '<div class="qa-empty-desc">管理员正在准备解答，敬请期待</div>' +
-    '</div>';
+    html += '<div class="qa-answers-empty">还没有回答' + (canAnswer ? '，来写下第一条回答' : '') + '</div>';
   }
 
-  html += '<div class="qa-back-row"><button class="qa-back-btn" onclick="qaBackToList()">← 返回列表</button></div>';
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
-function _qaAnswerHtml(a, idx, expanded, total, d) {
-  var likeState = a.liked ? 'on' : '';
+function _qaAnswerHtml(a, d) {
+  var likeState = a.liked ? ' on' : '';
   var likeIcon = a.liked ? _QA_IC_THUMB_FILLED : _QA_IC_THUMB;
-  var favState = a.is_favorited ? 'on' : '';
+  var favState = a.is_favorited ? ' on' : '';
   var favIcon = window.ICONS[a.is_favorited ? 'starFilled' : 'star'];
   var pin = a.is_pinned ? '<span class="qa-pin-badge qa-pin-badge-sm">' + _QA_IC_PIN + ' 置顶</span>' : '';
-  var collapseBtn = total > 1
-    ? '<button class="qa-answer-toggle" aria-expanded="' + (expanded ? 'true' : 'false') + '" aria-label="' + (expanded ? '收起回答' : '展开回答') + '" onclick="qaToggleAnswer(this)">' + (expanded ? '收起' : '展开全文') + '</button>'
-    : '';
 
   // F04：作者自己的待审核/已驳回回答随详情返回，需要明确的状态标识（他人不可见）
   var statusNote = '';
@@ -603,78 +637,59 @@ function _qaAnswerHtml(a, idx, expanded, total, d) {
     statusNote = '<div class="qa-answer-status qa-answer-status--rejected">未通过审核，编辑后可重新提交</div>';
   }
 
-  // v183 采纳徽章 + 采纳按钮
-  var acceptedBadge = a.is_accepted
-    ? '<span class="qa-accepted-badge qa-accepted-badge--answer" title="最佳回答">' + _QA_IC_CHECK + ' 最佳回答</span>'
-    : '';
   var canAccept = d && (_qaIsManager() || (currentUser && currentUser.id === d.owner_id && d.qa_user_open));
   var acceptBtn = canAccept
-    ? '<button class="qa-accept-btn' + (a.is_accepted ? ' on' : '') + '" onclick="qaAcceptAnswer(' + a.id + ', this)">' +
+    ? '<button type="button" class="qa-accept-btn' + (a.is_accepted ? ' on' : '') + '" onclick="qaAcceptAnswer(' + a.id + ', this)">' +
       (a.is_accepted ? '取消采纳' : '采纳为最佳回答') + '</button>'
     : '';
 
-  // v183 作者操作栏（编辑/编辑历史/删除）
   var isAnswerOwner = !!(currentUser && currentUser.id === a.author_id);
-  var ownerActions = isAnswerOwner ? '<div class="qa-owner-actions qa-owner-actions--answer">' +
-    '<button class="qa-owner-btn" onclick="showQaCompose({ type: \'answer\', action: \'edit\', qid: ' + (d ? d.id : '') + ', aid: ' + a.id + ' })">编辑</button>' +
-    '<button class="qa-owner-btn" onclick="showQaEditHistory(\'answer\', ' + a.id + ')">编辑历史</button>' +
-    '<button class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'answer\', ' + a.id + ')">删除</button>' +
-  '</div>' : '';
+  var ownerBtns = isAnswerOwner
+    ? '<button type="button" class="qa-owner-btn" onclick="showQaCompose({ type: \'answer\', action: \'edit\', qid: ' + (d ? d.id : '') + ', aid: ' + a.id + ' })">编辑</button>' +
+      '<button type="button" class="qa-owner-btn" onclick="showQaEditHistory(\'answer\', ' + a.id + ')">编辑历史</button>' +
+      '<button type="button" class="qa-owner-btn qa-owner-btn--danger" onclick="qaAskDelete(\'answer\', ' + a.id + ')">删除</button>'
+    : '';
 
-  // F05：回答锚点 id，收藏/搜索/通知可直达该回答
-  return '<div class="qa-answer' + expanded + (a.is_accepted ? ' qa-answer--accepted' : '') + '" data-qa-answer data-answer-id="' + a.id + '" id="answer-' + a.id + '">' +
-    '<div class="qa-answer-head">' + pin + acceptedBadge + _qaPersonHtml(a.author, a.avatar_url, 'answer', '回答者 · ' + a.created_at) + collapseBtn + '</div>' +
-    statusNote +
-    '<div class="qa-answer-body"><div class="qa-rich">' + qaSafeHtml(a.content) + '</div></div>' +
-    '<div class="qa-answer-actions">' +
-      '<button class="qa-like-btn ' + likeState + '" onclick="qaToggleAnswerLike(' + a.id + ', this)">' + likeIcon + '<span>赞</span><b class="qa-count">' + a.like_count + '</b></button>' +
-      '<button class="qa-fav-btn ' + favState + '" onclick="qaToggleAnswerFav(' + a.id + ', this)">' + favIcon + '<span>收藏</span><b class="qa-count">' + a.favorite_count + '</b></button>' +
-      acceptBtn +
-      '<button class="qa-report-btn" onclick="openQaReportModal(\'answer\', ' + a.id + ')">举报</button>' +
+  // F05：回答锚点 id，收藏/搜索/通知可直达该回答；采纳强调用 2px 绿色左边线
+  return '<article class="qa-answer' + (a.is_accepted ? ' qa-answer--accepted' : '') + '" data-qa-answer data-answer-id="' + a.id + '" id="answer-' + a.id + '">' +
+    '<div class="qa-article-body">' +
+      statusNote +
+      '<div class="qa-answer-author-row">' +
+        _qaAvatarHtml(a.author, a.avatar_url, 'answer') +
+        '<span class="qa-answer-author">' + esc(a.author) + '</span>' +
+        '<span class="qa-answer-date" title="' + esc(a.created_at) + '">' + _qaFormatDay(a.created_at) + '</span>' +
+        pin +
+        (a.is_accepted ? '<span class="qa-accepted-flag" title="最佳回答">' + _QA_IC_CHECK + ' 已采纳</span>' : '') +
+      '</div>' +
+      '<div class="qa-rich">' + qaSafeHtml(a.content) + '</div>' +
+      '<div class="qa-answer-actions">' +
+        '<button type="button" class="qa-like-btn' + likeState + '" onclick="qaToggleAnswerLike(' + a.id + ', this)">' + likeIcon + '<span>赞</span><b class="qa-count">' + a.like_count + '</b></button>' +
+        '<button type="button" class="qa-fav-btn' + favState + '" onclick="qaToggleAnswerFav(' + a.id + ', this)">' + favIcon + '<span>收藏</span><b class="qa-count">' + a.favorite_count + '</b></button>' +
+        acceptBtn +
+        '<button type="button" class="qa-report-btn" onclick="openQaReportModal(\'answer\', ' + a.id + ')">举报</button>' +
+        ownerBtns +
+      '</div>' +
     '</div>' +
-    ownerActions +
-  '</div>';
+  '</article>';
 }
 
-// V02/F09：收起态同步 inert（收起正文里的链接不可聚焦）+ aria-expanded + 预览文案
-function _qaSyncAnswerCollapse(card) {
-  if (!card) return;
-  var expanded = card.classList.contains('expanded');
-  var body = card.querySelector('.qa-answer-body');
-  if (body) {
-    if (expanded) body.removeAttribute('inert');
-    else body.setAttribute('inert', '');
-  }
-  var btn = card.querySelector('.qa-answer-toggle');
-  if (btn) {
-    btn.textContent = expanded ? '收起' : '展开全文';
-    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    btn.setAttribute('aria-label', expanded ? '收起回答' : '展开回答');
-  }
+function _qaAvatarHtml(name, url, role) {
+  var initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  var image = url
+    ? '<img src="' + esc(url) + '" alt="" loading="lazy">'
+    : '<span>' + esc(initial) + '</span>';
+  return '<span class="qa-avatar qa-avatar--' + (role || 'answer') + '" aria-hidden="true">' + image + '</span>';
 }
 
-function _qaSyncAllAnswerCollapse() {
-  document.querySelectorAll('#qaContent .qa-answer').forEach(_qaSyncAnswerCollapse);
-}
-
-// F05：收藏/搜索/通知直达某条回答 → 展开 + 轻量定位高亮
+// F05：收藏/搜索/通知直达某条回答 → 定位 + 轻量高亮（回答默认全展开，无需先展开）
 function _qaFocusAnswer(answerId) {
   var el = document.querySelector('[data-answer-id="' + parseInt(answerId, 10) + '"]');
   if (!el) return;
-  el.classList.add('expanded');
-  _qaSyncAnswerCollapse(el);
   requestAnimationFrame(function() {
-    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el.scrollIntoView({ block: 'start', behavior: _qaScrollBehavior() });
     el.classList.add('qa-answer--flash');
     window.setTimeout(function() { el.classList.remove('qa-answer--flash'); }, 1600);
   });
-}
-
-function qaToggleAnswer(btn) {
-  var card = btn.closest('.qa-answer');
-  if (!card) return;
-  card.classList.toggle('expanded');
-  _qaSyncAnswerCollapse(card);
 }
 
 function qaBackToList() {

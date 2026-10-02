@@ -51,7 +51,8 @@
   //       避免宽屏仍出现不必要的表格横向滚动。
   // v319：校园入口开放账号级自定义；个人入口与总管理员精选分层，缓存键同步推进。
   // v320：课程代码操作默认只链接当前叶子；共享课程禁止被单叶合并或全局改码。
-  var VERSION = '322';
+  // v323：问答区视觉重构（2026-10-02 设计规范）——列表/详情/工具栏/回答流改版。
+  var VERSION = '323';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

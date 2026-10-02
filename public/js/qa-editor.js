@@ -97,6 +97,20 @@ function qaSafeHtml(raw) {
     });
     textNode.replaceWith(fragment);
   });
+  // 展示层合并连续空段落（编辑器回车会输出 <p><br></p>，正文出现大段空白）：
+  // 仅折叠不含文本/图片/链接的纯空白段落，最多保留一个作正常段距。
+  var paragraphs = Array.from(template.content.querySelectorAll('p'));
+  var blankRun = 0;
+  paragraphs.forEach(function(p) {
+    var blank = !p.querySelector('img, a') && !(p.textContent || '').replace(/\u00a0/g, ' ').trim();
+    if (blank) {
+      blankRun += 1;
+      if (blankRun > 1) p.remove();
+    } else {
+      blankRun = 0;
+    }
+  });
+
   return template.innerHTML;
 }
 

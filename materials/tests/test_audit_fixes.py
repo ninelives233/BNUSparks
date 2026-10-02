@@ -385,3 +385,40 @@ class FrontendAuditContractTest(SimpleTestCase):
         self.assertIn('role="dialog" aria-modal="true"', html)
         self.assertIn('class="skip-link"', html)
         self.assertIn(":focus-visible", css)
+
+    def test_qa_visual_redesign_contracts_present(self):
+        """2026-10-02 问答区视觉重构的结构契约（docs/问答区视觉重构设计规范-2026-10-02.md）"""
+        root = Path(settings.BASE_DIR)
+        qa = (root / "public/js/qa.js").read_text(encoding="utf-8")
+        css = (root / "public/css/qa.css").read_text(encoding="utf-8")
+        editor = (root / "public/js/qa-editor.js").read_text(encoding="utf-8")
+        html = (root / "public/index.html").read_text(encoding="utf-8")
+
+        # §5 工具栏：接口可靠总数展示 + 文字式排序（aria-pressed）+ 独立筛选面板
+        self.assertIn('id="qaToolbarTotal"', qa)
+        self.assertIn("'latest', '最新提问'", qa)
+        self.assertIn('id="qaFilterPanel"', qa)
+        self.assertNotIn('id="qaFilterBtn"', html)  # 筛选按钮移入工具栏，页头只留提问入口
+        self.assertIn("课程、选课与校园生活中的问题", html)
+
+        # §6 列表：共享容器条目 + 统计列，日期到日，不再整卡可点
+        self.assertIn("qa-item-stats", qa)
+        self.assertIn("_qaFormatDay", qa)
+        self.assertNotIn('class="qa-card"', qa)
+
+        # §7 精选问答：紧凑标题区，默认两项，其余可展开/收起（aria-expanded）
+        self.assertIn("toggleQaPinned", qa)
+        self.assertIn("展开其余 ", qa)
+
+        # §8/§9 详情：单张阅读底板，回答全部展开——折叠开关、inert 同步、固定裁切高度必须移除
+        self.assertIn("qa-detail-mode", qa)
+        self.assertNotIn("qa-answer-toggle", qa)
+        self.assertNotIn("function qaToggleAnswer(", qa)
+        self.assertNotIn("_qaSyncAnswerCollapse", qa)
+        self.assertNotIn(".qa-answer-toggle", css)
+        self.assertNotIn("7.4em", css)
+        # §12：回答锚点避开固定顶栏
+        self.assertIn("scroll-margin-top", css)
+
+        # §10：展示层合并连续纯空白段落（不含图片/链接的空 <p>）
+        self.assertIn("纯空白段落", editor)
