@@ -55,7 +55,9 @@
   // v324：动画式使用教程接入（懒加载 tutorial 特性：data → scenes → player +
   //        tutorial.css）；tutorial-entry.js 为轻量入口，静态加载不走本表。
   // v325：教程挂载调用修正（mount 单参数）与进度仓库空存储初始化。
-  var VERSION = '330';
+  // v331：教程重制——分步时长（5～10s）、持久场景就地变化、单一 rAF 时钟、
+  //        统一停轴与稳定控制节点；tutorial.css 一并重排，缓存键同步推进。
+  var VERSION = '331';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

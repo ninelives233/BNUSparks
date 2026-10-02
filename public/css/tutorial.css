@@ -1,7 +1,12 @@
 /* BNU Sparks · tutorial.css —— 动画使用教程：浮窗、五组目录、演示舞台、控制栏、
    响应式与静态降级。懒加载（feature-loader: tutorial）。颜色全部引用 tokens.css
    语义变量，暗色随现有主题；新增样式 .tutorial-* 前缀，演示内部 .tutorial-demo-*，
-   不覆盖全局 button/a/table 或站点业务类。 */
+   不覆盖全局 button/a/table 或站点业务类。
+
+   2026-10 重排：[hidden] 全面生效（目录/文字说明/错误页不残留播放控件）、
+   目录紧凑缩略图、播放页层级（舞台为主，标题+当前说明紧随，完整步骤按需展开）、
+   控制两行（上一项/下一项同行，暂停/重播紧凑辅助，去试试弱化）、
+   转场层叠放不挤压。 */
 
 /* ── 遮罩与浮窗壳 ─────────────────────────────────────────── */
 .tutorial-overlay {
@@ -46,11 +51,14 @@
 .tutorial-root {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   padding: 28px;
   min-height: 0;
   flex: 1;
 }
+/* hidden 属性优先级高于任何 display 规则：目录、文字说明、错误页
+   不显示也不可聚焦任何播放控件 */
+.tutorial-root [hidden] { display: none !important; }
 
 .tutorial-sr {
   position: absolute;
@@ -68,20 +76,22 @@
 .tutorial-topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: 36px;
   flex: none;
 }
 .tutorial-topbar-title {
+  flex: 1;
+  min-width: 0;
   font-family: var(--serif);
   font-size: 18px;
   font-weight: 600;
   color: var(--ink);
-  margin-right: auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.tutorial-topbar-title:empty { display: none; }
 .tutorial-back {
   background: none;
   border: none;
@@ -92,14 +102,6 @@
   padding: 6px 8px;
   border-radius: var(--radius-sm);
   white-space: nowrap;
-}
-.tutorial-back.is-label {
-  font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ink);
-  cursor: default;
-  margin-right: auto;
 }
 .tutorial-counter {
   font-size: 13px;
@@ -120,6 +122,7 @@
   white-space: nowrap;
 }
 .tutorial-close {
+  margin-left: auto;
   background: none;
   border: none;
   color: var(--ink-soft);
@@ -145,9 +148,9 @@
   overscroll-behavior: contain;
 }
 
-/* ── 五组目录 ─────────────────────────────────────────────── */
+/* ── 五组目录（紧凑缩略图，无大块同色底） ─────────────────── */
 .tutorial-catalog-head {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 .tutorial-catalog-title {
   font-family: var(--serif);
@@ -188,19 +191,18 @@
 .tutorial-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 .tutorial-group-card {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  align-items: center;
+  gap: 12px;
   text-align: left;
   background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 0;
-  overflow: hidden;
+  padding: 12px 14px;
   cursor: pointer;
   font: inherit;
 }
@@ -212,49 +214,53 @@
   outline-offset: 2px;
 }
 .tutorial-group-thumb {
-  height: 88px;
+  flex: none;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   background: var(--primary-surface);
   color: var(--primary);
 }
 .tutorial-group-thumb svg {
-  width: 44px;
-  height: 44px;
+  width: 22px;
+  height: 22px;
 }
 .tutorial-group-info {
-  padding: 12px 14px 14px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .tutorial-group-title {
   font-family: var(--serif);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
 }
 .tutorial-group-blurb {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-soft);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 .tutorial-group-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 2px;
+  font-size: 11px;
   color: var(--ink-faint);
 }
 .tutorial-group-progress.is-done {
   color: var(--success);
 }
 .tutorial-group-arrow {
-  align-self: flex-end;
+  flex: none;
   color: var(--ink-faint);
-  margin: -20px 2px 0 0;
 }
 
 /* ── 操作目录（浮窗内展开区） ─────────────────────────────── */
@@ -348,20 +354,17 @@
 .tutorial-play {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 .tutorial-stage {
   position: relative;
   aspect-ratio: 16 / 9;
-  max-height: 52vh;
+  max-height: 50vh;
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .tutorial-demo-label {
   position: absolute;
@@ -376,18 +379,20 @@
   background: var(--surface);
   pointer-events: none;
 }
+/* 转场层在相同坐标区域叠放：新旧内容绝对定位铺满裁剪区，不参与相互挤压 */
 .tutorial-stage-clip {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: 14px;
 }
 .tutorial-demo-frame {
   width: 100%;
-  max-width: 640px;
+  max-width: 560px;
   max-height: 100%;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -410,93 +415,115 @@
   width: 100%;
   height: 100%;
 }
+/* 手机舞台：简洁触点（圆环），不再是桌面箭头 */
+.tutorial-stage--mobile .tutorial-pointer svg { display: none; }
+.tutorial-stage--mobile .tutorial-pointer::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: oklch(from var(--primary) l c h / 0.30);
+  border: 2px solid var(--primary);
+}
 
-/* ── 播放视图：文字区 ─────────────────────────────────────── */
-.tutorial-lesson-text {
+/* ── 播放视图：操作标题 + 当前说明 + 可展开完整步骤 ───────── */
+.tutorial-now {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
-.tutorial-lesson-title {
+.tutorial-now-title {
   font-family: var(--serif);
-  font-size: 23px;
+  font-size: 22px;
   line-height: 1.35;
   font-weight: 600;
   color: var(--ink);
   margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  outline: none;
 }
-.tutorial-lesson-caption {
+.tutorial-now-line {
   font-size: 15px;
   line-height: 1.6;
   color: var(--ink-soft);
   margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
-.tutorial-lesson-note {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--ink-faint);
-  margin: 0;
-}
-.tutorial-lesson-steps {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 6px 0 0;
-  padding: 8px 0 0;
+.tutorial-more {
   border-top: 1px dashed var(--border-light);
+  padding-top: 8px;
 }
-.tutorial-lesson-step {
-  display: inline-flex;
+.tutorial-more-summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-faint);
+  list-style-position: inside;
+  min-height: 32px;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+}
+.tutorial-more-summary:hover { color: var(--primary); }
+.tutorial-more-summary::marker { color: var(--ink-faint); }
+.tutorial-more-steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tutorial-more-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
   color: var(--ink-faint);
 }
-.tutorial-lesson-step.is-active {
+.tutorial-more-step.is-active {
   color: var(--ink-soft);
 }
-.tutorial-lesson-stepnum {
-  width: 16px;
-  height: 16px;
+.tutorial-more-stepnum {
+  flex: none;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
   font-size: 10px;
+  transform: translateY(2px);
 }
-.tutorial-lesson-step.is-active .tutorial-lesson-stepnum {
+.tutorial-more-step.is-active .tutorial-more-stepnum {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--on-primary);
 }
+.tutorial-lesson-note {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-faint);
+  margin: 10px 0 0;
+}
 
-/* ── 底部控制栏（grid 分区，不压正文） ────────────────────── */
+/* ── 底部控制栏：两行，节点全程稳定 ───────────────────────── */
 .tutorial-footer {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   border-top: 1px solid var(--border-light);
-  padding-top: 14px;
+  padding-top: 12px;
 }
-.tutorial-controls {
+.tutorial-nav-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+}
+.tutorial-aux-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .tutorial-ctl {
-  flex: 1;
   min-height: 40px;
   background: none;
   border: 1px solid var(--border);
@@ -505,7 +532,7 @@
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-  padding: 8px 10px;
+  padding: 8px 14px;
   white-space: nowrap;
 }
 .tutorial-ctl:hover:not(:disabled) {
@@ -516,7 +543,9 @@
   opacity: 0.45;
   cursor: default;
 }
+.tutorial-ctl-prev { flex: 1; }
 .tutorial-ctl-next {
+  flex: 2;
   background: var(--primary);
   border-color: var(--primary);
   color: var(--on-primary);
@@ -526,23 +555,33 @@
   background: var(--primary-dark);
   border-color: var(--primary-dark);
 }
-.tutorial-try-row {
-  display: flex;
-  justify-content: center;
+.tutorial-ctl-play,
+.tutorial-ctl-replay {
+  flex: none;
+  min-height: 36px;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  color: var(--ink-faint);
 }
+/* 去试试：具体目的文案，次要视觉，不与「下一项」争夺注意力 */
 .tutorial-try-btn {
+  margin-left: auto;
   background: none;
   border: none;
   color: var(--primary);
+  opacity: 0.85;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  padding: 8px 14px;
-  min-height: 44px;
+  padding: 6px 10px;
+  min-height: 36px;
   border-radius: var(--radius-sm);
+  text-align: right;
 }
 .tutorial-try-btn:hover {
   text-decoration: underline;
+  opacity: 1;
 }
 
 /* ── 静态步骤视图（reduced-motion / WAAPI 不可用） ───────── */
@@ -565,7 +604,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 .tutorial-static-step {
   border: 1px solid var(--border);
@@ -574,21 +613,16 @@
   background: var(--raised);
 }
 .tutorial-static-thumb {
-  position: relative;
-  height: 168px;
+  padding: 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--border-light);
   overflow: hidden;
 }
 .tutorial-static-thumb .tutorial-demo-frame {
-  width: 620px;
-  max-height: none;
-  transform: scale(0.42);
-  transform-origin: top left;
-  position: absolute;
-  left: 0;
-  top: 8px;
-  gap: 6px;
+  max-width: none;
+  transform: none;
+  position: static;
+  max-height: 220px;
 }
 .tutorial-static-text {
   padding: 10px 12px;
@@ -596,9 +630,12 @@
   line-height: 1.55;
   color: var(--ink-soft);
 }
+.tutorial-static-actions {
+  display: flex;
+  gap: 8px;
+}
 .tutorial-static-mark,
 .tutorial-static-play {
-  align-self: flex-start;
   min-height: 44px;
   padding: 10px 18px;
   font: inherit;
@@ -621,26 +658,44 @@
   color: var(--primary);
 }
 
+/* ── 错误视图 ─────────────────────────────────────────────── */
+.tutorial-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+}
+.tutorial-error-text {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+.tutorial-error-retry {
+  min-height: 44px;
+  padding: 9px 18px;
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--primary);
+  cursor: pointer;
+}
+
 /* ── 文字说明视图 ─────────────────────────────────────────── */
 .tutorial-guide {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
-.tutorial-guide-back {
-  align-self: flex-start;
-  background: none;
-  border: none;
-  color: var(--primary);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 6px 4px;
-}
 .tutorial-guide-title {
   font-family: var(--serif);
   font-size: 22px;
   margin: 0;
+  outline: none;
 }
 .tutorial-guide-section h3 {
   font-family: var(--serif);
@@ -727,58 +782,73 @@
   margin: 0;
 }
 
-/* ── 演示组件库（.tutorial-demo-*） ──────────────────────── */
-.tutorial-demo-app {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  width: 100%;
-  box-shadow: var(--shadow-xs);
+/* ═══ 演示组件库（.tutorial-demo-*） ═══════════════════════
+   局部界面：每幕只保留两三个主要对象；外壳、内容、可读文字与
+   装饰骨架分离。is-hidden 的元素不占空间、不参与命中。 */
+.tutorial-demo-frame { overflow: visible; }
+.tutorial-demo-is-hidden,
+.tutorial-demo-frame .is-hidden { display: none !important; }
+
+/* 一次性入场：只在元素（重新）显现时播放，不做整页错峰重入 */
+.tutorial-demo-frame .td-in { animation: tutorial-rise 240ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes tutorial-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.tutorial-demo-appbar {
+.tutorial-demo-typed { animation: tutorial-typed-in 320ms ease-out both; }
+@keyframes tutorial-typed-in { from { opacity: 0; } to { opacity: 1; } }
+.tutorial-demo-typed { color: var(--primary); }
+
+/* 布局 */
+.tutorial-demo-col {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-light);
-  background: var(--raised);
-}
-.tutorial-demo-appbar-logo {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-}
-.tutorial-demo-appbar-mark { color: var(--primary); font-size: 13px; }
-.tutorial-demo-appbar-name {
-  font-family: var(--serif);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  white-space: nowrap;
-}
-.tutorial-demo-searchbox {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  padding: 4px 6px 4px 10px;
-  background: var(--surface);
+  min-width: 0;
 }
-.tutorial-demo-searchbox-icon { color: var(--ink-faint); font-size: 13px; }
-.tutorial-demo-searchbox-input {
+.tutorial-demo-headrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+.tutorial-demo-crumb {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-faint);
   white-space: nowrap;
   overflow: hidden;
 }
-.tutorial-demo-searchbox-ph { color: var(--ink-faint); }
+.tutorial-demo-crumb-item.is-hot { color: var(--ink-soft); font-weight: 600; }
+.tutorial-demo-crumb-sep { color: var(--border); }
+.tutorial-demo-headrow-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tutorial-demo-crumb-solo {
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tutorial-demo-cap-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.tutorial-demo-cap-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+  border-top: 1px dashed var(--border-light);
+  padding-top: 6px;
+}
 .tutorial-demo-avatar {
   flex: none;
   width: 24px;
@@ -791,83 +861,17 @@
   justify-content: center;
   font-size: 12px;
 }
-.tutorial-demo-appbody {
-  display: flex;
-  min-height: 0;
-}
-.tutorial-demo-sidenav {
-  flex: none;
-  width: 96px;
-  border-right: 1px solid var(--border-light);
-  padding: 8px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--raised);
-}
-.tutorial-demo-sidenav-item {
-  font-size: 12px;
-  color: var(--ink-faint);
-  padding: 5px 8px;
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-}
-.tutorial-demo-sidenav-item.is-active {
-  background: var(--primary-surface);
-  color: var(--primary);
-  font-weight: 600;
-}
-.tutorial-demo-main {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tutorial-demo-phone {
-  width: min(300px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-.tutorial-demo-phone-screen {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 10px 14px;
-  max-height: 100%;
-  overflow: hidden;
+.tutorial-demo-bell { font-size: 14px; }
+.tutorial-demo-bell.is-hot {
+  filter: drop-shadow(0 0 3px oklch(from var(--star) l c h / 0.6));
 }
 
-/* 文字 */
-.tutorial-demo-lead {
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-.tutorial-demo-cap-label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--ink-faint);
-  margin-top: 2px;
-}
-.tutorial-demo-cap-note {
-  font-size: 12px;
-  color: var(--ink-faint);
-  border-top: 1px dashed var(--border-light);
-  padding-top: 6px;
-}
-
-/* 资料行 / 结果行 */
-.tutorial-demo-list,
-.tutorial-demo-ccards,
-.tutorial-demo-dlfeed {
+/* 列表行 */
+.tutorial-demo-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 0;
+  min-width: 0;
 }
 .tutorial-demo-frow {
   display: flex;
@@ -904,13 +908,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tutorial-demo-frow-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-}
-.tutorial-demo-frow-count { font-size: 11px; color: var(--ink-faint); }
+.tutorial-demo-frow-count { font-size: 11px; color: var(--ink-faint); flex: none; }
 .tutorial-demo-exglyph {
   flex: none;
   width: 30px;
@@ -927,6 +925,9 @@
 }
 .tutorial-demo-exglyph.is-zip { background: var(--star-light); color: var(--star-dark); }
 .tutorial-demo-exglyph.is-txt { background: var(--success-light); color: var(--success); }
+/* 复选框只在选择模式出现：不占位、不提前暴露 */
+.tutorial-demo-frow .tutorial-demo-checkbox { display: none; }
+.tutorial-demo-frow.is-selecting .tutorial-demo-checkbox { display: inline-flex; }
 .tutorial-demo-checkbox {
   flex: none;
   width: 16px;
@@ -944,22 +945,8 @@
   background: var(--primary);
   border-color: var(--primary);
 }
-.tutorial-demo-pill {
-  flex: none;
-  font-size: 11px;
-  border-radius: var(--radius-full);
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  color: var(--ink-soft);
-  background: var(--surface);
-  white-space: nowrap;
-}
-.tutorial-demo-pill.is-success { background: var(--success-light); color: var(--success); border-color: transparent; }
-.tutorial-demo-pill.is-pending { background: var(--pill-bg); color: var(--ink-soft); border-color: var(--pill-border); }
-.tutorial-demo-pill.is-danger { background: var(--danger-light); color: var(--danger); border-color: var(--danger-border); }
-.tutorial-demo-pill.is-star { background: var(--star-light); color: var(--star-dark); border-color: var(--star-border); }
 
-/* 星标 */
+/* 星标（点亮的动作发生在原对象上） */
 .tutorial-demo-star {
   flex: none;
   width: 18px;
@@ -979,7 +966,7 @@
   to { transform: scale(1); }
 }
 
-/* 按钮 / chip / 分段 */
+/* 按钮 / pill / chip / 分段 */
 .tutorial-demo-btn {
   flex: none;
   border: 1px solid var(--border);
@@ -999,11 +986,27 @@
 }
 .tutorial-demo-btn.is-small { font-size: 11px; padding: 3px 8px; }
 .tutorial-demo-btn.is-dim { opacity: 0.5; }
-.tutorial-demo-btn.is-active {
+.tutorial-demo-btn.is-active,
+.tutorial-demo-btn.is-on {
   background: var(--primary-surface);
   border-color: var(--primary);
   color: var(--primary);
+  font-weight: 600;
 }
+.tutorial-demo-pill {
+  flex: none;
+  font-size: 11px;
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  color: var(--ink-soft);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.tutorial-demo-pill.is-success { background: var(--success-light); color: var(--success); border-color: transparent; }
+.tutorial-demo-pill.is-pending { background: var(--pill-bg); color: var(--ink-soft); border-color: var(--pill-border); }
+.tutorial-demo-pill.is-danger { background: var(--danger-light); color: var(--danger); border-color: var(--danger-border); }
+.tutorial-demo-pill.is-star { background: var(--star-light); color: var(--star-dark); border-color: var(--star-border); }
 .tutorial-demo-chipbar {
   display: flex;
   flex-wrap: wrap;
@@ -1026,7 +1029,6 @@
   color: var(--primary);
   font-weight: 600;
 }
-.tutorial-demo-chip.is-dim { opacity: 0.5; }
 .tutorial-demo-seg {
   display: inline-flex;
   gap: 4px;
@@ -1037,7 +1039,7 @@
   align-self: flex-start;
 }
 
-/* 课程卡片 / 搜索结果 */
+/* 课程卡 / 搜索结果 */
 .tutorial-demo-ccard {
   display: flex;
   align-items: center;
@@ -1048,10 +1050,18 @@
   background: var(--raised);
   padding: 9px 11px;
 }
-.tutorial-demo-ccard.is-solo { max-width: 320px; }
+.tutorial-demo-ccard.is-hot {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px oklch(from var(--primary) l c h / 0.25);
+}
 .tutorial-demo-ccard.is-new {
   border-color: var(--success);
-  animation: tutorial-rise 240ms cubic-bezier(.23, 1, .32, 1) both;
+}
+.tutorial-demo-ccard.is-press { animation: tutorial-press 160ms ease-out; }
+@keyframes tutorial-press {
+  0% { transform: scale(1); }
+  55% { transform: scale(0.985); }
+  100% { transform: scale(1); }
 }
 .tutorial-demo-ccard-name {
   font-size: 13px;
@@ -1065,6 +1075,11 @@
   border-radius: 4px;
   padding: 1px 6px;
   font-variant-numeric: tabular-nums;
+}
+.tutorial-demo-codechip.is-hot {
+  color: var(--primary);
+  border-color: var(--primary);
+  font-weight: 600;
 }
 .tutorial-demo-result {
   display: flex;
@@ -1083,7 +1098,7 @@
 .tutorial-demo-result-title { font-size: 13px; font-weight: 600; color: var(--ink); }
 .tutorial-demo-result-meta { font-size: 11px; color: var(--ink-faint); }
 
-/* 课程头 / 面包屑 */
+/* 课程锚点头 */
 .tutorial-demo-course-head {
   display: flex;
   align-items: center;
@@ -1098,16 +1113,29 @@
   color: var(--ink);
 }
 .tutorial-demo-course-head-code { display: flex; align-items: center; gap: 6px; }
-.tutorial-demo-breadcrumb {
+
+/* 搜索框 */
+.tutorial-demo-searchbox {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--ink-faint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 4px 6px 4px 10px;
+  background: var(--raised);
 }
-.tutorial-demo-bc-item.is-hot { color: var(--primary); font-weight: 600; }
+.tutorial-demo-searchbox-icon { color: var(--ink-faint); font-size: 13px; }
+.tutorial-demo-searchbox-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tutorial-demo-searchbox-ph { color: var(--ink-faint); }
 
-/* 菜单 */
+/* 菜单（浮窗内弹出层，占位于所在列尾部，不遮内容） */
 .tutorial-demo-menu {
   align-self: flex-end;
   display: flex;
@@ -1119,8 +1147,8 @@
   box-shadow: var(--shadow-sm);
   padding: 6px;
   min-width: 150px;
+  z-index: 2;
 }
-.tutorial-demo-menu.is-open { animation: tutorial-rise 200ms cubic-bezier(.23, 1, .32, 1) both; }
 .tutorial-demo-menu-item {
   font-size: 12px;
   color: var(--ink-soft);
@@ -1134,7 +1162,7 @@
   font-weight: 600;
 }
 
-/* 详情 / 预览 */
+/* 详情 / 预览（装饰行与可读文字分离） */
 .tutorial-demo-detail {
   display: flex;
   flex-direction: column;
@@ -1172,10 +1200,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  flex: 1;
-  min-height: 0;
 }
-.tutorial-demo-sheet.is-fadein { animation: tutorial-rise 320ms cubic-bezier(.23,1,.32,1) both; }
 .tutorial-demo-sheet-title {
   font-family: var(--serif);
   font-size: 13px;
@@ -1184,29 +1209,22 @@
   border-bottom: 1px solid var(--border-light);
   padding-bottom: 4px;
 }
+.tutorial-demo-sheet-heading {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
 .tutorial-demo-sheet-line {
   height: 7px;
   border-radius: 4px;
   background: var(--border-light);
 }
-.tutorial-demo-sheet-line:first-of-type {
-  height: auto;
-  background: none;
-  font-size: 11px;
-  color: var(--ink-soft);
-}
-.tutorial-demo-sheet-line.is-blank { background: none; }
-.tutorial-demo-sheet-foot { font-size: 10px; color: var(--ink-faint); margin-top: auto; }
+.tutorial-demo-sheet-foot { font-size: 10px; color: var(--ink-faint); margin-top: 2px; }
 
 /* ZIP 清单 */
 .tutorial-demo-ziptree {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--raised);
-  padding: 8px 10px;
 }
 .tutorial-demo-ziptree-row {
   display: flex;
@@ -1218,11 +1236,6 @@
   border-radius: var(--radius-xs);
 }
 .tutorial-demo-ziptree-row.is-folder { font-weight: 600; color: var(--ink); }
-.tutorial-demo-ziptree-row.is-hot {
-  background: var(--primary-surface);
-  color: var(--primary);
-}
-.tutorial-demo-ziptree-row.is-dim { opacity: 0.45; }
 .tutorial-demo-ziptree-glyph { color: var(--ink-faint); width: 12px; }
 .tutorial-demo-ziptree-size { margin-left: auto; font-size: 10px; color: var(--ink-faint); }
 
@@ -1247,7 +1260,7 @@
 .tutorial-demo-week-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(5, minmax(24px, 1fr));
+  grid-template-rows: repeat(5, minmax(22px, 1fr));
   gap: 3px;
   flex: 1;
   min-height: 0;
@@ -1287,7 +1300,6 @@
   align-items: center;
   gap: 8px;
 }
-.tutorial-demo-formrow.is-dim { opacity: 0.5; }
 .tutorial-demo-formrow-label {
   flex: none;
   width: 64px;
@@ -1333,9 +1345,13 @@
   border-color: var(--primary);
   box-shadow: 0 0 0 1px oklch(from var(--primary) l c h / 0.25);
 }
-.tutorial-demo-qcard-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.tutorial-demo-qcard-title { font-size: 13px; font-weight: 600; color: var(--ink); padding-right: 70px; }
 .tutorial-demo-qcard-meta { font-size: 11px; color: var(--ink-faint); }
-.tutorial-demo-qcard-snippet { font-size: 12px; color: var(--ink-soft); }
+.tutorial-demo-qcard .tutorial-demo-pill {
+  position: absolute;
+  top: 9px;
+  right: 11px;
+}
 .tutorial-demo-answer {
   border: 1px solid var(--border);
   border-left: 3px solid var(--border);
@@ -1353,7 +1369,7 @@
 .tutorial-demo-answer.is-focus {
   box-shadow: 0 0 0 2px oklch(from var(--primary) l c h / 0.35);
 }
-.tutorial-demo-answer-head { display: flex; align-items: center; gap: 6px; }
+.tutorial-demo-answer-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tutorial-demo-answer-author { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
 .tutorial-demo-answer-line { font-size: 12px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
 .tutorial-demo-answer-actions { display: flex; gap: 6px; margin-top: 2px; }
@@ -1375,7 +1391,6 @@
   box-shadow: var(--shadow-sm);
   padding: 12px 14px;
   width: 100%;
-  animation: tutorial-rise 240ms cubic-bezier(.23, 1, .32, 1) both;
 }
 .tutorial-demo-panel-title {
   font-family: var(--serif);
@@ -1451,54 +1466,14 @@
   gap: 8px;
 }
 .tutorial-demo-toolbar-count { font-size: 12px; color: var(--ink-soft); }
-.tutorial-demo-dlfeed-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--success);
-  border-radius: var(--radius-sm);
-  background: var(--success-light);
-  padding: 8px 10px;
-  animation: tutorial-rise 260ms cubic-bezier(.23, 1, .32, 1) both;
-}
-.tutorial-demo-dlfeed-name { flex: 1; font-size: 12px; color: var(--ink); }
-.tutorial-demo-dlfeed-state { font-size: 11px; color: var(--success); }
-.tutorial-demo-treeleaf { display: flex; flex-direction: column; gap: 4px; }
-.tutorial-demo-treeleaf-path { font-size: 11px; color: var(--ink-faint); }
-.tutorial-demo-favhead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tutorial-demo-favhead-name { font-size: 13px; font-weight: 600; color: var(--ink); }
-.tutorial-demo-qahead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.tutorial-demo-qahead-title { font-family: var(--serif); font-size: 16px; font-weight: 600; }
-.tutorial-demo-bell { font-size: 15px; }
-.tutorial-demo-bell.is-hot {
-  filter: drop-shadow(0 0 3px oklch(from var(--star) l c h / 0.6));
-}
 
-/* 入场动效（暂停时可被 getAnimations 冻结） */
-.tutorial-demo-typed { animation: tutorial-typed-in 320ms ease-out both; }
-@keyframes tutorial-typed-in { from { opacity: 0; } to { opacity: 1; } }
-.tutorial-demo-frame .tutorial-demo-typed { color: var(--primary); }
-@keyframes tutorial-rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+/* 静态降级视图禁用一切演示动画，保证截图式步骤稳定 */
+.tutorial-static.td-noanim *,
+.tutorial-static.td-noanim *::before,
+.tutorial-static.td-noanim *::after {
+  animation: none !important;
+  transition: none !important;
 }
-.td-stagger > * {
-  animation: tutorial-rise 220ms cubic-bezier(.23, 1, .32, 1) both;
-}
-.td-stagger > *:nth-child(2) { animation-delay: 45ms; }
-.td-stagger > *:nth-child(3) { animation-delay: 90ms; }
-.td-stagger > *:nth-child(4) { animation-delay: 135ms; }
-.td-stagger > *:nth-child(5) { animation-delay: 180ms; }
-.td-stagger > *:nth-child(n+6) { animation-delay: 200ms; }
 
 /* ── 窄屏与短屏 ──────────────────────────────────────────── */
 @media (max-width: 600px) {
@@ -1519,48 +1494,39 @@
     padding: 16px;
     gap: 12px;
   }
-  .tutorial-topbar-title,
-  .tutorial-back.is-label {
-    font-size: 17px;
-  }
+  .tutorial-topbar-title { font-size: 17px; }
   .tutorial-catalog-title { font-size: 20px; }
   .tutorial-groups { grid-template-columns: 1fr; }
-  .tutorial-group-card {
-    flex-direction: row;
-    align-items: center;
-  }
-  .tutorial-group-thumb {
-    width: 88px;
-    height: 72px;
-    flex: none;
-    align-self: stretch;
-  }
-  .tutorial-group-info { padding: 10px 12px; }
-  .tutorial-group-arrow { margin: 0 4px 0 0; align-self: center; }
   .tutorial-stage {
     aspect-ratio: auto;
     max-height: none;
-    min-height: 300px;
-    padding: 10px 0;
+    min-height: 280px;
   }
-  .tutorial-stage-clip { padding: 10px 8px; }
-  .tutorial-demo-frame { max-width: none; }
-  .tutorial-lesson-title { font-size: 20px; }
-  .tutorial-lesson-caption { font-size: 14px; }
-  .tutorial-controls { flex-wrap: wrap; }
-  .tutorial-ctl { min-height: 44px; flex: 1 1 40%; }
-  .tutorial-ctl-prev,
-  .tutorial-ctl-next { flex: 1 1 100%; order: -1; }
+  .tutorial-stage-clip { padding: 12px 10px; }
+  .tutorial-demo-frame { max-width: 340px; }
+  .tutorial-now-title { font-size: 19px; }
+  .tutorial-now-line { font-size: 14px; }
+  /* 上一项/下一项同行；暂停/重播/去试试紧凑一行，不再各占整行 */
+  .tutorial-nav-row { gap: 8px; }
+  .tutorial-ctl { min-height: 44px; }
+  .tutorial-aux-row { flex-wrap: nowrap; }
+  .tutorial-ctl-play,
+  .tutorial-ctl-replay { min-height: 40px; }
+  .tutorial-try-btn { min-height: 40px; font-size: 12px; padding: 6px 6px; }
   .tutorial-static-steps { grid-template-columns: 1fr; }
-  .tutorial-static-thumb { height: 190px; }
-  .tutorial-static-thumb .tutorial-demo-frame { transform: scale(0.5); }
 }
 
 /* 320px 宽：再收一级间距，杜绝横向溢出 */
 @media (max-width: 360px) {
   .tutorial-root { padding: 12px; gap: 10px; }
-  .tutorial-demo-sidenav { display: none; }
   .tutorial-demo-formrow-label { width: 52px; }
+  .tutorial-try-btn { font-size: 11px; }
+  .tutorial-ctl { font-size: 13px; padding: 8px 8px; }
+}
+
+/* 短屏：中间内容滚动，控制保持可达 */
+@media (max-height: 560px) and (min-width: 601px) {
+  .tutorial-stage { max-height: 38vh; }
 }
 
 /* ── 减少动态效果：关闭全部教程动画（静态步骤视图接管） ──── */
@@ -1584,7 +1550,8 @@
   .tutorial-toc-btn:hover,
   .tutorial-ctl:hover:not(:disabled),
   .tutorial-try-btn:hover,
-  .tutorial-group-card:hover {
+  .tutorial-group-card:hover,
+  .tutorial-more-summary:hover {
     background: none;
     border-color: var(--border);
     color: inherit;

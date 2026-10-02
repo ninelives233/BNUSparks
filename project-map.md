@@ -32,7 +32,7 @@
 
 - `materials/views/__init__.py` 是后端 facade；拆分模块时保持既有导入路径兼容。
 - `materials/urls.py` 是 API 地址的唯一事实源。
-- 教程分镜白名单以后端 `materials/views/tutorial.py` 的 `LESSON_REVISIONS` 与前端 `public/js/tutorial-data.js` 双向一致为准（`materials/tests/test_tutorial.py` 守门）；改分镜 ID/revision 必须两侧同步。
+- 教程分镜白名单以后端 `materials/views/tutorial.py` 的 `LESSON_REVISIONS` 与前端 `public/js/tutorial-data.js` 双向一致为准（`materials/tests/test_tutorial.py` 守门）；改分镜 ID/revision 必须两侧同步。分镜制作稿（步数、指针目标、节奏）以 `public/js/tutorial-scenes.js` 为准，`tools/check_tutorial_scenes.js` 守门其与 data 的一致性。
 - `public/index.html` 决定静态脚本基础加载顺序；按视图模块由 `feature-loader.js` 加载。
 - 前端使用跨文件全局函数和内联事件；改名或删除前必须全仓搜索。
 - SPA 导航必须通过现有 history/state 封装，不能只切换 DOM。

@@ -241,7 +241,8 @@
       mode: mountOpts.mode || 'catalog',
       groupId: mountOpts.groupId,
       lessonId: mountOpts.lessonId,
-      mobileStage: window.innerWidth <= 600,
+      // 手机舞台断点由播放器内部监听视口变化（跨断点重建场景），
+      // 这里不再传入一次性快照
       progress: progress,
       gen: gen,
       onClose: function () { closeRequested(); },
