@@ -199,11 +199,17 @@
     if (items.length) {
       var item = items[0];
       var id = Number(item.id || 0);
-      slides.push('<a class="h8-carousel-slide h8-carousel-notice compact-announcement-link" href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span class="h8-carousel-excerpt">' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>');
+      slides.push('<a class="h8-carousel-slide h8-carousel-notice compact-announcement-link" href="/announcements#announcement-' + id + '" data-announcement-id="' + id + '" data-tick-label="最新公告"><span class="h8-label">' + htmlEscape(String(item.created_at || '').slice(0, 10)) + '</span><strong>' + htmlEscape(item.title) + '</strong><span class="h8-carousel-excerpt">' + htmlEscape(plainText(item.content).slice(0, 100)) + '</span></a>');
     }
+    // v324：常青教程帧（不进公告列表/未读计数，不用数据库伪造公告）；
+    // 顺序：最新公告（如果有）→ 使用教程 → 用户群 → 意见反馈。
     slides.push(
-      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span><img class="h8-carousel-qr" src="/static/group-qr.png?v=315" width="56" height="56" alt="用户交流群二维码" loading="lazy"></a>',
-      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">反馈问卷</span><strong>意见反馈</strong><span class="h8-carousel-text">一分钟填完，问题和建议都会被认真看到。</span></span></a>'
+      '<a class="h8-carousel-slide h8-carousel-promo h8-carousel-tutorial compact-announcement-link" href="/tutorial" data-tutorial-entry="home-carousel" data-tick-label="使用教程">' +
+        '<span class="h8-carousel-visual" aria-hidden="true"><span class="h8-carousel-paper h8-carousel-paper-1"></span><span class="h8-carousel-paper h8-carousel-paper-2"></span><span class="h8-carousel-play">▶</span></span>' +
+        '<span class="h8-carousel-body"><span class="h8-label">使用教程</span><strong>这些用法，值得认识一下</strong><span class="h8-carousel-text">找资料、整理课表、收藏与分享，选一组看看。</span></span>' +
+        '<span class="h8-carousel-cta">打开教程 →</span></a>',
+      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1" data-tick-label="用户群"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span><img class="h8-carousel-qr" src="/static/group-qr.png?v=315" width="56" height="56" alt="用户交流群二维码" loading="lazy"></a>',
+      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1" data-tick-label="意见反馈"><span class="h8-carousel-body"><span class="h8-label">反馈问卷</span><strong>意见反馈</strong><span class="h8-carousel-text">一分钟填完，问题和建议都会被认真看到。</span></span></a>'
     );
     return slides;
   }
@@ -285,7 +291,8 @@
     var track = host.querySelector('.h8-carousel-track');
     if (!track || track.children.length < 3) return;
     // reduced-motion 用户不自动轮换，只经刻度线/拖拽手动切换
-    if (_carouselReduced.matches || _carouselHover || document.hidden) return;
+    // v324：教程浮窗打开时暂停背后的轮播
+    if (_carouselReduced.matches || _carouselHover || document.hidden || window.BnuTutorial && window.BnuTutorial.isOpen()) return;
     _carouselTimer = setInterval(function () { compactCarouselGo(_carouselIndex + 1); }, _carouselInterval);
   }
 
@@ -399,24 +406,27 @@
     if (!host) return;
     if (result && result.error) {
       if (block) block.hidden = false;
-      setHostError(host, '公告暂时无法读取。', 'announcements');
+      // v324：公告失败也不能吞掉教程入口——渲染常青帧（使用教程/用户群/反馈），
+      // 并在旁边保留加载失败与重试提示；重试经签名比对不会重复添加教程帧。
+      renderEvergreenAnnouncement(host);
       updateHelperVisibility();
       return;
     }
     var items = result && result.value && result.value.items || [];
     _compactData.announcements = items;
-    // 常青帧（交流群/反馈）兜底：卡内始终有内容，公告为空也不再隐藏整卡
+    // 常青帧（教程/交流群/反馈）兜底：卡内始终有内容，公告为空也不再隐藏整卡
     if (block) block.hidden = false;
     var slides = compactCarouselSlides(items);
     var signature = slides.join('|');
     var carousel = host.querySelector('.h8-carousel');
     if (!carousel || carousel.dataset.signature !== signature) {
       _carouselIndex = 0;
+      var tickNames = slideTickNames(slides);
       var ticks = slides.map(function (_, i) {
-        return '<button type="button" data-index="' + i + '" aria-label="切换到第 ' + (i + 1) + ' 帧"></button>';
+        return '<button type="button" data-index="' + i + '" aria-label="切换到：' + htmlEscape(tickNames[i] || ('第 ' + (i + 1) + ' 帧')) + '"></button>';
       }).join('');
       host.innerHTML =
-        '<div class="h8-carousel" aria-roledescription="轮播" aria-label="公告与联系入口">' +
+        '<div class="h8-carousel" aria-roledescription="轮播" aria-label="公告与使用入口">' +
           '<div class="h8-carousel-track">' + slides.join('') + '</div>' +
           '<div class="h8-carousel-ticks" role="group" aria-label="轮换内容切换">' + ticks + '</div>' +
         '</div>' +
@@ -429,7 +439,8 @@
         node.classList.add('h8-carousel-clone');
         node.setAttribute('aria-hidden', 'true');
         node.setAttribute('tabindex', '-1');
-        ['href', 'data-announcement-id', 'data-about-contact'].forEach(function (attr) { node.removeAttribute(attr); });
+        node.setAttribute('inert', '');
+        ['href', 'data-announcement-id', 'data-about-contact', 'data-tutorial-entry', 'data-tick-label'].forEach(function (attr) { node.removeAttribute(attr); });
       };
       if (track.children.length >= 2) {
         var cloneLast = track.lastElementChild.cloneNode(true);
@@ -454,6 +465,56 @@
     }
     compactCarouselRestartTimer();
     updateHelperVisibility();
+  }
+
+  function slideTickNames(slides) {
+    // 从临时 DOM 读取每帧的 data-tick-label，供切换点命名（“使用教程”而非“第几帧”）
+    var probe = document.createElement('div');
+    probe.innerHTML = slides.join('');
+    return Array.prototype.map.call(probe.children, function (node) {
+      return node.getAttribute('data-tick-label') || '';
+    });
+  }
+
+  // v324：公告接口失败时的常青轮播（只有教程/用户群/反馈三帧）+ 错误重试提示。
+  function renderEvergreenAnnouncement(host) {
+    var slides = compactCarouselSlides([]);
+    var signature = 'evergreen|' + slides.join('|');
+    var carousel = host.querySelector('.h8-carousel');
+    if (!carousel || carousel.dataset.signature !== signature) {
+      _carouselIndex = 0;
+      var tickNames = slideTickNames(slides);
+      var ticks = slides.map(function (_, i) {
+        return '<button type="button" data-index="' + i + '" aria-label="切换到：' + htmlEscape(tickNames[i] || ('第 ' + (i + 1) + ' 帧')) + '"></button>';
+      }).join('');
+      host.innerHTML =
+        '<div class="h8-carousel" aria-roledescription="轮播" aria-label="公告与使用入口">' +
+          '<div class="h8-carousel-track">' + slides.join('') + '</div>' +
+          '<div class="h8-carousel-ticks" role="group" aria-label="轮换内容切换">' + ticks + '</div>' +
+        '</div>' +
+        '<div class="compact-error h8-announcement-error"><span>公告暂时无法读取。</span> <button type="button" data-compact-retry="announcements">重试</button></div>';
+      carousel = host.querySelector('.h8-carousel');
+      carousel.dataset.signature = signature;
+      var track = carousel.querySelector('.h8-carousel-track');
+      var stripClone = function (node) {
+        node.classList.add('h8-carousel-clone');
+        node.setAttribute('aria-hidden', 'true');
+        node.setAttribute('tabindex', '-1');
+        node.setAttribute('inert', '');
+        ['href', 'data-announcement-id', 'data-about-contact', 'data-tutorial-entry', 'data-tick-label'].forEach(function (attr) { node.removeAttribute(attr); });
+      };
+      if (track.children.length >= 2) {
+        var cloneLast = track.lastElementChild.cloneNode(true);
+        stripClone(cloneLast);
+        track.insertBefore(cloneLast, track.firstChild);
+        var cloneFirst = track.children[1].cloneNode(true);
+        stripClone(cloneFirst);
+        track.appendChild(cloneFirst);
+      }
+      compactCarouselBind(carousel);
+    }
+    compactCarouselGo(_carouselIndex);
+    compactCarouselRestartTimer();
   }
 
   function canManageCampus() {
@@ -1169,6 +1230,14 @@
       if (more) { event.preventDefault(); discoveryMore(_compactData.discoveryKind); return; }
       var homeAction = event.target.closest('[data-home-action="courses"]');
       if (homeAction && typeof showAllCourses === 'function') { event.preventDefault(); showAllCourses(); return; }
+      // v324：常青教程帧——普通未修饰的主键点击才接住；Ctrl/Cmd/Shift/中键保留浏览器链接语义
+      var tutorialEntry = event.target.closest('[data-tutorial-entry]');
+      if (tutorialEntry) {
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (typeof showTutorial === 'function') showTutorial();
+        return;
+      }
       var announcement = event.target.closest('[data-announcement-id]');
       if (announcement && typeof showAnnouncements === 'function') { event.preventDefault(); showAnnouncements(Number(announcement.getAttribute('data-announcement-id'))); return; }
       // 公告卡轮播的常青帧（交流群/反馈问卷）：点击进「关于 → 联系我们」
@@ -1232,6 +1301,12 @@
     clearCompactData();
     if (document.body && document.body.dataset.homeLayout === 'compact' && document.getElementById('homeView') && document.getElementById('homeView').classList.contains('active')) loadCompactHome();
     if (document.getElementById('recommendationsView') && document.getElementById('recommendationsView').classList.contains('active')) loadRecommendationsPage();
+  });
+  // v324：教程浮窗打开时暂停背后的轮播；关闭后仅当首页可见时恢复
+  document.addEventListener('bnututorialopen', function () { compactCarouselRestartTimer(); });
+  document.addEventListener('bnututorialclose', function () {
+    var homeView = document.getElementById('homeView');
+    if (homeView && homeView.classList.contains('active')) compactCarouselRestartTimer();
   });
   // 外观切换（宽松/紧凑布局）后补拉当前布局数据，并放行可能仍被扣住的编排
   window.addEventListener('bnuappearancechange', function () {

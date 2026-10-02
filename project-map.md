@@ -21,6 +21,7 @@
 | 我的课程/课表 | `user_timetable.py`、`public/js/timetable.js`、`public/css/timetable.css` |
 | 监测与管理员状态 | `monitoring_events.py`、`admin_monitoring.py`、`public/js/admin-*.js` |
 | 前端启动与路由 | `public/index.html`、`public/js/app.js`、`views.js`、`feature-loader.js` |
+| 动画使用教程（浮窗、五组目录、首次登录核心导览） | `public/js/tutorial-entry.js`（静态入口）、`tutorial-data/scenes/player.js`（懒加载）、`public/css/tutorial.css`、`materials/views/tutorial.py` |
 | 前端 API、认证与共用工具 | `public/js/utils.js`、`auth.js`、`profile.js`、`notifications.js` |
 | 课程浏览和资料详情 | `public/js/explorer-*.js`、`public/css/course.css`、`files.css` |
 | 首页、外观和推荐 | `public/js/home.js`、`appearance.js`、`public/css/base.css`、`tokens.css` |
@@ -31,6 +32,7 @@
 
 - `materials/views/__init__.py` 是后端 facade；拆分模块时保持既有导入路径兼容。
 - `materials/urls.py` 是 API 地址的唯一事实源。
+- 教程分镜白名单以后端 `materials/views/tutorial.py` 的 `LESSON_REVISIONS` 与前端 `public/js/tutorial-data.js` 双向一致为准（`materials/tests/test_tutorial.py` 守门）；改分镜 ID/revision 必须两侧同步。
 - `public/index.html` 决定静态脚本基础加载顺序；按视图模块由 `feature-loader.js` 加载。
 - 前端使用跨文件全局函数和内联事件；改名或删除前必须全仓搜索。
 - SPA 导航必须通过现有 history/state 封装，不能只切换 DOM。

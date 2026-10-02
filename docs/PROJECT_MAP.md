@@ -57,6 +57,7 @@ Browser
 | 课表 | UserTimetable | revision 冲突、旧客户端写入、跨设备覆盖 |
 | 监测 | MonitoringEvent、MonitoringAggregate | 隐私、幂等、保留期和查询成本 |
 | 内容运营 | Announcement、CampusLink、Notification | 管理权限、排序和缓存失效 |
+| 教程进度 | UserTutorialState、UserTutorialLesson | 迁移把存量用户建为 exempt、claim 条件更新、revision 白名单 |
 
 ## 4. 后端模块
 
@@ -102,6 +103,7 @@ Browser
 | 我的课程 | `timetable.js`、`timetable.css` |
 | 公告 | `announcement.css` 和对应视图逻辑 |
 | 设计令牌与组件 | `tokens.css`、`components.css` |
+| 动画使用教程 | `tutorial-entry.js`（静态入口/首次调度）、`tutorial-data/scenes/player.js`（懒加载）、`tutorial.css`；状态接口 `materials/views/tutorial.py` |
 
 前端没有模块打包器，跨文件公共函数是运行时契约。修改函数名、加载顺序、全局状态或缓存
 策略时，必须同时检查 HTML 入口、懒加载器、内联事件和所有调用方。

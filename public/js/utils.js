@@ -293,7 +293,8 @@
     var dialog = _activeDialog;
     if (!dialog || !dialog.isConnected || getComputedStyle(dialog).display === 'none') return;
     if (event.key === 'Escape') {
-      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close');
+      // .tutorial-close：教程浮窗复用同一套 Escape 关闭链（v324）
+      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close');
       if (close) { event.preventDefault(); close.click(); }
       return;
     }

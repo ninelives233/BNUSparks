@@ -11,7 +11,8 @@ document.addEventListener('click', function(e) {
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
       + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
       + '.guest-appearance-trigger, .compact-campus-link, .compact-campus-more, .compact-announcement-link, '
-      + '.compact-recommend-more, .recommendations-page, .h8-carousel, .h8-carousel-ticks button')) return;
+      + '.compact-recommend-more, .recommendations-page, .h8-carousel, .h8-carousel-ticks button, '
+      + '.tutorial-overlay, .tutorial-dialog')) return; // v324：教程浮窗内部交互（暂停/翻页/关闭）不触发登录；去试试的权限由动作路由处理
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -163,6 +164,17 @@ function animateCount(el, target, shouldAnimate) {
 // ── 浏览器前进/后退 ──
 window.addEventListener('popstate', async function(e) {
   const state = e.state;
+
+  // ── 动画教程浮窗（v324）：教程路由自身是唯一历史项，不占 _modal 条目 ──
+  if (window.BnuTutorial && window.BnuTutorial.isOpen()) {
+    if (state && state.view === 'tutorial') {
+      // 前进/刷新恢复到教程条目：始终恢复主题目录，不自动续播
+      window.BnuTutorial.open({ mode: 'catalog', fromHistory: true });
+      return;
+    }
+    // 后退离开教程：先清理（停时间轴、解锁滚动、还原焦点），再继续正常目的视图恢复
+    window.BnuTutorial.close({ fromPopstate: true });
+  }
 
   // ── 如果有浮层/弹窗打开，先关闭它 ──
   // 预览弹窗（最上层：可能叠在文件详情浮层之上，优先关闭）
@@ -379,6 +391,10 @@ window.addEventListener('popstate', async function(e) {
     } else if (typeof updateSidebar === 'function') {
       updateSidebar(state.view);
     }
+    // v324：前进/刷新落到 /tutorial 条目且教程未开 → 恢复主题目录（不自动续播）
+    if (state.view === 'tutorial' && window.BnuTutorial && !window.BnuTutorial.isOpen()) {
+      window.BnuTutorial.open({ mode: 'catalog', fromHistory: true });
+    }
     return;
   }
   if (typeof showHome === 'function') showHome(true);
@@ -583,6 +599,8 @@ document.addEventListener('DOMContentLoaded', () => {
         default: showHome();
       }
       _suppressingPushState = false;
+      // v324：初始路由恢复完成标记（教程首次展示调度等待此标记）
+      window._bnusparksReady = true;
       return;
     }
     // 未知路径深链：既无路由也无保存视图 → 地址栏对齐根路径再显示首页
@@ -591,6 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // 默认首页
     showDefaultLanding();
+    window._bnusparksReady = true;
   }
 
   // 只有课程树或受保护视图需要等待；首页/静态页在此之前即可交互。

@@ -4575,6 +4575,55 @@ html[data-bnu-theme="warm"] .home-eight {
 .home-eight .h8-carousel-notice .h8-carousel-excerpt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 .home-eight .h8-carousel-promo .h8-carousel-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; }
 .home-eight .h8-carousel-qr { flex: 0 0 56px; width: 56px; height: 56px; border: 1px solid var(--v9-border); border-radius: var(--radius-sm); background: #fff; }
+/* v324：常青教程帧——两张轻叠纸卡 + 播放符号（纯 CSS，不在轮播内播放教程动画） */
+.home-eight .h8-carousel-tutorial .h8-carousel-visual { position: relative; flex: 0 0 52px; height: 56px; }
+.home-eight .h8-carousel-paper {
+  position: absolute;
+  bottom: 2px;
+  width: 30px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--raised);
+  box-shadow: var(--shadow-xs);
+}
+.home-eight .h8-carousel-paper::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 5px;
+  right: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--primary-light);
+  box-shadow: 0 7px 0 var(--border-light), 0 14px 0 var(--border-light);
+}
+.home-eight .h8-carousel-paper-1 { left: 2px; transform: rotate(-7deg); }
+.home-eight .h8-carousel-paper-2 { left: 16px; transform: rotate(5deg); }
+.home-eight .h8-carousel-play {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 8px;
+  padding-left: 2px;
+  box-shadow: var(--shadow-sm);
+}
+.home-eight .h8-carousel-tutorial .h8-carousel-cta {
+  flex: none;
+  align-self: center;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .home-eight .h8-carousel-ticks { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-light); }
 .home-eight .h8-carousel-ticks button { position: relative; width: 20px; height: 10px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .home-eight .h8-carousel-ticks button::after { content: ''; position: absolute; top: 4px; right: 2px; left: 2px; height: 2px; background: var(--v9-border); transition: background 180ms ease-out; }

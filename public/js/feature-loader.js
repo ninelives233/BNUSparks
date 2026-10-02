@@ -52,7 +52,10 @@
   // v319：校园入口开放账号级自定义；个人入口与总管理员精选分层，缓存键同步推进。
   // v320：课程代码操作默认只链接当前叶子；共享课程禁止被单叶合并或全局改码。
   // v323：问答区视觉重构（2026-10-02 设计规范）——列表/详情/工具栏/回答流改版。
-  var VERSION = '323';
+  // v324：动画式使用教程接入（懒加载 tutorial 特性：data → scenes → player +
+  //        tutorial.css）；tutorial-entry.js 为轻量入口，静态加载不走本表。
+  // v325：教程挂载调用修正（mount 单参数）与进度仓库空存储初始化。
+  var VERSION = '330';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -90,6 +93,11 @@
     ],
     timetable: [
       'timetable.js'
+    ],
+    tutorial: [
+      'tutorial-data.js',
+      'tutorial-scenes.js',
+      'tutorial-player.js'
     ]
   };
 
@@ -101,7 +109,8 @@
     'admin-pending': ['admin.css'],
     'admin-records': ['admin.css'],
     'admin-qa': ['admin.css', 'qa.css'],
-    timetable: ['timetable.css']
+    timetable: ['timetable.css'],
+    tutorial: ['tutorial.css']
   };
 
   function loadStyle(name) {

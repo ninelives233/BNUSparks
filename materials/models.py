@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.core.validators import FileExtensionValidator
@@ -1395,3 +1396,78 @@ class MonitoringAggregate(models.Model):
 
     def __str__(self):
         return f"{self.granularity} {self.event_name} {self.bucket_start:%Y-%m-%d %H:%M}"
+
+
+# ═══════════════════════════════════════════════════════════════
+# 使用教程（新手引导）
+# 推荐状态每用户一行（UserTutorialState）；分镜已看记录只在真正看完
+# 一个分镜时新增一行，不为所有用户预建全部行。状态推进全部依赖数据库
+# 条件更新与唯一约束，SQLite 上不用 select_for_update 充当并发手段。
+# 分镜白名单与版本号见 materials/views/tutorial.py（与前端
+# public/js/tutorial-data.js 保持一致，由 test_tutorial.py 守门）。
+# ═══════════════════════════════════════════════════════════════
+
+class UserTutorialState(models.Model):
+    """使用教程推荐状态（每用户至多一条，OneToOne）。
+
+    offer_state 语义：
+    - pending：新账号待自动展示教程（默认）；
+    - offered：客户端已领取展示（claim_offer 条件推进）；
+    - dismissed：用户主动关闭，不再自动展示（dismiss_offer 幂等）；
+    - completed：核心导览分镜的当前版本全部看完（条件推进，exempt 除外）；
+    - exempt：历史账号或不参与自动展示的账号（迁移 0059 对存量用户回填）。
+    """
+
+    class OfferState(models.TextChoices):
+        PENDING = "pending", "待推荐"
+        OFFERED = "offered", "已领取"
+        DISMISSED = "dismissed", "已关闭"
+        COMPLETED = "completed", "已完成"
+        EXEMPT = "exempt", "豁免"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="tutorial_state", verbose_name="用户",
+    )
+    offer_state = models.CharField(
+        "推荐状态", max_length=12, choices=OfferState.choices,
+        default=OfferState.PENDING,
+    )
+    offered_at = models.DateTimeField("领取时间", null=True, blank=True)
+    dismissed_at = models.DateTimeField("关闭时间", null=True, blank=True)
+    completed_at = models.DateTimeField("完成时间", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "使用教程状态"
+        verbose_name_plural = "使用教程状态"
+
+    def __str__(self):
+        return f"教程状态 {self.user_id}: {self.get_offer_state_display()}"
+
+
+class UserTutorialLesson(models.Model):
+    """分镜已看记录：同一用户同一分镜同一版本至多一行（唯一约束幂等）。"""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="tutorial_lessons", verbose_name="用户",
+    )
+    lesson_id = models.CharField("分镜编号", max_length=32)
+    revision = models.PositiveIntegerField("内容版本")
+    seen_at = models.DateTimeField("已看时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "教程分镜已看记录"
+        verbose_name_plural = "教程分镜已看记录"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "lesson_id", "revision"],
+                name="unique_user_tutorial_lesson",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "seen_at"], name="tutorial_lesson_user_seen"),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} 看过 {self.lesson_id} r{self.revision}"

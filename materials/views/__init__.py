@@ -10,6 +10,9 @@ from .auth import (
     api_change_password, api_forgot_password, api_reset_password,
 )
 
+# 使用教程（新手引导进度）
+from .tutorial import api_tutorial
+
 # 通知
 from .notifications import api_notifications, api_notification_read
 
