@@ -59,7 +59,10 @@
   //        统一停轴与稳定控制节点；tutorial.css 一并重排，缓存键同步推进。
   // v332：教程体验重制二轮——连续动效（页面滑入/菜单弹出/逐字输入/点击涟漪）、
   //        go(i) 增量应用、节奏收紧与停跳阈值 4s；缓存键同步推进。
-  var VERSION = '332';
+  // v333：教程演示区改用站点真实 class（2026-10-03 二次修订：真实界面经过取舍
+  //        的局部展示），tutorial 特性一并加载 course/qa/timetable.css，保证演示
+  //        外观与真实页面同源；缓存键同步推进。
+  var VERSION = '333';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -114,7 +117,8 @@
     'admin-records': ['admin.css'],
     'admin-qa': ['admin.css', 'qa.css'],
     timetable: ['timetable.css'],
-    tutorial: ['tutorial.css']
+    // 演示 DOM 复用站点真实 class：教程需要 Explorer/问答/课表的业务 CSS 同源渲染
+    tutorial: ['tutorial.css', 'course.css', 'qa.css', 'timetable.css']
   };
 
   function loadStyle(name) {

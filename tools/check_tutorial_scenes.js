@@ -5,7 +5,8 @@
    1. 25 个分镜全部能构建，步骤数与 tutorial-data.js 的 steps 一一对应；
    2. 每步 go(i) 可从初始状态直接推进（静态降级视图依赖此性质）；
    3. 每步指针目标在该步开始前（go(i-1) 之后）已存在于场景根内；
-   4. 时长满足节奏公式：建立 1.1s + 每步 ≥1.3s + 收尾 1.5s；
+   4. 时长满足节奏公式：pace[k]（第 k+1 步与前一步的间隔）建立 ≥1.0s、其后每步
+      ≥1.3s，durationMs = 末步 cue + 1.5s；无 pace 时按均匀分布兜底检查；
    5. capability 保守分支：无会话信息时为 generic。 */
 
 const fs = require('fs');
@@ -135,6 +136,11 @@ function makeDocument() {
   return {
     createElement: (t) => makeNode(t),
     createElementNS: (ns, t) => makeNode(t),
+    createTextNode: (t) => {
+      const n = makeNode('#text');
+      n.textContent = String(t);
+      return n;
+    },
   };
 }
 
@@ -209,15 +215,28 @@ for (const id of lessons) {
       }
     }
 
-    // 4. 时长满足节奏公式（留表：建立 1.1s + 每步 ≥1.3s + 收尾 1.5s）
+    // 4. 时长满足节奏公式：优先 data.pace（逐步声明），否则均匀分布兜底。
+    //    硬下限：建立（cue0→cue1）≥1.0s，其后每步 ≥1.3s；durationMs = 末步 cue + 1.5s。
     const n = scene.steps;
-    const minDur = 1100 + 1300 * (n - 1) + 1500;
-    check(lesson.durationMs >= minDur,
-      label + '：durationMs ' + lesson.durationMs + ' 低于 ' + n + ' 步下限 ' + minDur);
-    const cues = P.cueTimes(lesson.durationMs, n);
+    const cues = P.cueTimes(lesson.durationMs, n, lesson.pace);
     check(cues.length === n, label + '：cueTimes 长度不符');
+    if (Array.isArray(lesson.pace)) {
+      check(lesson.pace.length === n - 1,
+        label + '：pace 长度应为 ' + (n - 1) + '，实际 ' + lesson.pace.length);
+      lesson.pace.forEach(function (v, k) {
+        const floor = k === 0 ? 1000 : 1300;
+        check(typeof v === 'number' && v >= floor,
+          label + '：pace[' + k + '] 低于下限 ' + floor + 'ms');
+      });
+      const lastCue = cues[n - 1];
+      check(Math.abs(lesson.durationMs - (lastCue + 1500)) <= 1,
+        label + '：durationMs ' + lesson.durationMs + ' ≠ 末步 cue ' + lastCue + ' + 1500');
+    } else {
+      const minDur = 1100 + 1300 * (n - 1) + 1500;
+      check(lesson.durationMs >= minDur,
+        label + '：durationMs ' + lesson.durationMs + ' 低于 ' + n + ' 步下限 ' + minDur);
+    }
     if (cues.length > 1) {
-      // 建立相位（cue0→cue1）由 LEAD_MS 决定，单独要求可读下限
       check(cues[1] >= 1000, label + '：建立步骤停留不足 1s');
     }
     for (let i = 2; i < cues.length; i++) {

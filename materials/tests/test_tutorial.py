@@ -24,7 +24,10 @@ TUTORIAL_DATA_PATH = (
 MIGRATION_0059 = "materials.migrations.0059_user_tutorial_models"
 
 
-def _mark(client, lesson_id, revision=1):
+def _mark(client, lesson_id, revision=None):
+    # revision 缺省取白名单当前版本：revision 属于内容版本，测试不硬编码具体数值
+    if revision is None:
+        revision = LESSON_REVISIONS[lesson_id]
     return client.post_json(TUTORIAL_URL, {
         "action": "mark_seen", "lesson_id": lesson_id, "revision": revision,
     })
@@ -140,7 +143,7 @@ class TutorialApiTest(BnuTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             resp.json()["data"]["seen"],
-            [{"lesson_id": "find-search", "revision": 1}],
+            [{"lesson_id": "find-search", "revision": LESSON_REVISIONS["find-search"]}],
         )
         self.assertEqual(
             UserTutorialLesson.objects.filter(user=self.user).count(), 1,
@@ -160,7 +163,10 @@ class TutorialApiTest(BnuTestCase):
         self.assertEqual(rows.count(), 2)
         self.assertEqual(
             {(r.lesson_id, r.revision) for r in rows},
-            {("find-search", 1), ("qa-accept", 1)},
+            {
+                ("find-search", LESSON_REVISIONS["find-search"]),
+                ("qa-accept", LESSON_REVISIONS["qa-accept"]),
+            },
         )
 
     def test_mark_seen_rejects_invalid_input(self):
@@ -172,7 +178,8 @@ class TutorialApiTest(BnuTestCase):
             {"action": "mark_seen", "lesson_id": "not-a-lesson", "revision": 1},
             {"action": "mark_seen", "lesson_id": "find-search"},  # 缺 revision
             {"action": "mark_seen", "lesson_id": "find-search", "revision": 0},
-            {"action": "mark_seen", "lesson_id": "find-search", "revision": 2},
+            {"action": "mark_seen", "lesson_id": "find-search",
+             "revision": LESSON_REVISIONS["find-search"] + 1},
             {"action": "mark_seen", "lesson_id": "find-search", "revision": "1"},
             {"action": "mark_seen", "lesson_id": "find-search", "revision": True},
         ]
@@ -209,8 +216,9 @@ class TutorialApiTest(BnuTestCase):
         for lesson_id in ("find-search", "courses-import", "save-course"):
             self.assertEqual(_mark(self.client, lesson_id).status_code, 200)
 
-        # 用非当前版本（revision=2）冒充新版进度 → 400，不计入完成
-        resp = _mark(self.client, "share-text", revision=2)
+        # 用非当前版本（当前版本 +1）冒充新版进度 → 400，不计入完成
+        resp = _mark(self.client, "share-text",
+                     revision=LESSON_REVISIONS["share-text"] + 1)
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(
             UserTutorialLesson.objects.filter(
