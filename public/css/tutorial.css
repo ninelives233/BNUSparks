@@ -5,9 +5,20 @@
 
    2026-10-03 二次修订：演示 DOM 改用站点真实 class（业务 CSS 渲染，见
    docs/TUTORIAL_DESIGN_SPEC.md §5），本文件只保留教程壳样式、教程专属状态类
-   （is-hidden、is-ghost、td-* 动画、is-hot、is-dim、td-focus）、覆盖层 fixed
-   到 absolute 的中和层与少量本地装饰件（纸张、目录树、迷你周格、空状态）。
-   指导语固定两行高、位于舞台上方。 */
+   （is-hidden、td-* 动画、is-hot、is-dim、td-focus）与少量本地装饰件
+   （纸张、目录树、迷你周格、空状态）。指导语固定两行高、位于舞台上方。
+
+   2026-10-03 三次修订（动效精修）：
+   - 舞台是稳定构图区：不再对整幕做逐步缩放入画（删除 fitScene 呼吸）；
+     场景超出时由播放器做一次性、单向的定版缩放（无过渡、不回弹）。
+   - 真实弹层恢复覆盖关系：search/preview/modal/tt/drawer 覆盖层在舞台内
+     absolute 铺满，自带业务 CSS 的 modalIn / notifSlideIn / ttPop 入场动画；
+     高表单走真实内部滚动，不再伪装成页面下方的长内容。
+   - 转场词汇按行为区分：状态变化就地完成（无动画）；标签内容切换纯淡入
+     （td-fade）；菜单/下拉轻弹出（td-pop）；场景内页面导航方向滑入
+     （td-slide）＋旧页离位淡出（td-leaving/td-out，叠放不挤压）；
+     换分镜/目录/窗口由壳层与 entry 负责。输入填入只做内容高亮（td-typed），
+     不再移动输入框。 */
 
 /* ── 遮罩与浮窗壳 ─────────────────────────────────────────── */
 .tutorial-overlay {
@@ -52,8 +63,8 @@
 .tutorial-root {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 28px;
+  gap: 12px;
+  padding: 24px;
   min-height: 0;
   flex: 1;
 }
@@ -143,11 +154,42 @@
 
 /* ── 中部滚动区 ───────────────────────────────────────────── */
 .tutorial-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* 视图切换（换分镜 / 目录进出）：旧视图离位淡出叠放在新视图之上（不挤压），
+   新视图按方向入画；目录往返用纯淡入淡出。动画结束由播放器移除旧节点。 */
+.tutorial-leave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: auto;
+  max-height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  animation: tutorial-view-out 170ms ease forwards;
+}
+.tutorial-leave.is-back { animation-name: tutorial-view-out-back; }
+.tutorial-leave.is-fade { animation-name: tutorial-view-fade-out; }
+.tutorial-enter { animation: tutorial-view-in 220ms cubic-bezier(.23, 1, .32, 1) both; }
+.tutorial-enter.is-back { animation-name: tutorial-view-in-back; }
+.tutorial-enter.is-fade { animation: tutorial-view-fade-in 200ms ease both; }
+@keyframes tutorial-view-out { to { opacity: 0; transform: translateX(-14px); } }
+@keyframes tutorial-view-out-back { to { opacity: 0; transform: translateX(14px); } }
+@keyframes tutorial-view-fade-out { to { opacity: 0; } }
+@keyframes tutorial-view-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tutorial-view-in-back {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tutorial-view-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── 五组目录（紧凑缩略图，无大块同色底） ─────────────────── */
 .tutorial-catalog-head {
@@ -367,17 +409,15 @@
   border-radius: var(--radius-md);
   overflow: hidden;
 }
+/* 辅助信息，不是按钮：去掉边框与底色，只留安静的角标文字 */
 .tutorial-demo-label {
   position: absolute;
   bottom: 8px;
-  right: 10px;
+  right: 12px;
   z-index: 3;
   font-size: 11px;
+  letter-spacing: 0.06em;
   color: var(--ink-faint);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  padding: 2px 8px;
-  background: var(--surface);
   pointer-events: none;
 }
 /* 转场层在相同坐标区域叠放：新旧内容绝对定位铺满裁剪区，不参与相互挤压；
@@ -388,20 +428,26 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 16px 16px 40px;
+  padding: 12px 16px 32px;
 }
 .tutorial-demo-frame {
   width: 100%;
   max-width: 640px;
-  /* 填满裁剪区并顶对齐；高度不设上限——场景自然生长，超出部分由
-     player.fitScene() 等比缩小入画（fitScene 依赖 offsetHeight 读到自然高度） */
-  min-height: 100%;
+  /* 稳定构图区：高度锁定为舞台可用高度。基内容按各分镜设计容量裁取；
+     超出时由播放器按“真实页面滚动”语义把当前操作对象滚入视野
+     （不缩放、不挤压；滚动条隐藏，演示不响应滚轮）。
+     弹层 absolute 覆盖基内容，不参与滚动布局。 */
+  height: 100%;
   position: relative;
+  z-index: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.tutorial-demo-frame::-webkit-scrollbar { display: none; }
 .tutorial-pointer {
   position: absolute;
   left: 0;
@@ -441,6 +487,14 @@
   border: 2px solid var(--primary);
 }
 
+/* 「我的课程」页骨架在演示里按窄窗口口径收紧：标题用 clamp 的下档、
+   行距与列表间隔取紧凑值（限定演示域，真实页面不受影响）。
+   目的：3 行课程列表 + 页头在舞台可用高度内完整呈现，避免定版缩放。 */
+.tutorial-demo-frame .tt-title { font-size: 1.35rem; }
+.tutorial-demo-frame .tt-top { margin: 8px 0 6px; }
+.tutorial-demo-frame .tt-list { gap: 8px; width: 100%; }
+.tutorial-demo-frame .tt-lrow { padding: 9px 16px 8px 18px; }
+
 /* ── 播放视图：操作标题 + 当前说明 + 可展开完整步骤 ───────── */
 .tutorial-now {
   display: flex;
@@ -449,7 +503,7 @@
 }
 .tutorial-now-title {
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.35;
   font-weight: 600;
   color: var(--ink);
@@ -525,24 +579,16 @@
   margin: 10px 0 0;
 }
 
-/* ── 底部控制栏：两行，节点全程稳定 ───────────────────────── */
+/* ── 底部控制栏：单行紧凑，节点全程稳定 ─────────────────────
+   [上一项] [暂停/继续] [下一项] ···· 去试试。主控位在暂停/继续/重播三态间
+   只换文字，min-width 固定，不产生宽度跳动；重播由主控位在结束态承担。 */
 .tutorial-footer {
   flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   border-top: 1px solid var(--border-light);
-  padding-top: 12px;
-}
-.tutorial-nav-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.tutorial-aux-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  padding-top: 10px;
 }
 .tutorial-ctl {
   min-height: 40px;
@@ -564,9 +610,12 @@
   opacity: 0.45;
   cursor: default;
 }
-.tutorial-ctl-prev { flex: 1; }
+.tutorial-ctl-play {
+  flex: none;
+  min-width: 96px;
+  text-align: center;
+}
 .tutorial-ctl-next {
-  flex: 2;
   background: var(--primary);
   border-color: var(--primary);
   color: var(--on-primary);
@@ -576,16 +625,7 @@
   background: var(--primary-dark);
   border-color: var(--primary-dark);
 }
-.tutorial-ctl-play,
-.tutorial-ctl-replay {
-  flex: none;
-  min-height: 36px;
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: var(--radius-full);
-  color: var(--ink-faint);
-}
-/* 去试试：具体目的文案，次要视觉，不与「下一项」争夺注意力 */
+/* 去试试：具体目的文案，安静的文字链接，不与播放控制争夺注意力 */
 .tutorial-try-btn {
   margin-left: auto;
   background: none;
@@ -596,7 +636,7 @@
   font-size: 13px;
   cursor: pointer;
   padding: 6px 10px;
-  min-height: 36px;
+  min-height: 40px;
   border-radius: var(--radius-sm);
   text-align: right;
 }
@@ -634,7 +674,7 @@
   background: var(--raised);
 }
 .tutorial-static-thumb {
-  height: 250px;
+  height: 180px;
   padding: 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--border-light);
@@ -809,10 +849,6 @@
    2) 覆盖层 fixed→absolute 中和，让真实弹层落在舞台内；
    3) 演示布局小件（顶条、装饰行、纸张、目录树、迷你周格）。
    演示子树不响应任何指针事件，演示节点不进 Tab 序（JS 侧 tabindex=-1）。 */
-.tutorial-demo-frame {
-  overflow: visible;
-  transition: transform 240ms cubic-bezier(.23, 1, .32, 1);
-}
 .tutorial-demo-frame,
 .tutorial-demo-frame * {
   pointer-events: none !important;
@@ -829,29 +865,44 @@
   border-radius: 8px;
 }
 
-/* 一次性入场：只在元素（重新）显现时播放，不做整页错峰重入。
-   td-slide：前进进入的新页面（右→左滑入，有方向感）。 */
+/* 转场词汇（按行为区分，不统一套一个滑入）：
+   td-in     内容块显现（轻微上浮淡入，一次）；
+   td-slide  场景内页面导航（右→左，有方向感）；
+   td-fade   同页标签/内容切换（纯淡入，无位移）；
+   td-pop    菜单/下拉打开（轻弹出，170ms）；
+   td-out    旧页离位淡出（配合 td-leaving 绝对叠放，短重叠不挤压）。
+   状态变化（星标点亮、勾选、采纳）就地完成，无动画。 */
 .tutorial-demo-frame .td-in { animation: tutorial-rise 240ms cubic-bezier(.23, 1, .32, 1) both; }
 @keyframes tutorial-rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.tutorial-demo-frame .td-slide { animation: tutorial-slide-in 300ms cubic-bezier(.23, 1, .32, 1) both; }
+.tutorial-demo-frame .td-slide { animation: tutorial-slide-in 280ms cubic-bezier(.23, 1, .32, 1) both; }
 @keyframes tutorial-slide-in {
   from { opacity: 0; transform: translateX(26px); }
   to { opacity: 1; transform: translateX(0); }
 }
-
-/* 状态变化的就地动效：星标/收藏点亮 .7→1，不弹跳 */
-.tutorial-demo-frame .favorited svg,
-.tutorial-demo-frame .qa-fav-btn.on svg {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: tutorial-soft-pop 220ms cubic-bezier(.23, 1, .32, 1);
+.tutorial-demo-frame .td-fade { animation: tutorial-fade 180ms ease both; }
+@keyframes tutorial-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-@keyframes tutorial-soft-pop {
-  from { transform: scale(0.7); }
-  to { transform: scale(1); }
+.tutorial-demo-frame .td-pop { animation: tutorial-pop 170ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes tutorial-pop {
+  from { opacity: 0; transform: translateY(-3px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.tutorial-demo-frame .td-leaving { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.tutorial-demo-frame .td-out { animation: tutorial-out 150ms ease forwards; }
+@keyframes tutorial-out {
+  to { opacity: 0; }
+}
+
+/* 输入填入：框体稳定，只对写入做一次轻高亮（不动 transform/布局） */
+.tutorial-demo-frame .td-typed { animation: tutorial-typed 480ms ease-out; }
+@keyframes tutorial-typed {
+  0% { box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.16); }
+  100% { box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0); }
 }
 /* 搜索框聚焦态（演示用 class，等价真实 :focus-within 的可见反馈） */
 .tutorial-demo-frame .search-box.td-focus {
@@ -859,34 +910,69 @@
   box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.1);
 }
 
-/* 覆盖层中和：真实弹层是 fixed 全屏层，演示内落在舞台坐标里 */
+/* 覆盖层恢复真实覆盖关系：真实弹层是 fixed 全屏层，演示内改为舞台坐标里的
+   absolute 铺满层（显隐由场景控制；display 恢复时继承业务 CSS 自带的
+   modalIn / notifSlideIn / ttPop 入场动画，不再叠加教程自己的滑入）。
+   高表单弹窗走真实内部滚动（modal-card/sg-inner/tt-modal 限高 100%），
+   不再把弹窗排成页面下方的长内容。 */
 .tutorial-demo-frame .search-overlay,
 .tutorial-demo-frame .preview-overlay,
 .tutorial-demo-frame .modal-overlay,
 .tutorial-demo-frame .tt-overlay,
 .tutorial-demo-frame .notif-drawer-overlay {
-  /* 文档流内的面板：真实弹层的固定定位在演示里退化为“上下文之上、
-     弹层在下”的阅读顺序，整幕高度交给播放器自适应缩放入画 */
-  position: relative;
-  inset: auto;
+  position: absolute;
+  inset: 0;
   z-index: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
   margin: 0;
-  width: 100%;
+  width: auto;
+  height: auto;
+}
+.tutorial-demo-frame .search-overlay,
+.tutorial-demo-frame .preview-overlay,
+.tutorial-demo-frame .modal-overlay,
+.tutorial-demo-frame .tt-overlay { padding: 8px; }
+.tutorial-demo-frame .notif-drawer-overlay { display: block; }
+.tutorial-demo-frame .notif-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(300px, 92%);
+  height: 100%;
+  max-width: 92%;
 }
 .tutorial-demo-frame .sg-inner,
 .tutorial-demo-frame .modal-card,
-.tutorial-demo-frame .tt-modal,
-.tutorial-demo-frame .notif-drawer {
+.tutorial-demo-frame .tt-modal {
   position: relative;
   max-width: 100%;
+  max-height: 100%;
 }
-/* 抽屉在演示里是舞台内的一块面板，不再是全高侧滑 */
-.tutorial-demo-frame .notif-drawer { width: min(280px, 100%); height: auto; padding-bottom: 4px; }
+/* 搜索结果浮层在舞台内收紧（头部/分组头/条目取紧凑值），保证「课程」
+   「资料」两个分组同框可见——真实页面在手机高度下同样要滚动才能看全 */
+.tutorial-demo-frame .sg-header { padding: 10px 14px 8px; }
+.tutorial-demo-frame .sg-subtitle { margin: 2px 0 0 30px; }
+.tutorial-demo-frame .sg-title { font-size: 1.02rem; }
+.tutorial-demo-frame .sg-section-header { padding: 7px 12px 3px; position: static; }
+.tutorial-demo-frame .sg-section-body { padding: 2px 5px 4px; }
+.tutorial-demo-frame .sg-item { padding: 4px 7px; }
+.tutorial-demo-frame .sg-body { max-height: none; }
 .tutorial-demo-frame .dm-item { padding: 8px 14px; }
+/* 预览浮层头部给右上角圆形关闭钮让位（真实 CSS 里 close 是 absolute 定位，
+   头部行内容不加内边距时会与「下载」按钮叠压） */
+.tutorial-demo-frame .preview-header { padding-right: 60px; }
+/* ZIP 清单在预览遮罩上以浅色面板呈现（真实站点同样渲染在浅色列表底上） */
+.tutorial-demo-frame .preview-body .tutorial-demo-ziptree {
+  background: var(--raised);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  width: min(320px, 100%);
+  box-shadow: var(--shadow-sm);
+}
+/* 资料详情的预览框：真实 min-height 400px 是给 PDF 查看器留的，
+   演示里纸张紧随头部即可，避免大片空白 */
+.tutorial-demo-frame .fd-preview-body { min-height: 0; }
+/* 抽屉头部在矮舞台里收紧（真实抽屉头部更高） */
+.tutorial-demo-frame .notif-drawer-header { padding: 10px 14px; }
 /* 筛选下拉：真实是 fixed 定位层，演示内锚定在资料页头下方 */
 .tutorial-demo-frame .file-area-header { position: relative; }
 .tutorial-demo-frame .file-area-header .filter-dropdown {
@@ -894,6 +980,8 @@
   top: calc(100% + 4px);
   z-index: 5;
 }
+/* 课表槽位弹层：锚定在「我的课程」头部行下方（与真实 tt-top 相对定位一致） */
+.tutorial-demo-frame .tt-top { position: relative; }
 
 /* 问答表单在演示里收紧：真实编辑器正文 min-height 180px 会把表单推出舞台 */
 .tutorial-demo-frame .qa-compose-card { padding: 12px 16px; }
@@ -969,9 +1057,8 @@
   padding: 6px 10px;
   margin: 0 0 8px;
 }
-/* 课表槽位弹层：演示内就地展开（真实为定位弹层） */
-.tutorial-demo-frame .td-slotwrap { position: relative; display: flex; justify-content: center; }
-.tutorial-demo-frame .td-slotwrap .tt-slot-pop { position: static; width: min(320px, 100%); }
+/* 课表槽位弹层：真实 CSS 即 absolute 锚定 tt-top 右下，演示内直接继承 */
+.tutorial-demo-frame .tt-slot-pop { max-width: min(320px, 100%); }
 /* 手动添加课程的字段提示（tt-fld 内的只读占位与说明） */
 .tutorial-demo-frame .tt-fld .tt-fld-ph { color: var(--ink-faint); font-size: 13px; }
 .tutorial-demo-frame .tt-fld-hint { font-size: 11px; color: var(--ink-faint); margin: 4px 0 0 64px; }
@@ -1088,7 +1175,13 @@
     padding: 16px;
     gap: 12px;
   }
-  .tutorial-topbar-title { font-size: 17px; }
+  .tutorial-topbar-title {
+    font-size: 16px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
   .tutorial-catalog-title { font-size: 20px; }
   .tutorial-groups { grid-template-columns: 1fr; }
   .tutorial-stage {
@@ -1096,16 +1189,14 @@
     max-height: none;
     min-height: 280px;
   }
-  .tutorial-stage-clip { padding: 12px 10px 36px; }
+  .tutorial-stage-clip { padding: 12px 10px 30px; }
   .tutorial-demo-frame { max-width: 340px; }
   .tutorial-now-title { font-size: 19px; }
   .tutorial-now-line { font-size: 14px; }
-  /* 上一项/下一项同行；暂停/重播/去试试紧凑一行，不再各占整行 */
-  .tutorial-nav-row { gap: 8px; }
-  .tutorial-ctl { min-height: 44px; }
-  .tutorial-aux-row { flex-wrap: nowrap; }
-  .tutorial-ctl-play,
-  .tutorial-ctl-replay { min-height: 40px; }
+  /* 控制单行放不下时「去试试」换行，主控组始终同行 */
+  .tutorial-footer { flex-wrap: wrap; row-gap: 2px; }
+  .tutorial-ctl { min-height: 44px; padding: 8px 12px; }
+  .tutorial-ctl-play { min-width: 92px; }
   .tutorial-try-btn { min-height: 40px; font-size: 12px; padding: 6px 6px; }
   .tutorial-static-steps { grid-template-columns: 1fr; }
 }

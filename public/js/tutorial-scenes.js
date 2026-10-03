@@ -8,10 +8,13 @@
    .mu-tabs、.pc-item、.review-badge、.qa-*、.qe-*、.preview-overlay、
    .filter-dropdown），由对应业务 CSS 渲染（course/qa/timetable.css 由 tutorial
    特性一并加载）；本文件不重新发明产品外观。tutorial.css 只负责：覆盖层
-   fixed 到 static 的定位中和、舞台尺寸适配、以及 is-hidden/is-ghost/td-* 与
+   fixed 到舞台内 absolute 的覆盖关系、舞台尺寸适配、以及 is-hidden/td-* 与
    is-hot 等教程专属状态类。
-   安全边界：演示子树 pointer-events:none（CSS），全部可聚焦元素 tabindex=-1；
-   演示节点无 id、无 onclick、无 href。
+
+   转场口径（2026-10-03 三次修订）：弹层显隐用 setHidden（display 切换会继承
+   业务 CSS 自带的 modalIn / notifSlideIn / ttPop 入场动画）；场景内页面导航用
+   swapPage（旧页离位淡出叠放 + 新页 td-slide）；同页标签/内容切换用 td-fade；
+   自绘菜单用 td-pop；状态变化（星标/勾选/采纳）就地完成不加动画。
 
    编排模型：build() 返回 {
      root: 场景根（.tutorial-demo-frame，一次性建好全部对象）
@@ -52,13 +55,34 @@
     n.classList.add(kind || 'td-in');
     return n;
   }
-  // 真实输入控件的“填入”：直接设 value + 轻淡入（真实控件里不放装饰 span）
+  // 真实输入控件的“填入”：只写入内容并做一次轻高亮（td-typed 只动
+  // box-shadow），框体位置、边框、背景全程稳定；无逐字动画、无定时器，
+  // 暂停/重播/减少动态效果下行为一致。
   function typedInto(input, text) {
+    if (!input) return null;
     input.value = String(text == null ? '' : text);
-    input.classList.remove('td-in');
+    input.classList.remove('td-typed');
     void input.offsetWidth;
-    input.classList.add('td-in');
+    input.classList.add('td-typed');
     return input;
+  }
+  // 场景内页面导航：旧页离位（绝对定位叠放在新页之上）淡出，新页滑入；
+  // 短暂重叠（约 150ms）且互不挤压。守门桩没有定时器：直接隐藏旧页。
+  function swapPage(oldEl, newEl, kind) {
+    if (oldEl && oldEl !== newEl) {
+      if (typeof window.setTimeout === 'function') {
+        oldEl.classList.add('td-leaving');
+        oldEl.classList.add('td-out');
+        window.setTimeout(function () {
+          oldEl.classList.remove('td-leaving');
+          oldEl.classList.remove('td-out');
+          oldEl.classList.add('is-hidden');
+        }, 240);
+      } else {
+        setHidden(oldEl, true);
+      }
+    }
+    return reveal(newEl, kind || 'td-slide');
   }
 
   // ── 图标：与站点同源的内联 SVG（避免依赖懒加载模块的常量） ──
@@ -980,7 +1004,7 @@
         function () {},
         function () { sbox.classList.add('td-focus'); },
         function () { typedInto(input, '学习方法'); },
-        function () { reveal(overlay); }
+        function () { setHidden(overlay, false); }
       ]
     };
   }
@@ -1024,7 +1048,7 @@
           // 锚定到「类型」chip 正下方（构建时场景未挂载拿不到 offsetLeft，
           // 打开下拉这一步场景已在文档里）
           if (chipType.offsetLeft) typeMenu.style.left = chipType.offsetLeft + 'px';
-          reveal(typeMenu, 'td-in');
+          reveal(typeMenu, 'td-pop');
         },
         function () {
           setHidden(typeMenu, true);
@@ -1036,7 +1060,7 @@
         },
         function () {
           if (chipSort.offsetLeft) { sortMenu.style.left = chipSort.offsetLeft + 'px'; sortMenu.style.right = 'auto'; }
-          reveal(sortMenu, 'td-in');
+          reveal(sortMenu, 'td-pop');
         },
         function () {
           setHidden(sortMenu, true);
@@ -1086,15 +1110,17 @@
         function () {},
         function () { alt.classList.add('is-hot'); },
         function () {
-          // 真实行为是整页跳转：课程名锚点不变，代码与资料换成 DEMO201
+          // 真实行为是整页跳转：课程名锚点不变，代码与资料换成 DEMO201，
+          // 页面回到顶部（面包屑是连续锚点）；演示页同步回顶
           bcCurrent.textContent = '学习方法导论（DEMO201）';
           tbody.textContent = '';
           tbody.appendChild(fileRow({ name: '海洋科学导论复习要点.pdf', type: '笔记' }));
           tbody.appendChild(fileRow({ name: '课程大纲.pdf', type: '大纲' }));
-          reveal(tableWrap, 'td-in');
+          reveal(tableWrap, 'td-fade');
           cur.classList.remove('is-current');
           alt.classList.add('is-current');
           alt.classList.remove('is-hot');
+          if (root.scrollTop) root.scrollTop = 0;
         },
         function () { bcCurrent.classList.add('is-hot'); }
       ]
@@ -1129,7 +1155,7 @@
         clicks: [false, true, true, false],
         apply: [
           function () {},
-          function () { reveal(mOverlay); },
+          function () { setHidden(mOverlay, false); },
           function () {
             var b = mOverlay.querySelector('[data-mark="btn-dlpdf"]');
             b.textContent = '✓ 已开始下载';
@@ -1145,7 +1171,7 @@
       clicks: [false, true, false, false],
       apply: [
         function () {},
-        function () { reveal(overlay); },
+        function () { setHidden(overlay, false); },
         function () { pages.classList.add('td-scrolled'); },
         function () {
           var dl = overlay.querySelector('[data-mark="btn-dl"]');
@@ -1173,7 +1199,7 @@
       clicks: [false, true, true, false],
       apply: [
         function () {},
-        function () { reveal(overlay); },
+        function () { setHidden(overlay, false); },
         function () {
           tree.appendChild(zipTree([
             { name: '提纲.pdf', size: '312 KB' },
@@ -1268,8 +1294,9 @@
       clicks: [false, true, true, false],
       apply: [
         function () {},
-        function () { setHidden(empty, true); reveal(modal); },
-        function () { setHidden(modal, true); reveal(list); },
+        // 弹窗以真实覆盖层出现（ttPop），空状态仍在背后，与真实页面一致
+        function () { setHidden(modal, false); },
+        function () { setHidden(modal, true); setHidden(empty, true); reveal(list); },
         function () {}
       ]
     };
@@ -1304,7 +1331,7 @@
           seg.children[0].classList.remove('active');
           seg.children[1].classList.add('active');
           setHidden(list, true);
-          reveal(week);
+          reveal(week, 'td-fade');
         },
         function () {
           week.classList.add('is-focus');
@@ -1315,7 +1342,7 @@
           seg.children[0].classList.add('active');
           setHidden(week, true);
           setHidden(list, false);
-          reveal(list);
+          reveal(list, 'td-fade');
         }
       ]
     };
@@ -1372,7 +1399,7 @@
           var row = root.querySelector('[data-mark="row-course"]');
           if (row) row.classList.add('is-hot');
         },
-        function () { setHidden(list, true); reveal(dest, 'td-slide'); },
+        function () { swapPage(list, dest); },
         function () {}
       ]
     };
@@ -1401,7 +1428,7 @@
       clicks: [false, true, false, true],
       apply: [
         function () {},
-        function () { reveal(modal); },
+        function () { setHidden(modal, false); },
         function () {
           var inp = modal.querySelector('[data-mark="inp-name"]');
           if (inp && inp.value !== '书法入门') typedInto(inp, '书法入门');
@@ -1423,11 +1450,12 @@
     var root = el('div', 'tutorial-demo-frame');
     var shell = ttShell({ manageMark: 'btn-manage' });
     root.appendChild(shell);
-    var popWrap = el('div', 'td-slotwrap');
+    // 槽位弹层挂进 tt-top（演示 CSS 给 tt-top position:relative），
+    // 真实 CSS 的 absolute 锚定（top: calc(100% + 6px); right: 0）直接生效
+    var top = shell.querySelector('.tt-top');
     var pop = slotPop({ oldMark: 'slot-old', newMark: 'btn-newslot' });
-    popWrap.appendChild(pop);
-    root.appendChild(popWrap);
-    setHidden(popWrap, true);
+    top.appendChild(pop);
+    setHidden(pop, true);
     var oldCourses = el('ul', 'tt-list');
     [['学习方法导论', 'ttp2'], ['高等数学 B', 'ttp4'], ['体育（三）', 'ttp6']].forEach(function (p) {
       oldCourses.appendChild(ttRow({ name: p[0], hue: p[1], tag: { cls: 'tt-tag-warm', text: '3 份资料' }, meta: '上学期 · 示例老师', sched: '周一 3—4 节' }));
@@ -1446,9 +1474,9 @@
       clicks: [false, true, true, false, true],
       apply: [
         function () {},
-        function () { reveal(popWrap); },
+        function () { setHidden(pop, false); },
         function () {
-          // 导入为新课表：新槽位出现并生效，背景列表换成新课
+          // 导入为新课表：新槽位出现并生效，弹层背后的列表换成新课
           var rowNew = el('div', 'tt-slot-row is-active');
           var mainNew = el('div', 'tt-slot-main');
           mainNew.appendChild(el('div', 'tt-slot-name', '新学期'));
@@ -1463,7 +1491,7 @@
           countEl.textContent = '2 / 3';
           setHidden(oldCourses, true);
           setHidden(newCourses, false);
-          reveal(newCourses);
+          reveal(newCourses, 'td-fade');
         },
         function () {},
         function () {
@@ -1479,7 +1507,7 @@
           oldRow.querySelector('.tt-slot-main').appendChild(el('i', 'tt-slot-cur', '当前'));
           setHidden(newCourses, true);
           setHidden(oldCourses, false);
-          reveal(oldCourses);
+          reveal(oldCourses, 'td-fade');
         }
       ]
     };
@@ -1598,19 +1626,19 @@
       clicks: [false, true, true, true, true],
       apply: [
         function () {},
-        function () { reveal(dr); },
-        function () { setHidden(dr, true); reveal(favPage, 'td-slide'); },
+        function () { setHidden(dr, false); },
+        function () { swapPage(dr, favPage); },
         function () {
           tabs.children[0].classList.remove('active');
           tabs.children[1].classList.add('active');
           setHidden(courseRow, true);
-          reveal(fileRowEl);
+          reveal(fileRowEl, 'td-fade');
         },
         function () {
           tabs.children[1].classList.remove('active');
           tabs.children[2].classList.add('active');
           setHidden(fileRowEl, true);
-          reveal(postRowEl);
+          reveal(postRowEl, 'td-fade');
         }
       ]
     };
@@ -1634,14 +1662,14 @@
       clicks: [false, true, false, false],
       apply: [
         function () {},
-        function () {
-          // 弹窗接管画面：隐藏文件表（保留课程名锚点），保证表单关键字段入画
-          setHidden(tableWrap, true);
-          reveal(modal.overlay, 'td-slide');
-        },
+        // 弹窗以真实覆盖层出现（modalIn），文件表留在背后被遮罩压暗（真实关系）
+        function () { setHidden(modal.overlay, false); },
         function () {
           modal.typeSel.value = '笔记';
           typedInto(modal.teacher, '示例老师');
+          // 高表单走真实内部滚动：把必填项与提交按钮滚入视野
+          var card = modal.overlay.querySelector('.modal-card');
+          if (card) card.scrollTop = card.scrollHeight;
         },
         function () {
           var b = modal.overlay.querySelector('[data-mark="btn-submit"]');
@@ -1671,7 +1699,7 @@
           tabText.classList.add('um-tab-active');
           setHidden(modal.paneFile, true);
           setHidden(modal.paneText, false);
-          reveal(modal.paneText);
+          reveal(modal.paneText, 'td-fade');
           if (titleInput) titleInput.placeholder = '留空则自动取内容前20字';
         },
         function () {
@@ -1744,13 +1772,13 @@
       clicks: [false, true, true, true],
       apply: [
         function () {},
-        function () { reveal(dr); },
-        function () { setHidden(dr, true); reveal(uploads, 'td-slide'); },
+        function () { setHidden(dr, false); },
+        function () { swapPage(dr, uploads); },
         function () {
           tabs.children[0].classList.remove('active');
           tabs.children[1].classList.add('active');
           setHidden(pubRow, true);
-          reveal(pendRow);
+          reveal(pendRow, 'td-fade');
         }
       ]
     };
@@ -1791,14 +1819,13 @@
       clicks: [false, true, false, true],
       apply: [
         function () {},
-        function () { reveal(modal, 'td-slide'); },
+        function () { setHidden(modal, false); },
         function () { typedInto(desc, '按周整理的复习要点，覆盖第 1—8 周。'); },
         function () {
           setHidden(modal, true);
           var badge = rejRow.querySelector('.review-badge');
           var newBadge = reviewBadge('pending', '审核中');
           rejRow.querySelector('.pc-item-title').replaceChild(newBadge, badge);
-          reveal(rejRow);
         }
       ]
     };
@@ -1838,7 +1865,7 @@
         function () {},
         function () { typedInto(input, '期末复习'); },
         function () {},
-        function () { reveal(overlay); }
+        function () { setHidden(overlay, false); }
       ]
     };
   }
@@ -1848,9 +1875,9 @@
     var root = el('div', 'tutorial-demo-frame');
     var toolbar = qaToolbar({ total: 12, filterMark: 'qa-filter' });
     root.appendChild(toolbar);
-    var panel = qaFilterPanel({ l1Mark: 'qa-l1', l2Mark: 'qa-l2' });
+    // 真实折叠机制：0fr 收起（不占高度、不可见），展开继承业务 CSS 的 180ms 过渡
+    var panel = qaFilterPanel({ l1Mark: 'qa-l1', l2Mark: 'qa-l2', collapsed: true });
     root.appendChild(panel);
-    setHidden(panel, true);
     var q1 = qaItem({ title: '如何安排期末复习？', answers: 12, preview: '想问问大家考前两周都是怎么安排的……', tags: ['课程学习', '期末复习'] });
     var q2 = qaItem({ title: '怎么选通识课？', answers: 8, date: '1 周前', preview: '下学期想选一门轻松一点的通识课……', tags: ['课程学习', '选课'], author: '另一位同学' });
     root.appendChild(q1);
@@ -1864,7 +1891,7 @@
       clicks: [false, true, true, true, false],
       apply: [
         function () {},
-        function () { reveal(panel); filterBtn.setAttribute('aria-expanded', 'true'); },
+        function () { panel.classList.remove('qa-filter-collapsed'); filterBtn.setAttribute('aria-expanded', 'true'); },
         function () {
           panel.querySelector('.qa-pills-l1').children[0].classList.remove('on');
           panel.querySelector('[data-mark="qa-l1"]').classList.add('on');
@@ -1900,13 +1927,13 @@
       clicks: [false, true, false, false],
       apply: [
         function () {},
-        function () { setHidden(ctxItem, true); setHidden(headEl, true); reveal(compose, 'td-slide'); },
+        function () { setHidden(headEl, true); swapPage(ctxItem, compose); },
         function () {
           typedInto(compose.querySelector('[data-mark="inp-title"]'), '期末复习应该如何分配时间？');
           compose.querySelector('[data-mark="chip-l1"]').classList.add('on');
           compose.querySelector('[data-mark="chip-l2"]').classList.add('on');
           var summary = compose.querySelector('.qc-tag-summary');
-          if (summary) reveal(summary);
+          if (summary) reveal(summary, 'td-fade');
         },
         function () {
           var c = compose.querySelector('[data-mark="inp-body"]');
@@ -1938,7 +1965,7 @@
       clicks: [false, true, false, false],
       apply: [
         function () {},
-        function () { setHidden(detail, true); reveal(compose, 'td-slide'); },
+        function () { swapPage(detail, compose); },
         function () {
           var c = compose.querySelector('[data-mark="inp-body"]');
           if (c) {

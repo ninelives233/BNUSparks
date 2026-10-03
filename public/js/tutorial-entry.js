@@ -9,8 +9,9 @@
   var overlay = null;          // .tutorial-overlay 根节点
   var dialog = null;           // .tutorial-dialog
   var player = null;           // BnuTutorialPlayer 实例
-  var phase = 'closed';        // closed | loading | open | error
+  var phase = 'closed';        // closed | loading | open | error | closing
   var openPromise = null;
+  var closeTimer = 0;          // 关闭退场动画的移除兜底
   var openerEl = null;         // 打开教程的入口元素（关闭后焦点回归）
   var sourceState = null;      // 进入教程前的可信站内历史状态
   var sourceScroll = 0;
@@ -71,7 +72,9 @@
   // ── 清理（不动历史） ──
   function cleanupOverlay() {
     if (phase === 'closed' && !overlay) return;
-    var wasOpen = phase === 'open';
+    // closing 也是“曾经打开”：关闭事件照常广播，外部监听者不丢信号
+    var wasOpen = phase === 'open' || phase === 'closing';
+    if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = 0; }
     if (player) { try { player.destroy(); } catch (e) {} player = null; }
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     overlay = null;
@@ -270,6 +273,10 @@
       // 全局去重：重复调用不得增加第二层浮窗
       return openPromise || Promise.resolve();
     }
+    if (phase === 'closing') {
+      // 快速关闭再打开：立即完成上一次退出（移除节点、恢复背景），再全新打开
+      cleanupOverlay();
+    }
     var mode = opts.mode === 'core' ? 'core' : 'catalog';
     var explicit = !opts.silent;
     // 注意：懒加载完成前 BnuTutorialData 尚未就绪，这里不能据此降级模式——
@@ -325,13 +332,44 @@
   }
 
   // ── 关闭 ──
-  // opts: { fromPopstate } — 浏览器后退已由历史处理，这里只清理。
+  // opts: { fromPopstate } — 浏览器后退已由历史处理，这里只做即时清理。
+  // 普通关闭：请求到达即停表（halt，之后的进度写入不再发生），窗口播放
+  // 160ms 退场动画，动画结束（或 220ms 兜底）后移除节点，再恢复焦点、
+  // 滚动与背景交互。减少动态效果与加载中直接清理，保持即时、清晰。
   function close(opts) {
     opts = opts || {};
     if (phase === 'closed') return Promise.resolve();
-    cleanupOverlay();
-    if (opts.fromPopstate) return Promise.resolve();
-    // 关闭按钮：返回进入前的站内历史项；无可信站内来源（新标签直达）→ 替换为首页
+    if (phase === 'closing') return openPromise || Promise.resolve();
+    if (opts.fromPopstate) {
+      cleanupOverlay();
+      return Promise.resolve();
+    }
+    if (player) { try { player.halt(); } catch (e) {} }
+    var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (reduce || !dialog || phase === 'loading' || phase === 'error') {
+      cleanupOverlay();
+      navigateBackFromClose();
+      return Promise.resolve();
+    }
+    phase = 'closing';
+    var finished = false;
+    var finish = function () {
+      if (finished) return;
+      finished = true;
+      dialog.removeEventListener('animationend', finish);
+      cleanupOverlay();
+    };
+    dialog.classList.add('is-closing');
+    if (closeTimer) window.clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(finish, 220);
+    dialog.addEventListener('animationend', finish);
+    navigateBackFromClose();
+    return Promise.resolve();
+  }
+
+  // 关闭按钮：返回进入前的站内历史项；无可信站内来源（新标签直达）→ 替换为首页。
+  // 历史交还发生在退场动画期间：来源页在淡出的浮窗后面就位。
+  function navigateBackFromClose() {
     var st = history.state;
     if (st && st.view === 'tutorial') {
       if (sourceState) {
@@ -340,7 +378,6 @@
         showHomeReplacing();
       }
     }
-    return Promise.resolve();
   }
 
   function closeRequested() {
@@ -641,7 +678,7 @@
   window.BnuTutorial = {
     open: function (opts) { return open(opts || {}); },
     close: function (opts) { return close(opts || {}); },
-    isOpen: function () { return phase === 'open' || phase === 'loading' || phase === 'error'; },
+    isOpen: function () { return phase === 'open' || phase === 'loading' || phase === 'error' || phase === 'closing'; },
     maybeOffer: function () { maybeOffer(); },
     destroy: function () {
       cancelSettle();

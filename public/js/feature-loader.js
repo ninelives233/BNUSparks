@@ -62,7 +62,10 @@
   // v333：教程演示区改用站点真实 class（2026-10-03 二次修订：真实界面经过取舍
   //        的局部展示），tutorial 特性一并加载 course/qa/timetable.css，保证演示
   //        外观与真实页面同源；缓存键同步推进。
-  var VERSION = '333';
+  // v334：教程动效精修——删除整幕逐步缩放（弹层恢复 absolute 覆盖＋继承真实
+  //        入场动画＋高表单内部滚动）、字幕阅读阶段、指针就近出场、关闭退场
+  //        动画、单行控制栏与按行为区分的转场词汇；缓存键同步推进。
+  var VERSION = '334';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
