@@ -21,13 +21,15 @@
   var Data = window.BnuTutorialData;
   var Scenes = window.BnuTutorialScenes;
 
-  // 步骤节奏（虚拟毫秒）：建立 1.5s、收尾 1.6s，中间各步均分剩余时间。
-  var LEAD_MS = 1500;
-  var TAIL_MS = 1600;
+  // 步骤节奏（虚拟毫秒）：建立 1.1s、收尾 1.5s，中间各步均分剩余时间（≥1.3s，
+  // 与 tools/check_tutorial_scenes.js 的下限一致）。
+  var LEAD_MS = 1100;
+  var TAIL_MS = 1500;
   var POINTER_MOVE_MS = 340;   // 指针移动
   var POINTER_PRESS_MS = 150;  // 点击反馈
   var NO_TARGET_DELAY = 260;   // 无指针步骤：短暂停留后变化
-  var STALL_MS = 1000;         // 单帧间隔超过此值 = 明显卡顿，明确暂停
+  var POINTER_HALF = 13;       // 指针热区半径（图标 26px）
+  var STALL_MS = 4000;         // 单帧间隔超过此值 = 环境停跳（而非一次普通卡顿），明确暂停
 
   var moduleRate = 1;          // 仅 QA 调试接口可改（慢速观察），正常恒为 1
 
@@ -220,6 +222,7 @@
     var stageClip = null;
     var startTimer = 0;
     var announceTimer = 0;
+    var rippleTimers = [];
     var sawReduce = reduceMotion.matches;
 
     // ── 壳 DOM ──
@@ -305,6 +308,7 @@
       runToken++;
       if (startTimer) { window.clearTimeout(startTimer); startTimer = 0; }
       if (announceTimer) { window.clearTimeout(announceTimer); announceTimer = 0; }
+      rippleTimers.splice(0).forEach(function (t) { window.clearTimeout(t); });
       stopClock();
       cancelStage();
       pointer = null;
@@ -516,7 +520,7 @@
       var label = el('span', 'tutorial-demo-label', '示例演示');
       stageClip = el('div', 'tutorial-stage-clip');
       pointerEl = el('div', 'tutorial-pointer');
-      pointerEl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7.5-6.2 1.7L9.5 19z" fill="currentColor" stroke="var(--surface)" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+      pointerEl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7.5-6.2 1.7L9.5 19z" fill="currentColor" stroke="var(--surface)" stroke-width="1.6" stroke-linejoin="round"/></svg>';
       pointerEl.style.opacity = '0';
       stage.appendChild(label);
       stage.appendChild(stageClip);
@@ -643,9 +647,41 @@
     }
     function setPointerAt(x, y, scale) {
       pointerPlaced = true;
-      pointerEl.style.transform = 'translate(' + (x - 11) + 'px,' + (y - 11) + 'px)' + (scale && scale !== 1 ? ' scale(' + scale + ')' : '');
+      pointerEl.style.transform = 'translate(' + (x - POINTER_HALF) + 'px,' + (y - POINTER_HALF) + 'px)' + (scale && scale !== 1 ? ' scale(' + scale + ')' : '');
     }
     function easeInOut(p) { return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; }
+
+    // 点击涟漪：在点击坐标扩散一圈（transform/opacity，随舞台动画一起暂停/取消）
+    function spawnRipple(x, y) {
+      if (!stageClip) return;
+      var ring = document.createElement('div');
+      ring.className = 'tutorial-click-ring';
+      ring.style.left = x + 'px';
+      ring.style.top = y + 'px';
+      stageClip.appendChild(ring);
+      try {
+        var anim = ring.animate([
+          { transform: 'translate(-50%, -50%) scale(0.35)', opacity: 0.5 },
+          { transform: 'translate(-50%, -50%) scale(1.6)', opacity: 0 }
+        ], { duration: 460, easing: 'cubic-bezier(.23, 1, .32, 1)' });
+        anim.onfinish = function () { if (ring.parentNode) ring.parentNode.removeChild(ring); };
+      } catch (e) { /* WAAPI 不可用：静态降级本就不走这条路 */ }
+      var t = window.setTimeout(function () {
+        rippleTimers = rippleTimers.filter(function (x) { return x !== t; });
+        if (ring.parentNode) ring.parentNode.removeChild(ring);
+      }, 700);
+      rippleTimers.push(t);
+    }
+
+    // 目标是否已被场景隐藏（点击导航后旧目标消失，指针不能悬在原地）
+    function targetHidden(el) {
+      var n = el;
+      while (n && n !== stageClip) {
+        if (n.classList && n.classList.contains('is-hidden')) return true;
+        n = n.parentNode;
+      }
+      return !n; // 已脱离场景根同样视为消失
+    }
 
     function advancePointer() {
       if (!pointer || pointer.applied) return;
@@ -677,9 +713,10 @@
       }
       if (pointer.phase === 'press') {
         var q = Math.min(1, (clock.elapsed - pointer.pressAt) / POINTER_PRESS_MS);
-        setPointerAt(pointer.to.x, pointer.to.y, 1 - 0.22 * Math.sin(Math.PI * q));
+        setPointerAt(pointer.to.x, pointer.to.y, 1 - 0.26 * Math.sin(Math.PI * q));
         if (q >= 1) {
           setPointerAt(pointer.to.x, pointer.to.y, 1);
+          spawnRipple(pointer.to.x, pointer.to.y);
           applyStep();
         }
       }
@@ -690,7 +727,15 @@
       if (pointer) pointer.applied = true;
       try { scene.go(stepIndex); } catch (e) { renderError(); return; }
       updateNowLine();
-      if (pointer && !scene.targets[stepIndex]) pointerEl.style.opacity = '0';
+      // 指针的去留：无目标步骤直接隐藏；有目标的步骤若其目标已被场景隐藏
+      //（例如点击后导航离开），同样隐藏，不能悬停在空白上。
+      if (pointer) {
+        if (!scene.targets[stepIndex]) pointerEl.style.opacity = '0';
+        else {
+          var used = targetEl(scene.targets[stepIndex]);
+          if (!used || targetHidden(used)) pointerEl.style.opacity = '0';
+        }
+      }
       if (variant.steps[stepIndex] != null) {
         say('第 ' + (stepIndex + 1) + ' 步：' + variant.steps[stepIndex]);
       }

@@ -368,7 +368,7 @@
 }
 .tutorial-demo-label {
   position: absolute;
-  top: 8px;
+  bottom: 8px;
   right: 10px;
   z-index: 3;
   font-size: 11px;
@@ -379,18 +379,21 @@
   background: var(--surface);
   pointer-events: none;
 }
-/* 转场层在相同坐标区域叠放：新旧内容绝对定位铺满裁剪区，不参与相互挤压 */
+/* 转场层在相同坐标区域叠放：新旧内容绝对定位铺满裁剪区，不参与相互挤压；
+   底部为「示例演示」角标预留条，场景内容不与角标重叠 */
 .tutorial-stage-clip {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 14px;
+  padding: 16px 16px 40px;
 }
 .tutorial-demo-frame {
   width: 100%;
-  max-width: 560px;
+  max-width: 640px;
+  /* 填满裁剪区并顶对齐：不同页面高度不同，也不在换页时整体重新居中 */
+  min-height: 100%;
   max-height: 100%;
   position: relative;
   display: flex;
@@ -403,17 +406,28 @@
   left: 0;
   top: 0;
   z-index: 4;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   color: var(--primary);
   pointer-events: none;
   opacity: 0;
   transition: opacity 120ms ease;
-  filter: drop-shadow(0 1px 2px oklch(0.45 0.01 55 / 0.35));
 }
 .tutorial-pointer svg {
   width: 100%;
   height: 100%;
+}
+/* 点击涟漪：扩散圆环，只动 transform/opacity */
+.tutorial-click-ring {
+  position: absolute;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid oklch(from var(--primary) l c h / 0.75);
+  background: oklch(from var(--primary) l c h / 0.14);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 /* 手机舞台：简洁触点（圆环），不再是桌面箭头 */
 .tutorial-stage--mobile .tutorial-pointer svg { display: none; }
@@ -788,16 +802,31 @@
 .tutorial-demo-frame { overflow: visible; }
 .tutorial-demo-is-hidden,
 .tutorial-demo-frame .is-hidden { display: none !important; }
+/* 占位不可见：为即将出现的元素保留位置（出现时不挤动周围布局） */
+.tutorial-demo-frame .is-ghost { visibility: hidden; }
 
-/* 一次性入场：只在元素（重新）显现时播放，不做整页错峰重入 */
+/* 一次性入场：只在元素（重新）显现时播放，不做整页错峰重入。
+   td-slide：前进进入的新页面（右→左滑入，有方向感）；
+   td-pop：菜单/状态徽标从锚点弹出。 */
 .tutorial-demo-frame .td-in { animation: tutorial-rise 240ms cubic-bezier(.23, 1, .32, 1) both; }
 @keyframes tutorial-rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.tutorial-demo-typed { animation: tutorial-typed-in 320ms ease-out both; }
-@keyframes tutorial-typed-in { from { opacity: 0; } to { opacity: 1; } }
-.tutorial-demo-typed { color: var(--primary); }
+.tutorial-demo-frame .td-slide { animation: tutorial-slide-in 300ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes tutorial-slide-in {
+  from { opacity: 0; transform: translateX(26px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.tutorial-demo-frame .td-pop { animation: tutorial-pop-in 200ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes tutorial-pop-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* 输入逐字浮现：每个字符带递增 delay，整体呈现连续敲入 */
+.tutorial-demo-typed { color: var(--primary); white-space: nowrap; }
+.tutorial-demo-typed .tutorial-demo-typed-ch { animation: tutorial-typed-ch 130ms ease-out both; }
+@keyframes tutorial-typed-ch { from { opacity: 0; } to { opacity: 1; } }
 
 /* 布局 */
 .tutorial-demo-col {
@@ -811,6 +840,7 @@
   align-items: center;
   gap: 8px;
   min-height: 26px;
+  position: relative;
 }
 .tutorial-demo-crumb {
   flex: 1;
@@ -880,7 +910,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--raised);
-  padding: 7px 9px;
+  padding: 9px 11px;
   min-width: 0;
 }
 .tutorial-demo-frow.is-dim { opacity: 0.45; }
@@ -946,7 +976,7 @@
   border-color: var(--primary);
 }
 
-/* 星标（点亮的动作发生在原对象上） */
+/* 星标（点亮的动作发生在原对象上）；SVG 缩放以自身为原点 */
 .tutorial-demo-star {
   flex: none;
   width: 18px;
@@ -955,16 +985,22 @@
   stroke: var(--ink-faint);
   stroke-width: 1.6;
   stroke-linejoin: round;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 .tutorial-demo-star.is-filled {
   fill: var(--star);
   stroke: var(--star-dark);
-  animation: tutorial-star-pop 240ms cubic-bezier(.23, 1, .32, 1);
+  animation: tutorial-star-pop 300ms cubic-bezier(.34, 1.4, .64, 1);
 }
 @keyframes tutorial-star-pop {
-  from { transform: scale(0.94); }
-  to { transform: scale(1); }
+  0% { transform: scale(0.7); }
+  55% { transform: scale(1.22); }
+  100% { transform: scale(1); }
 }
+/* 行内「已收藏」徽标从星标侧弹出 */
+.tutorial-demo-frow > .tutorial-demo-pill,
+.tutorial-demo-ccard > .tutorial-demo-pill { transform-origin: right center; }
 
 /* 按钮 / pill / chip / 分段 */
 .tutorial-demo-btn {
@@ -1012,6 +1048,13 @@
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  position: relative;
+}
+/* 筛选菜单锚定在 chip 栏下方（左右位置由场景内联设定），不把列表往下推 */
+.tutorial-demo-chipbar .tutorial-demo-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 3;
 }
 .tutorial-demo-chip {
   font-size: 12px;
@@ -1057,6 +1100,7 @@
 .tutorial-demo-ccard.is-new {
   border-color: var(--success);
 }
+.tutorial-demo-ccard.is-dim { opacity: 0.5; }
 .tutorial-demo-ccard.is-press { animation: tutorial-press 160ms ease-out; }
 @keyframes tutorial-press {
   0% { transform: scale(1); }
@@ -1135,7 +1179,7 @@
 }
 .tutorial-demo-searchbox-ph { color: var(--ink-faint); }
 
-/* 菜单（浮窗内弹出层，占位于所在列尾部，不遮内容） */
+/* 菜单（锚定下拉：放在 .tutorial-demo-headrow 内时挂在头像下方，遮住内容） */
 .tutorial-demo-menu {
   align-self: flex-end;
   display: flex;
@@ -1148,6 +1192,14 @@
   padding: 6px;
   min-width: 150px;
   z-index: 2;
+}
+.tutorial-demo-headrow .tutorial-demo-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  align-self: auto;
+  z-index: 3;
+  transform-origin: top right;
 }
 .tutorial-demo-menu-item {
   font-size: 12px;
@@ -1178,6 +1230,10 @@
 .tutorial-demo-detail-meta { font-size: 11px; color: var(--ink-faint); }
 .tutorial-demo-detail-desc { font-size: 12px; color: var(--ink-soft); margin: 0; }
 .tutorial-demo-detail-actions { display: flex; gap: 6px; }
+/* 列容器里的独立徽标靠右悬挂，不撑成整行色块 */
+.tutorial-demo-detail > .tutorial-demo-pill,
+.tutorial-demo-col > .tutorial-demo-pill,
+.tutorial-demo-frame > .tutorial-demo-pill { align-self: flex-end; }
 .tutorial-demo-viewer {
   display: flex;
   flex-direction: column;
@@ -1346,6 +1402,18 @@
   box-shadow: 0 0 0 1px oklch(from var(--primary) l c h / 0.25);
 }
 .tutorial-demo-qcard-title { font-size: 13px; font-weight: 600; color: var(--ink); padding-right: 70px; }
+.tutorial-demo-qahead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tutorial-demo-qahead-title {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
 .tutorial-demo-qcard-meta { font-size: 11px; color: var(--ink-faint); }
 .tutorial-demo-qcard .tutorial-demo-pill {
   position: absolute;
@@ -1502,7 +1570,7 @@
     max-height: none;
     min-height: 280px;
   }
-  .tutorial-stage-clip { padding: 12px 10px; }
+  .tutorial-stage-clip { padding: 12px 10px 36px; }
   .tutorial-demo-frame { max-width: 340px; }
   .tutorial-now-title { font-size: 19px; }
   .tutorial-now-line { font-size: 14px; }

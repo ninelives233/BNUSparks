@@ -36,17 +36,34 @@
   function setHidden(el, hidden) {
     if (el) el.classList.toggle('is-hidden', !!hidden);
   }
-  // 元素（重新）显现：一次性入场动画，不在每步整体重播
-  function reveal(el) {
-    setHidden(el, false);
-    el.classList.remove('td-in');
-    void el.offsetWidth;
-    el.classList.add('td-in');
+  // 预留占位但不可见：元素出现前后不改变周围布局（星标不会因徽标出现而移位）
+  function ghost(el) {
+    if (el) el.classList.add('is-ghost');
     return el;
   }
-  // 输入示例以词组/短句淡入，不逐字模拟键盘
+  // 元素（重新）显现：一次性入场动画，不在每步整体重播。
+  // kind: 'td-in'（默认，上浮）/ 'td-slide'（前进而来的页面，右侧滑入）/
+  //       'td-pop'（菜单、状态徽标等从锚点弹出）。
+  function reveal(el, kind) {
+    setHidden(el, false);
+    el.classList.remove('is-ghost');
+    el.classList.remove('td-in');
+    el.classList.remove('td-slide');
+    el.classList.remove('td-pop');
+    void el.offsetWidth;
+    el.classList.add(kind || 'td-in');
+    return el;
+  }
+  // 输入示例：逐字浮现（纯 CSS delay，暂停时随子树动画一起冻结）
   function typed(text) {
-    return sp('typed', text);
+    var wrap = sp('typed');
+    var chars = String(text == null ? '' : text);
+    for (var i = 0; i < chars.length; i++) {
+      var c = sp('typed-ch', chars[i]);
+      c.style.animationDelay = Math.min(i * 34, 640) + 'ms';
+      wrap.appendChild(c);
+    }
+    return wrap;
   }
   function fillInput(inputEl, text) {
     inputEl.textContent = '';
@@ -318,7 +335,7 @@
   function findSearch(ctx) {
     var mobile = !!ctx.mobile;
     var root = d('frame');
-    var bar = headRow(['木铎星火', '首页'], { avatarMark: 'avatar' });
+    var bar = headRow(['木铎星火', '首页']);
     var search = searchbox({ placeholder: '搜索课程、资料或老师…', mark: 'search-input', btnMark: 'search-go' });
     var results = d('col');
     var resCourse = d('result is-course');
@@ -372,8 +389,8 @@
         function () {},
         function () { fillInput(search.querySelector('.tutorial-demo-searchbox-input'), '学习方法'); },
         function () { reveal(results); },
-        function () { setHidden(results, true); reveal(coursePage); },
-        function () { setHidden(coursePage, true); reveal(detail); }
+        function () { setHidden(results, true); reveal(coursePage, 'td-slide'); },
+        function () { setHidden(coursePage, true); reveal(detail, 'td-slide'); }
       ]
     };
   }
@@ -388,10 +405,15 @@
     bar.appendChild(chipType);
     bar.appendChild(chipSort);
     root.appendChild(bar);
+    // 筛选菜单锚定在各自 chip 下方（真实下拉），不再把列表往下推
     var typeMenu = menu(['全部', '笔记', { label: '试卷', mark: 'opt-paper' }, '讲义'], { activeIdx: 2 });
     var sortMenu = menu(['上传时间', '下载量', { label: '收藏量', mark: 'opt-fav' }], { activeIdx: 2 });
-    root.appendChild(typeMenu);
-    root.appendChild(sortMenu);
+    typeMenu.style.left = '0';
+    typeMenu.style.transformOrigin = 'top left';
+    sortMenu.style.right = '0';
+    sortMenu.style.transformOrigin = 'top right';
+    bar.appendChild(typeMenu);
+    bar.appendChild(sortMenu);
     var list = d('list');
     var paper1 = row({ title: '2022 期末试卷.pdf', meta: '示例同学 · 收藏 41', ext: 'pdf' });
     var paper2 = row({ title: '2023 期末试卷.pdf', meta: '示例同学 · 收藏 28', ext: 'pdf' });
@@ -410,7 +432,7 @@
       clicks: [false, true, true, true, true],
       apply: [
         function () {},
-        function () { reveal(typeMenu); },
+        function () { reveal(typeMenu, 'td-pop'); },
         function () {
           setHidden(typeMenu, true);
           chipType.textContent = '类型：试卷';
@@ -418,7 +440,15 @@
           setHidden(note1, true);
           setHidden(note2, true);
         },
-        function () { reveal(sortMenu); },
+        function () {
+          // 排序菜单锚定在「排序」chip 当前位置下方（类型激活后宽度会变，落到打开时再取）
+          if (chipSort.offsetLeft) {
+            sortMenu.style.left = chipSort.offsetLeft + 'px';
+            sortMenu.style.right = 'auto';
+            sortMenu.style.transformOrigin = 'top left';
+          }
+          reveal(sortMenu, 'td-pop');
+        },
         function () {
           setHidden(sortMenu, true);
           chipSort.textContent = '排序：收藏量';
@@ -464,19 +494,23 @@
         function () {},
         function () {
           rowAlt.classList.add('is-hot');
-          same.appendChild(noteLine('两条都叫“学习方法导论”，代码不同。'));
+          var n1 = noteLine('两条都叫“学习方法导论”，代码不同。');
+          same.appendChild(n1);
+          reveal(n1);
         },
         function () {
           codeChip.textContent = 'DEMO201';
           files.textContent = '';
           files.appendChild(row({ title: '海洋科学导论复习要点.pdf', meta: '示例同学 · 收藏 8', ext: 'pdf' }));
           files.appendChild(row({ title: '课程大纲.pdf', meta: '另一位同学 · 收藏 2', ext: 'pdf' }));
-          reveal(files);
+          reveal(files, 'td-slide');
           setHidden(same, true);
         },
         function () {
           codeChip.classList.add('is-hot');
-          root.appendChild(noteLine('名称相同、代码不同：留意课程归属再下载资料。'));
+          var n2 = noteLine('名称相同、代码不同：留意课程归属再下载资料。');
+          root.appendChild(n2);
+          reveal(n2);
         }
       ]
     };
@@ -513,19 +547,21 @@
         root: root, steps: 4,
         targets: [null, 'btn-preview', 'btn-dl-pdf', null],
         clicks: [false, true, true, false],
-        apply: [
-          function () {},
-          function () { reveal(mobileHint); },
-          function () {
-            dlPill = pill('已开始下载 ↓', 'success');
-            detail.appendChild(dlPill);
-            reveal(dlPill);
-          },
-          function () {
-            setHidden(mobileHint, true);
-            detail.appendChild(noteLine('下载后用手机上的应用查看 PDF。'));
-          }
-        ]
+      apply: [
+        function () {},
+        function () { reveal(mobileHint, 'td-slide'); },
+        function () {
+          dlPill = pill('已开始下载 ↓', 'success');
+          detail.appendChild(dlPill);
+          reveal(dlPill, 'td-pop');
+        },
+        function () {
+          setHidden(mobileHint, true);
+          var n = noteLine('下载后用手机上的应用查看 PDF。');
+          detail.appendChild(n);
+          reveal(n);
+        }
+      ]
       };
     }
     viewer = d('viewer');
@@ -560,7 +596,9 @@
           setHidden(viewer, true);
           previewBtn.classList.remove('is-primary');
           dlBtn.classList.add('is-primary');
-          detail.appendChild(noteLine('确认内容后再下载；PPT/PPTX 暂不支持在线预览。'));
+          var n = noteLine('确认内容后再下载；PPT/PPTX 暂不支持在线预览。');
+          detail.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -605,7 +643,7 @@
       clicks: [false, true, true, false],
       apply: [
         function () {},
-        function () { reveal(listPanel); },
+        function () { reveal(listPanel, 'td-slide'); },
         function () {
           treeBox.textContent = '';
           entries = tree(true);
@@ -613,7 +651,9 @@
           reveal(treeBox);
         },
         function () {
-          listPanel.appendChild(noteLine('这里查看目录，不打开包内文件。'));
+          var n = noteLine('这里查看目录，不打开包内文件。');
+          listPanel.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -672,10 +712,12 @@
           [r1, r2].forEach(function (r) {
             var feed = pill('已开始下载 ↓', 'success');
             r.appendChild(feed);
-            reveal(feed);
+            reveal(feed, 'td-pop');
           });
           setHidden(dlSelBtn, true);
-          root.appendChild(noteLine('两份资料分别下载，不合并为压缩包。'));
+          var n = noteLine('两份资料分别下载，不合并为压缩包。');
+          root.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -732,9 +774,9 @@
       clicks: [false, true, true, true],
       apply: [
         function () {},
-        function () { setHidden(empty, true); reveal(confirm); },
-        function () { setHidden(confirm, true); reveal(listWrap); },
-        function () { setHidden(listWrap, true); reveal(dest); }
+        function () { setHidden(empty, true); reveal(confirm, 'td-slide'); },
+        function () { setHidden(confirm, true); reveal(listWrap, 'td-slide'); },
+        function () { setHidden(listWrap, true); reveal(dest, 'td-slide'); }
       ]
     };
   }
@@ -767,7 +809,7 @@
           segEl.children[0].classList.remove('is-active');
           segEl.children[1].classList.add('is-active');
           setHidden(listView, true);
-          reveal(weekView);
+          reveal(weekView, 'td-slide');
         },
         function () {
           weekView.classList.add('is-focus');
@@ -778,7 +820,7 @@
           segEl.children[0].classList.add('is-active');
           setHidden(weekView, true);
           setHidden(listView, false);
-          reveal(listView);
+          reveal(listView, 'td-slide-back');
         }
       ]
     };
@@ -790,9 +832,16 @@
     var generic = ctx.capability === 'generic';
     var root = d('frame');
     root.appendChild(headRow(['我的课程']));
+    var list = d('col');
+    list.appendChild(card({ name: '高等数学 B', code: 'DEMO102', hot: false }));
+    list.firstChild.classList.add('is-dim');
     var solo = card({ name: '学习方法导论', code: 'DEMO101', mark: 'card-course' });
     if (link) solo.appendChild(pill('有资料', 'success'));
-    root.appendChild(solo);
+    list.appendChild(solo);
+    var other = card({ name: '体育（三）', code: 'DEMO103' });
+    other.classList.add('is-dim');
+    list.appendChild(other);
+    root.appendChild(list);
     var dest = d('col');
     dest.appendChild(courseHead('学习方法导论', 'DEMO101'));
     if (link) {
@@ -809,16 +858,18 @@
     var apply = [
       function () {},
       function () { solo.classList.add('is-press'); },
-      function () { setHidden(solo, true); reveal(dest); },
+      function () { setHidden(list, true); reveal(dest, 'td-slide'); },
       function () {
+        var n = link
+          ? noteLine('课程名与目录位置保持一致。')
+          : noteLine(generic
+            ? '能否直达资料取决于培养层次、课表格式和课程匹配。'
+            : '此课表仅作课程表使用；课程安排以详情为准。');
+        dest.appendChild(n);
+        reveal(n);
         if (link) {
           var f = dest.querySelector('[data-mark="file-1"]');
           if (f) f.classList.add('is-hot');
-          dest.appendChild(noteLine('课程名与目录位置保持一致。'));
-        } else {
-          dest.appendChild(noteLine(generic
-            ? '能否直达资料取决于培养层次、课表格式和课程匹配。'
-            : '此课表仅作课程表使用；课程安排以详情为准。'));
         }
       }
     ];
@@ -838,8 +889,9 @@
     var list = d('col');
     list.appendChild(card({ name: '高等数学 B', code: 'DEMO102' }));
     root.appendChild(list);
+    // 菜单锚定在「管理」按钮下方
     var manageMenu = menu(['导入课表', { label: '手动添加课程', mark: 'mi-manual' }, '外观设置'], { activeIdx: 1 });
-    root.appendChild(manageMenu);
+    bar.appendChild(manageMenu);
     setHidden(manageMenu, true);
     var form = panel('手动添加课程', [
       formRow('课程名称', '书法入门'),
@@ -856,13 +908,15 @@
       clicks: [false, true, true, true],
       apply: [
         function () {},
-        function () { reveal(manageMenu); },
-        function () { setHidden(manageMenu, true); reveal(form); },
+        function () { reveal(manageMenu, 'td-pop'); },
+        function () { setHidden(manageMenu, true); reveal(form, 'td-slide'); },
         function () {
           setHidden(form, true);
           list.insertBefore(newCard, list.firstChild);
           reveal(newCard);
-          root.appendChild(noteLine('自学课程不会出现在周课表中。'));
+          var n = noteLine('自学课程不会出现在周课表中。');
+          root.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -912,7 +966,7 @@
           list.textContent = '';
           newCards = cardsFor('new');
           list.appendChild(newCards);
-          reveal(list);
+          reveal(list, 'td-slide');
         },
         function () {
           rowOld.classList.add('is-active', 'is-hot');
@@ -920,8 +974,10 @@
           list.textContent = '';
           oldCards = cardsFor('old');
           list.appendChild(oldCards);
-          reveal(list);
-          root.appendChild(noteLine('旧课表仍可随时查看。'));
+          reveal(list, 'td-slide-back');
+          var n = noteLine('旧课表仍可随时查看。');
+          root.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -934,22 +990,26 @@
     var barCrumb = bar.querySelector('.tutorial-demo-crumb');
     root.appendChild(bar);
     var listWrap = d('col');
+    // 同层课程行做上下文：舞台是“一门课在一列表中”，不是孤立一行
+    listWrap.appendChild(row({ title: '课程设计与开发', meta: 'EDU220 · 示例学院', dim: true }));
     var courseRow = d('frow is-hot');
     courseRow.appendChild(d('frow-title', '学习方法导论'));
     courseRow.appendChild(sp('codechip', 'DEMO101'));
-    courseRow.appendChild(star(false, 'star'));
-    var favedPill = pill('已收藏', 'star');
+    var starEl = star(false, 'star');
+    starEl.style.marginLeft = 'auto';
+    courseRow.appendChild(starEl);
+    var favedPill = ghost(pill('已收藏', 'star'));
+    courseRow.appendChild(favedPill);
     listWrap.appendChild(courseRow);
-    listWrap.appendChild(favedPill);
+    listWrap.appendChild(row({ title: '教育心理学基础', meta: 'PSY105 · 示例学院', dim: true }));
     root.appendChild(listWrap);
-    setHidden(favedPill, true);
+    // 头像菜单锚定在顶栏头像下方（真实下拉），不挤在列表流里
     var favMenu = menu(['通知中心', '我的上传', { label: '我的收藏', mark: 'menu-fav' }, '个人中心'], { activeIdx: 2 });
-    root.appendChild(favMenu);
+    bar.appendChild(favMenu);
     setHidden(favMenu, true);
     var favPage = d('col');
     favPage.appendChild(favTabs(0, ['fav-tab-course', 'fav-tab-file', 'fav-tab-post']));
-    var favRowEl = row({ title: '学习方法导论', meta: 'DEMO101', mark: 'fav-row', star: true, hot: true });
-    favPage.appendChild(favRowEl);
+    favPage.appendChild(row({ title: '学习方法导论', meta: 'DEMO101', mark: 'fav-row', star: true, hot: true }));
     root.appendChild(favPage);
     setHidden(favPage, true);
     var coursePage = d('col');
@@ -957,6 +1017,7 @@
     coursePage.appendChild(courseHead('学习方法导论', 'DEMO101'));
     coursePage.appendChild(row({ title: '期末复习提纲.pdf', meta: '示例同学 · 收藏 12', ext: 'pdf', count: '86', dlBtn: true }));
     coursePage.appendChild(row({ title: '平时作业参考.pdf', meta: '另一位同学 · 收藏 5', ext: 'pdf', count: '40', dlBtn: true }));
+    coursePage.appendChild(row({ title: '课堂展示指南.pdf', meta: '第三位同学 · 收藏 3', ext: 'pdf', count: '18', dlBtn: true, dim: true }));
     coursePage.appendChild(noteLine('从“我的收藏 → 课程”随时回到这里。'));
     root.appendChild(coursePage);
     setHidden(coursePage, true);
@@ -967,22 +1028,22 @@
       apply: [
         function () {},
         function () {
-          courseRow.querySelector('.tutorial-demo-star').classList.add('is-filled');
+          starEl.classList.add('is-filled');
           setHidden(favedPill, false);
-          reveal(favedPill);
+          reveal(favedPill, 'td-pop');
         },
-        function () { reveal(favMenu); },
+        function () { reveal(favMenu, 'td-pop'); },
         function () {
           setHidden(favMenu, true);
           setHidden(listWrap, true);
           barCrumb.textContent = '';
           barCrumb.appendChild(sp('crumb-item is-hot', '头像菜单 › 我的收藏 › 课程'));
-          reveal(favPage);
+          reveal(favPage, 'td-slide');
         },
         function () {
           setHidden(bar, true);
           setHidden(favPage, true);
-          reveal(coursePage);
+          reveal(coursePage, 'td-slide');
         }
       ]
     };
@@ -999,16 +1060,19 @@
     dinfo.appendChild(d('detail-title', '期末复习提纲.pdf'));
     dinfo.appendChild(d('detail-meta', '学习方法导论 · DEMO101'));
     dhead.appendChild(dinfo);
-    dhead.appendChild(star(false, 'star'));
+    var starEl = star(false, 'star');
+    dhead.appendChild(starEl);
+    var favedPill = ghost(pill('已收藏', 'star'));
+    dhead.appendChild(favedPill);
     detail.appendChild(dhead);
-    var favedPill = pill('已收藏', 'star');
-    detail.appendChild(favedPill);
-    setHidden(favedPill, true);
+    detail.appendChild(d('detail-desc', '按周整理的复习要点与例题提示。'));
+    detail.appendChild(sheet('期末复习提纲', '第一章 学习方法概述', [1, 2, 3], { foot: '示例预览 · 第 1 页' }));
     root.appendChild(detail);
     var favPage = d('col');
     favPage.appendChild(sp('crumb-solo', '头像菜单 › 我的收藏 › 文件'));
     favPage.appendChild(favTabs(1, ['fav-tab-course', 'fav-tab-file', 'fav-tab-post']));
     favPage.appendChild(row({ title: '期末复习提纲.pdf', meta: '学习方法导论 · DEMO101', ext: 'pdf', mark: 'fav-row', hot: true }));
+    favPage.appendChild(row({ title: '课程大纲.pdf', meta: '学习方法导论 · DEMO101', ext: 'pdf', dim: true }));
     root.appendChild(favPage);
     setHidden(favPage, true);
     return {
@@ -1018,12 +1082,18 @@
       apply: [
         function () {},
         function () {
-          detail.querySelector('.tutorial-demo-star').classList.add('is-filled');
-          setHidden(favedPill, false);
-          reveal(favedPill);
+          starEl.classList.add('is-filled');
+          reveal(favedPill, 'td-pop');
         },
-        function () { setHidden(detail, true); reveal(favPage); },
-        function () { setHidden(favPage, true); setHidden(detail, false); reveal(detail); root.appendChild(noteLine('点开收藏的资料，回到详情。')); }
+        function () { setHidden(detail, true); reveal(favPage, 'td-slide'); },
+        function () {
+          setHidden(favPage, true);
+          setHidden(detail, false);
+          reveal(detail, 'td-slide-back');
+          var n = noteLine('点开收藏的资料，回到详情。');
+          root.appendChild(n);
+          reveal(n);
+        }
       ]
     };
   }
@@ -1064,13 +1134,15 @@
           favBtn.classList.add('is-on');
           a1.classList.add('is-hot');
         },
-        function () { setHidden(answers, true); reveal(favPage); },
+        function () { setHidden(answers, true); reveal(favPage, 'td-slide'); },
         function () {
           setHidden(favPage, true);
           setHidden(answers, false);
           a1.classList.add('is-hot');
-          reveal(answers);
-          root.appendChild(noteLine('点开收藏，回到回答所在位置。'));
+          reveal(answers, 'td-slide-back');
+          var n = noteLine('点开收藏，回到回答所在位置。');
+          root.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -1079,9 +1151,10 @@
   // save-retrieve · A 头像 → B 菜单 → C 课程标签 → D 文件标签 → E 帖子标签
   function saveRetrieve(ctx) {
     var root = d('frame');
-    root.appendChild(headRow(null, [avatar('avatar')]));
+    var bar = headRow(null, [avatar('avatar')]);
+    root.appendChild(bar);
     var favMenu = menu(['通知中心', '我的上传', { label: '我的收藏', mark: 'mi-fav' }, '个人中心'], { activeIdx: 2 });
-    root.appendChild(favMenu);
+    bar.appendChild(favMenu);
     setHidden(favMenu, true);
     var favPage = d('col');
     favPage.appendChild(sp('crumb-solo', '头像菜单 › 我的收藏'));
@@ -1103,10 +1176,10 @@
       clicks: [false, true, true, true, true],
       apply: [
         function () {},
-        function () { reveal(favMenu); },
+        function () { reveal(favMenu, 'td-pop'); },
         function () {
           setHidden(favMenu, true);
-          reveal(favPage);
+          reveal(favPage, 'td-slide');
         },
         function () {
           tabs.children[0].classList.remove('is-active');
@@ -1119,7 +1192,9 @@
           tabs.children[2].classList.add('is-active');
           setHidden(fileRow, true);
           reveal(postRow);
-          favPage.appendChild(noteLine('课程、资料和问答收藏都在这里。'));
+          var n = noteLine('课程、资料和问答收藏都在这里。');
+          favPage.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -1158,12 +1233,12 @@
       clicks: [false, true, false, true],
       apply: [
         function () {},
-        function () { setHidden(list, true); reveal(dialog); },
+        function () { setHidden(list, true); reveal(dialog, 'td-slide'); },
         function () {
           setHidden(rowType, false); setHidden(rowTeacher, false); setHidden(rowDesc, false);
           reveal(rowType); reveal(rowTeacher); reveal(rowDesc);
         },
-        function () { setHidden(dialog, true); reveal(pending); }
+        function () { setHidden(dialog, true); reveal(pending, 'td-slide'); }
       ]
     };
   }
@@ -1210,7 +1285,7 @@
           setHidden(rowType, false);
           reveal(rowType);
         },
-        function () { setHidden(dialog, true); reveal(pending); }
+        function () { setHidden(dialog, true); reveal(pending, 'td-slide'); }
       ]
     };
   }
@@ -1251,12 +1326,12 @@
       clicks: [false, true, false, true],
       apply: [
         function () {},
-        function () { setHidden(dialog, true); reveal(form); },
+        function () { setHidden(dialog, true); reveal(form, 'td-slide'); },
         function () {
           setHidden(rowType, false); setHidden(rowCollege, false); setHidden(rowMajor, false);
           reveal(rowType); reveal(rowCollege); reveal(rowMajor);
         },
-        function () { setHidden(form, true); reveal(pending); }
+        function () { setHidden(form, true); reveal(pending, 'td-slide'); }
       ]
     };
   }
@@ -1266,11 +1341,11 @@
     var root = d('frame');
     var bell = sp('bell', '🔔');
     mark('bell', bell);
-    setHidden(bell, true);
+    ghost(bell);
     var bar = headRow(null, [bell, avatar('avatar')]);
     root.appendChild(bar);
     var favMenu = menu(['通知中心', { label: '我的上传', mark: 'mi-up' }, '我的收藏'], { activeIdx: 1 });
-    root.appendChild(favMenu);
+    bar.appendChild(favMenu);
     setHidden(favMenu, true);
     var uploads = d('col');
     uploads.appendChild(sp('crumb-solo', '头像菜单 › 我的上传'));
@@ -1289,20 +1364,24 @@
       clicks: [false, true, true, true, true],
       apply: [
         function () {},
-        function () { reveal(favMenu); },
-        function () { setHidden(favMenu, true); reveal(uploads); },
+        function () { reveal(favMenu, 'td-pop'); },
+        function () { setHidden(favMenu, true); reveal(uploads, 'td-slide'); },
         function () {
           tabs.children[1].classList.remove('is-active');
           tabs.children[0].classList.add('is-active');
           setHidden(rowPending, true);
           setHidden(rowPublished, false);
           reveal(rowPublished);
-          uploads.appendChild(noteLine('“已发布”是另一份资料——审核不是自动通过的。'));
+          var n1 = noteLine('“已发布”是另一份资料——审核不是自动通过的。');
+          uploads.appendChild(n1);
+          reveal(n1);
         },
         function () {
-          setHidden(bell, false);
+          reveal(bell, 'td-pop');
           bell.classList.add('is-hot');
-          uploads.appendChild(noteLine('审核消息也会发到通知中心。'));
+          var n2 = noteLine('审核消息也会发到通知中心。');
+          uploads.appendChild(n2);
+          reveal(n2);
         }
       ]
     };
@@ -1332,14 +1411,16 @@
       clicks: [false, true, true, true],
       apply: [
         function () {},
-        function () { reveal(reason); },
-        function () { setHidden(reason, true); reveal(form); },
+        function () { reveal(reason, 'td-slide'); },
+        function () { setHidden(reason, true); reveal(form, 'td-slide'); },
         function () {
           setHidden(form, true);
           crumbEl.textContent = '我的上传 › 审核中';
           rejected.replaceChild(pill('待审核', 'pending'), rejected.querySelector('.tutorial-demo-pill'));
           reveal(rejected);
-          root.appendChild(noteLine('状态恢复为待审核，不演示自动通过。'));
+          var n = noteLine('状态恢复为待审核，不演示自动通过。');
+          root.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -1380,7 +1461,7 @@
         function () {},
         function () { fillInput(search.querySelector('.tutorial-demo-searchbox-input'), '期末复习'); },
         function () { reveal(results); },
-        function () { setHidden(results, true); reveal(detail); }
+        function () { setHidden(results, true); reveal(detail, 'td-slide'); }
       ]
     };
   }
@@ -1441,14 +1522,18 @@
           setHidden(tagPanel, true);
           bar.insertBefore(activeChip, sortChip);
           setHidden(activeChip, false);
+          reveal(activeChip, 'td-pop');
           bar.insertBefore(clearChip, activeChip);
+          // 先占位再显现：「清除筛选」出现时不挤动旁边的排序 chip
           setHidden(clearChip, false);
+          ghost(clearChip);
           setHidden(q2, true);
         },
         function () {
-          bar.insertBefore(clearChip, activeChip);
-          setHidden(clearChip, false);
-          root.appendChild(noteLine('已选标签与排序保持可见，可随时清除。'));
+          reveal(clearChip, 'td-pop');
+          var n = noteLine('已选标签与排序保持可见，可随时清除。');
+          root.appendChild(n);
+          reveal(n);
         }
       ]
     };
@@ -1488,14 +1573,14 @@
       clicks: [false, true, false, true],
       apply: [
         function () {},
-        function () { setHidden(list, true); reveal(editor); },
+        function () { setHidden(list, true); reveal(editor, 'td-slide'); },
         function () {
           setHidden(rowBody, false);
           setHidden(tagsBox, false);
           reveal(rowBody);
           reveal(tagsBox);
         },
-        function () { setHidden(editor, true); reveal(pending); }
+        function () { setHidden(editor, true); reveal(pending, 'td-slide'); }
       ]
     };
   }
@@ -1529,12 +1614,12 @@
       clicks: [false, true, false, true],
       apply: [
         function () {},
-        function () { setHidden(detail, true); reveal(editor); },
+        function () { setHidden(detail, true); reveal(editor, 'td-slide'); },
         function () {
           fillInput(rowBody.querySelector('.tutorial-demo-formrow-input'),
             '先按章节整理错题，再按优先级复习；适合考前两周开始。');
         },
-        function () { setHidden(editor, true); reveal(pending); }
+        function () { setHidden(editor, true); reveal(pending, 'td-slide'); }
       ]
     };
   }
@@ -1570,7 +1655,9 @@
         function () {},
         function () {
           a1.classList.add('is-focus');
-          root.appendChild(noteLine('只有提问者本人能看到采纳按钮。'));
+          var n1 = noteLine('只有提问者本人能看到采纳按钮。');
+          root.appendChild(n1);
+          reveal(n1);
         },
         function () {
           a1.classList.remove('is-focus');
@@ -1578,13 +1665,15 @@
           var headEl = a1.querySelector('.tutorial-demo-answer-head');
           headEl.appendChild(badge);
           setHidden(badge, false);
-          reveal(badge);
+          reveal(badge, 'td-pop');
           var adopt = a1.querySelector('[data-mark="adopt-btn"]');
           if (adopt) adopt.parentNode.removeChild(adopt);
           q.replaceChild(pill('已采纳', 'success'), q.querySelector('.tutorial-demo-pill'));
         },
         function () {
-          root.appendChild(noteLine('回答顺序保持不变，只添加采纳标记。'));
+          var n2 = noteLine('回答顺序保持不变，只添加采纳标记。');
+          root.appendChild(n2);
+          reveal(n2);
         }
       ]
     };
@@ -1649,6 +1738,10 @@
       if (!Array.isArray(scene.targets) || scene.targets.length !== scene.steps) return null;
       if (!Array.isArray(scene.apply) || scene.apply.length !== scene.steps) return null;
       var clicks = Array.isArray(scene.clicks) ? scene.clicks : [];
+      // go(i) 语义是“推进到第 i 步的绝对状态”。同一实例上顺序调用时只执行
+      // 增量（apply[已应用+1..i]），避免“追加类”操作重复执行；新实例从
+      // 头执行全部 apply（静态降级视图与守门依赖这一性质）。
+      var lastApplied = -1;
       return {
         root: scene.root,
         steps: scene.steps,
@@ -1656,7 +1749,9 @@
         clicks: scene.targets.map(function (t, i) { return clicks[i] !== false; }),
         go: function (i) {
           if (i < 0 || i >= scene.steps) return;
-          for (var k = 0; k <= i; k++) scene.apply[k]();
+          var from = Math.max(lastApplied + 1, 0);
+          for (var k = from; k <= i; k++) scene.apply[k]();
+          lastApplied = Math.max(lastApplied, i);
         }
       };
     },

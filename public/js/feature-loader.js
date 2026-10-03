@@ -57,7 +57,9 @@
   // v325：教程挂载调用修正（mount 单参数）与进度仓库空存储初始化。
   // v331：教程重制——分步时长（5～10s）、持久场景就地变化、单一 rAF 时钟、
   //        统一停轴与稳定控制节点；tutorial.css 一并重排，缓存键同步推进。
-  var VERSION = '331';
+  // v332：教程体验重制二轮——连续动效（页面滑入/菜单弹出/逐字输入/点击涟漪）、
+  //        go(i) 增量应用、节奏收紧与停跳阈值 4s；缓存键同步推进。
+  var VERSION = '332';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

@@ -5,7 +5,7 @@
    1. 25 个分镜全部能构建，步骤数与 tutorial-data.js 的 steps 一一对应；
    2. 每步 go(i) 可从初始状态直接推进（静态降级视图依赖此性质）；
    3. 每步指针目标在该步开始前（go(i-1) 之后）已存在于场景根内；
-   4. 时长满足节奏公式：建立 1.5s + 每步 ≥1.4s + 收尾 1.6s；
+   4. 时长满足节奏公式：建立 1.1s + 每步 ≥1.3s + 收尾 1.5s；
    5. capability 保守分支：无会话信息时为 generic。 */
 
 const fs = require('fs');
@@ -209,15 +209,19 @@ for (const id of lessons) {
       }
     }
 
-    // 4. 时长满足节奏公式（留表：建立 1.5s + 每步 ≥1.4s + 收尾 1.6s）
+    // 4. 时长满足节奏公式（留表：建立 1.1s + 每步 ≥1.3s + 收尾 1.5s）
     const n = scene.steps;
-    const minDur = 1500 + 1400 * (n - 1) + 1600;
+    const minDur = 1100 + 1300 * (n - 1) + 1500;
     check(lesson.durationMs >= minDur,
       label + '：durationMs ' + lesson.durationMs + ' 低于 ' + n + ' 步下限 ' + minDur);
     const cues = P.cueTimes(lesson.durationMs, n);
     check(cues.length === n, label + '：cueTimes 长度不符');
-    for (let i = 1; i < cues.length; i++) {
-      check(cues[i] - cues[i - 1] >= 1400, label + '：第 ' + i + ' 步间隔不足 1.4s');
+    if (cues.length > 1) {
+      // 建立相位（cue0→cue1）由 LEAD_MS 决定，单独要求可读下限
+      check(cues[1] >= 1000, label + '：建立步骤停留不足 1s');
+    }
+    for (let i = 2; i < cues.length; i++) {
+      check(cues[i] - cues[i - 1] >= 1300, label + '：第 ' + i + ' 步间隔不足 1.3s');
       check(cues[i] <= lesson.durationMs - 1200, label + '：末步变化后停留不足');
     }
   }
