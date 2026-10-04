@@ -36,7 +36,7 @@ GROUP_ORDER = tuple(LESSON_GROUPS)
 
 # 当前内容版本：修文案、调动画不提升 revision；操作入口/步骤实质变化才提升。
 LESSON_REVISIONS = {
-    "find-search": 2,
+    "find-search": 3,
     "find-filter": 2,
     "find-same-name": 2,
     "find-preview": 2,
@@ -52,7 +52,7 @@ LESSON_REVISIONS = {
     "save-answer": 2,
     "save-retrieve": 2,
     "share-file": 2,
-    "share-text": 2,
+    "share-text": 3,
     "share-course": 2,
     "share-review": 2,
     "share-resubmit": 2,

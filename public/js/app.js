@@ -286,7 +286,11 @@ window.addEventListener('popstate', async function(e) {
 
   // ── 正常视图切换 + 恢复内部状态 ──
   if (state && state.view && typeof switchView === 'function') {
-    switchView(state.view, true);
+    // v335：教程条目自身没有前景页面——背景保持当前真实页面（来源页），
+    // 不 switchView('tutorial') 显示空教程页；浮窗由下方 v324 分支重开
+    if (state.view !== 'tutorial') {
+      switchView(state.view, true);
+    }
     // 管理后台懒加载兜底：popstate 可能落在本会话从未初始化过后台的历史条目上
     // （跨刷新边界的旧条目、启动期被守卫拦下的条目），此时 admin.css 未加载、
     // adminContent 为空、Tab 未绑定，只切视图会得到空壳。走完整入口补齐渲染，
@@ -388,7 +392,8 @@ window.addEventListener('popstate', async function(e) {
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
-    } else if (typeof updateSidebar === 'function') {
+    } else if (state.view !== 'tutorial' && typeof updateSidebar === 'function') {
+      // 教程条目不改变背景视图，侧栏高亮保持来源页原状
       updateSidebar(state.view);
     }
     // v324：前进/刷新落到 /tutorial 条目且教程未开 → 恢复主题目录（不自动续播）
@@ -577,7 +582,16 @@ document.addEventListener('DOMContentLoaded', () => {
         case 'notif': showNotifFull(); break;
         case 'admin': showAdminPanel(); break;
         case 'about': showAbout(saved.aboutSection || 'introduction'); break;
-        case 'tutorial': showTutorial(); break;
+        case 'tutorial':
+          // v335：/tutorial 直达或刷新——教程条目自身没有前景页面，
+          // 先渲染真实首页作背景，再在其上打开教程浮窗（不压新条目）
+          if (window.BnuTutorial && typeof window.BnuTutorial.open === 'function') {
+            showHome();
+            window.BnuTutorial.open({ mode: 'catalog', fromHistory: true, silent: true });
+          } else {
+            showTutorial();
+          }
+          break;
         case 'announcements': showAnnouncements(saved.announcementId); break;
         case 'broad': showBroad(); break;
         case 'myuploads': showMyUploadsPage(saved.myUploadTab); break;

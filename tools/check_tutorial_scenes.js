@@ -4,9 +4,12 @@
    验证前端分镜契约（不替代浏览器体验验收）：
    1. 25 个分镜全部能构建，步骤数与 tutorial-data.js 的 steps 一一对应；
    2. 每步 go(i) 可从初始状态直接推进（静态降级视图依赖此性质）；
-   3. 每步指针目标在该步开始前（go(i-1) 之后）已存在于场景根内；
-   4. 时长满足节奏公式：pace[k]（第 k+1 步与前一步的间隔）建立 ≥1.0s、其后每步
-      ≥1.3s，durationMs = 末步 cue + 1.5s；无 pace 时按均匀分布兜底检查；
+   3. 每步焦点对象（targets[i]，播放器加 is-hot 焦点环）在该步开始前
+      已存在于场景根内；
+   4. 时长满足节奏公式：pace[k]（第 k+1 步与前一步字幕的间隔）全部 ≥1.5s；
+      durationMs = 末步 cue + readLead(末步文案) + 1.5s（readLead 见
+      tutorial-player.js，动作在字幕后留阅读时间、结果留观察停留）；
+      无 pace 时按均匀分布兜底检查；
    5. capability 保守分支：无会话信息时为 generic。 */
 
 const fs = require('fs');
@@ -199,7 +202,7 @@ for (const id of lessons) {
       label + (mobile ? '（手机）' : '') + '：场景步数 ' + scene.steps +
       ' ≠ steps.length ' + variant.steps.length);
 
-    // 3. go(i) 从初始状态直接推进不抛错；目标节点在该步开始前存在
+    // 3. go(i) 从初始状态直接推进不抛错；焦点对象在该步开始前存在
     for (let i = 0; i < scene.steps; i++) {
       const inst = S.build(lesson.scene, ctx);
       try {
@@ -207,7 +210,7 @@ for (const id of lessons) {
         const t = scene.targets[i];
         if (t) {
           const el = inst.root.querySelector('[data-mark="' + t + '"]');
-          check(!!el, label + (mobile ? '（手机）' : '') + '：第 ' + i + ' 步指针目标 #' + t + ' 不存在');
+          check(!!el, label + (mobile ? '（手机）' : '') + '：第 ' + i + ' 步焦点对象 #' + t + ' 不存在');
         }
         inst.go(i);
       } catch (e) {
@@ -216,7 +219,9 @@ for (const id of lessons) {
     }
 
     // 4. 时长满足节奏公式：优先 data.pace（逐步声明），否则均匀分布兜底。
-    //    硬下限：建立（cue0→cue1）≥1.0s，其后每步 ≥1.3s；durationMs = 末步 cue + 1.5s。
+    //    硬下限：pace[k] 全部 ≥1.5s（字幕阅读 + 结果停留的最小预算）；
+    //    durationMs = 末步 cue + readLead(末步文案) + 1.5s（按基础步骤文案计，
+    //    pace 与 durationMs 都属于基础口径，与能力/视口分支无关）。
     const n = scene.steps;
     const cues = P.cueTimes(lesson.durationMs, n, lesson.pace);
     check(cues.length === n, label + '：cueTimes 长度不符');
@@ -224,24 +229,25 @@ for (const id of lessons) {
       check(lesson.pace.length === n - 1,
         label + '：pace 长度应为 ' + (n - 1) + '，实际 ' + lesson.pace.length);
       lesson.pace.forEach(function (v, k) {
-        const floor = k === 0 ? 1000 : 1300;
-        check(typeof v === 'number' && v >= floor,
-          label + '：pace[' + k + '] 低于下限 ' + floor + 'ms');
+        check(typeof v === 'number' && v >= 1500,
+          label + '：pace[' + k + '] 低于下限 1500ms');
       });
-      const lastCue = cues[n - 1];
-      check(Math.abs(lesson.durationMs - (lastCue + 1500)) <= 1,
-        label + '：durationMs ' + lesson.durationMs + ' ≠ 末步 cue ' + lastCue + ' + 1500');
+      const baseSteps = lesson.steps;
+      const lastLead = P.readLead(baseSteps[baseSteps.length - 1]);
+      const expectDur = cues[n - 1] + lastLead + 1500;
+      check(Math.abs(lesson.durationMs - expectDur) <= 1,
+        label + '：durationMs ' + lesson.durationMs + ' ≠ 末步 cue ' + cues[n - 1] +
+        ' + 阅读时长 ' + lastLead + ' + 1500');
     } else {
-      const minDur = 1100 + 1300 * (n - 1) + 1500;
+      const minDur = 1500 * (n - 1) + 1500;
       check(lesson.durationMs >= minDur,
         label + '：durationMs ' + lesson.durationMs + ' 低于 ' + n + ' 步下限 ' + minDur);
     }
     if (cues.length > 1) {
-      check(cues[1] >= 1000, label + '：建立步骤停留不足 1s');
+      check(cues[1] >= 1500, label + '：建立步骤停留不足 1.5s');
     }
     for (let i = 2; i < cues.length; i++) {
-      check(cues[i] - cues[i - 1] >= 1300, label + '：第 ' + i + ' 步间隔不足 1.3s');
-      check(cues[i] <= lesson.durationMs - 1200, label + '：末步变化后停留不足');
+      check(cues[i] - cues[i - 1] >= 1500, label + '：第 ' + i + ' 步间隔不足 1.5s');
     }
   }
 }
@@ -256,4 +262,4 @@ if (failures) {
   console.error('tutorial-scenes 守门未通过：' + failures + ' 处');
   process.exit(1);
 }
-console.log('tutorial-scenes 守门通过：25 个分镜 ×（桌面+手机）构建、步骤、指针目标、节奏全部一致');
+console.log('tutorial-scenes 守门通过：25 个分镜 ×（桌面+手机）构建、步骤、焦点对象、节奏全部一致');

@@ -1,24 +1,26 @@
-/* BNU Sparks · tutorial.css —— 动画使用教程：浮窗、五组目录、演示舞台、控制栏、
-   响应式与静态降级。懒加载（feature-loader: tutorial）。颜色全部引用 tokens.css
-   语义变量，暗色随现有主题；新增样式 .tutorial-* / .td-* 前缀，不覆盖全局
-   button/a/table 或站点业务类。
+/* BNU Sparks · tutorial.css —— 动画使用教程：浮窗、五组目录、演示舞台、
+   导航面板、控制栏、响应式与静态降级。懒加载（feature-loader: tutorial）。
+   颜色全部引用 tokens.css 语义变量，暗色随现有主题；新增样式
+   .tutorial-* / .td-* 前缀，不覆盖全局 button/a/table 或站点业务类。
 
    2026-10-03 二次修订：演示 DOM 改用站点真实 class（业务 CSS 渲染，见
    docs/TUTORIAL_DESIGN_SPEC.md §5），本文件只保留教程壳样式、教程专属状态类
    （is-hidden、td-* 动画、is-hot、is-dim、td-focus）与少量本地装饰件
-   （纸张、目录树、迷你周格、空状态）。指导语固定两行高、位于舞台上方。
+   （纸张、目录树、迷你周格、空状态）。
 
-   2026-10-03 三次修订（动效精修）：
-   - 舞台是稳定构图区：不再对整幕做逐步缩放入画（删除 fitScene 呼吸）；
-     场景超出时由播放器做一次性、单向的定版缩放（无过渡、不回弹）。
-   - 真实弹层恢复覆盖关系：search/preview/modal/tt/drawer 覆盖层在舞台内
-     absolute 铺满，自带业务 CSS 的 modalIn / notifSlideIn / ttPop 入场动画；
-     高表单走真实内部滚动，不再伪装成页面下方的长内容。
-   - 转场词汇按行为区分：状态变化就地完成（无动画）；标签内容切换纯淡入
-     （td-fade）；菜单/下拉轻弹出（td-pop）；场景内页面导航方向滑入
-     （td-slide）＋旧页离位淡出（td-leaving/td-out，叠放不挤压）；
-     换分镜/目录/窗口由壳层与 entry 负责。输入填入只做内容高亮（td-typed），
-     不再移动输入框。 */
+   2026-10-03 三次修订（动效精修）：真实弹层恢复覆盖关系；转场词汇按行为
+   区分（状态变化就地完成、td-fade 纯淡入、td-pop 菜单、td-slide 页面导航）；
+   输入填入只做内容高亮（td-typed）。
+
+   2026-10-03 四次修订（稳定视觉中心）：
+   - 三态界面：播放态顶栏只有「目录」入口＋当前操作名称＋关闭；主题名、
+     操作计数、组内列表与本操作完整步骤收进导航面板（主动打开即暂停）；
+     删除台上的第二套标题与台下的步骤区块。
+   - 解说进入舞台：舞台底部固定解说条（一次一句，位置稳定），舞台整体
+     对读屏 aria-hidden，解说经 aria-live 完整播报。
+   - 默认无模拟鼠标：删除指针与点击涟漪的全部样式；定位用 is-hot 焦点环
+     （一次一个，轻入），按压反馈是控件自身的 td-act 脉动。
+   - 完成态主按钮只有一个（去试试）；播放期控制全部安静。 */
 
 /* ── 遮罩与浮窗壳 ─────────────────────────────────────────── */
 .tutorial-overlay {
@@ -61,6 +63,7 @@
 }
 
 .tutorial-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -84,7 +87,7 @@
   border: 0;
 }
 
-/* ── 顶栏 ─────────────────────────────────────────────────── */
+/* ── 顶栏：导航入口 + 当前操作名称 + 关闭（次级视觉层级） ── */
 .tutorial-topbar {
   display: flex;
   align-items: center;
@@ -96,14 +99,18 @@
   flex: 1;
   min-width: 0;
   font-family: var(--serif);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  outline: none;
 }
 .tutorial-topbar-title:empty { display: none; }
+/* 标题是焦点的语义落点（非交互控件）：不显示焦点环，键盘起点由它承担 */
+.tutorial-topbar-title:focus,
+.tutorial-topbar-title:focus-visible { outline: none; }
 .tutorial-back {
   background: none;
   border: none;
@@ -121,7 +128,7 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.tutorial-toc-toggle,
+.tutorial-nav-toggle,
 .tutorial-skip {
   background: none;
   border: 1px solid var(--border);
@@ -132,6 +139,16 @@
   padding: 6px 12px;
   border-radius: var(--radius-full);
   white-space: nowrap;
+}
+.tutorial-nav-toggle::after {
+  content: '⌄';
+  margin-left: 5px;
+  color: var(--ink-faint);
+}
+.tutorial-nav-toggle[aria-expanded='true']::after { content: '⌃'; }
+.tutorial-nav-toggle[aria-expanded='true'] {
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .tutorial-close {
   margin-left: auto;
@@ -145,12 +162,13 @@
   border-radius: var(--radius-sm);
 }
 .tutorial-back:hover,
-.tutorial-toc-toggle:hover,
+.tutorial-nav-toggle:hover,
 .tutorial-skip:hover,
 .tutorial-close:hover {
   color: var(--ink);
   background: var(--primary-surface);
 }
+.tutorial-close:hover { background: none; color: var(--ink); }
 
 /* ── 中部滚动区 ───────────────────────────────────────────── */
 .tutorial-body {
@@ -306,38 +324,49 @@
   color: var(--ink-faint);
 }
 
-/* ── 操作目录（浮窗内展开区） ─────────────────────────────── */
-.tutorial-toc {
-  flex: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--raised);
-  padding: 10px 12px;
-  max-height: 40%;
+/* ── 导航面板（主题名 · 计数 · 组内列表 · 完整步骤 · 入口） ──
+   挂在顶栏之下的浮层，主动打开即暂停播放；Esc / 点外部收起 */
+.tutorial-nav-panel {
+  position: absolute;
+  top: 64px;
+  left: 24px;
+  right: 24px;
+  z-index: 20;
+  /* 顶栏之下、控制栏之上全部可用：组内列表＋完整步骤＋链接默认一屏可见 */
+  max-height: calc(100% - 148px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: 10px 14px;
+  animation: tutorial-nav-in 180ms cubic-bezier(.23, 1, .32, 1) both;
 }
-.tutorial-toc-head {
+@keyframes tutorial-nav-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.tutorial-nav-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 6px;
 }
-.tutorial-toc-title {
-  font-size: 13px;
+.tutorial-nav-group {
+  font-family: var(--serif);
+  font-size: 15px;
   font-weight: 600;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
-.tutorial-toc-restart {
-  background: none;
-  border: none;
-  color: var(--primary);
-  font: inherit;
+.tutorial-nav-count {
   font-size: 12px;
-  cursor: pointer;
-  padding: 4px 6px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.tutorial-toc-list {
+.tutorial-nav-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -345,7 +374,7 @@
   flex-direction: column;
   gap: 2px;
 }
-.tutorial-toc-btn {
+.tutorial-nav-btn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -355,21 +384,21 @@
   font: inherit;
   font-size: 13px;
   color: var(--ink-soft);
-  padding: 7px 8px;
+  padding: 6px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
 }
-.tutorial-toc-btn:hover {
+.tutorial-nav-btn:hover {
   background: var(--primary-surface);
   color: var(--ink);
 }
-.tutorial-toc-btn.is-active {
+.tutorial-nav-btn.is-active {
   background: var(--primary-surface);
   color: var(--primary);
   font-weight: 600;
 }
-.tutorial-toc-num {
+.tutorial-nav-num {
   flex: none;
   width: 20px;
   height: 20px;
@@ -380,20 +409,94 @@
   border-radius: var(--radius-full);
   font-size: 11px;
 }
-.tutorial-toc-name {
+.tutorial-nav-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tutorial-toc-seen {
+.tutorial-nav-seen {
   flex: none;
   font-size: 11px;
   color: var(--success);
 }
+.tutorial-nav-sec {
+  border-top: 1px solid var(--border-light);
+  margin-top: 8px;
+  padding-top: 8px;
+  /* 面板内容超高需要滚动时，底部留出一段缓冲，避免滚动边界切到文字行中腰 */
+  padding-bottom: 6px;
+}
+.tutorial-nav-sec-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+.tutorial-nav-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  counter-reset: navstep;
+}
+.tutorial-nav-step {
+  counter-increment: navstep;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  padding-left: 22px;
+  position: relative;
+}
+.tutorial-nav-step::before {
+  content: counter(navstep);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+.tutorial-nav-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  margin: 6px 0 0;
+}
+/* 链接行：面板内容超高时可随面板滚动，但自身粘在面板底部始终可见 */
+.tutorial-nav-links {
+  position: sticky;
+  bottom: -10px;
+  margin: 6px -14px -10px;
+  padding: 4px 14px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
+}
+.tutorial-nav-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+}
+.tutorial-nav-link:hover { text-decoration: underline; }
 
-/* ── 播放视图：舞台 ───────────────────────────────────────── */
+/* ── 播放视图：舞台（主视觉 = 演示区 + 台内解说条） ───────── */
 .tutorial-play {
   display: flex;
   flex-direction: column;
@@ -408,11 +511,32 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
-/* 辅助信息，不是按钮：去掉边框与底色，只留安静的角标文字 */
+.tutorial-stage-clip {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 演示区：舞台内的稳定构图区。场景超出演示框时由播放器按“真实页面滚动”
+   语义平滑滚入当前对象（不缩放、不挤压；滚动条隐藏，演示不响应滚轮）；
+   弹层 absolute 覆盖基内容，不参与滚动布局。 */
+.tutorial-stage-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  z-index: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px 16px 8px;
+}
+/* 辅助信息，不是按钮：安静的角标文字，钉在演示区右上角 */
 .tutorial-demo-label {
   position: absolute;
-  bottom: 8px;
+  top: 8px;
   right: 12px;
   z-index: 3;
   font-size: 11px;
@@ -420,23 +544,9 @@
   color: var(--ink-faint);
   pointer-events: none;
 }
-/* 转场层在相同坐标区域叠放：新旧内容绝对定位铺满裁剪区，不参与相互挤压；
-   底部为「示例演示」角标预留条，场景内容不与角标重叠 */
-.tutorial-stage-clip {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 12px 16px 32px;
-}
 .tutorial-demo-frame {
   width: 100%;
   max-width: 640px;
-  /* 稳定构图区：高度锁定为舞台可用高度。基内容按各分镜设计容量裁取；
-     超出时由播放器按“真实页面滚动”语义把当前操作对象滚入视野
-     （不缩放、不挤压；滚动条隐藏，演示不响应滚轮）。
-     弹层 absolute 覆盖基内容，不参与滚动布局。 */
   height: 100%;
   position: relative;
   z-index: 0;
@@ -448,43 +558,32 @@
   scrollbar-width: none;
 }
 .tutorial-demo-frame::-webkit-scrollbar { display: none; }
-.tutorial-pointer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 4;
-  width: 26px;
-  height: 26px;
-  color: var(--primary);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 120ms ease;
+
+/* 台内解说条：一次一句，位置稳定（不随对象游走），不遮挡演示内容；
+   固定两行高——换字幕不推移舞台，文案控制在两行内 */
+.tutorial-caption {
+  flex: none;
+  margin: 0;
+  border-top: 1px solid var(--border-light);
+  background: var(--surface);
+  padding: 8px 16px;
+  min-height: calc(2 * 1.6em + 16px);
+  display: flex;
+  align-items: flex-start;
 }
-.tutorial-pointer svg {
-  width: 100%;
-  height: 100%;
+.tutorial-caption-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-/* 点击涟漪：扩散圆环，只动 transform/opacity */
-.tutorial-click-ring {
-  position: absolute;
-  z-index: 3;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid oklch(from var(--primary) l c h / 0.75);
-  background: oklch(from var(--primary) l c h / 0.14);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-/* 手机舞台：简洁触点（圆环），不再是桌面箭头 */
-.tutorial-stage--mobile .tutorial-pointer svg { display: none; }
-.tutorial-stage--mobile .tutorial-pointer::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  background: oklch(from var(--primary) l c h / 0.30);
-  border: 2px solid var(--primary);
+.tutorial-caption-text.td-cap-in { animation: tutorial-cap-in 240ms ease both; }
+@keyframes tutorial-cap-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* 「我的课程」页骨架在演示里按窄窗口口径收紧：标题用 clamp 的下档、
@@ -495,93 +594,10 @@
 .tutorial-demo-frame .tt-list { gap: 8px; width: 100%; }
 .tutorial-demo-frame .tt-lrow { padding: 9px 16px 8px 18px; }
 
-/* ── 播放视图：操作标题 + 当前说明 + 可展开完整步骤 ───────── */
-.tutorial-now {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.tutorial-now-title {
-  font-family: var(--serif);
-  font-size: 20px;
-  line-height: 1.35;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0;
-  outline: none;
-}
-/* 指导语固定两行高：换字幕不推移舞台；超长截断（写文案时控制在两行内） */
-.tutorial-now-line {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  margin: 0;
-  min-height: calc(2 * 1.6em);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.tutorial-more {
-  border-top: 1px dashed var(--border-light);
-  padding-top: 8px;
-}
-.tutorial-more-summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--ink-faint);
-  list-style-position: inside;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-}
-.tutorial-more-summary:hover { color: var(--primary); }
-.tutorial-more-summary::marker { color: var(--ink-faint); }
-.tutorial-more-steps {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tutorial-more-step {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--ink-faint);
-}
-.tutorial-more-step.is-active {
-  color: var(--ink-soft);
-}
-.tutorial-more-stepnum {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-full);
-  border: 1px solid var(--border);
-  font-size: 10px;
-  transform: translateY(2px);
-}
-.tutorial-more-step.is-active .tutorial-more-stepnum {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--on-primary);
-}
-.tutorial-lesson-note {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--ink-faint);
-  margin: 10px 0 0;
-}
-
 /* ── 底部控制栏：单行紧凑，节点全程稳定 ─────────────────────
-   [上一项] [暂停/继续] [下一项] ···· 去试试。主控位在暂停/继续/重播三态间
-   只换文字，min-width 固定，不产生宽度跳动；重播由主控位在结束态承担。 */
+   播放/暂停期：[上一项] [暂停/继续] [下一项] 全部安静（下一项不与任何
+   入口争夺注意力）；完成态：主控位变重播、「去试试」作为唯一主按钮出现
+   在右侧。主控位 min-width 固定，无宽度跳动。 */
 .tutorial-footer {
   flex: none;
   display: flex;
@@ -625,24 +641,35 @@
   background: var(--primary-dark);
   border-color: var(--primary-dark);
 }
-/* 去试试：具体目的文案，安静的文字链接，不与播放控制争夺注意力 */
+/* 完成态：下一项退为安静按钮，把唯一的视觉主按钮让给「去试试」 */
+.tutorial-ctl-next.is-quiet {
+  background: none;
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+.tutorial-ctl-next.is-quiet:hover:not(:disabled) {
+  background: var(--primary-surface);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+/* 去试试：完成态唯一的视觉主按钮 */
 .tutorial-try-btn {
   margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--primary);
-  opacity: 0.85;
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: var(--on-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 6px 10px;
+  padding: 8px 18px;
   min-height: 40px;
-  border-radius: var(--radius-sm);
-  text-align: right;
+  border-radius: var(--radius-md);
+  text-align: center;
 }
 .tutorial-try-btn:hover {
-  text-decoration: underline;
-  opacity: 1;
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
 }
 
 /* ── 静态步骤视图（reduced-motion / WAAPI 不可用） ───────── */
@@ -674,8 +701,8 @@
   background: var(--raised);
 }
 .tutorial-static-thumb {
-  height: 180px;
-  padding: 10px;
+  height: 132px;
+  padding: 8px 10px;
   background: var(--bg);
   border-bottom: 1px solid var(--border-light);
   overflow: hidden;
@@ -683,6 +710,10 @@
 .tutorial-static-thumb .tutorial-demo-frame {
   max-width: none;
   position: static;
+  /* 缩略图内按内容自然高度排版：播放器的适配缩放以 offsetHeight 为准，
+     height:100% 会让它误判为「已放得下」而把场景裁在固定框里 */
+  height: auto;
+  overflow: hidden;
 }
 .tutorial-static-text {
   padding: 10px 12px;
@@ -695,7 +726,8 @@
   gap: 8px;
 }
 .tutorial-static-mark,
-.tutorial-static-play {
+.tutorial-static-play,
+.tutorial-static-try {
   min-height: 44px;
   padding: 10px 18px;
   font: inherit;
@@ -711,6 +743,11 @@
 .tutorial-static-mark:disabled {
   opacity: 0.55;
   cursor: default;
+}
+.tutorial-static-try {
+  background: none;
+  border: 1px solid var(--primary);
+  color: var(--primary);
 }
 .tutorial-static-play {
   background: none;
@@ -858,10 +895,12 @@
 .tutorial-demo-frame .is-hidden { display: none !important; }
 /* 占位不可见：为即将出现的元素保留位置（出现时不挤动周围布局） */
 .tutorial-demo-frame .td-ghost { visibility: hidden; }
-/* 弱化上下文 / 强调结果：每时刻至多一个 is-hot 目标 */
+/* 弱化上下文：每时刻至多一个 is-hot 焦点环（由播放器随解说放置）。
+   环就地出现（与字幕同拍的状态变化，不加淡入）。环带一圈表面色间隔：
+   落在主色底按钮上时依然可辨 */
 .tutorial-demo-frame .is-dim { opacity: 0.45; }
 .tutorial-demo-frame .is-hot {
-  box-shadow: 0 0 0 2px oklch(from var(--primary) l c h / 0.55);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px oklch(from var(--primary) l c h / 0.65);
   border-radius: 8px;
 }
 
@@ -903,6 +942,12 @@
 @keyframes tutorial-typed {
   0% { box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.16); }
   100% { box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0); }
+}
+/* 按压反馈：控件自身的轻微脉动（默认无模拟鼠标，动作由真实控件表达） */
+.tutorial-demo-frame .td-act { animation: tutorial-act 200ms ease; }
+@keyframes tutorial-act {
+  0% { transform: scale(0.96); }
+  100% { transform: scale(1); }
 }
 /* 搜索框聚焦态（演示用 class，等价真实 :focus-within 的可见反馈） */
 .tutorial-demo-frame .search-box.td-focus {
@@ -971,6 +1016,13 @@
 /* 资料详情的预览框：真实 min-height 400px 是给 PDF 查看器留的，
    演示里纸张紧随头部即可，避免大片空白 */
 .tutorial-demo-frame .fd-preview-body { min-height: 0; }
+/* fd-container 自带的大水平内边距（真实页面留白）在演示窄框里叠加出横向
+   溢出：演示域内收敛（舞台 stage-view 已有内边距），真实页面不受影响 */
+.tutorial-demo-frame .fd-container {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0 0 8px;
+}
 /* 抽屉头部在矮舞台里收紧（真实抽屉头部更高） */
 .tutorial-demo-frame .notif-drawer-header { padding: 10px 14px; }
 /* 筛选下拉：真实是 fixed 定位层，演示内锚定在资料页头下方 */
@@ -1001,6 +1053,26 @@
 .tutorial-demo-frame .mf-input { padding: 6px 10px; }
 .tutorial-demo-frame .mf-textarea { min-height: 36px; }
 .tutorial-demo-frame .mf-textarea-lg { min-height: 52px; }
+/* 文字录入教学的最小卡片：再收一档，整卡完整落进舞台（无滚动切割）。
+   标题与标签页吸附在卡片顶部：末步把「开始上传」滚入视野时头部保持完整，
+   内容字段在其下滚动（真实内部滚动语义），不出现半截文字 */
+.tutorial-demo-frame .modal-card.td-compact { padding: 0 14px 8px; }
+.tutorial-demo-frame .modal-card.td-compact .mf-textarea-lg { min-height: 40px; }
+.tutorial-demo-frame .modal-card.td-compact .modal-title {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 4px;
+  padding: 8px 0 4px;
+  background: var(--surface);
+}
+.tutorial-demo-frame .modal-card.td-compact .upload-mode-tabs {
+  position: sticky;
+  top: 33px;
+  z-index: 1;
+  margin: 0 0 8px;
+  background: var(--surface);
+}
 .tutorial-demo-frame .upload-mode-tabs { margin: 6px 0 10px; }
 .tutorial-demo-frame .um-tab { padding: 7px 10px; }
 /* 按钮内联 SVG 无原生尺寸时会被 flex 拉伸到默认 300×150：统一给演示内的
@@ -1175,29 +1247,33 @@
     padding: 16px;
     gap: 12px;
   }
+  .tutorial-nav-panel {
+    left: 16px;
+    right: 16px;
+    top: 60px;
+  }
   .tutorial-topbar-title {
     font-size: 16px;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
   }
   .tutorial-catalog-title { font-size: 20px; }
   .tutorial-groups { grid-template-columns: 1fr; }
   .tutorial-stage {
-    aspect-ratio: auto;
+    /* 定高：演示区的 height:100% 需要确定的父高（手机没有 aspect-ratio），
+       min-height 会让百分比链断裂、场景塌陷为 0 */
+    height: 300px;
     max-height: none;
-    min-height: 280px;
   }
-  .tutorial-stage-clip { padding: 12px 10px 30px; }
+  .tutorial-stage-view { padding: 10px 10px 6px; }
+  /* 手机窄舞台：不放「示例演示」角标（内容身份由解说与虚构示例数据承担） */
+  .tutorial-stage--mobile .tutorial-demo-label { display: none; }
   .tutorial-demo-frame { max-width: 340px; }
-  .tutorial-now-title { font-size: 19px; }
-  .tutorial-now-line { font-size: 14px; }
+  .tutorial-caption { padding: 8px 12px; }
+  .tutorial-caption-text { font-size: 13px; }
   /* 控制单行放不下时「去试试」换行，主控组始终同行 */
   .tutorial-footer { flex-wrap: wrap; row-gap: 2px; }
   .tutorial-ctl { min-height: 44px; padding: 8px 12px; }
   .tutorial-ctl-play { min-width: 92px; }
-  .tutorial-try-btn { min-height: 40px; font-size: 12px; padding: 6px 6px; }
+  .tutorial-try-btn { min-height: 40px; font-size: 13px; padding: 8px 14px; }
   .tutorial-static-steps { grid-template-columns: 1fr; }
 }
 
@@ -1227,15 +1303,15 @@
 /* hover 只在精细指针设备启用 */
 @media (hover: none) {
   .tutorial-back:hover,
-  .tutorial-toc-toggle:hover,
+  .tutorial-nav-toggle:hover,
   .tutorial-skip:hover,
   .tutorial-close:hover,
   .tutorial-aux-btn:hover,
-  .tutorial-toc-btn:hover,
+  .tutorial-nav-btn:hover,
+  .tutorial-nav-link:hover,
   .tutorial-ctl:hover:not(:disabled),
   .tutorial-try-btn:hover,
-  .tutorial-group-card:hover,
-  .tutorial-more-summary:hover {
+  .tutorial-group-card:hover {
     background: none;
     border-color: var(--border);
     color: inherit;
@@ -1244,5 +1320,9 @@
   .tutorial-ctl-next:hover:not(:disabled) {
     background: var(--primary);
     color: var(--on-primary);
+  }
+  .tutorial-ctl-next.is-quiet:hover:not(:disabled) {
+    background: none;
+    color: var(--ink-soft);
   }
 }

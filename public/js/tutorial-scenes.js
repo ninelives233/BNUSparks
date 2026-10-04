@@ -16,6 +16,12 @@
    swapPage（旧页离位淡出叠放 + 新页 td-slide）；同页标签/内容切换用 td-fade；
    自绘菜单用 td-pop；状态变化（星标/勾选/采纳）就地完成不加动画。
 
+   强调口径（2026-10-03 四次修订）：默认无模拟鼠标。targets[i] 语义是
+   「第 i 步的焦点对象」——播放器在解说出现时把 is-hot 焦点环放到该对象上
+   （一次一个），动作反馈由控件自身承担（td-act 脉动）；场景内部不再自加
+   is-hot（结果态的强调交给状态本身）。clicks[i] = 该步是否为按压动作
+   （决定是否播 td-act）。
+
    编排模型：build() 返回 {
      root: 场景根（.tutorial-demo-frame，一次性建好全部对象）
      steps: 步骤总数（含第 0 步“建立场景”）
@@ -380,10 +386,14 @@
     return tree;
   }
   // 上传弹窗（index.html:1514 的 #uploadModal 结构）
+  // opts.compact：文字录入教学的最小取舍——保留上传弹窗的识别线索（标题、
+  // 「上传文件 / 文字录入」标签页、内容、资料标题与提交），略去课程与
+  // 长提示行，让卡片完整落进舞台（不出现滚动切割）；完整口径（含必填的
+  // 类型/任课教师）由 share-file 演示。
   function uploadModal(opts) {
     opts = opts || {};
     var ov = el('div', 'modal-overlay');
-    var card = el('div', 'modal-card modal-card-wide');
+    var card = el('div', 'modal-card modal-card-wide' + (opts.compact ? ' td-compact' : ''));
     card.appendChild(btnEl('modal-close', '✕')).setAttribute('aria-label', '关闭');
     card.appendChild(el('h2', 'modal-title', '上传资料'));
     var tabs = el('div', 'upload-mode-tabs');
@@ -406,7 +416,9 @@
       if (hint) g.appendChild(el('div', 'mf-hint', hint));
       return g;
     }
-    card.appendChild(group('课程', inputEl('mf-input', { value: '学习方法导论' })));
+    if (!opts.compact) {
+      card.appendChild(group('课程', inputEl('mf-input', { value: '学习方法导论' })));
+    }
     var paneFile = el('div', 'upload-mode-pane');
     if (opts.mode === 'text') paneFile.classList.add('is-hidden');
     paneFile.appendChild(group('文件', inputEl('mf-input', { value: '期末复习提纲.pdf' }),
@@ -416,20 +428,23 @@
     if (opts.mode !== 'text') paneText.classList.add('is-hidden');
     paneText.appendChild(group('内容', inputEl('mf-input mf-textarea mf-textarea-lg',
       { tag: 'textarea', placeholder: '在此粘贴或输入文字内容…考试题目、笔记、知识点整理等', mark: opts.contentMark }),
-      '录入的文字将保存为 .txt 文件，若字数较多建议生成文档后上传'));
+      opts.compact ? null : '录入的文字将保存为 .txt 文件，若字数较多建议生成文档后上传'));
     card.appendChild(paneText);
     card.appendChild(group('资料标题', inputEl('mf-input', { placeholder: opts.mode === 'text' ? '留空则自动取内容前20字' : '留空则自动使用文件名', mark: opts.titleMark })));
-    var typeSel = document.createElement('select');
-    typeSel.className = 'mf-input';
-    typeSel.tabIndex = -1;
-    ['请选择类型…', '课本', '习题', '真题', '课件', '笔记', '汇总', '其他'].forEach(function (t) {
-      var o = document.createElement('option');
-      o.textContent = t;
-      typeSel.appendChild(o);
-    });
-    if (opts.typeMark) mark(opts.typeMark, typeSel);
-    card.appendChild(group('类型', typeSel, null, true));
-    card.appendChild(group('任课教师', inputEl('mf-input', { placeholder: '如：张老师', mark: opts.teacherMark }), null, true));
+    var typeSel = null;
+    if (!opts.compact) {
+      typeSel = document.createElement('select');
+      typeSel.className = 'mf-input';
+      typeSel.tabIndex = -1;
+      ['请选择类型…', '课本', '习题', '真题', '课件', '笔记', '汇总', '其他'].forEach(function (t) {
+        var o = document.createElement('option');
+        o.textContent = t;
+        typeSel.appendChild(o);
+      });
+      if (opts.typeMark) mark(opts.typeMark, typeSel);
+      card.appendChild(group('类型', typeSel, null, true));
+      card.appendChild(group('任课教师', inputEl('mf-input', { placeholder: '如：张老师', mark: opts.teacherMark }), null, true));
+    }
     card.appendChild(btnEl('mf-btn', '开始上传', opts.submitMark));
     ov.appendChild(card);
     return { overlay: ov, tabs: tabs, paneFile: paneFile, paneText: paneText,
@@ -974,7 +989,9 @@
 
   // ═══ 分镜工厂 ═════════════════════════════════════════════
 
-  // find-search · 建立页面 → 点搜索框 → 输入 → 分类结果（单屏，结果浮层）
+  // find-search · 建立搜索框 → 输入 → 按「→」提交 → 分类结果（单屏，结果浮层）
+  // 提交是真实动作（回车或「→」按钮），不是输入后自动出结果；
+  // 每组只保留一条代表结果，突出「课程 / 资料」两个分组。
   function findSearch() {
     var root = el('div', 'tutorial-demo-frame');
     var strip = topStrip([searchBox('search-input')]);
@@ -985,8 +1002,7 @@
     root.appendChild(deco);
     var overlay = searchOverlay('学习方法', '搜索结果', [
       { label: '课程', items: [
-        { name: '学习方法导论', pill: { cls: 'sg-pill-major', text: '专业' }, meta: 'DEMO101', mark: 'res-course' },
-        { name: '学习科学导论', pill: { cls: 'sg-pill-general', text: '通识' }, meta: 'DEMO105' }
+        { name: '学习方法导论', pill: { cls: 'sg-pill-major', text: '专业' }, meta: 'DEMO101', mark: 'res-course' }
       ] },
       { label: '资料', items: [
         { name: '期末复习提纲.pdf', meta: '学习方法导论' }
@@ -998,13 +1014,16 @@
     var sbox = strip.querySelector('[data-mark="search-box"]');
     return {
       root: root, steps: 4,
-      targets: [null, 'search-input', 'search-input', null],
-      clicks: [false, true, false, false],
+      targets: [null, 'search-input', 'search-go', null],
+      clicks: [false, false, true, false],
       apply: [
         function () {},
-        function () { sbox.classList.add('td-focus'); },
-        function () { typedInto(input, '学习方法'); },
-        function () { setHidden(overlay, false); }
+        function () {
+          sbox.classList.add('td-focus');
+          typedInto(input, '学习方法');
+        },
+        function () { setHidden(overlay, false); },
+        function () {}
       ]
     };
   }
@@ -1102,13 +1121,14 @@
     bottom.appendChild(flist);
     root.appendChild(bottom);
     var bcCurrent = bc.querySelector('.bc-current');
+    mark('bc-cur', bcCurrent);
     return {
       root: root, steps: 4,
-      targets: [null, 'alt-course', null, null],
+      targets: [null, 'alt-course', null, 'bc-cur'],
       clicks: [false, true, true, false],
       apply: [
         function () {},
-        function () { alt.classList.add('is-hot'); },
+        function () {},
         function () {
           // 真实行为是整页跳转：课程名锚点不变，代码与资料换成 DEMO201，
           // 页面回到顶部（面包屑是连续锚点）；演示页同步回顶
@@ -1119,10 +1139,9 @@
           reveal(tableWrap, 'td-fade');
           cur.classList.remove('is-current');
           alt.classList.add('is-current');
-          alt.classList.remove('is-hot');
           if (root.scrollTop) root.scrollTop = 0;
         },
-        function () { bcCurrent.classList.add('is-hot'); }
+        function () {}
       ]
     };
   }
@@ -1173,10 +1192,7 @@
         function () {},
         function () { setHidden(overlay, false); },
         function () { pages.classList.add('td-scrolled'); },
-        function () {
-          var dl = overlay.querySelector('[data-mark="btn-dl"]');
-          if (dl) dl.classList.add('is-hot');
-        }
+        function () {}
       ]
     };
   }
@@ -1395,10 +1411,7 @@
       clicks: [false, true, false, false],
       apply: [
         function () {},
-        function () {
-          var row = root.querySelector('[data-mark="row-course"]');
-          if (row) row.classList.add('is-hot');
-        },
+        function () {},
         function () { swapPage(list, dest); },
         function () {}
       ]
@@ -1587,7 +1600,6 @@
           // 真实行为：on class + 实心星 + 「已收藏」+ 计数 +1
           favBtn.classList.add('on');
           favBtn.innerHTML = TICONS.starFilled + '<span>已收藏</span><b class="qa-count">3</b>';
-          a1.classList.add('is-hot');
         },
         function () {}
       ]
@@ -1658,7 +1670,7 @@
     setHidden(modal.overlay, true);
     return {
       root: root, steps: 4,
-      targets: [null, 'btn-upload', null, null],
+      targets: [null, 'btn-upload', null, 'btn-submit'],
       clicks: [false, true, false, false],
       apply: [
         function () {},
@@ -1671,18 +1683,16 @@
           var card = modal.overlay.querySelector('.modal-card');
           if (card) card.scrollTop = card.scrollHeight;
         },
-        function () {
-          var b = modal.overlay.querySelector('[data-mark="btn-submit"]');
-          if (b) b.classList.add('is-hot');
-        }
+        function () {}
       ]
     };
   }
 
-  // share-text · 核心 · 上传窗 → 切文字录入 → 填标题与内容（不伪造提交）
+  // share-text · 核心 · 上传窗（识别线索：上传标签页）→ 原位切文字录入 →
+  // 填标题与内容 → 指向真实提交（不伪造提交成功）
   function shareText() {
     var root = el('div', 'tutorial-demo-frame');
-    var modal = uploadModal({ mode: 'file', tabTextMark: 'tab-text', titleMark: 'inp-title', contentMark: 'inp-content' });
+    var modal = uploadModal({ mode: 'file', compact: true, tabTextMark: 'tab-text', titleMark: 'inp-title', contentMark: 'inp-content', submitMark: 'btn-submit' });
     root.appendChild(modal.overlay);
     var tabText = modal.overlay.querySelector('[data-mark="tab-text"]');
     var tabFile = modal.tabs.children[0];
@@ -1690,7 +1700,7 @@
     var contentInput = modal.overlay.querySelector('[data-mark="inp-content"]');
     return {
       root: root, steps: 4,
-      targets: [null, 'tab-text', null, null],
+      targets: [null, 'tab-text', null, 'btn-submit'],
       clicks: [false, true, false, false],
       apply: [
         function () {},
@@ -1718,7 +1728,7 @@
     root.appendChild(card.card);
     return {
       root: root, steps: 4,
-      targets: [null, 'inp-name', 'sel-type', null],
+      targets: [null, 'inp-name', 'sel-type', 'btn-submit'],
       clicks: [false, false, false, false],
       apply: [
         function () {},
@@ -1727,10 +1737,7 @@
           typedInto(card.card.querySelector('[data-mark="inp-code"]'), 'GEN02201');
         },
         function () { card.sel.value = '通识核心'; },
-        function () {
-          var b = card.card.querySelector('[data-mark="btn-submit"]');
-          if (b) b.classList.add('is-hot');
-        }
+        function () {}
       ]
     };
   }
@@ -1998,7 +2005,7 @@
       clicks: [false, false, true, false],
       apply: [
         function () {},
-        function () { acceptBtn.classList.add('is-hot'); },
+        function () {},
         function () {
           acceptBtn.classList.remove('is-hot');
           acceptBtn.textContent = '取消采纳';

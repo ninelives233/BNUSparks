@@ -3,23 +3,27 @@
    data → scenes 之后加载）。只操作教程浮窗内部 DOM；导航、历史与认证归
    tutorial-entry.js 管。
 
-   播放模型（2026-10 重制；2026-10-03 三次修订动效精修）：
-   - 唯一时间基准：一个 rAF 驱动的虚拟时钟推进步骤、指针与字幕；对象级微动画
-     用 WAAPI/CSS，暂停时经 getAnimations 一并冻结（舞台子树 + 指针元素，
-     指针是 stageClip 的兄弟节点，必须单独纳入）。页面隐藏即明确暂停。
-   - 步骤时序：提示（字幕先行）→ 定位（按文案长度给阅读时间）→ 动作 →
-     反馈 → 结果停留。指针完成任务后退场；退场后再次出场时就近淡入，
-     不从上一次的陈旧坐标横穿画面。
-   - 构图稳定：舞台是稳定构图区，整幕在任何步骤都保持 100% 真实比例——
-     不缩放、不呼吸。场景页超出演示框时按“真实页面滚动”语义在指针动身前
-     把目标滚入视野；弹层恢复 absolute 覆盖，高表单走真实内部滚动。
-   - 视图切换（换分镜/目录/说明）：旧视图离位淡出叠放，新视图按方向入画；
-     减少动态效果下直接替换。
+   播放模型（2026-10-03 四次修订：稳定视觉中心）：
+   - 三种状态各司其职：目录（选主题）／播放（看懂一个操作）／完成（继续、
+     重看或去实际操作）。播放态顶栏只有「目录」导航入口、当前操作名称与
+     关闭；主题名、操作计数、组内列表与本操作完整步骤都收进导航面板；
+     主动打开导航面板即暂停播放。
+   - 解说进入舞台构图：舞台底部是固定解说条，一次一句，位置稳定不随对象
+     游走，不遮挡演示内容。舞台对读屏保持 aria-hidden，解说经 aria-live
+     区域按顺序完整播报，完整文字列表在导航面板中可达。
+   - 默认无模拟鼠标：步骤由真实控件自身表达——定位用焦点环（is-hot），
+     动作就地发生（输入填入、菜单自入口展开、状态就地切换），按压反馈是
+     控件自身的轻微脉动（td-act）。只有场景数据声明需要时才表达移动本身。
+   - 唯一时间基准：一个 rAF 驱动的虚拟时钟推进步骤、焦点、滚动与解说；
+     对象级微动画用 WAAPI/CSS，暂停时经 getAnimations(subtree) 一并冻结；
+     场景超出演示框时按“真实页面滚动”语义平滑滚入目标（随虚拟时钟走，
+     暂停即冻结）。页面隐藏即明确暂停。
+   - 结束守门：最后一步的动作与结果停留都完成后才切换完成态、记“已看”；
+     完成态主按钮只有一个（去试试），重播与下一项保持安静。
    - 离开播放视图的所有路径（返回目录、文字说明、错误、关闭、销毁）统一走
-     stopPlayback()：递增运行令牌、取消 rAF 与场景动画、清理涟漪、隐藏指针。
-     只有完整播放到动作收尾且页面可见才记“已看过”。
-   - 控制节点全程稳定：单行控制栏（上一项/主控/下一项/去试试），主控位在
-     暂停/继续/重播三态间只换文字，min-width 固定，无宽度跳动。 */
+     stopPlayback()：递增运行令牌、取消 rAF 与场景动画、清空焦点与滚动。
+   - 控制节点全程稳定：单行控制栏（上一项/主控/下一项），主控位在暂停/
+     继续/重播三态间只换文字，min-width 固定，无宽度跳动。 */
 (function () {
   'use strict';
 
@@ -28,17 +32,18 @@
 
   // 步骤节奏（虚拟毫秒）：默认均匀节奏仅作兜底；正式节奏由 data 的 pace 数组
   // 逐步声明（pace[k] = 第 k+1 步字幕与前一步字幕的间隔），与
-  // tools/check_tutorial_scenes.js 的下限一致。指针在字幕之后按阅读时长动身。
+  // tools/check_tutorial_scenes.js 的下限一致。动作在字幕出现并留出阅读时间后
+  // 就地发生。
   var LEAD_MS = 1100;
   var TAIL_MS = 1500;
-  var POINTER_MOVE_MS = 340;   // 指针移动
-  var POINTER_PRESS_MS = 150;  // 点击反馈
-  var POINTER_REST_MS = 350;   // 点击完成后指针停留，随后退场（结果成为重点）
-  var POINTER_HALF = 13;       // 指针热区半径（图标 26px）
-  var STALL_MS = 4000;         // 单帧间隔超过此值 = 环境停跳（而非一次普通卡顿），明确暂停
-  var VIEW_SWAP_MS = 280;      // 视图切换旧层清理兜底（动画 170–220ms）
+  var READ_MIN_MS = 500;    // 字幕出现到动作发生的最短阅读时间
+  var READ_MAX_MS = 900;    // 阅读时间上限（再长的文案也不无限推迟动作）
+  var RESULT_MIN_MS = 800;  // 动作结果到下一句解说之间的最短停留
+  var SCROLL_MS = 320;      // 定位滚动时长（虚拟时钟驱动，暂停即冻结）
+  var STALL_MS = 4000;      // 单帧间隔超过此值 = 环境停跳（而非一次普通卡顿），明确暂停
+  var VIEW_SWAP_MS = 280;   // 视图切换旧层清理兜底（动画 170–220ms）
 
-  var moduleRate = 1;          // 仅 QA 调试接口可改（慢速观察），正常恒为 1
+  var moduleRate = 1;       // 仅 QA 调试接口可改（慢速观察），正常恒为 1
 
   function cueTimes(durationMs, steps, pace) {
     if (steps <= 1) return [0];
@@ -53,6 +58,13 @@
     var cues = [0];
     for (var i = 1; i < steps; i++) cues.push(Math.round(LEAD_MS + (i - 1) * span));
     return cues;
+  }
+
+  // 阅读时长按文案长度走：短句快点动身，长句留足读的时间；设上限，
+  // 不把所有步骤统一拉长（导出给守门脚本复算时长公式）。
+  function readLead(text) {
+    var len = (text || '').length;
+    return Math.max(READ_MIN_MS, Math.min(READ_MAX_MS, 380 + 32 * Math.max(0, len - 8)));
   }
 
   // ── 进度仓库（§8.3） ─────────────────────────────────────
@@ -218,6 +230,7 @@
     var groupId = null;
     var lessonIdx = 0;
     var catalogScroll = 0;
+    var navOpen = false;
     var enteredFromCore = opts.mode === 'core';
 
     // 播放运行时
@@ -230,32 +243,33 @@
     var cues = [];
     var cueIdx = 0;
     var stepIndex = -1;
-    var pointer = null;            // { idx, phase, startedAt, moveAt, from, to, applied }
-    var pointerEl = null;
-    var pointerPlaced = false;     // 本次运行内指针是否已有落点（首次直接出现在目标旁）
+    var step = null;               // { idx, actionAt, applied }
+    var scrollAnim = null;         // { el, from, to, startedAt, dur }
+    var focusEl = null;            // 当前焦点环（is-hot）所在节点
     var stageClip = null;
+    var captionText = null;
     var startTimer = 0;
     var announceTimer = 0;
-    var rippleTimers = [];
     var sawReduce = reduceMotion.matches;
 
     // ── 壳 DOM ──
     var root = el('div', 'tutorial-root');
     var topbar = el('div', 'tutorial-topbar');
-    var backBtn = btnb('tutorial-back', '← 全部教程');
-    backBtn.setAttribute('aria-label', '返回全部教程');
+    var navBtn = btnb('tutorial-nav-toggle', '目录');
+    navBtn.setAttribute('aria-expanded', 'false');
+    navBtn.setAttribute('aria-controls', 'tutorialToc');
     var titleEl = el('div', 'tutorial-topbar-title');
+    titleEl.tabIndex = -1;
     var counterEl = el('span', 'tutorial-counter');
-    var tocBtn = btnb('tutorial-toc-toggle', '目录 ⌄');
-    tocBtn.setAttribute('aria-expanded', 'false');
-    tocBtn.setAttribute('aria-controls', 'tutorialToc');
+    var backBtn = btnb('tutorial-back', '← 返回目录');
+    backBtn.setAttribute('aria-label', '返回全部教程');
     var skipBtn = btnb('tutorial-skip', '跳过介绍');
     var closeBtn = btnb('tutorial-close', '✕');
     closeBtn.setAttribute('aria-label', '关闭教程');
-    topbar.appendChild(backBtn);
+    topbar.appendChild(navBtn);
     topbar.appendChild(titleEl);
     topbar.appendChild(counterEl);
-    topbar.appendChild(tocBtn);
+    topbar.appendChild(backBtn);
     topbar.appendChild(skipBtn);
     topbar.appendChild(closeBtn);
 
@@ -264,13 +278,14 @@
     announce.setAttribute('role', 'status');
 
     var body = el('div', 'tutorial-body');
-    var toc = el('div', 'tutorial-toc');
-    toc.id = 'tutorialToc';
-    toc.hidden = true;
+    // 导航面板：主题名、操作计数、组内列表与本操作完整步骤（主动打开即暂停）
+    var navPanel = el('div', 'tutorial-nav-panel');
+    navPanel.id = 'tutorialToc';
+    navPanel.hidden = true;
 
-    // 控制栏：单行紧凑（上一项 · 主控 · 下一项 ···· 去试试）。
-    // 节点只建一次，之后只更新文字/属性/状态（焦点不丢）；
-    // 重播由主控位在结束态承担，不再单设按钮。
+    // 控制栏：单行紧凑。节点只建一次，之后只更新文字/属性/状态（焦点不丢）；
+    // 播放态只有安静的上一项/主控/下一项；完成态主控位变重播、
+    // 「去试试」作为唯一主按钮出现在右侧。
     var footer = el('div', 'tutorial-footer');
     footer.hidden = true;
     var prevBtn = btnb('tutorial-ctl tutorial-ctl-prev', '上一项');
@@ -285,7 +300,7 @@
 
     root.appendChild(topbar);
     root.appendChild(announce);
-    root.appendChild(toc);
+    root.appendChild(navPanel);
     root.appendChild(body);
     root.appendChild(footer);
     host.appendChild(root);
@@ -295,38 +310,34 @@
     dialogTitle.id = 'tutorialDialogTitle';
     host.appendChild(dialogTitle);
 
-    // ── 场景动画的暂停/恢复/取消（舞台子树 + 指针，覆盖 CSS+WAAPI） ──
-    // 指针是 stageClip 的兄弟节点且自带 opacity 过渡：不纳入的话，
-    // 暂停瞬间指针的淡入/淡出仍会继续走完。
+    // Esc 先收起导航面板，再交给对话框的关闭链
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && navOpen) {
+        e.stopPropagation();
+        closeNav();
+      }
+    });
+    // 指向面板外部的指针按下收起面板（面板自身与开关按钮除外）
+    root.addEventListener('pointerdown', function (e) {
+      if (!navOpen) return;
+      var t = e.target;
+      if (navPanel.contains(t) || navBtn.contains(t)) return;
+      closeNav();
+    });
+
+    // ── 场景动画的暂停/恢复/取消（舞台子树，覆盖 CSS+WAAPI） ──
     function stageAnims() {
-      var out = [];
-      if (stageClip) {
-        try { out = out.concat(stageClip.getAnimations({ subtree: true })); } catch (e) {}
-      }
-      if (pointerEl) {
-        try { out = out.concat(pointerEl.getAnimations()); } catch (e) {}
-      }
-      return out;
+      if (!stageClip) return [];
+      try { return stageClip.getAnimations({ subtree: true }); } catch (e) { return []; }
     }
     function pauseStage() {
       stageAnims().forEach(function (a) { try { a.pause(); } catch (e) {} });
-      // Chromium 实测：指针的 opacity 过渡 pause() 后 playState=paused，
-      // 计算值仍会漂移一小段才停。暂停时直接锁当前计算值：先读值（此刻
-      // 过渡还在，读到的是视觉值），再关过渡（会取消过渡、跳回内联目标），
-      // 最后把刚读到的视觉值写回内联——顺序不能反，反了锁到的是目标值。
-      if (pointerEl) {
-        var frozen = window.getComputedStyle(pointerEl).opacity;
-        pointerEl.style.transition = 'none';
-        pointerEl.style.opacity = frozen;
-      }
     }
     function resumeStage() {
       stageAnims().forEach(function (a) { try { a.play(); } catch (e) {} });
-      if (pointerEl) pointerEl.style.transition = '';
     }
     function cancelStage() {
       stageAnims().forEach(function (a) { try { a.cancel(); } catch (e) {} });
-      if (pointerEl) pointerEl.style.transition = '';
     }
 
     function say(text) {
@@ -343,19 +354,17 @@
       runToken++;
       if (startTimer) { window.clearTimeout(startTimer); startTimer = 0; }
       if (announceTimer) { window.clearTimeout(announceTimer); announceTimer = 0; }
-      rippleTimers.splice(0).forEach(function (t) { window.clearTimeout(t); });
       stopClock();
       cancelStage();
-      // 已冻结/已取消的涟漪环不会触发 onfinish：显式移除，不留半透明残影
+      step = null;
+      scrollAnim = null;
+      clearFocus();
       if (stageClip) {
-        Array.prototype.forEach.call(stageClip.querySelectorAll('.tutorial-click-ring'), function (ring) {
-          if (ring.parentNode) ring.parentNode.removeChild(ring);
+        Array.prototype.forEach.call(stageClip.querySelectorAll('.td-act'), function (n) {
+          n.classList.remove('td-act');
         });
       }
-      pointer = null;
-      pointerPlaced = false;
       stepIndex = -1;
-      if (pointerEl) pointerEl.style.opacity = '0';
       clock.elapsed = 0;
       cueIdx = 0;
       state = 'idle';
@@ -367,26 +376,22 @@
     // ── 顶栏（元素稳定，只切换可见性与文字） ─────────────────
     function renderTopbar() {
       var inCatalog = view === 'catalog';
-      // 目录页顶栏只留关闭（标题在正文里，避免重复的“使用教程”）；
-      // 核心导览不显示返回（跳过介绍承担离开）；文字说明返回目录。
-      backBtn.hidden = inCatalog || (coreMode && view === 'lesson');
-      // 手机顶栏拥挤：返回钮只留箭头（aria-label 保留完整语义）
-      backBtn.textContent = view === 'guide'
-        ? (mqMobile.matches ? '←' : '← 返回目录')
-        : (mqMobile.matches ? '←' : '← 全部教程');
-      tocBtn.hidden = inCatalog || coreMode || view !== 'lesson';
+      // 播放态顶栏：目录入口 + 当前操作名称 + 关闭；核心导览保留跳过介绍；
+      // 目录页顶栏只留关闭（标题在正文里）；文字说明返回目录。
+      navBtn.hidden = inCatalog || coreMode || view !== 'lesson';
+      navBtn.setAttribute('aria-expanded', navOpen ? 'true' : 'false');
       skipBtn.hidden = !coreMode || view !== 'lesson';
-      counterEl.hidden = inCatalog || view === 'guide';
-      titleEl.classList.toggle('is-label', coreMode && view === 'lesson');
-      if (inCatalog || view === 'guide') {
-        titleEl.textContent = view === 'guide' ? '文字使用说明' : '';
+      backBtn.hidden = view !== 'guide';
+      counterEl.hidden = !(coreMode && view === 'lesson');
+      if (inCatalog) {
+        titleEl.textContent = '';
+      } else if (view === 'guide') {
+        titleEl.textContent = '文字使用说明';
       } else if (coreMode) {
         titleEl.textContent = '快速认识木铎星火';
         counterEl.textContent = (coreIdx + 1) + ' / 4';
       } else {
-        var group = Data.groupById(groupId);
-        titleEl.textContent = group ? group.title : '';
-        counterEl.textContent = '操作 ' + (lessonIdx + 1) + ' / ' + Data.lessonsInGroup(groupId).length;
+        titleEl.textContent = currentLesson ? currentLesson.title : '';
       }
       var viewName = view === 'catalog' ? '全部教程目录'
         : view === 'guide' ? '文字使用说明'
@@ -395,14 +400,95 @@
       dialogTitle.textContent = '木铎星火使用教程' + (view === 'lesson' && currentLesson ? '：' + currentLesson.title : '') + (viewName && view !== 'lesson' ? '：' + viewName : '');
     }
 
+    // ── 导航面板 ─────────────────────────────────────────────
+    function renderNav() {
+      if (coreMode || view !== 'lesson' || !groupId) return;
+      var lessons = Data.lessonsInGroup(groupId);
+      var group = Data.groupById(groupId);
+      var seen = progress.seenCount(lessons.map(function (l) { return l.id; }));
+      navPanel.textContent = '';
+      var head = el('div', 'tutorial-nav-head');
+      head.appendChild(el('span', 'tutorial-nav-group', group ? group.title : ''));
+      head.appendChild(el('span', 'tutorial-nav-count',
+        '操作 ' + (lessonIdx + 1) + ' / ' + lessons.length + ' · 已看 ' + seen));
+      navPanel.appendChild(head);
+
+      var list = el('ol', 'tutorial-nav-list');
+      lessons.forEach(function (l, i) {
+        var item = el('li', 'tutorial-nav-item');
+        var b = btnb('tutorial-nav-btn' + (i === lessonIdx ? ' is-active' : ''));
+        b.appendChild(el('span', 'tutorial-nav-num', String(i + 1)));
+        b.appendChild(el('span', 'tutorial-nav-name', l.title));
+        if (progress.has(l.id)) b.appendChild(el('span', 'tutorial-nav-seen', '已看过'));
+        b.addEventListener('click', function () {
+          closeNav();
+          openLesson(groupId, i, i > lessonIdx ? 'fwd' : 'back');
+        });
+        item.appendChild(b);
+        list.appendChild(item);
+      });
+      navPanel.appendChild(list);
+
+      // 本操作完整步骤与说明（从舞台下方移入导航面板）
+      if (variant) {
+        var sec = el('div', 'tutorial-nav-sec');
+        sec.appendChild(el('div', 'tutorial-nav-sec-title', '本操作完整步骤'));
+        var steps = el('ol', 'tutorial-nav-steps');
+        variant.steps.forEach(function (s) {
+          steps.appendChild(el('li', 'tutorial-nav-step', s));
+        });
+        sec.appendChild(steps);
+        if (variant.note) sec.appendChild(el('p', 'tutorial-nav-note', variant.note));
+        navPanel.appendChild(sec);
+      }
+
+      var links = el('div', 'tutorial-nav-links');
+      var restart = btnb('tutorial-nav-link', '从头观看本组');
+      restart.addEventListener('click', function () {
+        closeNav();
+        openLesson(groupId, 0, 'fwd');
+      });
+      links.appendChild(restart);
+      var guideBtn = btnb('tutorial-nav-link', '文字使用说明');
+      guideBtn.addEventListener('click', function () {
+        closeNav();
+        swapView('fade', openGuide);
+      });
+      links.appendChild(guideBtn);
+      var allBtn = btnb('tutorial-nav-link', '返回全部教程');
+      allBtn.addEventListener('click', function () {
+        closeNav();
+        var g = groupId;
+        swapView('fade', function () { renderCatalog(); focusGroupCard(g); });
+      });
+      links.appendChild(allBtn);
+      navPanel.appendChild(links);
+    }
+    function openNav() {
+      if (navBtn.hidden) return;
+      renderNav();
+      navOpen = true;
+      navPanel.hidden = false;
+      navBtn.setAttribute('aria-expanded', 'true');
+      // 主动打开导航面板：暂停当前演示；收起后由用户点「继续播放」
+      autoPause();
+    }
+    function closeNav() {
+      if (!navOpen) return;
+      navOpen = false;
+      navPanel.hidden = true;
+      navBtn.setAttribute('aria-expanded', 'false');
+      try { navBtn.focus({ preventScroll: true }); } catch (e) {}
+    }
+
     // ── 目录视图 ──
     function renderCatalog() {
       stopPlayback();
       if (view === 'catalog') catalogScroll = body.scrollTop;
       view = 'catalog';
       footer.hidden = true;
-      toc.hidden = true;
-      tocBtn.setAttribute('aria-expanded', 'false');
+      closeNav();
+      navPanel.hidden = true;
       renderTopbar();
       body.textContent = '';
       var wrap = el('div', 'tutorial-catalog');
@@ -473,7 +559,8 @@
       stopPlayback();
       view = 'guide';
       footer.hidden = true;
-      toc.hidden = true;
+      closeNav();
+      navPanel.hidden = true;
       renderTopbar();
       body.textContent = '';
       var wrap = el('div', 'tutorial-guide');
@@ -498,39 +585,6 @@
       }
       body.scrollTop = 0;
       notifyNavigate();
-    }
-
-    // ── 组内操作目录（浮窗内展开区） ──
-    function renderToc() {
-      if (coreMode || view !== 'lesson') return;
-      var lessons = Data.lessonsInGroup(groupId);
-      toc.textContent = '';
-      var head = el('div', 'tutorial-toc-head');
-      head.appendChild(el('span', 'tutorial-toc-title', Data.groupById(groupId).title + ' · 全部操作'));
-      var restart = btnb('tutorial-toc-restart', '从头观看');
-      restart.addEventListener('click', function () {
-        toc.hidden = true;
-        tocBtn.setAttribute('aria-expanded', 'false');
-        openLesson(groupId, 0);
-      });
-      head.appendChild(restart);
-      toc.appendChild(head);
-      var list = el('ol', 'tutorial-toc-list');
-      lessons.forEach(function (l, i) {
-        var item = el('li', 'tutorial-toc-item');
-        var b = btnb('tutorial-toc-btn' + (i === lessonIdx ? ' is-active' : ''));
-        b.appendChild(el('span', 'tutorial-toc-num', String(i + 1)));
-        b.appendChild(el('span', 'tutorial-toc-name', l.title));
-        if (progress.has(l.id)) b.appendChild(el('span', 'tutorial-toc-seen', '已看过'));
-        b.addEventListener('click', function () {
-          toc.hidden = true;
-          tocBtn.setAttribute('aria-expanded', 'false');
-          openLesson(groupId, i);
-        });
-        item.appendChild(b);
-        list.appendChild(item);
-      });
-      toc.appendChild(list);
     }
 
     // ── 视图切换（换分镜 / 目录 / 文字说明） ──────────────────
@@ -578,90 +632,41 @@
       lessonIdx = idx;
       currentLesson = lessons[lessonIdx];
       view = 'lesson';
-      toc.hidden = true;
-      tocBtn.setAttribute('aria-expanded', 'false');
       renderTopbar();
-      renderToc();
       swapView(dir || 'fwd', buildLessonView);
       notifyNavigate();
       startLesson();
     }
 
-    // 播放页静态结构：操作标题 + 当前指导语（固定两行高，舞台之上）→ 舞台（主视觉）
-    // → 可展开的完整步骤。指导语先行：换字幕不推移舞台。
+    // 播放页静态结构：舞台即主视觉（演示区 + 台内解说条）。
+    // 不再有第二套标题、可见步骤编号或常驻步骤区块——完整步骤在导航面板里。
     function buildLessonView() {
       footer.hidden = false;
       body.textContent = '';
       var wrap = el('div', 'tutorial-play');
-      var now = el('div', 'tutorial-now');
-      var h3 = el('h3', 'tutorial-now-title', (variant = Data.lessonVariant(currentLesson, mqMobile.matches)).title);
-      h3.tabIndex = -1;
-      now.appendChild(h3);
-      now.appendChild(el('p', 'tutorial-now-line', ''));
-      wrap.appendChild(now);
+      variant = Data.lessonVariant(currentLesson, mqMobile.matches);
 
       var stage = el('div', 'tutorial-stage' + (mqMobile.matches ? ' tutorial-stage--mobile' : ''));
       stage.setAttribute('aria-hidden', 'true');
-      var label = el('span', 'tutorial-demo-label', '示例演示');
       stageClip = el('div', 'tutorial-stage-clip');
-      pointerEl = el('div', 'tutorial-pointer');
-      pointerEl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7.5-6.2 1.7L9.5 19z" fill="currentColor" stroke="var(--surface)" stroke-width="1.6" stroke-linejoin="round"/></svg>';
-      pointerEl.style.opacity = '0';
-      stage.appendChild(label);
+      var stageView = el('div', 'tutorial-stage-view');
+      stageClip.appendChild(stageView);
+      var caption = el('p', 'tutorial-caption');
+      captionText = el('span', 'tutorial-caption-text');
+      caption.appendChild(captionText);
+      stageClip.appendChild(caption);
       stage.appendChild(stageClip);
-      stage.appendChild(pointerEl);
       wrap.appendChild(stage);
-
-      var more = el('details', 'tutorial-more');
-      var summary = el('summary', 'tutorial-more-summary', '完整步骤与说明');
-      more.appendChild(summary);
-      var steps = el('ol', 'tutorial-more-steps');
-      variant.steps.forEach(function (s, i) {
-        var li = el('li', 'tutorial-more-step');
-        li.appendChild(el('span', 'tutorial-more-stepnum', String(i + 1)));
-        li.appendChild(el('span', 'tutorial-more-steptext', s));
-        steps.appendChild(li);
-      });
-      more.appendChild(steps);
-      if (variant.note) more.appendChild(el('p', 'tutorial-lesson-note', variant.note));
-      // 复杂限制放入可展开说明；用户展开阅读时暂停播放，收起后由用户继续
-      more.addEventListener('toggle', function () {
-        if (more.open && state === 'playing') autoPause();
-      });
-      wrap.appendChild(more);
 
       body.appendChild(wrap);
       body.scrollTop = 0;
-      // 焦点落到操作标题：进入分镜后键盘/读屏从标题开始；标题 outline 关闭，
-      // 不会出现顶栏按钮上来历不明的焦点框
-      try { h3.focus({ preventScroll: true }); } catch (e) {}
-      updateNowLine();
+      setCaption(variant.steps[0] || '');
+      // 焦点落到顶栏操作名称：进入分镜后键盘/读屏从这里开始
+      try { titleEl.focus({ preventScroll: true }); } catch (e) {}
     }
 
     function currentSceneCtx() {
       return { mobile: mqMobile.matches, capability: Data.capability() };
-    }
-
-    // 场景页超出演示框时按“真实页面滚动”语义把目标滚入视野（瞬时完成，
-    // 是状态变化不是动画；暂停安全）。整幕永不缩放：任何步骤都是 100% 真实比例。
-    function scenePage() {
-      if (!scene || !scene.root) return null;
-      return scene.root;
-    }
-    function ensureVisible(target) {
-      if (!target || !stageClip) return;
-      var frame = scenePage();
-      if (!frame) return;
-      var cs = window.getComputedStyle(frame);
-      if (cs.overflowY !== 'auto' && cs.overflowY !== 'scroll') return;
-      var tr = target.getBoundingClientRect();
-      var fr = frame.getBoundingClientRect();
-      if (!tr.height || !fr.height) return;
-      if (tr.top < fr.top + 8) {
-        frame.scrollTop += tr.top - fr.top - 16;
-      } else if (tr.bottom > fr.bottom - 8) {
-        frame.scrollTop += tr.bottom - fr.bottom + 16;
-      }
     }
 
     function startLesson() {
@@ -672,8 +677,13 @@
       scene = Scenes.build(currentLesson.scene, currentSceneCtx());
       if (!scene) { renderError(); return; }
       cues = cueTimes(currentLesson.durationMs, scene.steps, variant.pace);
-      stageClip.textContent = '';
-      stageClip.appendChild(scene.root);
+      var viewEl = stageClip ? stageClip.querySelector('.tutorial-stage-view') : null;
+      if (viewEl) {
+        viewEl.textContent = '';
+        var lab = el('span', 'tutorial-demo-label', '示例演示');
+        viewEl.appendChild(lab);
+        viewEl.appendChild(scene.root);
+      }
       // 首帧样式就绪：强制回流 + 可取消的短延时（rAF 在节流环境可能不回调）
       void stageClip.offsetWidth;
       state = 'playing';
@@ -709,92 +719,127 @@
     }
 
     function runTimeline() {
+      // 定位滚动：随虚拟时钟推进，暂停即冻结（可能同时滚动弹窗内部容器与场景根）
+      if (scrollAnim) {
+        var sp = Math.min(1, (clock.elapsed - scrollAnim.startedAt) / scrollAnim.dur);
+        scrollAnim.tweens.forEach(function (tw) {
+          tw.el.scrollTop = tw.from + (tw.to - tw.from) * easeInOut(sp);
+        });
+        if (sp >= 1) scrollAnim = null;
+      }
       while (cueIdx < cues.length && clock.elapsed >= cues[cueIdx]) {
         beginStep(cueIdx);
         cueIdx++;
       }
-      advancePointer();
+      if (step && !step.applied && clock.elapsed >= step.actionAt) applyStep();
       if (state === 'playing' && clock.elapsed >= currentLesson.durationMs && timelineSettled()) {
         finishLesson();
       }
     }
 
-    // 结束守门：最后一步的阅读、动作与指针退场都完成后才算播完。
-    // 阅读阶段会把实际结束点推后一点，不能在动作进行中就切结束态、记“已看”。
+    // 结束守门：最后一步的阅读、动作与结果停留都完成后才算播完。
+    // 不能在动作进行中就切结束态、记“已看”。
     function timelineSettled() {
-      if (!pointer) return true;
-      if (!pointer.applied) return false;
-      return !pointer.fadeAt || clock.elapsed >= pointer.fadeAt;
+      return !step || step.applied;
     }
 
-    // 阅读时长按文案长度走：短句快点动身，长句留足读的时间；设上限，
-    // 不把所有步骤统一拉长。
-    function readLead(text) {
-      var len = (text || '').length;
-      return Math.min(900, 380 + 32 * Math.max(0, len - 8));
-    }
-
+    // ── 步骤执行：字幕（台内解说）→ 定位（焦点环 + 平滑滚动）→
+    //    动作（控件自身脉动 + 状态就地变化）→ 结果停留 ──
     function beginStep(i) {
-      // 保险：上一步的变化尚未落地就跨到下一步时，先落地（正常节奏不会发生）
-      if (pointer && !pointer.applied) applyStep();
+      // 保险：上一步的变化尚未落地就跨到下一步时（大幅推进/调试跳播），先落地
+      if (step && !step.applied) applyStep();
       stepIndex = i;
-      // 指导语先行：本步的指导语在指针动身前出现，并给独立的阅读时间
-      //（提示 → 定位 → 动作 → 反馈 → 结果停留）
-      updateNowLine();
-      if (variant.steps[i] != null) {
-        say('第 ' + (i + 1) + ' 步：' + variant.steps[i]);
-      }
-      var targetName = scene.targets[i];
+      setCaption(variant.steps[i]);
+      say('第 ' + (i + 1) + ' 步：' + variant.steps[i]);
+      setFocus(i);
+      var target = scene.targets[i] ? targetEl(scene.targets[i]) : null;
+      if (target && !targetHidden(target)) scrollToTarget(target);
+      // 动作时刻：字幕出现后留出阅读时间，并为结果保留观察停留；
+      // 数值边界与 tools/check_tutorial_scenes.js 的时长公式一致。
       var lead = readLead(variant.steps[i]);
-      // 目标落点在动身时刻再测量：阅读阶段结束、目标被滚入视野之后，
-      // 坐标才是用户此刻看到的位置。
-      pointer = { idx: i, phase: 'wait', startedAt: clock.elapsed, moveAt: clock.elapsed + lead, target: targetName, click: scene.clicks[i], applied: false, from: null, to: null, pressAt: 0, fadeAt: 0 };
+      var gap = i < cues.length - 1 ? cues[i + 1] - cues[i] : 0;
+      var delay = gap
+        ? Math.max(READ_MIN_MS, Math.min(lead, gap - RESULT_MIN_MS))
+        : Math.min(lead, READ_MAX_MS);
+      step = { idx: i, actionAt: clock.elapsed + delay, applied: false };
+    }
+
+    function applyStep() {
+      if (!scene || !currentLesson || !step) return;
+      step.applied = true;
+      // 按压反馈落在控件自身：轻微脉动，无光标、无扩散圆环
+      if (scene.clicks[step.idx] && focusEl) {
+        focusEl.classList.remove('td-act');
+        void focusEl.offsetWidth;
+        focusEl.classList.add('td-act');
+      }
+      try { scene.go(step.idx); } catch (e) { renderError(); return; }
+      // 焦点的去留：动作后目标被场景隐藏（点击导航/菜单收起）时同步收环，
+      // 不能把强调环留在已消失的对象上
+      if (focusEl && (targetHidden(focusEl) || focusEl.classList.contains('is-hidden'))) {
+        clearFocus();
+      }
+    }
+
+    // ── 焦点环（is-hot）：一次一个，随解说指向当前对象 ──────
+    function setFocus(i) {
+      clearFocus();
+      var t = scene.targets[i] ? targetEl(scene.targets[i]) : null;
+      if (t && !targetHidden(t)) {
+        focusEl = t;
+        t.classList.add('is-hot');
+      }
+    }
+    function clearFocus() {
+      if (focusEl) {
+        focusEl.classList.remove('is-hot');
+        focusEl.classList.remove('td-act');
+        focusEl = null;
+      }
+    }
+
+    // ── 台内解说条 ──
+    function setCaption(text) {
+      if (!captionText) return;
+      captionText.classList.remove('td-cap-in');
+      void captionText.offsetWidth;
+      captionText.textContent = text || '';
+      captionText.classList.add('td-cap-in');
+    }
+
+    // 场景页或弹窗内部内容超出演示框时，按“真实页面滚动”语义把当前对象滚入
+    // 视野：逐层收集场景根内可滚动的祖先（如 modal-card）连同场景根一起平滑
+    // 滚动（虚拟时钟驱动，暂停即冻结），不是瞬间跳变。
+    function scrollToTarget(target) {
+      if (!target || !stageClip || !scene || !scene.root) return;
+      if (typeof target.getBoundingClientRect !== 'function') return; // 守门桩
+      var tweens = [];
+      var n = target.parentNode;
+      while (n && n !== stageClip) {
+        if (n === scene.root) { addScrollTween(n, target, tweens); break; }
+        if (n.nodeType === 1) addScrollTween(n, target, tweens);
+        n = n.parentNode;
+      }
+      if (!tweens.length) return;
+      scrollAnim = { startedAt: clock.elapsed, dur: SCROLL_MS, tweens: tweens };
+    }
+    function addScrollTween(container, target, tweens) {
+      var cs = window.getComputedStyle(container);
+      if (cs.overflowY !== 'auto' && cs.overflowY !== 'scroll') return;
+      var tr = target.getBoundingClientRect();
+      var cr = container.getBoundingClientRect();
+      if (!tr.height || !cr.height) return;
+      var delta = 0;
+      if (tr.top < cr.top + 8) delta = tr.top - cr.top - 16;
+      else if (tr.bottom > cr.bottom - 8) delta = tr.bottom - cr.bottom + 16;
+      if (delta) tweens.push({ el: container, from: container.scrollTop, to: container.scrollTop + delta });
     }
 
     function targetEl(name) {
       if (!name || !stageClip) return null;
       try { return stageClip.querySelector('[data-mark="' + name + '"]'); } catch (e) { return null; }
     }
-    function currentPointerPoint() {
-      var r = pointerEl.getBoundingClientRect();
-      var c = stageClip.getBoundingClientRect();
-      return { x: r.left - c.left + r.width / 2, y: r.top - c.top + r.height / 2 };
-    }
-    function pointFor(target) {
-      var r = target.getBoundingClientRect();
-      var c = stageClip.getBoundingClientRect();
-      var off = mqMobile.matches ? 10 : 14;
-      return { x: r.left - c.left + r.width / 2 + off, y: r.top - c.top + r.height / 2 + off };
-    }
-    function setPointerAt(x, y, scale) {
-      pointerPlaced = true;
-      pointerEl.style.transform = 'translate(' + (x - POINTER_HALF) + 'px,' + (y - POINTER_HALF) + 'px)' + (scale && scale !== 1 ? ' scale(' + scale + ')' : '');
-    }
-    function easeInOut(p) { return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; }
-
-    // 点击涟漪：在点击坐标扩散一圈（transform/opacity，随舞台动画一起暂停/取消）
-    function spawnRipple(x, y) {
-      if (!stageClip) return;
-      var ring = document.createElement('div');
-      ring.className = 'tutorial-click-ring';
-      ring.style.left = x + 'px';
-      ring.style.top = y + 'px';
-      stageClip.appendChild(ring);
-      try {
-        var anim = ring.animate([
-          { transform: 'translate(-50%, -50%) scale(0.35)', opacity: 0.5 },
-          { transform: 'translate(-50%, -50%) scale(1.6)', opacity: 0 }
-        ], { duration: 460, easing: 'cubic-bezier(.23, 1, .32, 1)' });
-        anim.onfinish = function () { if (ring.parentNode) ring.parentNode.removeChild(ring); };
-      } catch (e) { /* WAAPI 不可用：静态降级本就不走这条路 */ }
-      var t = window.setTimeout(function () {
-        rippleTimers = rippleTimers.filter(function (x) { return x !== t; });
-        if (ring.parentNode) ring.parentNode.removeChild(ring);
-      }, 700);
-      rippleTimers.push(t);
-    }
-
-    // 目标是否已被场景隐藏（点击导航后旧目标消失，指针不能悬在原地）
+    // 目标是否已被场景隐藏（导航/菜单收起后强调环不能悬在原地）
     function targetHidden(el) {
       var n = el;
       while (n && n !== stageClip) {
@@ -803,108 +848,12 @@
       }
       return !n; // 已脱离场景根同样视为消失
     }
-
-    function advancePointer() {
-      if (!pointer) return;
-      // 已应用的动作步：短暂停留后指针退场，让结果成为画面重点
-      if (pointer.applied) {
-        if (pointer.fadeAt && clock.elapsed >= pointer.fadeAt &&
-            pointerEl.style.opacity !== '0') {
-          pointerEl.style.opacity = '0';
-        }
-        return;
-      }
-      if (pointer.phase === 'wait') {
-        // 阅读阶段：字幕已出，等够阅读时间再定位/动作
-        if (clock.elapsed >= pointer.moveAt) {
-          var target = pointer.target ? targetEl(pointer.target) : null;
-          if (target && !targetHidden(target)) {
-            ensureVisible(target);
-            pointer.from = (pointerPlaced && pointerEl.style.opacity !== '0')
-              ? currentPointerPoint()      // 指针连续可见：从原位滑向新目标
-              : { x: 0, y: 0, fresh: true }; // 指针刚退场：就近重新出场，不从陈旧坐标横穿
-            pointer.to = pointFor(target);
-            pointer.phase = 'move';
-            pointerEl.style.opacity = '1';
-            pointer.startedAt = clock.elapsed;
-          } else {
-            pointer.phase = 'none';
-            pointer.startedAt = clock.elapsed;
-          }
-        }
-        return;
-      }
-      if (pointer.phase === 'none') {
-        applyStep();
-        return;
-      }
-      if (pointer.phase === 'move') {
-        var t = (clock.elapsed - pointer.startedAt) / POINTER_MOVE_MS;
-        if (pointer.from.fresh) {
-          // 指针此前隐藏：直接出现在目标旁，不播放横穿
-          setPointerAt(pointer.to.x, pointer.to.y);
-          pointer.from = { x: pointer.to.x, y: pointer.to.y };
-        } else {
-          var p = Math.min(1, t);
-          var e = easeInOut(p);
-          setPointerAt(pointer.from.x + (pointer.to.x - pointer.from.x) * e,
-                       pointer.from.y + (pointer.to.y - pointer.from.y) * e);
-        }
-        if (t >= 1) {
-          if (pointer.click) {
-            pointer.phase = 'press';
-            pointer.pressAt = clock.elapsed;
-          } else {
-            applyStep();
-          }
-        }
-        return;
-      }
-      if (pointer.phase === 'press') {
-        var q = Math.min(1, (clock.elapsed - pointer.pressAt) / POINTER_PRESS_MS);
-        setPointerAt(pointer.to.x, pointer.to.y, 1 - 0.26 * Math.sin(Math.PI * q));
-        if (q >= 1) {
-          setPointerAt(pointer.to.x, pointer.to.y, 1);
-          spawnRipple(pointer.to.x, pointer.to.y);
-          applyStep();
-        }
-      }
-    }
-
-    function applyStep() {
-      if (!scene || !currentLesson) return;
-      if (pointer) {
-        pointer.applied = true;
-        // 动作完成后指针短暂停留再退场（虚拟时钟驱动，暂停时一并冻结）
-        pointer.fadeAt = clock.elapsed + POINTER_REST_MS;
-      }
-      try { scene.go(stepIndex); } catch (e) { renderError(); return; }
-      // 指针的去留：无目标步骤直接隐藏；有目标的步骤若其目标已被场景隐藏
-      //（例如点击后导航离开），同样隐藏，不能悬停在空白上。
-      if (pointer) {
-        if (!scene.targets[stepIndex]) pointerEl.style.opacity = '0';
-        else {
-          var used = targetEl(scene.targets[stepIndex]);
-          if (!used || targetHidden(used)) pointerEl.style.opacity = '0';
-        }
-      }
-    }
-
-    function updateNowLine() {
-      var line = body.querySelector('.tutorial-now-line');
-      if (!line) return;
-      var total = variant.steps.length;
-      var text = stepIndex >= 0 && variant.steps[stepIndex] != null ? variant.steps[stepIndex] : variant.steps[0];
-      line.textContent = (total > 1 ? '第 ' + (Math.max(0, stepIndex) + 1) + ' / ' + total + ' 步 · ' : '') + text;
-      var items = body.querySelectorAll('.tutorial-more-step');
-      Array.prototype.forEach.call(items, function (li, i) {
-        li.classList.toggle('is-active', i <= Math.max(0, stepIndex));
-      });
-    }
+    function easeInOut(p) { return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; }
 
     function finishLesson() {
       state = 'ended';
-      pointerEl.style.opacity = '0';
+      clearFocus();
+      scrollAnim = null;
       updateControls();
       // 记“已看”守门：确实完整播放到末步、仍在本分镜视图、页面可见。
       // 提前离开的路径都先经过 stopPlayback()（state→idle），到不了这里。
@@ -941,6 +890,15 @@
       playBtn.hidden = staticMode;
       prevBtn.disabled = (coreMode ? coreIdx : lessonIdx) === 0;
       nextBtn.textContent = nextLabel();
+      // 「去试试」只在完成态出现，且是唯一的视觉主按钮；
+      // 播放期间下一项保持安静，不与任何入口争夺注意力
+      var ended = state === 'ended';
+      nextBtn.classList.toggle('is-quiet', !staticMode && ended);
+      tryBtn.hidden = staticMode || !ended || !currentLesson.action;
+      if (!tryBtn.hidden) {
+        tryBtn.textContent = '去试试 · ' + tryActionLabel(currentLesson.action);
+        tryBtn.setAttribute('aria-label', '去试试：' + tryActionLabel(currentLesson.action));
+      }
       if (staticMode) return;
       if (state === 'playing') {
         playBtn.textContent = '暂停';
@@ -959,12 +917,6 @@
         playBtn.textContent = '播放';
         playBtn.setAttribute('aria-label', '播放演示');
         playBtn.disabled = false;
-      }
-      var actionId = currentLesson.action;
-      tryBtn.hidden = !actionId;
-      if (actionId) {
-        tryBtn.textContent = '去试试 · ' + tryActionLabel(actionId);
-        tryBtn.setAttribute('aria-label', '去试试：' + tryActionLabel(actionId));
       }
     }
 
@@ -1038,31 +990,7 @@
       if (existing) existing.remove();
       var wrap = el('div', 'tutorial-static td-noanim');
       wrap.appendChild(el('p', 'tutorial-static-note', '已减少动态效果：下面按步骤静态展示这个操作的完整过程。'));
-      var steps = el('ol', 'tutorial-static-steps');
-      variant.steps.forEach(function (text, i) {
-        var li = el('li', 'tutorial-static-step');
-        var thumbBox = el('div', 'tutorial-static-thumb');
-        thumbBox.setAttribute('aria-hidden', 'true');
-        var inst = Scenes.build(currentLesson.scene, currentSceneCtx());
-        if (inst) {
-          try {
-            inst.go(Math.min(i, inst.steps - 1));
-            thumbBox.appendChild(inst.root);
-            void thumbBox.offsetWidth;
-            var avail = thumbBox.clientHeight - 20;
-            var nat = inst.root.offsetHeight;
-            if (nat > avail && nat > 0) {
-              var k = Math.max(0.7, avail / nat);
-              inst.root.style.transform = 'scale(' + k + ')';
-              inst.root.style.transformOrigin = 'top center';
-            }
-          } catch (e) { /* 静态帧构建失败时保留文字步骤 */ }
-        }
-        li.appendChild(thumbBox);
-        li.appendChild(el('div', 'tutorial-static-text', (i + 1) + '. ' + text));
-        steps.appendChild(li);
-      });
-      wrap.appendChild(steps);
+      // 操作按钮置顶：不滚动就能标记已看 / 去试试；步骤图在下方滚动阅读
       var actions = el('div', 'tutorial-static-actions');
       var markBtn = btnb('tutorial-static-mark', progress.has(currentLesson.id) ? '已看过' : '标记已看过');
       if (progress.has(currentLesson.id)) markBtn.disabled = true;
@@ -1073,6 +1001,14 @@
         say('已把《' + currentLesson.title + '》标记为已看过。');
       });
       actions.appendChild(markBtn);
+      // 静态模式同样能在读完后来到真实入口（完成态语义）
+      if (currentLesson.action) {
+        var tryBtn2 = btnb('tutorial-static-try', '去试试 · ' + tryActionLabel(currentLesson.action));
+        tryBtn2.addEventListener('click', function () {
+          if (currentLesson && currentLesson.action) opts.onTryIt(currentLesson.action);
+        });
+        actions.appendChild(tryBtn2);
+      }
       if (!reduceMotion.matches && waapiOk) {
         var playBtn2 = btnb('tutorial-static-play', '播放演示');
         playBtn2.addEventListener('click', function () {
@@ -1084,7 +1020,36 @@
         actions.appendChild(playBtn2);
       }
       wrap.appendChild(actions);
+      var steps = el('ol', 'tutorial-static-steps');
+      variant.steps.forEach(function (text, i) {
+        var li = el('li', 'tutorial-static-step');
+        var thumbBox = el('div', 'tutorial-static-thumb');
+        thumbBox.setAttribute('aria-hidden', 'true');
+        var inst = Scenes.build(currentLesson.scene, currentSceneCtx());
+        if (inst) {
+          try {
+            inst.go(Math.min(i, inst.steps - 1));
+            thumbBox.appendChild(inst.root);
+          } catch (e) { /* 静态帧构建失败时保留文字步骤 */ }
+        }
+        li.appendChild(thumbBox);
+        li.appendChild(el('div', 'tutorial-static-text', (i + 1) + '. ' + text));
+        steps.appendChild(li);
+      });
+      wrap.appendChild(steps);
       body.insertBefore(wrap, body.firstChild);
+      // 插入文档后再测量缩放：游离节点没有布局（offsetHeight 为 0），
+      // 纯适配缩放把场景整体缩进缩略图，不裁断文字
+      Array.prototype.forEach.call(body.querySelectorAll('.tutorial-static-thumb'), function (tb) {
+        var f = tb.querySelector('.tutorial-demo-frame');
+        if (!f) return;
+        var avail = tb.clientHeight - 16;
+        var nat = f.offsetHeight;
+        if (nat > avail && nat > 0) {
+          f.style.transform = 'scale(' + avail / nat + ')';
+          f.style.transformOrigin = 'top center';
+        }
+      });
     }
 
     function renderError() {
@@ -1122,12 +1087,10 @@
       lessonIdx = Data.lessonsInGroup(groupId).indexOf(currentLesson);
       view = 'lesson';
       stopPlayback();
-      toc.hidden = true;
-      toc.textContent = '';
-      tocBtn.setAttribute('aria-expanded', 'false');
+      closeNav();
+      navPanel.hidden = true;
       renderTopbar();
       swapView(dir || 'fwd', buildLessonView);
-      renderToc();
       notifyNavigate();
       startLesson();
     }
@@ -1165,10 +1128,13 @@
     }
 
     // ── 事件 ──
+    navBtn.addEventListener('click', function () {
+      if (navOpen) closeNav();
+      else openNav();
+    });
     backBtn.addEventListener('click', function () {
-      if (view === 'guide' || (view === 'lesson' && !coreMode)) {
-        var g = groupId;
-        swapView('back', function () { renderCatalog(); focusGroupCard(g); });
+      if (view === 'guide') {
+        swapView('back', function () { renderCatalog(); focusGroupCard(groupId); });
       }
     });
     closeBtn.addEventListener('click', function () {
@@ -1176,15 +1142,6 @@
       opts.onClose('close');
     });
     skipBtn.addEventListener('click', function () { leaveCore('skip'); });
-    tocBtn.addEventListener('click', function () {
-      toc.hidden = !toc.hidden;
-      tocBtn.setAttribute('aria-expanded', toc.hidden ? 'false' : 'true');
-      if (!toc.hidden) {
-        renderToc();
-        // 打开操作目录时暂停当前演示；关闭后由用户点「继续播放」
-        autoPause();
-      }
-    });
     prevBtn.addEventListener('click', function () { step(-1); });
     nextBtn.addEventListener('click', function () { step(1); });
     playBtn.addEventListener('click', function () { togglePlay(); });
@@ -1197,13 +1154,8 @@
       if (reduceMotion.matches === sawReduce) return;
       sawReduce = reduceMotion.matches;
       if (view !== 'lesson') return;
-      if (reduceMotion.matches) {
-        // 销毁当前时间轴，展示静态步骤，不自动记已看
-        renderStatic();
-      } else {
-        // 恢复偏好后等待用户“播放演示”（静态视图带播放按钮）
-        renderStatic();
-      }
+      // 销毁当前时间轴，展示静态步骤；恢复偏好后仍等待用户“播放演示”
+      renderStatic();
     }
     function onMqChange() {
       // 视口跨断点：重建当前分镜视图（确定性重播），不只 mount 时判断一次
@@ -1227,7 +1179,7 @@
 
     progress.onChange(function () {
       if (view === 'catalog') renderCatalog();
-      else if (view === 'lesson') renderToc();
+      else if (view === 'lesson' && navOpen) renderNav();
     });
 
     // ── 启动 ──
@@ -1250,11 +1202,20 @@
     var api = {
       el: root,
       dialogTitle: dialogTitle,
+      // 对话框焦点陷阱初始化后调用：把焦点放回本视图的语义起点，
+      // 而不是焦点陷阱默认命中的第一个控件（顶栏「目录」按钮）
+      focusInitial: function () {
+        var t = null;
+        if (view === 'lesson') t = titleEl;
+        else if (view === 'guide') t = body.querySelector('.tutorial-guide-title');
+        else t = body.querySelector('.tutorial-group-card');
+        if (t) { try { t.focus({ preventScroll: true }); } catch (e) {} }
+      },
       showCatalog: function () {
         swapView('fade', function () { renderCatalog(); focusGroupCard(groupId); });
       },
       // 立即停止教学计时（关闭浮窗、切换账号等路径用）：
-      // 停表、停指针、取消场景动画，之后的进度写入不再发生。
+      // 停表、取消场景动画与滚动，之后的进度写入不再发生。
       halt: function () { stopPlayback(); },
       // QA 专用：慢速观察（不影响正常用户的播放速度）
       setRate: function (r) { moduleRate = (r > 0 && r <= 4) ? r : 1; },
@@ -1274,7 +1235,7 @@
           elapsed: Math.round(clock.elapsed),
           stepIndex: stepIndex,
           stepTarget: scene && stepIndex >= 0 ? (scene.targets[stepIndex] || null) : null,
-          stepPhase: pointer ? pointer.phase : null,
+          stepPhase: step ? (step.applied ? 'acted' : 'wait') : null,
           lessonId: currentLesson ? currentLesson.id : null
         };
       },
@@ -1305,6 +1266,7 @@
     mount: mount,
     createProgress: createProgress,
     cueTimes: cueTimes,
+    readLead: readLead,
     _active: null,     // 当前挂载的实例（QA 控制台用，如 _active.setRate(0.4)）
     _rate: function (r) { if (this._active) this._active.setRate(r); }
   };

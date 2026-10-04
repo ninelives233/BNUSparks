@@ -1,7 +1,14 @@
 /* BNU Sparks · tutorial-entry.js —— 动画使用教程：统一打开入口、首次资格调度、
    加载中/失败壳、认证代次检查与全局去重。轻量静态加载（index.html 直接引用）；
    完整分镜模块（data/scenes/player + tutorial.css）按需经 feature-loader 拉取。
-   全局命名空间 window.BnuTutorial：open/close/maybeOffer/destroy。 */
+   全局命名空间 window.BnuTutorial：open/close/maybeOffer/destroy。
+
+   背景与历史（2026-10-03 四次修订）：教程是真实页面之上的浮窗。打开时只压
+   一条 tutorial 历史条目（后退=关闭），不再 switchView('tutorial')——来源页
+   （首页/课程/问答…）保持可见，经 inert + 焦点陷阱 + 滚动锁变为不可交互；
+   直达或刷新 /tutorial 时由 app.js 先渲染真实首页作背景再开浮窗。关闭经
+   history.back 交还历史，由 popstate 的常规恢复路径还原来源页与滚动位置；
+   无可信来源（新标签直达）时关闭把该条目原地替换为首页。 */
 (function () {
   'use strict';
 
@@ -14,7 +21,6 @@
   var closeTimer = 0;          // 关闭退场动画的移除兜底
   var openerEl = null;         // 打开教程的入口元素（关闭后焦点回归）
   var sourceState = null;      // 进入教程前的可信站内历史状态
-  var sourceScroll = 0;
   var inerted = [];            // 被设为 inert 的背景节点
   var openGen = 0;             // 打开时的认证代次
   var openAccountKey = null;   // 打开时的账号标识
@@ -261,8 +267,17 @@
     });
     phase = 'open';
     emitOpenClose();
-    // 加载壳被播放器替换后重新建立焦点与焦点陷阱目标
+    // 加载壳被播放器替换后重新建立焦点陷阱；activateDialog 内部经 rAF 聚焦
+    // 第一个可聚焦控件（顶栏「目录」）。语义焦点必须排在它之后：双 rAF 严格
+    // 保持 FIFO 顺序（含 rAF 被节流合并到同一帧的环境），最终落点为
+    // 播放视图的操作名称 / 目录的首组卡。
     if (typeof activateDialog === 'function') activateDialog(dialog);
+    var reassertFocus = function () { try { player.focusInitial(); } catch (e) {} };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { requestAnimationFrame(reassertFocus); });
+    } else {
+      reassertFocus();
+    }
   }
 
   // ── 打开 ──
@@ -291,15 +306,12 @@
       // 可信站内来源：教程条目自身不算（新标签直达 /tutorial 或刷新恢复时为 null）
       sourceState = (history.state && history.state._bnusparks && !history.state._modal && history.state.view !== 'tutorial')
         ? history.state : null;
-      sourceScroll = window.pageYOffset || 0;
     }
-    // 教程路由自身就是唯一历史项：不调用 _pushModalHistory；
-    // 从历史恢复（前进/刷新）进入时历史已就位，只切视图不压新条目。
-    if (typeof switchView === 'function' && typeof updateSidebar === 'function') {
-      if (!opts.fromHistory && typeof pushViewState === 'function') pushViewState('tutorial', {});
-      switchView('tutorial');
-      updateSidebar('home');
-    }
+    // 教程路由自身就是唯一历史项：只压教程条目（后退=关闭教程），背景页面
+    // 保持不动——来源页在浮窗后面保持可见（inert + 滚动锁由 buildShell 之后的
+    // applyInert/lockScroll 建立），不再 switchView('tutorial') 把空教程页当前景。
+    // 从历史恢复（前进/刷新）进入时历史已就位，连条目也不压。
+    if (!opts.fromHistory && typeof pushViewState === 'function') pushViewState('tutorial', {});
     buildShell();
     applyInert();
     lockScroll();
@@ -334,14 +346,16 @@
   // ── 关闭 ──
   // opts: { fromPopstate } — 浏览器后退已由历史处理，这里只做即时清理。
   // 普通关闭：请求到达即停表（halt，之后的进度写入不再发生），窗口播放
-  // 160ms 退场动画，动画结束（或 220ms 兜底）后移除节点，再恢复焦点、
-  // 滚动与背景交互。减少动态效果与加载中直接清理，保持即时、清晰。
+  // 160ms 退场动画，动画结束（或 220ms 兜底）后移除节点、交还历史，再恢复
+  // 焦点、滚动与背景交互。减少动态效果与加载中直接清理，保持即时、清晰。
   function close(opts) {
     opts = opts || {};
     if (phase === 'closed') return Promise.resolve();
     if (phase === 'closing') return openPromise || Promise.resolve();
     if (opts.fromPopstate) {
-      cleanupOverlay();
+      // 退场动画期间到达的 popstate（✕ 关闭内部触发了 history.back）：
+      // 不重复清理，让进行中的退场动画走完；背景视图由 popstate 正常恢复
+      if (phase === 'open' || phase === 'loading' || phase === 'error') cleanupOverlay();
       return Promise.resolve();
     }
     if (player) { try { player.halt(); } catch (e) {} }
@@ -358,17 +372,20 @@
       finished = true;
       dialog.removeEventListener('animationend', finish);
       cleanupOverlay();
+      // 历史交还放在退场结束后：若退场被快速重开打断（cleanupOverlay），
+      // 排队的 history.back 不会再到达并把新会话的历史条目弹掉
+      navigateBackFromClose();
     };
     dialog.classList.add('is-closing');
     if (closeTimer) window.clearTimeout(closeTimer);
     closeTimer = window.setTimeout(finish, 220);
     dialog.addEventListener('animationend', finish);
-    navigateBackFromClose();
     return Promise.resolve();
   }
 
   // 关闭按钮：返回进入前的站内历史项；无可信站内来源（新标签直达）→ 替换为首页。
-  // 历史交还发生在退场动画期间：来源页在淡出的浮窗后面就位。
+  // 历史交还发生在退场动画结束之后（见 close 内 finish）：背景本就保持来源页，
+  // 无视觉代价；动画被打断时不再触发，避免弹掉重开会话的新条目。
   function navigateBackFromClose() {
     var st = history.state;
     if (st && st.view === 'tutorial') {
