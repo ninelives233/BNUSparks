@@ -16,19 +16,9 @@
    swapPage（旧页离位淡出叠放 + 新页 td-slide）；同页标签/内容切换用 td-fade；
    自绘菜单用 td-pop；状态变化（星标/勾选/采纳）就地完成不加动画。
 
-   强调口径（2026-10-03 四次修订）：默认无模拟鼠标。targets[i] 语义是
-   「第 i 步的焦点对象」——播放器在解说出现时把 is-hot 焦点环放到该对象上
-   （一次一个），动作反馈由控件自身承担（td-act 脉动）；场景内部不再自加
-   is-hot（结果态的强调交给状态本身）。clicks[i] = 该步是否为按压动作
-   （决定是否播 td-act）。
-
-   编排模型：build() 返回 {
-     root: 场景根（.tutorial-demo-frame，一次性建好全部对象）
-     steps: 步骤总数（含第 0 步“建立场景”）
-     targets: 每步指针目标 data-mark 名（null = 该步无指针）
-     clicks: 每步指针是否产生点击反馈
-     go(i): 就地推进到第 i 步（绝对状态；增量执行见文件尾 build 包装）
-   } */
+   场景持久构建，go(i) 增量建立第 i 节拍的状态，prepare(i) 可提前准备对象
+   退出动画。targets/clicks 只描述业务对象；镜头与解说在 data.timelineOf。
+   对象动画统一交给播放器的虚拟时钟，不使用清理 timer。 */
 (function () {
   'use strict';
 
@@ -73,20 +63,11 @@
     return input;
   }
   // 场景内页面导航：旧页离位（绝对定位叠放在新页之上）淡出，新页滑入；
-  // 短暂重叠（约 150ms）且互不挤压。守门桩没有定时器：直接隐藏旧页。
+  // 短暂重叠（约 150ms）且互不挤压，旧节点保留到场景销毁。
   function swapPage(oldEl, newEl, kind) {
     if (oldEl && oldEl !== newEl) {
-      if (typeof window.setTimeout === 'function') {
-        oldEl.classList.add('td-leaving');
-        oldEl.classList.add('td-out');
-        window.setTimeout(function () {
-          oldEl.classList.remove('td-leaving');
-          oldEl.classList.remove('td-out');
-          oldEl.classList.add('is-hidden');
-        }, 240);
-      } else {
-        setHidden(oldEl, true);
-      }
+      // 旧对象保留至场景销毁；虚拟时钟驱动 td-out 的完成，不用清理 timer。
+      oldEl.classList.add('td-leaving', 'td-out');
     }
     return reveal(newEl, kind || 'td-slide');
   }
@@ -282,6 +263,7 @@
     }
     th('th-name', '文件名');
     th('th-type', '类型');
+    if (rows.some(function (r) { return r.favorite != null; })) th('th-favcount', '收藏量');
     var dth = th('th-download', null);
     dth.appendChild(el('span', 'dl-normal', '下载'));
     dth.appendChild(el('span', 'dl-check'));
@@ -308,6 +290,7 @@
     nameTd.appendChild(wrapEl);
     tr.appendChild(nameTd);
     tr.appendChild(el('td', 'ft-type', r.type || ''));
+    if (r.favorite != null) tr.appendChild(el('td', 'ft-favcount', String(r.favorite)));
     var dlTd = el('td', 'ft-download');
     var normal = el('span', 'dl-normal');
     var dl = el('a', 'dl-link');
@@ -1008,8 +991,11 @@
         { name: '期末复习提纲.pdf', meta: '学习方法导论' }
       ] }
     ]);
+    overlay.classList.add('td-search-result');
     root.appendChild(overlay);
     setHidden(overlay, true);
+    var sections = overlay.querySelectorAll('.sg-section');
+    ghost(sections[1]);
     var input = strip.querySelector('[data-mark="search-input"]');
     var sbox = strip.querySelector('[data-mark="search-box"]');
     return {
@@ -1022,8 +1008,8 @@
           sbox.classList.add('td-focus');
           typedInto(input, '学习方法');
         },
-        function () { setHidden(overlay, false); },
-        function () {}
+        function () { reveal(overlay, 'td-fade'); },
+        function () { reveal(sections[1]); }
       ]
     };
   }
@@ -1034,8 +1020,8 @@
     root.appendChild(filesHeader({
       count: 4, filter: true, typeMark: 'chip-type', sortMark: 'chip-sort'
     }));
-    var paper1 = { name: '2022 期末试卷.pdf', type: '试卷' };
-    var paper2 = { name: '2023 期末试卷.pdf', type: '试卷' };
+    var paper1 = { name: '2022 期末试卷.pdf', type: '试卷', favorite: 28, mark: 'paper-2022' };
+    var paper2 = { name: '2023 期末试卷.pdf', type: '试卷', favorite: 41, mark: 'paper-2023' };
     var note1 = { name: '课堂笔记.pdf', type: '笔记' };
     var hand1 = { name: '复习讲义.pdf', type: '讲义' };
     var tableWrap = fileTable([paper1, paper2, note1, hand1]);
@@ -1059,6 +1045,10 @@
     var chipSort = root.querySelector('[data-mark="chip-sort"]');
     return {
       root: root, steps: 5,
+      prepare: function (i) {
+        if (i !== 2 || typeof tbody.children[2].animate !== 'function') return;
+        [2, 3].forEach(function (k) { tbody.children[k].animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(10px)'}], {duration:160,fill:'both'}); });
+      },
       targets: [null, 'chip-type', 'opt-paper', 'chip-sort', 'opt-fav'],
       clicks: [false, true, true, true, true],
       apply: [
@@ -1084,7 +1074,7 @@
         function () {
           setHidden(sortMenu, true);
           chipSort.textContent = '排序：收藏量 ▽';
-          // 收藏量排序：2023（28）提到 2022（41）之前演示原位对调
+          // 真实规则：收藏量降序，2023（41）在 2022（28）之前。
           tbody.insertBefore(tbody.children[1], tbody.children[0]);
         }
       ]
@@ -1131,15 +1121,16 @@
         function () {},
         function () {
           // 真实行为是整页跳转：课程名锚点不变，代码与资料换成 DEMO201，
-          // 页面回到顶部（面包屑是连续锚点）；演示页同步回顶
+          // 演示保留原列表与面包屑，回顶由时间线平滑接续。
           bcCurrent.textContent = '学习方法导论（DEMO201）';
-          tbody.textContent = '';
-          tbody.appendChild(fileRow({ name: '海洋科学导论复习要点.pdf', type: '笔记' }));
-          tbody.appendChild(fileRow({ name: '课程大纲.pdf', type: '大纲' }));
+          var firstRow = tbody.children[0];
+          firstRow.querySelector('.fn-text').textContent = '学习方法复习要点.pdf';
+          firstRow.querySelector('.ft-type').textContent = '笔记';
+          reveal(firstRow, 'td-fade');
           reveal(tableWrap, 'td-fade');
           cur.classList.remove('is-current');
           alt.classList.add('is-current');
-          if (root.scrollTop) root.scrollTop = 0;
+          // 回顶与构图由播放器时间线协调，保留课程名和代码锚点。
         },
         function () {}
       ]
@@ -1277,42 +1268,60 @@
   }
 
   // courses-import · 空课程页 → 选文件 → 确认导入弹窗 → 课程列表（不再跳进课程）
-  function coursesImport() {
-    var root = el('div', 'tutorial-demo-frame');
-    var shell = ttShell({ manageMark: 'btn-manage-dim' });
-    root.appendChild(shell);
-    var empty = el('div', 'tutorial-demo-empty');
-    empty.appendChild(el('div', 'tutorial-demo-empty-title', '还没有课程'));
-    empty.appendChild(el('div', 'tutorial-demo-empty-sub', '导入教务系统导出的列表式课表，或手动添加。'));
-    var eActs = el('div', 'tutorial-demo-empty-actions');
-    eActs.appendChild(btnEl('tt-btn primary', '选择教务导出文件', 'btn-import'));
-    eActs.appendChild(btnEl('tt-btn', '手动添加课程'));
-    empty.appendChild(eActs);
+  function coursesImport(ctx) {
+    var linked = ctx.capability === 'link';
+    var root = el('div', 'tutorial-demo-frame td-import-scene');
+    root.appendChild(ttShell({ manageMark: 'btn-manage-dim' }));
+    var empty = el('div', 'tt-empty');
+    empty.appendChild(el('div', 'glyph', '课'));
+    empty.appendChild(el('h2', null, '导入你的选课课表'));
+    empty.appendChild(el('p', null, '教务系统「学生选课」导出的列表式课表（.xls）'));
+    var steps = el('div', 'steps');
+    steps.appendChild(el('span', 'step', '① 教务系统 → 个人课表'));
+    steps.appendChild(el('span', 'step', '② 导出 / 另存为课程表'));
+    empty.appendChild(steps);
+    empty.appendChild(btnEl('tt-btn primary', '选择教务导出文件', 'btn-import'));
     root.appendChild(empty);
-    var manageBtn = root.querySelector('[data-mark="btn-manage-dim"]');
-    if (manageBtn) manageBtn.classList.add('is-dim');
-    var modal = ttConfirmModal([
-      { name: '学习方法导论（DEMO101）', time: '周一 3—4 节' },
-      { name: '高等数学 B（DEMO102）', time: '周二 1—2 节' },
-      { name: '体育（三）（DEMO103）', time: '周四 3—4 节' }
-    ], { confirmMark: 'btn-confirm' });
-    root.appendChild(modal);
-    setHidden(modal, true);
-    var list = el('ul', 'tt-list');
-    list.appendChild(ttRow({ name: '学习方法导论', hue: 'ttp2', tag: { cls: 'tt-tag-warm', text: '12 份资料' }, meta: '示例老师 · 3 学分', sched: '周一 3—4 节', mark: 'row-1' }));
-    list.appendChild(ttRow({ name: '高等数学 B', hue: 'ttp4', tag: { cls: 'tt-tag-warm', text: '5 份资料' }, meta: '另一位老师 · 6 学分', sched: '周二 1—2 节' }));
-    list.appendChild(ttRow({ name: '体育（三）', hue: 'ttp6', tag: { cls: 'tt-tag-cold', text: '暂无资料' }, meta: '体育部 · 1 学分', sched: '周四 3—4 节' }));
+    var file = mark('import-file', el('div', 'td-import-file'));
+    file.appendChild(el('span', 'ext-badge', 'XLS'));
+    file.appendChild(el('div', null, '示例课表.xls'));
+    file.appendChild(el('small', null, '教程示意 · 本地解析'));
+    root.appendChild(file);
+    setHidden(file, true);
+    var modal = linked ? ttConfirmModal([
+      { name: '学习方法导论', time: '周一 3—4 节' },
+      { name: '高等数学 B', time: '周二 1—2 节' }
+    ], { confirmMark: 'btn-confirm' }) : null;
+    if (modal) {
+      modal.classList.add('td-import-confirm');
+      var dots = modal.querySelectorAll('.dot');
+      dots.forEach(function (dot, i) { dot.classList.add(i ? 'ttp4' : 'ttp2'); });
+      root.appendChild(modal);
+      setHidden(modal, true);
+    }
+    var list = mark('import-list', el('ul', 'tt-list'));
+    list.appendChild(ttRow({ name: '学习方法导论', hue: 'ttp2', tag: linked ? { cls: 'tt-tag-warm', text: '12 份资料' } : null, meta: '示例老师 · 3 学分', sched: '周一 3—4 节', mark: 'row-1' }));
+    list.appendChild(ttRow({ name: '高等数学 B', hue: 'ttp4', tag: linked ? { cls: 'tt-tag-warm', text: '5 份资料' } : null, meta: '另一位老师 · 6 学分', sched: '周二 1—2 节' }));
     root.appendChild(list);
     setHidden(list, true);
     return {
-      root: root, steps: 4,
-      targets: [null, 'btn-import', 'btn-confirm', null],
-      clicks: [false, true, true, false],
+      root: root, steps: 5,
+      targets: [null, 'btn-import', 'import-file', linked ? 'btn-confirm' : 'import-file', null],
+      clicks: [false, true, false, linked, false],
       apply: [
         function () {},
-        // 弹窗以真实覆盖层出现（ttPop），空状态仍在背后，与真实页面一致
-        function () { setHidden(modal, false); },
-        function () { setHidden(modal, true); setHidden(empty, true); reveal(list); },
+        function () { setHidden(empty, true); reveal(file); },
+        function () { if (modal) reveal(modal, 'td-pop'); },
+        function () {
+          var origins = modal ? Array.from(modal.querySelectorAll('.nm')).map(function (n) { return n.getBoundingClientRect(); }) : [];
+          if (modal) setHidden(modal, true);
+          setHidden(file, true); reveal(list);
+          Array.from(list.children).forEach(function (row, i) {
+            if (!origins[i] || typeof row.animate !== 'function') return;
+            var result = row.getBoundingClientRect();
+            row.animate([{transform:'translateY('+ (origins[i].top-result.top) +'px)',opacity:.65},{transform:'translateY(0)',opacity:1}], {duration:500,easing:'ease-in-out',fill:'both'});
+          });
+        },
         function () {}
       ]
     };
@@ -1365,10 +1374,10 @@
   }
 
   // courses-open · 课程行 → 「查看资料 ›」/ 点开课程行 → 资料目录或课程详情
-  // link / generic：有资料的课帶「查看资料 ›」，进入同名课程资料目录（名称锚点）；
-  // nolink：无关联课表，点开课程行查看上课时间与地点。
+  // link：有资料的课带「查看资料 ›」，进入同名课程资料目录（名称锚点）；
+  // nolink / generic：保守演示课程安排，点开课程行查看上课时间与地点。
   function coursesOpen(ctx) {
-    var nolink = ctx.capability === 'nolink';
+    var nolink = ctx.capability !== 'link';
     var root = el('div', 'tutorial-demo-frame');
     var shell = ttShell({});
     root.appendChild(shell);
@@ -1419,7 +1428,7 @@
   }
 
   // courses-manual · 「＋ 添加课程」→ 表单 → 填名 → 保存（时间可不填）
-  function coursesManual() {
+  function coursesManual(ctx) {
     var root = el('div', 'tutorial-demo-frame');
     var shell = ttShell({});
     root.appendChild(shell);
@@ -1449,7 +1458,7 @@
         },
         function () {
           setHidden(modal, true);
-          var li = ttRow({ name: '书法入门', hue: 'ttp8', tag: { cls: 'tt-tag-cold', text: '暂无资料' }, meta: '自学课程 · 不出现在周课表' });
+          var li = ttRow({ name: '书法入门', hue: 'ttp8', tag: ctx.capability === 'link' ? { cls: 'tt-tag-cold', text: '暂无资料' } : null, meta: '自学课程 · 不出现在周课表' });
           list.insertBefore(li, list.firstChild);
           reveal(li);
           footCount.textContent = '共 2 门课程';
@@ -1528,12 +1537,12 @@
 
   // save-course · 核心 · 课程行星标 → 点亮（结束保持原位）
   function saveCourse() {
-    var root = el('div', 'tutorial-demo-frame');
+    var root = el('div', 'tutorial-demo-frame td-save-course');
     var bc = breadcrumb(['全部课程', '专业课 / 示例专业']);
     root.appendChild(bc);
     var list = folderList([
       { name: '课程设计与开发', code: 'EDU220', files: 8, dim: true },
-      { name: '学习方法导论', code: 'DEMO101', files: 12, starMark: 'star' },
+      { name: '学习方法导论', code: 'DEMO101', files: 12, starMark: 'star', mark: 'saved-row' },
       { name: '教育心理学基础', code: 'PSY105', files: 6, dim: true }
     ]);
     root.appendChild(list);
@@ -2073,6 +2082,9 @@
       var scene;
       try { scene = factory(ctx || {}); } catch (e) { return null; }
       if (!scene || !scene.root || !(scene.steps > 0)) return null;
+      if (ctx && ctx.capability !== 'link' && /^courses/.test(name)) {
+        scene.root.querySelectorAll('.tt-tag, .tt-open').forEach(function (n) { n.remove(); });
+      }
       if (!Array.isArray(scene.targets) || scene.targets.length !== scene.steps) return null;
       if (!Array.isArray(scene.apply) || scene.apply.length !== scene.steps) return null;
       var clicks = Array.isArray(scene.clicks) ? scene.clicks : [];
@@ -2084,6 +2096,7 @@
         root: scene.root,
         steps: scene.steps,
         targets: scene.targets,
+        prepare: scene.prepare || function () {},
         clicks: scene.targets.map(function (t, i) { return clicks[i] !== false; }),
         go: function (i) {
           if (i < 0 || i >= scene.steps) return;

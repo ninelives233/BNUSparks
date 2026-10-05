@@ -268,9 +268,9 @@
     phase = 'open';
     emitOpenClose();
     // 加载壳被播放器替换后重新建立焦点陷阱；activateDialog 内部经 rAF 聚焦
-    // 第一个可聚焦控件（顶栏「目录」）。语义焦点必须排在它之后：双 rAF 严格
+    // 第一个可聚焦控件。语义焦点必须排在它之后：双 rAF 严格
     // 保持 FIFO 顺序（含 rAF 被节流合并到同一帧的环境），最终落点为
-    // 播放视图的操作名称 / 目录的首组卡。
+    // 播放视图的返回全部教程按钮 / 目录的首组卡。
     if (typeof activateDialog === 'function') activateDialog(dialog);
     var reassertFocus = function () { try { player.focusInitial(); } catch (e) {} };
     if (typeof requestAnimationFrame === 'function') {

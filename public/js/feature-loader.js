@@ -70,7 +70,8 @@
   //        打开即暂停）；解说移入舞台底部固定解说条；默认移除模拟鼠标（is-hot
   //        焦点环 + 控件自身 td-act 脉动表达动作，平滑定位滚动）；浮窗背景
   //        保留真实来源页（不再切换到空教程页）；缓存键同步推进。
-  var VERSION = '335';
+  // 教程操作队列、镜头与绝对时间线；旧缓存不得混用播放契约。
+  var VERSION = '336';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

@@ -3,24 +3,8 @@
    颜色全部引用 tokens.css 语义变量，暗色随现有主题；新增样式
    .tutorial-* / .td-* 前缀，不覆盖全局 button/a/table 或站点业务类。
 
-   2026-10-03 二次修订：演示 DOM 改用站点真实 class（业务 CSS 渲染，见
-   docs/TUTORIAL_DESIGN_SPEC.md §5），本文件只保留教程壳样式、教程专属状态类
-   （is-hidden、td-* 动画、is-hot、is-dim、td-focus）与少量本地装饰件
-   （纸张、目录树、迷你周格、空状态）。
-
-   2026-10-03 三次修订（动效精修）：真实弹层恢复覆盖关系；转场词汇按行为
-   区分（状态变化就地完成、td-fade 纯淡入、td-pop 菜单、td-slide 页面导航）；
-   输入填入只做内容高亮（td-typed）。
-
-   2026-10-03 四次修订（稳定视觉中心）：
-   - 三态界面：播放态顶栏只有「目录」入口＋当前操作名称＋关闭；主题名、
-     操作计数、组内列表与本操作完整步骤收进导航面板（主动打开即暂停）；
-     删除台上的第二套标题与台下的步骤区块。
-   - 解说进入舞台：舞台底部固定解说条（一次一句，位置稳定），舞台整体
-     对读屏 aria-hidden，解说经 aria-live 完整播报。
-   - 默认无模拟鼠标：删除指针与点击涟漪的全部样式；定位用 is-hot 焦点环
-     （一次一个，轻入），按压反馈是控件自身的 td-act 脉动。
-   - 完成态主按钮只有一个（去试试）；播放期控制全部安静。 */
+   队列轨道负责操作之间的切换；镜头层只做教学缩放和平移。
+   解说使用镜头内留白，控制与文字阅读独立于镜头。 */
 
 /* ── 遮罩与浮窗壳 ─────────────────────────────────────────── */
 .tutorial-overlay {
@@ -108,7 +92,7 @@
   outline: none;
 }
 .tutorial-topbar-title:empty { display: none; }
-/* 标题是焦点的语义落点（非交互控件）：不显示焦点环，键盘起点由它承担 */
+/* 标题不作为自动换项的焦点落点；键盘起点是返回按钮。 */
 .tutorial-topbar-title:focus,
 .tutorial-topbar-title:focus-visible { outline: none; }
 .tutorial-back {
@@ -497,42 +481,6 @@
 .tutorial-nav-link:hover { text-decoration: underline; }
 
 /* ── 播放视图：舞台（主视觉 = 演示区 + 台内解说条） ───────── */
-.tutorial-play {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.tutorial-stage {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  max-height: 50vh;
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.tutorial-stage-clip {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* 演示区：舞台内的稳定构图区。场景超出演示框时由播放器按“真实页面滚动”
-   语义平滑滚入当前对象（不缩放、不挤压；滚动条隐藏，演示不响应滚轮）；
-   弹层 absolute 覆盖基内容，不参与滚动布局。 */
-.tutorial-stage-view {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  z-index: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 12px 16px 8px;
-}
 /* 辅助信息，不是按钮：安静的角标文字，钉在演示区右上角 */
 .tutorial-demo-label {
   position: absolute;
@@ -559,33 +507,6 @@
 }
 .tutorial-demo-frame::-webkit-scrollbar { display: none; }
 
-/* 台内解说条：一次一句，位置稳定（不随对象游走），不遮挡演示内容；
-   固定两行高——换字幕不推移舞台，文案控制在两行内 */
-.tutorial-caption {
-  flex: none;
-  margin: 0;
-  border-top: 1px solid var(--border-light);
-  background: var(--surface);
-  padding: 8px 16px;
-  min-height: calc(2 * 1.6em + 16px);
-  display: flex;
-  align-items: flex-start;
-}
-.tutorial-caption-text {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.tutorial-caption-text.td-cap-in { animation: tutorial-cap-in 240ms ease both; }
-@keyframes tutorial-cap-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: none; }
-}
-
 /* 「我的课程」页骨架在演示里按窄窗口口径收紧：标题用 clamp 的下档、
    行距与列表间隔取紧凑值（限定演示域，真实页面不受影响）。
    目的：3 行课程列表 + 页头在舞台可用高度内完整呈现，避免定版缩放。 */
@@ -594,83 +515,8 @@
 .tutorial-demo-frame .tt-list { gap: 8px; width: 100%; }
 .tutorial-demo-frame .tt-lrow { padding: 9px 16px 8px 18px; }
 
-/* ── 底部控制栏：单行紧凑，节点全程稳定 ─────────────────────
-   播放/暂停期：[上一项] [暂停/继续] [下一项] 全部安静（下一项不与任何
-   入口争夺注意力）；完成态：主控位变重播、「去试试」作为唯一主按钮出现
-   在右侧。主控位 min-width 固定，无宽度跳动。 */
-.tutorial-footer {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-top: 1px solid var(--border-light);
-  padding-top: 10px;
-}
-.tutorial-ctl {
-  min-height: 40px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 8px 14px;
-  white-space: nowrap;
-}
-.tutorial-ctl:hover:not(:disabled) {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-.tutorial-ctl:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.tutorial-ctl-play {
-  flex: none;
-  min-width: 96px;
-  text-align: center;
-}
-.tutorial-ctl-next {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--on-primary);
-}
-.tutorial-ctl-next:hover:not(:disabled) {
-  color: var(--on-primary);
-  background: var(--primary-dark);
-  border-color: var(--primary-dark);
-}
-/* 完成态：下一项退为安静按钮，把唯一的视觉主按钮让给「去试试」 */
-.tutorial-ctl-next.is-quiet {
-  background: none;
-  border-color: var(--border);
-  color: var(--ink-soft);
-}
-.tutorial-ctl-next.is-quiet:hover:not(:disabled) {
-  background: var(--primary-surface);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-/* 去试试：完成态唯一的视觉主按钮 */
-.tutorial-try-btn {
-  margin-left: auto;
-  background: var(--primary);
-  border: 1px solid var(--primary);
-  color: var(--on-primary);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 8px 18px;
-  min-height: 40px;
-  border-radius: var(--radius-md);
-  text-align: center;
-}
-.tutorial-try-btn:hover {
-  background: var(--primary-dark);
-  border-color: var(--primary-dark);
-}
+.tutorial-ctl { min-height:44px; color:var(--ink-soft); font:inherit; font-size:14px; cursor:pointer; border-radius:var(--radius-md); }
+.tutorial-ctl:disabled { opacity:.45; cursor:default; }
 
 /* ── 静态步骤视图（reduced-motion / WAAPI 不可用） ───────── */
 .tutorial-static {
@@ -1267,8 +1113,6 @@
   /* 手机窄舞台：不放「示例演示」角标（内容身份由解说与虚构示例数据承担） */
   .tutorial-stage--mobile .tutorial-demo-label { display: none; }
   .tutorial-demo-frame { max-width: 340px; }
-  .tutorial-caption { padding: 8px 12px; }
-  .tutorial-caption-text { font-size: 13px; }
   /* 控制单行放不下时「去试试」换行，主控组始终同行 */
   .tutorial-footer { flex-wrap: wrap; row-gap: 2px; }
   .tutorial-ctl { min-height: 44px; padding: 8px 12px; }
@@ -1317,12 +1161,127 @@
     color: inherit;
     text-decoration: none;
   }
-  .tutorial-ctl-next:hover:not(:disabled) {
-    background: var(--primary);
-    color: var(--on-primary);
-  }
-  .tutorial-ctl-next.is-quiet:hover:not(:disabled) {
-    background: none;
-    color: var(--ink-soft);
-  }
+
 }
+
+/* 队列、镜头、业务对象各用独立层，不竞争 transform。 */
+.tutorial-root.is-playing-view { gap: 10px; }
+.tutorial-topbar { gap: 8px; }
+.tutorial-back, .tutorial-nav-toggle, .tutorial-close, .tutorial-replay {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 10px; flex: none;
+  border: 0; border-radius: var(--radius-md); background: none; color: var(--ink-soft); cursor: pointer;
+}
+.tutorial-topbar svg, .tutorial-footer svg, .tutorial-arrow svg { width: 20px; height: 20px; flex: none; }
+.tutorial-nav-toggle::after { content: none; }
+.tutorial-counter { font-size: 12px; }
+.tutorial-topbar-title { font-size: 15px; }
+.tutorial-play { position: relative; gap: 0; }
+.tutorial-stage { position: relative; display: flex; flex-direction: column; width: 100%; background: var(--bg); overflow: hidden; height: clamp(310px, 52vh, 430px); aspect-ratio: auto; max-height: none; border: 0; border-radius: var(--radius-lg); }
+.tutorial-stage-clip { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: pan-y pinch-zoom; user-select: none; }
+.tutorial-track { position: absolute; inset: 0; will-change: transform; }
+.tutorial-queue-item { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tutorial-camera-window { position: absolute; inset: 70px 46px 24px; overflow: hidden; }
+.tutorial-camera { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
+.tutorial-camera .tutorial-demo-frame { max-width: none; height: 100%; }
+.tutorial-narration { position: absolute; top: 18px; left: 46px; right: 46px; margin: 0; font-family: var(--serif); font-size: 19px; line-height: 1.5; color: var(--ink); z-index: 4; pointer-events: none; }
+.tutorial-demo-label { top: auto; bottom: 6px; right: 14px; font-size: 10px; }
+.tutorial-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 52px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); color: var(--ink-soft); background: none; cursor: pointer; z-index: 6; }
+.tutorial-arrow-prev { left: 2px; } .tutorial-arrow-next { right: 2px; }
+.tutorial-arrow:disabled { opacity: .25; cursor: default; }
+.tutorial-arrow:hover:not(:disabled) { color: var(--primary); background: var(--primary-surface); }
+.tutorial-footer { display: grid; grid-template-columns: 1fr auto 44px; gap: 6px; border: 0; padding: 0; min-height: 48px; }
+.tutorial-dots { display: flex; align-items: center; justify-content: center; min-height: 44px; }
+.tutorial-dot { position: relative; width: 40px; height: 44px; padding: 0; border: 0; background: none; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: var(--radius-md); }
+.tutorial-dot-mark { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); opacity: .4; }
+.tutorial-dot.is-active .tutorial-dot-mark { width: 9px; height: 9px; opacity: 1; background: conic-gradient(var(--primary) calc(var(--progress, 0) * 360deg), var(--border) 0); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--ink-faint); }
+.tutorial-dot.is-seen::after { content: ''; position: absolute; bottom: 7px; width: 3px; height: 3px; border-radius: 50%; background: var(--success); }
+.tutorial-ctl-play { min-width: 80px; display: flex; gap: 6px; align-items: center; justify-content: center; border: 0; background: none; padding: 8px; }
+.tutorial-root button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.tutorial-group-end { position: absolute; inset: 0; z-index: 7; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 12px; padding: 36px; border-radius: var(--radius-lg); background: var(--surface); }
+.tutorial-group-end h3, .tutorial-group-end p { width: 100%; text-align: center; margin: 0; }
+.tutorial-group-end p { color: var(--ink-soft); }
+.tutorial-demo-frame .td-search-result { position: relative; inset: auto; background: none; padding: 0; display: flex; flex: 1; min-height: 0; align-items: flex-start; }
+.tutorial-demo-frame .td-search-result .sg-inner { width: 100%; box-shadow: var(--shadow-sm); max-height: 100%; }
+.tutorial-demo-frame .td-search-result .sg-header { display: none; }
+.tutorial-demo-frame .td-search-result .sg-body { overflow: visible; }
+.tutorial-demo-frame .td-search-result .sg-section-header { padding-top: 8px; }
+.tutorial-demo-frame:has(.td-search-result:not(.is-hidden)) .td-deco-rows { display: none; }
+.tutorial-demo-frame .is-hot { box-shadow: none; outline: none; }
+.tutorial-demo-frame .td-act { animation: tutorial-act 140ms ease both; }
+.tutorial-demo-frame .tt-empty { padding: 8px 4px; }
+.tutorial-demo-frame .tt-empty .glyph { font-size: 28px; margin-bottom: 2px; }
+.tutorial-demo-frame .tt-empty h2 { font-size: 18px; margin: 0 0 8px; }
+.tutorial-demo-frame .tt-empty p { font-size: 12px; line-height: 1.5; margin: 0 0 10px; }
+.tutorial-demo-frame .tt-empty .steps { margin: 0 0 12px; gap: 6px; font-size: 11px; }
+.tutorial-demo-frame .tt-empty .steps .step { padding: 3px; }
+.tutorial-demo-frame .td-import-file { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); margin-top: 16px; }
+.tutorial-demo-frame .td-import-file small { width: 100%; color: var(--ink-faint); }
+.tutorial-demo-frame .td-import-confirm .tt-privacy-note { display: none; }
+.tutorial-demo-frame .td-import-confirm .tt-mbody { padding: 10px 14px; }
+.tutorial-demo-frame .td-import-confirm .dot.ttp2 { background: var(--primary); }
+.tutorial-demo-frame .td-import-confirm .dot.ttp4 { background: var(--success); }
+.tutorial-demo-frame .td-import-confirm .tt-mrow { gap: 8px; }
+.tutorial-demo-frame .td-import-confirm .tt-mrow .tm { font-size: 11px; }
+.tutorial-demo-frame .fli-fav-star svg { width: 20px; height: 20px; }
+.tutorial-static { padding-bottom: 8px; }
+@media (max-width: 600px) {
+  .tutorial-root { padding: 14px; }
+  .tutorial-stage { height: min(420px, 56dvh); min-height: 300px; }
+  .tutorial-camera-window { inset: 78px 28px 24px; }
+  .tutorial-narration { left: 28px; right: 28px; top: 16px; font-size: 17px; }
+  .tutorial-arrow { width: 26px; }
+  .tutorial-arrow-prev { left: 0; } .tutorial-arrow-next { right: 0; }
+  .tutorial-footer { grid-template-columns: 1fr 44px; gap: 0; }
+  .tutorial-dots { grid-column: 1 / -1; }
+  .tutorial-ctl-play { justify-self: center; margin-left: 44px; }
+  .tutorial-topbar { gap: 2px; }
+  .tutorial-topbar-title { font-size: 13px; }
+  .tutorial-counter { display: none; }
+  .tutorial-skip { padding: 6px; font-size: 11px; }
+  .tutorial-demo-frame .tt-empty .steps { flex-direction: column; }
+  .tutorial-demo-frame .td-import-confirm .tt-mrow { flex-wrap: wrap; }
+  .tutorial-demo-frame .td-import-confirm .tt-mrow .tm { width: 100%; padding-left: 16px; }
+}
+@media (max-width: 360px) {
+  .tutorial-root { padding: 10px; }
+  .tutorial-dot { width: 36px; }
+  .tutorial-camera-window { left: 24px; right: 24px; }
+  .tutorial-narration { left: 24px; right: 24px; }
+}
+@media (max-height: 560px) {
+  .tutorial-stage { height: 240px; min-height: 220px; }
+  .tutorial-camera-window { top: 64px; bottom: 18px; }
+  .tutorial-narration { font-size: 16px; top: 10px; }
+  .tutorial-demo-frame:has(.td-search-result) { gap: 6px; }
+  .tutorial-demo-frame:has(.td-search-result) .td-topstrip { padding: 2px 6px; }
+  .tutorial-demo-frame:has(.td-search-result) .search-box { padding: 4px 4px 4px 10px; }
+  .tutorial-demo-frame:has(.td-search-result) .search-box button { width: 28px; height: 28px; }
+  .tutorial-demo-frame .td-search-result .sg-section-header { padding: 2px 8px; line-height: 1.25; }
+  .tutorial-demo-frame .td-search-result .sg-section-body { padding: 0 4px 2px; }
+  .tutorial-demo-frame .td-search-result .sg-item { padding: 2px 6px; line-height: 1.4; }
+  .tutorial-demo-frame .td-search-result .sg-item-name { font-size: 13px; }
+  .tutorial-demo-frame .td-search-result .sg-item-meta { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-track, .tutorial-camera { will-change: auto; }
+}
+
+.tutorial-demo-frame .tt-empty { border: 0; padding: 4px; }
+.tutorial-demo-frame .tt-empty .glyph { line-height: 1.1; margin: 0 0 2px; }
+.tutorial-demo-frame .td-import-scene .tt-top { margin: 2px 0 4px; }
+.tutorial-demo-frame .tt-empty .steps { margin-bottom: 8px; }
+
+.tutorial-demo-frame.td-save-course .folder-list { width: 82%; align-self: center; }
+@media (max-width:600px) {
+  .tutorial-demo-frame.td-save-course .folder-list { width: 90%; }
+  .tutorial-demo-frame.td-save-course .fli-badge { display: none; }
+  .tutorial-demo-frame.td-save-course .folder-list-item { padding: 10px 8px; }
+  .tutorial-demo-frame.td-save-course .fli-icon { display: none; }
+}
+
+.tutorial-queue-item.td-noanim *, .tutorial-queue-item.td-noanim *::before, .tutorial-queue-item.td-noanim *::after { animation: none !important; transition: none !important; }
+.tutorial-static-nav { display: flex; justify-content: space-between; }
+.tutorial-static-nav .tutorial-arrow { position: static; transform: none; width: 44px; height: 44px; }
+
+.tutorial-demo-frame .td-import-file { width: 86%; align-self: center; }

@@ -1,16 +1,8 @@
 #!/usr/bin/env node
 'use strict';
-/* 教程分镜守门：在最小 DOM 桩中加载 tutorial-data/scenes/player，
-   验证前端分镜契约（不替代浏览器体验验收）：
-   1. 25 个分镜全部能构建，步骤数与 tutorial-data.js 的 steps 一一对应；
-   2. 每步 go(i) 可从初始状态直接推进（静态降级视图依赖此性质）；
-   3. 每步焦点对象（targets[i]，播放器加 is-hot 焦点环）在该步开始前
-      已存在于场景根内；
-   4. 时长满足节奏公式：pace[k]（第 k+1 步与前一步字幕的间隔）全部 ≥1.5s；
-      durationMs = 末步 cue + readLead(末步文案) + 1.5s（readLead 见
-      tutorial-player.js，动作在字幕后留阅读时间、结果留观察停留）；
-      无 pace 时按均匀分布兜底检查；
-   5. capability 保守分支：无会话信息时为 generic。 */
+/* 分镜与播放器回归：所有分支可确定性构建；解说/动作/镜头时间合法，
+   结果有观察时间；队列完成、跳过、暂停、取消和手势遵循用户可见行为。
+   DOM 桩只验证契约，视觉与动态质量仍需浏览器实际播放验收。 */
 
 const fs = require('fs');
 const path = require('path');
@@ -23,14 +15,17 @@ function makeNode(tag) {
     tagName: String(tag || 'div').toUpperCase(),
     childNodes: [],
     attributes: {},
-    style: {},
+    style: { setProperty(k,v) { this[k]=v; } },
+    dataset: {},
+    _events: {},
+    clientWidth: 640, clientHeight: 320, offsetHeight: 40, offsetTop: 0, offsetLeft: 0, scrollTop: 0,
     className: '',
     textContent: '',
     type: '',
     disabled: false,
     hidden: false,
     tabIndex: -1,
-    offsetWidth: 0,
+    offsetWidth: 60,
     parentNode: null,
     isConnected: true,
     setAttribute(name, value) {
@@ -72,10 +67,17 @@ function makeNode(tag) {
       return child;
     },
     remove() { if (this.parentNode) this.parentNode.removeChild(this); },
-    addEventListener() {},
-    removeEventListener() {},
-    focus() {},
-    matches() { return false; },
+    addEventListener(type,fn) { (this._events[type] ||= []).push(fn); },
+    removeEventListener(type,fn) { this._events[type]=(this._events[type]||[]).filter(x=>x!==fn); },
+    dispatch(type,props={}) { const e={target:this,button:0,preventDefault(){},stopPropagation(){},...props}; for(const fn of this._events[type]||[])fn(e); },
+    focus() { sandbox.document.activeElement=this; },
+    matches(sel) { return matchSel(this,sel); },
+    closest(sel) { let n=this;while(n){if(matchSel(n,sel))return n;n=n.parentNode;}return null; },
+    contains(n) { while(n){if(n===this)return true;n=n.parentNode;}return false; },
+    getAnimations() { return []; },
+    animate() { return {cancel(){},pause(){},currentTime:0}; },
+    getBoundingClientRect() { return {top:0,bottom:40,left:0,right:60,width:60,height:40}; },
+    setPointerCapture() {}, releasePointerCapture() {},
     querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
     querySelectorAll(sel) {
       const out = [];
@@ -115,7 +117,7 @@ function makeNode(tag) {
   });
   Object.defineProperty(node, 'textContent', {
     get() {
-      return node.childNodes.map((c) => c.textContent).join('');
+      return (node.__text || '') + node.childNodes.map((c) => c.textContent).join('');
     },
     set(v) {
       node.childNodes = [];
@@ -127,8 +129,11 @@ function makeNode(tag) {
 
 function matchSel(n, sel) {
   sel = sel.trim();
-  const attr = sel.match(/^\[data-mark="([^"]+)"\]$/);
-  if (attr) return n.attributes['data-mark'] === attr[1];
+  if(sel.includes(','))return sel.split(',').some(x=>matchSel(n,x));
+  const attr = sel.match(/^\[([\w-]+)="([^"]+)"\]$/);
+  if(attr) return n.attributes[attr[1]]===attr[2] || (attr[1].startsWith('data-') && n.dataset[attr[1].slice(5)]===attr[2]);
+  if(/^[a-z]+\[data-mark\]$/.test(sel)) return n.tagName===sel.split('[')[0].toUpperCase() && n.hasAttribute('data-mark');
+  if(/^[a-z]+$/.test(sel))return n.tagName===sel.toUpperCase();
   if (sel.charAt(0) === '.') {
     return sel.slice(1).split(/\s+/).every((cls) => n.classList.contains(cls));
   }
@@ -152,7 +157,19 @@ function loadModule(file, sandbox) {
   vm.runInContext(code, sandbox, { filename: file });
 }
 
-const sandbox = { document: makeDocument(), console };
+let rafId=0;
+const rafs=new Map(), medias=new Map();
+const sandbox = { document: makeDocument(), console, Element: function(){}, performance:{now:()=>1000} };
+sandbox.Element.prototype.animate=function(){};
+sandbox.document.visibilityState='visible';sandbox.document.hidden=false;
+sandbox.document._events={};
+sandbox.document.addEventListener=function(type,fn){(this._events[type] ||= []).push(fn);};
+sandbox.document.removeEventListener=function(type,fn){this._events[type]=(this._events[type]||[]).filter(x=>x!==fn);};
+sandbox.addEventListener=sandbox.document.addEventListener.bind(sandbox.document);
+sandbox.removeEventListener=sandbox.document.removeEventListener.bind(sandbox.document);
+sandbox.matchMedia=function(q){if(!medias.has(q))medias.set(q,{matches:false,listeners:[],addEventListener(type,fn){this.listeners.push(fn);},removeEventListener(type,fn){this.listeners=this.listeners.filter(x=>x!==fn);}});return medias.get(q);};
+sandbox.requestAnimationFrame=fn=>{rafs.set(++rafId,fn);return rafId;};sandbox.cancelAnimationFrame=id=>rafs.delete(id);
+sandbox.getComputedStyle=()=>({overflowY:'auto'});
 sandbox.window = sandbox;
 sandbox.self = sandbox;
 vm.createContext(sandbox);
@@ -186,8 +203,10 @@ for (const id of lessons) {
   check(S.has(lesson.scene), label + '：场景 ' + lesson.scene + ' 不存在');
 
   // 桌面与窄屏两套上下文都要能构建
-  for (const mobile of [false, true]) {
-    const ctx = { mobile, capability: 'link' };
+  for (const mobile of [false, true]) for(const capability of ['link','nolink','generic']) {
+    sandbox.currentUser=capability==='generic'?null:{identity_education:capability==='link'?'本科':'硕士'};
+    sandbox.ttState={data:{noLink:capability==='nolink'}};
+    const ctx = { mobile, capability };
     let scene = null;
     try { scene = S.build(lesson.scene, ctx); } catch (e) {
       check(false, label + (mobile ? '（手机）' : '') + '：构建抛错 ' + e.message);
@@ -218,37 +237,38 @@ for (const id of lessons) {
       }
     }
 
-    // 4. 时长满足节奏公式：优先 data.pace（逐步声明），否则均匀分布兜底。
-    //    硬下限：pace[k] 全部 ≥1.5s（字幕阅读 + 结果停留的最小预算）；
-    //    durationMs = 末步 cue + readLead(末步文案) + 1.5s（按基础步骤文案计，
-    //    pace 与 durationMs 都属于基础口径，与能力/视口分支无关）。
-    const n = scene.steps;
-    const cues = P.cueTimes(lesson.durationMs, n, lesson.pace);
-    check(cues.length === n, label + '：cueTimes 长度不符');
-    if (Array.isArray(lesson.pace)) {
-      check(lesson.pace.length === n - 1,
-        label + '：pace 长度应为 ' + (n - 1) + '，实际 ' + lesson.pace.length);
-      lesson.pace.forEach(function (v, k) {
-        check(typeof v === 'number' && v >= 1500,
-          label + '：pace[' + k + '] 低于下限 1500ms');
-      });
-      const baseSteps = lesson.steps;
-      const lastLead = P.readLead(baseSteps[baseSteps.length - 1]);
-      const expectDur = cues[n - 1] + lastLead + 1500;
-      check(Math.abs(lesson.durationMs - expectDur) <= 1,
-        label + '：durationMs ' + lesson.durationMs + ' ≠ 末步 cue ' + cues[n - 1] +
-        ' + 阅读时长 ' + lastLead + ' + 1500');
-    } else {
-      const minDur = 1500 * (n - 1) + 1500;
-      check(lesson.durationMs >= minDur,
-        label + '：durationMs ' + lesson.durationMs + ' 低于 ' + n + ' 步下限 ' + minDur);
+    const timeline=D.timelineOf(lesson,mobile,capability);
+    check(timeline.beats.length===scene.steps,label+'：时间线动作数与场景不符');
+    check(timeline.end===lesson.durationMs,label+'：目录时长与时间线不符');
+    let prior=-1;
+    for(const [i,beat] of timeline.beats.entries()) {
+      check(Number.isFinite(beat.at)&&beat.at>prior,label+'：解说时间必须递增');
+      check(Number.isFinite(beat.act)&&beat.act>=beat.at,label+'：动作不能早于解说');
+      check(!!beat.text,label+'：缺少解说');
+      if(i+1<timeline.beats.length)check(beat.act<=timeline.beats[i+1].at,label+'：动作不能跨过下一节拍');
+      if(beat.camera) {
+        check(beat.camera.scale>=1&&beat.camera.scale<=1.35,label+'：镜头比例非法');
+        check(beat.camera.ms>=0&&beat.camera.ms<=1000,label+'：镜头时长非法');
+        if(beat.camera.target)check(!!scene.root.querySelector('[data-mark="'+beat.camera.target+'"]'),label+'：镜头目标不存在 '+beat.camera.target);
+      }
+      prior=beat.at;
     }
-    if (cues.length > 1) {
-      check(cues[1] >= 1500, label + '：建立步骤停留不足 1.5s');
+    const last=timeline.beats[timeline.beats.length-1];
+    check(timeline.end-last.act>=1000,label+'：最终结果没有足够观察时间');
+    check(timeline.end>=Math.max(...timeline.beats.map(b=>Math.max(b.act+500,b.at+(b.camera?b.camera.ms:0)))),label+'：结束早于最后动作/镜头');
+    if(id==='courses-import') {
+      scene.go(scene.steps-1);
+      check(!!scene.root.querySelector('[data-mark="btn-confirm"]')===(capability==='link'),'导入确认窗必须与能力一致');
+      if(capability!=='link')check(!scene.root.querySelector('.tt-tag-warm'),'无关联导入不能承诺资料');
     }
-    for (let i = 2; i < cues.length; i++) {
-      check(cues[i] - cues[i - 1] >= 1500, label + '：第 ' + i + ' 步间隔不足 1.5s');
+    if(id==='find-filter') {
+      scene.go(scene.steps-1);const rows=scene.root.querySelectorAll('tr[data-mark]');
+      check(rows[0].attributes['data-mark']==='paper-2023','收藏量排序应为 41 > 28');
     }
+    if(/^courses-/.test(id) && capability!=='link') {
+      scene.go(scene.steps-1);check(!scene.root.querySelector('.tt-tag, .tt-open'),'无关联分支不显示资料数量与直达承诺：'+id);
+    }
+
   }
 }
 
@@ -258,8 +278,72 @@ for (const g of D.groups) {
   check(dur > 0, '组 ' + g.id + ' 时长为 0');
 }
 
-if (failures) {
-  console.error('tutorial-scenes 守门未通过：' + failures + ' 处');
-  process.exit(1);
+// Exercise public controls and real player clock, rather than duplicating its state machine.
+sandbox.currentUser=null;sandbox.ttState=null;
+const marks=[];let navigation=null,coreLeave=[];
+const progress={has:id=>marks.includes(id),seenCount:ids=>ids.filter(id=>marks.includes(id)).length,mark:id=>marks.push(id),unsyncedCount:()=>0,onChange(){}};
+function mount(extra={}) {
+  return P.mount({host:makeNode('div'),mode:'core',progress,onCoreLeave:r=>coreLeave.push(r),onNavigate:n=>navigation=n,onClose(){},...extra});
 }
-console.log('tutorial-scenes 守门通过：25 个分镜 ×（桌面+手机）构建、步骤、焦点对象、节奏全部一致');
+function click(p,cls){const n=p.el.querySelector(cls);check(!!n,'控件存在 '+cls);if(n)n.dispatch('click');}
+let player=mount();
+check(player.debugState().queue.join(',')===D.coreIds.join(','),'核心顺序独立于找资料组');
+const stablePlay=player.el.querySelector('.tutorial-ctl-play');stablePlay.focus();
+player.debugAdvance(8999);check(!marks.includes('find-search'),'结果停留结束前不能记已看');
+player.debugAdvance(1);check(marks.includes('find-search'),'完整播放后记已看');
+player.debugAdvance(300);check(player.debugState().lessonId==='courses-import','完成触发下一项');
+check(player.el.querySelector('.tutorial-ctl-play')===stablePlay && sandbox.document.activeElement===stablePlay,'自动换项保持控制节点与焦点');
+click(player,'.tutorial-ctl-play');const paused=player.debugState();player.debugAdvance(30000);
+check(player.debugState().elapsed===paused.elapsed && !marks.includes('courses-import'),'暂停冻结时间且不记已看');
+click(player,'.tutorial-arrow-next');check(player.debugState().lessonId==='save-course'&&player.debugState().state==='paused','暂停后切项保持暂停');
+click(player,'.tutorial-ctl-play');player.debugAdvance(2000);
+let clip=player.el.querySelector('.tutorial-stage-clip');
+clip.dispatch('pointerdown',{pointerId:1,clientX:300,clientY:100});clip.dispatch('pointermove',{pointerId:1,clientX:340,clientY:100,cancelable:true});
+const dragTime=player.debugState().elapsed;player.debugAdvance(5000);check(player.debugState().elapsed===dragTime,'拖动冻结教学时钟');
+clip.dispatch('pointercancel',{pointerId:1});player.debugAdvance(220);
+check(player.debugState().lessonId==='save-course'&&player.debugState().elapsed===dragTime,'取消拖动恢复当前时间、不重播');
+clip.dispatch('pointerdown',{pointerId:2,clientX:500,clientY:100});clip.dispatch('pointermove',{pointerId:2,clientX:150,clientY:100,cancelable:true});clip.dispatch('pointerup',{pointerId:2});player.debugAdvance(300);
+check(player.debugState().lessonId==='share-text'&&!marks.includes('save-course'),'拖动切项不误记跳过的项目');
+player.debugAdvance(D.lessons['share-text'].durationMs);
+check(player.debugState().view==='catalog' && coreLeave.includes('finished'),'核心到末项返回目录');
+check(!marks.includes('courses-import')&&!marks.includes('save-course'),'核心走到末尾不代表跳过项目已看');player.destroy();
+player=mount({mode:'catalog',groupId:'find',lessonId:'find-download'});player.debugAdvance(D.lessons['find-download'].durationMs);
+check(player.debugState().state==='ended'&&player.debugState().view==='lesson','普通组到末项停止');check(!!player.el.querySelector('.tutorial-group-end'),'组末提供结束动作');player.destroy();
+player=mount();click(player,'.tutorial-nav-toggle');player.debugAdvance(20000);check(player.debugState().elapsed===0,'更多面板阻止自动推进');player.destroy();
+player=mount();sandbox.document.hidden=true;sandbox.document.visibilityState='hidden';for(const fn of sandbox.document._events.visibilitychange||[])fn();player.debugAdvance(20000);check(player.debugState().state==='paused'&&player.debugState().elapsed===0,'后台冻结');sandbox.document.hidden=false;sandbox.document.visibilityState='visible';player.destroy();
+player=mount();let dotNodes=player.el.querySelectorAll('.tutorial-dot');dotNodes[2].dispatch('click');dotNodes[1].dispatch('click');dotNodes[3].dispatch('click');player.debugAdvance(300);check(player.debugState().lessonId==='share-text','快速圆点切换由最后选择决定');player.halt();player.debugAdvance(50000);check(player.debugState().state==='idle','关闭后旧时钟不能推进');player.destroy();
+player=mount();player.debugAdvance(1800);
+const cameraBefore=player.debugState().camera;clip=player.el.querySelector('.tutorial-stage-clip');
+const objectAnimation={currentTime:0,paused:false,cancelled:false,pause(){this.paused=true;},cancel(){this.cancelled=true;}};
+clip.getAnimations=()=>[objectAnimation];player.debugAdvance(40);
+check(objectAnimation.paused,'对象动画交给统一时钟、不能自行运行');
+click(player,'.tutorial-ctl-play');const objectTime=objectAnimation.currentTime;
+const cameraPaused=player.debugState().camera;player.debugAdvance(800);
+check(objectAnimation.currentTime===objectTime && JSON.stringify(player.debugState().camera)===JSON.stringify(cameraPaused),'镜头运动中暂停同时冻结对象与镜头');
+click(player,'.tutorial-ctl-play');player.debugAdvance(100);
+check(player.debugState().camera.scale>cameraBefore.scale && objectAnimation.currentTime>objectTime,'恢复后镜头与对象沿原时间继续');
+player.destroy();check(objectAnimation.cancelled,'关闭取消对象动画');
+player=mount();clip=player.el.querySelector('.tutorial-stage-clip');
+clip.dispatch('pointerdown',{pointerId:1,clientX:200,clientY:100});clip.dispatch('pointermove',{pointerId:1,clientX:205,clientY:140,cancelable:true});player.debugAdvance(100);
+check(player.debugState().elapsed===100 && !player.debugState().pauseReasons.includes('drag'),'纵向手势保留原生滚动，不冻结播放');clip.dispatch('pointerup',{pointerId:1});
+clip.dispatch('pointerdown',{pointerId:2,clientX:200,clientY:100});clip.dispatch('pointermove',{pointerId:2,clientX:300,clientY:100,cancelable:true});
+const boundaryOffset=parseFloat(clip.querySelector('.tutorial-track').style.transform.slice(11));
+check(boundaryOffset>0 && boundaryOffset<100,'首项拖向边界有阻尼');
+clip.dispatch('pointerdown',{pointerId:3,clientX:250,clientY:110});player.debugAdvance(300);
+check(player.debugState().elapsed===100 && player.debugState().pauseReasons.includes('multitouch'),'多指冻结播放且取消拖动');
+clip.dispatch('pointercancel',{pointerId:2});clip.dispatch('pointercancel',{pointerId:3});player.debugAdvance(100);
+check(player.debugState().elapsed===200 && player.debugState().activeIndex===0,'多指均取消后恢复原播放意图，不切项');
+player.el.dispatch('keydown',{key:'ArrowRight',target:player.el.querySelector('.tutorial-topbar-title')});player.debugAdvance(1);
+check(player.debugState().activeIndex===0,'阅读区域方向键不接管');
+player.el.dispatch('keydown',{key:'ArrowRight',target:player.el.querySelector('.tutorial-dot')});player.debugAdvance(300);
+check(player.debugState().activeIndex===1,'导航区域方向键可切项');player.destroy();
+const progressCache=new Map();sandbox.localStorage={getItem:k=>progressCache.get(k),setItem:(k,v)=>progressCache.set(k,v),removeItem:k=>progressCache.delete(k)};
+progressCache.set('bnu:tutorial:account:test:v1',JSON.stringify({seen:{'courses-import':2},pending:[{lesson_id:'courses-import',revision:2},{lesson_id:'removed-lesson',revision:1},{lesson_id:'courses-import',revision:D.lessons['courses-import'].revision}]}));
+const cachedProgress=P.createProgress('test',()=>1);
+check(!cachedProgress.has('courses-import') && cachedProgress.unsyncedCount()===1,'改版旧进度不当作已看，过期补交不能阻塞当前版本');
+const reducePreference=medias.get('(prefers-reduced-motion: reduce)');reducePreference.matches=true;player=mount();player.debugAdvance(30000);check(player.debugState().state==='paused'&&player.debugState().activeIndex===0,'减少动态效果使用用户控制阅读，不自动翻走');check(player.el.querySelectorAll('.tutorial-dot').length===4,'静态模式保留操作定位');
+reducePreference.matches=false;for(const fn of reducePreference.listeners)fn();click(player,'.tutorial-static-play');player.debugAdvance(100);check(player.debugState().state==='playing'&&player.debugState().elapsed===100,'退出减少动态效果后可主动恢复播放');player.destroy();
+sandbox.currentUser={identity_education:'硕士'};player=mount({mode:'catalog',groupId:'courses',lessonId:'courses-open'});
+check(!player.el.querySelectorAll('.tutorial-dot').some(n=>n.getAttribute('aria-label').includes('直达资料')),'分支操作名称不承诺无关联资料');player.destroy();
+if (failures) {console.error('tutorial 守门未通过：'+failures+' 处');process.exit(1);}
+console.log('tutorial 守门通过：全部操作 × 桌面/窄屏 × link/nolink/generic 时间线与队列/暂停/手势回归');
