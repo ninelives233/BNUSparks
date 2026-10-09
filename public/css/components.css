@@ -225,7 +225,7 @@
     .reupload-btn, .fi-preview-btn, .fi-download-btn, .pc-btn-detail,
     .pv-dl-btn, .announcement-create-btn, .fa-filter-btn,
     .profile-edit-btn, .profile-action-btn, .so-new-btn, .nc-level-btn,
-    .ppc-save-btn, .fm-action-btn, .mgmt-new-btn) {
+    .ppc-save-btn, .fm-action-btn, .mgmt-new-btn, .explorer-newcourse-btn) {
   display: inline-flex;
   align-items: center;
   justify-content: center;

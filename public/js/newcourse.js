@@ -108,11 +108,26 @@
     _resetNewCourseSubmitButtons();
   }
 
+  // ── 页头说明按实际权限区分（v=175）：不要向普通用户承诺免审核，
+  //    也不要向有创建权限的管理员统一声称必须等待审核。
+  //    后端口径（course_requests.py）：role != user 且目标位置在创建权限范围内
+  //    → auto_approved 直接建课；否则走审核。前端按角色给对应说明。
+  function _ncUpdatePermissionHint() {
+    var el = _ncEl('ncCardSub');
+    if (!el) return;
+    if (currentUser && currentUser.role && currentUser.role !== 'user') {
+      el.textContent = '填写开课信息；所选位置在你的创建权限范围内时将直接创建课程，否则提交后由管理员审核';
+    } else {
+      el.textContent = '填写开课信息，提交后由管理员审核，通过后课程将加入目录';
+    }
+  }
+
   function showNewCourse() {
     pushViewState('newCourse', {});
     switchView('newCourse');
     updateSidebar(null);
     _renderNewCourseBreadcrumb();
+    _ncUpdatePermissionHint();
     switchNewCourseType('general');
     _resetNewCourseSubmitButtons();   // 防御：重进视图时复位可能卡死的按钮
     window.scrollTo({ top: 0 });
@@ -124,6 +139,7 @@
     switchView('newCourse');
     updateSidebar(null);
     _renderNewCourseBreadcrumb();
+    _ncUpdatePermissionHint();
     switchNewCourseType('general');
     _resetNewCourseSubmitButtons();
     _updateFooterVisibility('newCourse');

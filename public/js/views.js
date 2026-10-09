@@ -895,6 +895,13 @@
      Iter 7: 首页上传按钮 + 物质支持
      ═══════════════════════════════════════════════════════════ */
 
+  // 首页与课程目录工具栏共用的「新建课程」申请入口；未登录先弹登录，
+  // 与 openCourseSearchUpload 的登录门槛保持一致。
+  function openNewCourseEntry() {
+    if (!currentUser) { showLoginModal(); return; }
+    openNewCourse();
+  }
+
   // 首页可以在 explorer 尚未加载时打开上传弹窗；新建课程入口需要等待完整 feature。
   function openNewCourse() {
     var ready = Promise.resolve();
@@ -952,7 +959,7 @@
           '<input type="text" id="courseSearchInput" placeholder="课程名称或代码…" autofocus>' +
         '</div>' +
         '<div class="so-new-course">' +
-          '<div class="so-new-hint">没有要找的学院/专业/课程？点击↓</div>' +
+          '<div class="so-new-hint">找不到课程？申请新建课程</div>' +
           '<button class="so-new-btn" onclick="openNewCourseFromSearch(this)">新建课程</button>' +
         '</div>' +
         '<div class="search-overlay-results" id="courseSearchResults">' +
@@ -996,7 +1003,12 @@
         if (!courses.length) window.BnuMonitoring.track('search.no_result');
       }
       if (!courses.length) {
-        resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">' + iconSvg('search') + '</div><div class="so-empty-text">未找到相关课程，试试其他关键词</div></div>';
+        // 无结果时强化申请引导：只做文字指路，弹窗内仍只有一个申请入口（上方「新建课程」按钮）
+        resultsEl.innerHTML = '<div class="so-empty">' +
+          '<div class="so-empty-icon">' + iconSvg('search') + '</div>' +
+          '<div class="so-empty-text">未找到相关课程，试试其他关键词</div>' +
+          '<div class="so-empty-sub">课程尚未被平台收录？点击上方「新建课程」提交申请，审核通过后即可上传资料</div>' +
+          '</div>';
         return;
       }
       var html = '<div class="so-results-list">';

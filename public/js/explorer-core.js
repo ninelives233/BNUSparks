@@ -571,6 +571,8 @@
     if (actionGroup && courseNavHost) actionGroup.hidden = !courseNavHost.childElementCount;
     const oldBtn = actionGroup.querySelector(':scope > .mgmt-new-btn');
     if (oldBtn) oldBtn.remove();
+    const oldNewCourseBtn = actionGroup.querySelector(':scope > .explorer-newcourse-btn');
+    if (oldNewCourseBtn) oldNewCourseBtn.remove();
     topRow.classList.remove('has-mgmt-new');
     if (isMgmtActive()) {
       const node = getNode(expPath);
@@ -582,12 +584,25 @@
       if (showNewBtn) {
         const newBtn = document.createElement('button');
         newBtn.className = 'mgmt-new-btn';
-        newBtn.textContent = '＋ 新建';
+        // 管理创建入口：文件夹图标 + 「＋ 新建」，与普通用户的「新建课程」申请入口
+        // 靠图标、文案和管理操作组分隔表达区别（不靠颜色/悬停提示）。
+        newBtn.innerHTML = iconSvg('folder') + '<span>＋ 新建</span>';
+        newBtn.setAttribute('aria-label', '管理模式：在当前目录新建节点或文件夹');
         newBtn.onclick = function(e) { e.stopPropagation(); showNewFolderDialog(node && node.id); };
         actionGroup.appendChild(newBtn);
         actionGroup.hidden = false;
         topRow.classList.add('has-mgmt-new');
       }
+    } else {
+      // 普通浏览模式：目录工具栏提供「新建课程」申请入口（申请页内自选归属位置）；
+      // 与管理模式「＋ 新建」互斥展示，随模式切换。未登录由 openNewCourseEntry 引导登录。
+      const newCourseBtn = document.createElement('button');
+      newCourseBtn.className = 'explorer-newcourse-btn';
+      newCourseBtn.innerHTML = iconSvg('document') + '<span>新建课程</span>';
+      newCourseBtn.setAttribute('aria-label', '新建课程（提交课程申请）');
+      newCourseBtn.onclick = function(e) { e.stopPropagation(); openNewCourseEntry(); };
+      actionGroup.appendChild(newCourseBtn);
+      actionGroup.hidden = false;
     }
   }
 

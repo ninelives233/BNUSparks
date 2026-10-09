@@ -54,11 +54,11 @@
   }
 </script>
 <link rel="stylesheet" href="/static/css/tokens.css?v=307">
-<link rel="stylesheet" href="/static/css/base.css?v=319">
-<link rel="stylesheet" href="/static/css/user.css?v=212">
-<link rel="stylesheet" href="/static/css/files.css?v=200">
+<link rel="stylesheet" href="/static/css/base.css?v=321">
+<link rel="stylesheet" href="/static/css/user.css?v=213">
+<link rel="stylesheet" href="/static/css/files.css?v=202">
 <link rel="stylesheet" href="/static/css/announcement.css?v=187">
-<link rel="stylesheet" href="/static/css/components.css?v=200">
+<link rel="stylesheet" href="/static/css/components.css?v=201">
 </head>
 <body>
 
@@ -217,10 +217,17 @@
           <p>课程、资料与校园入口</p>
         </div>
         <div class="h8-heading-tools">
-          <button type="button" class="h8-upload-btn" onclick="openCourseSearchUpload()" aria-label="上传文件">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg>
-            <span>上传文件</span>
-          </button>
+          <!-- v=175 课程创建入口分层：上传=实心主操作，新建课程=描边申请入口，右侧与平台统计以分隔线隔开 -->
+          <div class="h8-actions">
+            <button type="button" class="h8-upload-btn" onclick="openCourseSearchUpload()" aria-label="上传文件">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg>
+              <span>上传文件</span>
+            </button>
+            <button type="button" class="h8-newcourse-btn" onclick="openNewCourseEntry()" aria-label="新建课程（提交课程申请）">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ui-icon-document"></use></svg>
+              <span>新建课程</span>
+            </button>
+          </div>
           <div class="h8-scale" aria-label="平台规模" data-nosnippet>
             <strong><span data-stat="total_files">—</span> <small>份共享资料</small></strong>
             <span><span data-stat="college_with_data_count">—</span> 个学院 / 学部目录</span>
@@ -342,10 +349,16 @@
       </div>
       <!-- ═══ 上传按钮（窄屏：hero 内；宽屏：nav-cards 下方）═══ -->
       <div class="home-upload-section home-upload-section--hero" data-motion-reveal data-motion-delay="320">
-        <button class="home-upload-btn" onclick="openCourseSearchUpload()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          上传文件
-        </button>
+        <div class="home-upload-actions">
+          <button class="home-upload-btn" onclick="openCourseSearchUpload()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            上传文件
+          </button>
+          <button class="home-newcourse-btn" onclick="openNewCourseEntry()" aria-label="新建课程（提交课程申请）">
+            <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ui-icon-document"></use></svg>
+            新建课程
+          </button>
+        </div>
         <p class="home-materials-count">当前已有 <strong class="total-material-count">-</strong> 份资料</p>
       </div>
       <p class="hero-footer" data-motion-reveal data-motion-delay="400">
@@ -388,10 +401,16 @@
 
   <!-- ═══ 上传按钮（宽屏版：三个卡片下方）═══ -->
   <div class="home-upload-section home-upload-section--navcards">
-    <button class="home-upload-btn" onclick="openCourseSearchUpload()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      上传文件
-    </button>
+    <div class="home-upload-actions">
+      <button class="home-upload-btn" onclick="openCourseSearchUpload()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        上传文件
+      </button>
+      <button class="home-newcourse-btn" onclick="openNewCourseEntry()" aria-label="新建课程（提交课程申请）">
+        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ui-icon-document"></use></svg>
+        新建课程
+      </button>
+    </div>
     <p class="home-materials-count">当前已有 <strong class="total-material-count">-</strong> 份资料</p>
   </div>
 
@@ -1034,7 +1053,7 @@
     <div class="nc-card">
       <div class="nc-card-head">
         <h2 class="nc-card-title">新建课程</h2>
-        <div class="nc-card-sub">填写开课信息，提交后由管理员审核创建课程文件夹</div>
+        <div class="nc-card-sub" id="ncCardSub">填写开课信息，提交后由管理员审核，通过后课程将加入目录</div>
       </div>
 
       <!-- 分段控制器：通识课 / 专业课 -->
@@ -1577,13 +1596,13 @@
 <script src="/static/js/profile.js?v=222" defer></script>
 <script src="/static/js/notifications.js?v=305" defer></script>
 <script src="/static/js/admin-core.js?v=301" defer></script>
-<script src="/static/js/views.js?v=318" defer></script>
+<script src="/static/js/views.js?v=319" defer></script>
 <script src="/static/js/tutorial-entry.js?v=330" defer></script>
-<script src="/static/js/explorer-core.js?v=224" defer></script>
+<script src="/static/js/explorer-core.js?v=225" defer></script>
 <script src="/static/js/explorer-file.js?v=189" defer></script>
 <script src="/static/js/explorer-preview.js?v=188" defer></script>
 <script src="/static/js/home.js?v=322" defer></script>
-<script src="/static/js/feature-loader.js?v=336" defer></script>
+<script src="/static/js/feature-loader.js?v=337" defer></script>
 <script src="/static/js/app.js?v=318" defer></script>
 
 </body>

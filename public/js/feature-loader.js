@@ -71,7 +71,10 @@
   //        焦点环 + 控件自身 td-act 脉动表达动作，平滑定位滚动）；浮窗背景
   //        保留真实来源页（不再切换到空教程页）；缓存键同步推进。
   // 教程操作队列、镜头与绝对时间线；旧缓存不得混用播放契约。
-  var VERSION = '336';
+  // v337：课程创建入口分层——目录工具栏普通模式新增「新建课程」申请入口
+  //        （与管理「＋ 新建」随模式互斥），申请页页头说明按权限区分；
+  //        newcourse.js 一并更新，缓存键同步推进。
+  var VERSION = '337';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

@@ -1195,6 +1195,65 @@
   height: 22px;
 }
 
+/* v=175 首页入口分层：上传（实心，主操作）+ 新建课程（描边，申请入口）同组；统计另起一行 */
+.home-upload-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.home-newcourse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 32px;
+  background: transparent;
+  color: var(--home-upload);
+  border: 1.5px solid oklch(from var(--home-upload) l c h / 0.45);
+  border-radius: var(--radius-full);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.home-newcourse-btn:hover {
+  background: oklch(from var(--home-upload) l c h / 0.08);
+  border-color: var(--home-upload);
+  transform: translateY(-1px);
+}
+
+.home-newcourse-btn:active {
+  transform: translateY(0);
+}
+
+.home-newcourse-btn:focus-visible {
+  outline: 2px solid oklch(from var(--home-upload) l c h / 0.55);
+  outline-offset: 2px;
+}
+
+.home-newcourse-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-upload-btn,
+  .home-newcourse-btn {
+    transition: none;
+  }
+  .home-upload-btn:hover,
+  .home-upload-btn:active,
+  .home-newcourse-btn:hover,
+  .home-newcourse-btn:active {
+    transform: none;
+  }
+}
+
 .home-materials-count {
   margin-top: var(--space-sm);
   font-size: 0.9rem;

@@ -162,6 +162,53 @@
   flex-shrink: 0;
 }
 .mgmt-new-btn:hover { opacity: 0.85; }
+
+/* v=175 课程目录工具栏：普通模式「新建课程」申请入口。
+   与管理入口「＋ 新建」的区分由图标（文档 vs 文件夹）、文案（完整词 vs 管理短文案）、
+   分组（普通操作 vs 琥珀色管理操作）和模式互斥共同表达，不依赖颜色或悬停提示。
+   v=176 造型并入工具栏既有家族：档案索引式 8px 圆角、中性描边、与根页签同字号同高。 */
+.explorer-view .explorer-top-actions .explorer-newcourse-btn {
+  margin-left: auto;
+  background: var(--raised);
+  color: var(--primary);
+  border: 1px solid var(--border);
+  padding: 6px 13px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.explorer-view .explorer-top-actions .explorer-newcourse-btn:hover {
+  background: var(--primary-surface);
+  border-color: var(--primary-light);
+}
+.explorer-view .explorer-top-actions .explorer-newcourse-btn:focus-visible {
+  outline: 2px solid oklch(from var(--primary) l c h / 0.45);
+  outline-offset: 2px;
+}
+/* 管理按钮同槽位同造型（保留琥珀管理组语义色）；补 1px 同色描边对齐相邻按钮的盒高 */
+.explorer-view .explorer-top-actions .mgmt-new-btn {
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--accent);
+}
+.mgmt-new-btn,
+.explorer-view .explorer-top-actions .explorer-newcourse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.mgmt-new-btn .ui-icon,
+.explorer-view .explorer-top-actions .explorer-newcourse-btn .ui-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
 .mgmt-pen {
   display: inline-block;
   margin-left: 4px;
@@ -214,7 +261,8 @@
 }
 .fi-pen:hover { opacity: 1; }
 
-/* 批量操作和新建按钮的窄屏布局属于课程资料页。 */
+/* 批量操作和新建按钮的窄屏布局属于课程资料页。
+   （explorer-newcourse-btn 只出现在目录工具栏，窄屏尺寸由 base.css 的工具栏规则统一） */
 @media (max-width: 640px) {
   .batch-dl-bar { flex-wrap: wrap; gap: 8px; }
   .batch-dl-bar .admin-btn-sm { font-size: 0.72rem; padding: 5px 10px; }

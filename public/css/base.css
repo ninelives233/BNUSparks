@@ -1032,10 +1032,11 @@
     .explorer-view .explorer-top-actions .course-nav-current {
       display: none;
     }
-    .explorer-view .explorer-top-actions .mgmt-new-btn {
+    .explorer-view .explorer-top-actions .mgmt-new-btn,
+    .explorer-view .explorer-top-actions .explorer-newcourse-btn {
       margin-bottom: 0;
-      font-size: 0.7rem;
-      padding: 3px 8px;
+      /* 窄屏仍与根页签同高同字号，只收水平内边距（页签此断点为 6px 14px） */
+      padding: 6px 12px;
     }
   }
 
@@ -1880,6 +1881,7 @@
   .so-empty { text-align: center; padding: var(--space-lg); }
   .so-empty-icon { font-size: 1.5rem; margin-bottom: var(--space-xs); }
   .so-empty-text { font-size: 0.85rem; color: var(--ink-faint); }
+  .so-empty-sub { margin-top: 6px; font-size: 0.78rem; color: var(--primary); line-height: 1.55; }
 
   /* ── 首页上传弹窗：新建课程入口（静态 views.js 使用） ── */
   .so-new-course {
@@ -4331,8 +4333,9 @@ html[data-bnu-theme="warm"] .home-eight {
 }
 
 /* ═══ 紧凑首页 v21：上传入口并入平台规模栏 ═══════════════════
-   复用松散首页的课程搜索上传流程；紧凑首页只换成轻量描边按钮，
-   宽屏位于统计数字左侧，窄屏继续保持同一行并收紧尺寸。 */
+   复用松散首页的课程搜索上传流程。v=175 入口分层：上传=实心主操作
+   （较高视觉权重），新建课程=描边申请入口（文档/表单图标）；按钮组
+   与平台统计之间用分隔线隔开，窄屏同组收紧。 */
 .home-eight .h8-heading-tools {
   display: flex;
   min-width: 0;
@@ -4341,7 +4344,34 @@ html[data-bnu-theme="warm"] .home-eight {
   gap: 18px;
 }
 
+/* 首页操作组：与右侧平台统计以发丝分隔线表达分区，不靠留白猜 */
+.home-eight .h8-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding-right: 14px;
+  border-right: 1px solid var(--v9-border);
+}
+
 .home-eight .h8-upload-btn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font: 600 12px/1 var(--sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, box-shadow 160ms ease-out, transform 160ms ease-out;
+}
+
+.home-eight .h8-newcourse-btn {
   display: inline-flex;
   flex: 0 0 auto;
   min-height: 34px;
@@ -4358,24 +4388,34 @@ html[data-bnu-theme="warm"] .home-eight {
   transition: background-color 160ms ease-out, border-color 160ms ease-out, box-shadow 160ms ease-out, transform 160ms ease-out;
 }
 
-.home-eight .h8-upload-btn svg {
+.home-eight .h8-upload-btn svg,
+.home-eight .h8-newcourse-btn svg {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
 }
 
 .home-eight .h8-upload-btn:hover {
+  border-color: var(--primary-dark);
+  background: var(--primary-dark);
+  box-shadow: var(--shadow-xs);
+  transform: translateY(-1px);
+}
+
+.home-eight .h8-newcourse-btn:hover {
   border-color: var(--primary);
   background: color-mix(in oklab, var(--primary-surface) 52%, transparent);
   box-shadow: var(--shadow-xs);
   transform: translateY(-1px);
 }
 
-.home-eight .h8-upload-btn:active {
+.home-eight .h8-upload-btn:active,
+.home-eight .h8-newcourse-btn:active {
   transform: translateY(0);
 }
 
-.home-eight .h8-upload-btn:focus-visible {
+.home-eight .h8-upload-btn:focus-visible,
+.home-eight .h8-newcourse-btn:focus-visible {
   outline: 2px solid color-mix(in oklab, var(--primary) 45%, transparent);
   outline-offset: 2px;
 }
@@ -4393,14 +4433,21 @@ html[data-bnu-theme="warm"] .home-eight {
     justify-content: space-between;
   }
 
-  .home-eight .h8-upload-btn {
+  .home-eight .h8-actions {
+    gap: 6px;
+    padding-right: 10px;
+  }
+
+  .home-eight .h8-upload-btn,
+  .home-eight .h8-newcourse-btn {
     min-height: 28px;
     gap: 5px;
     padding: 0 clamp(8px, 2.3vw, 10px);
     font-size: clamp(10px, 2.9vw, 12px);
   }
 
-  .home-eight .h8-upload-btn svg {
+  .home-eight .h8-upload-btn svg,
+  .home-eight .h8-newcourse-btn svg {
     width: 13px;
     height: 13px;
   }
@@ -4411,12 +4458,15 @@ html[data-bnu-theme="warm"] .home-eight {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .home-eight .h8-upload-btn {
+  .home-eight .h8-upload-btn,
+  .home-eight .h8-newcourse-btn {
     transition: none;
   }
 
   .home-eight .h8-upload-btn:hover,
-  .home-eight .h8-upload-btn:active {
+  .home-eight .h8-upload-btn:active,
+  .home-eight .h8-newcourse-btn:hover,
+  .home-eight .h8-newcourse-btn:active {
     transform: none;
   }
 }
