@@ -874,8 +874,13 @@
     gap: 4px;
     font-size: 0.78rem;
   }
-  .admin-pending-card .pc-meta span {
+  .admin-pending-card .pc-meta > span {
     display: block;
+  }
+  /* 上传者 pill 不在打散范围内：保持头像+名字一行，且不随纵列拉伸占满整行 */
+  .admin-pending-card .pc-meta > .cr-user-pill {
+    display: inline-flex;
+    align-self: flex-start;
   }
   .admin-pending-card .pc-actions {
     flex-direction: column;

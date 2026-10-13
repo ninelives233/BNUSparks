@@ -611,6 +611,28 @@
   align-items: center;
 }
 
+/* 窄屏：四钮一行——「下载」占满剩余宽度，收藏/举报/删除为 44px 方形图标钮；
+   缺「删除」权限时方块尺寸不变，主按钮自动加宽补位（flex-grow） */
+@media (max-width: 480px) {
+  .fd-actions-inner {
+    flex-wrap: nowrap;
+  }
+  .fd-actions-inner .fd-btn {
+    flex: 0 0 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    justify-content: center;
+  }
+  .fd-actions-inner .fd-btn-primary {
+    flex: 1 1 auto;
+    padding: 0 16px;
+    gap: 6px;
+    font-size: 0.88rem;
+  }
+}
+
 .fd-btn {
   display: inline-flex;
   align-items: center;

@@ -74,7 +74,9 @@
   // v337：课程创建入口分层——目录工具栏普通模式新增「新建课程」申请入口
   //        （与管理「＋ 新建」随模式互斥），申请页页头说明按权限区分；
   //        newcourse.js 一并更新，缓存键同步推进。
-  var VERSION = '337';
+  // v338：admin.css 待审核卡片移动端上传者 pill 布局修复（.pc-meta span
+  //        打散规则改为仅直接子级，pill 保持一行），缓存键同步推进。
+  var VERSION = '338';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

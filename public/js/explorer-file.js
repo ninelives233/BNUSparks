@@ -484,16 +484,17 @@
     }
     var actionsEl = document.getElementById('fdActions');
     if (actionsEl) {
-      var dlBtn = '<button class="fd-btn fd-btn-primary" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载</button>';
+      // 窄屏下方形图标钮只显示图标，文字标签由 aria-label 提供读屏名称
+      var dlBtn = '<button class="fd-btn fd-btn-primary" aria-label="下载" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载</button>';
       var favBtn = currentUser
-        ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
+        ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" aria-label="收藏" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
         : '';
       // 举报按钮：低调 ghost，收藏按钮右侧；大小与收藏一致（同 .fd-btn 基类）
       var repBtn = currentUser
-        ? '<button class="fd-btn fd-btn-secondary fd-btn-report" id="fdRepBtn" onclick="openReportModal(' + (file.id || 0) + ', ' + (file.uploader_id || 0) + ')" title="举报资料问题">' + FD_ICONS.report + ' 举报</button>'
+        ? '<button class="fd-btn fd-btn-secondary fd-btn-report" id="fdRepBtn" aria-label="举报" onclick="openReportModal(' + (file.id || 0) + ', ' + (file.uploader_id || 0) + ')" title="举报资料问题">' + FD_ICONS.report + ' 举报</button>'
         : '';
       var delBtn = (file.can_delete && !_civilianMode)
-        ? '<button class="fd-btn fd-btn-danger" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + ' 删除</button>'
+        ? '<button class="fd-btn fd-btn-danger" aria-label="删除" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + ' 删除</button>'
         : '';
       actionsEl.innerHTML = '<div class="fd-actions-inner">' + dlBtn + favBtn + repBtn + delBtn + '</div>';
       // 加载初始收藏状态
