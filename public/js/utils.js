@@ -294,7 +294,7 @@
     if (!dialog || !dialog.isConnected || getComputedStyle(dialog).display === 'none') return;
     if (event.key === 'Escape') {
       // .tutorial-close：教程浮窗复用同一套 Escape 关闭链（v324）
-      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close');
+      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close,.mf-sheet-close,.fdm-sheet-close');
       if (close) { event.preventDefault(); close.click(); }
       return;
     }
@@ -346,6 +346,31 @@
           tbody.innerHTML = '<tr><td colspan="7" class="admin-empty admin-empty--sm">暂无资料</td></tr>';
           var pag = document.getElementById('filePagination');
           if (pag) pag.style.display = 'none';
+        }
+      }
+      // 移动端资料行布局：同步移除对应行并更新计数
+      var mlist = document.getElementById('mfFileList');
+      if (mlist) {
+        var mrow = mlist.querySelector('.mf-row[data-file-id="' + fileId + '"]');
+        if (mrow) mrow.remove();
+        var mfc = document.getElementById('fileCount');
+        var mRemaining = 0;
+        if (mfc) {
+          var mfm = mfc.textContent.match(/(\d+)/);
+          if (mfm) {
+            mRemaining = Math.max(0, parseInt(mfm[1], 10) - 1);
+            mfc.textContent = mRemaining + ' 份资料';
+          }
+        }
+        var mfEnd = document.getElementById('mfListEnd');
+        if (mfEnd) mfEnd.textContent = '共 ' + mRemaining + ' 份资料，已全部显示';
+        if (!mlist.querySelector('.mf-row')) {
+          mlist.innerHTML = '<div class="mf-empty">暂无资料，欢迎上传</div>';
+          var mpag = document.getElementById('filePagination');
+          if (mpag) mpag.style.display = 'none';
+          var mppc = document.getElementById('perPageControl');
+          if (mppc) mppc.style.display = 'none';
+          if (mfEnd) mfEnd.textContent = '';
         }
       }
     }).catch(function(err) {
@@ -577,6 +602,24 @@
       var total = tbody ? tbody.querySelectorAll('.dl-chk').length : 0;
       headCount.textContent = count + '/' + total;
     }
+    // 移动端资料行布局：同步「已选 N 份」、底部「下载所选（N）」与全选框
+    var mfCount = document.getElementById('mfSelectedCount');
+    if (mfCount) mfCount.textContent = '已选 ' + count + ' 份';
+    var mfBtn = document.getElementById('mfBatchDlBtn');
+    if (mfBtn) {
+      mfBtn.disabled = count === 0;
+      mfBtn.innerHTML = iconSvg('arrow-down') + '下载所选（' + count + '）';
+    }
+    var mfAll = document.getElementById('mfSelectAllChk');
+    if (mfAll) {
+      var mlist = document.getElementById('mfFileList');
+      if (mlist) {
+        var chks = mlist.querySelectorAll('.dl-chk');
+        var on = 0;
+        chks.forEach(function (c) { if (c.checked) on++; });
+        mfAll.checked = chks.length > 0 && on === chks.length;
+      }
+    }
   }
 
   function toggleSelectAll(source) {
@@ -605,7 +648,9 @@
   function batchDownloadSelected() {
     var selected = Object.keys(_selectedIds).map(Number);
     if (!selected.length) { alert('请先选择文件'); return; }
-    var btn = document.getElementById('batchDlBtn');
+    // 移动端底部主按钮与桌面批量工具条共用同一流程
+    var btn = document.getElementById('batchDlBtn') || document.getElementById('mfBatchDlBtn');
+    var doneLabel = document.getElementById('mfBatchDlBtn') ? '下载所选' : '下载选中';
     if (btn) { setIconText(btn, 'clock', '下载中 0/' + selected.length); btn.disabled = true; }
     var done = 0;
     selected.reduce(function(promise, fid, idx) {
@@ -619,9 +664,9 @@
         });
       });
     }, Promise.resolve()).then(function() {
-      if (btn) { setIconText(btn, 'arrow-down', '下载选中'); btn.disabled = false; }
+      if (btn) { setIconText(btn, 'arrow-down', doneLabel); btn.disabled = false; }
     }).catch(function() {
-      if (btn) { setIconText(btn, 'arrow-down', '下载选中'); btn.disabled = false; }
+      if (btn) { setIconText(btn, 'arrow-down', doneLabel); btn.disabled = false; }
     });
   }
 
@@ -993,7 +1038,7 @@
   };
 
   // Shared flat icon sprite for controls and status labels across lazily loaded views.
-  var UI_ICON_NAMES = 'alert archive arrow-down bell book bolt building calendar camera check check-circle clock close code comment document edit flag folder folder-open globe handshake help image info layers link lock mail megaphone mobile package pause pin question search shield sparkle star trash upload user users chart clipboard chevron-left chevron-right reply save refresh'.split(' ');
+  var UI_ICON_NAMES = 'alert archive arrow-down bell book bolt building calendar camera check check-circle clock close code comment document edit filter flag folder folder-open globe handshake help image info layers link lock mail megaphone mobile package pause pin question search shield sparkle star trash upload user users chart clipboard chevron-left chevron-right reply save refresh'.split(' ');
 
   function iconSvg(name, className) {
     if (UI_ICON_NAMES.indexOf(name) < 0) return '';

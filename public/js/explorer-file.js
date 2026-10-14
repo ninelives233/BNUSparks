@@ -1,6 +1,14 @@
 /* BNU Sparks · explorer-file.js —— 文件简介/详情/举报/内联编辑。定义全局符号见本文件内函数名（跨文件公共契约勿改名） */
   var _fileInfoOverlay = null;
 
+  // 排序方式标签（筛选按钮/底部面板共用）；键与 _getFilteredSortedFiles 的分支一致
+  var _MF_SORT_LABELS = { 'date': '上传时间', 'download': '下载量', 'favorite': '收藏量', 'teacher': '任课教师' };
+
+  // 详情页移动布局（≤768px）：信息区结构/操作行与桌面不同，渲染时按断点分支
+  function _fdIsMobile() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+  }
+
   function showFileInfoModal(file) {
     window._currentInfoFile = file; // 供模式切换时即时重渲染弹窗
     var existing = document.querySelector('.file-info-overlay');
@@ -203,8 +211,13 @@
     }
     var sortBtn = document.getElementById('sortFilterBtn');
     if (sortBtn) {
-      var labels = { 'date': '上传时间', 'download': '下载量', 'favorite': '收藏量', 'teacher': '任课教师' };
-      sortBtn.textContent = '排序：' + (labels[_sortBy] || '上传时间') + ' ▾';
+      sortBtn.textContent = '排序：' + (_MF_SORT_LABELS[_sortBy] || '上传时间') + ' ▾';
+    }
+    // 移动端合并筛选按钮：显示当前「类型 · 排序」条件
+    var mfBtn = document.getElementById('mobileFilterBtn');
+    if (mfBtn) {
+      var lbl = mfBtn.querySelector('.mf-filter-label');
+      if (lbl) lbl.textContent = (_typeFilter || '全部类型') + ' · ' + (_MF_SORT_LABELS[_sortBy] || '上传时间');
     }
   }
 
@@ -303,6 +316,10 @@
     if (uploaderEl) uploaderEl.innerHTML = '';
     var actionsEl = document.getElementById('fdActions');
     if (actionsEl) actionsEl.innerHTML = '';
+    var backRow = document.getElementById('fdBackRow');
+    if (backRow) { backRow.hidden = true; backRow.innerHTML = ''; }
+    var fileInfoEl = document.getElementById('fdFileInfo');
+    if (fileInfoEl) fileInfoEl.hidden = true;
     window.scrollTo({ top: 0 });
   }
 
@@ -313,6 +330,15 @@
   function _renderFdStats(file) {
     var meta2 = document.querySelector('.fd-meta2');
     if (!meta2) return;
+    // 移动端：弱化统计行（零值保留），不做竖线串联
+    if (_fdIsMobile()) {
+      meta2.innerHTML = '<div class="fd-meta-row fdm-stats">' +
+        '<span class="fdm-stat">浏览 <b>' + (file.view_count || 0) + '</b></span>' +
+        '<span class="fdm-stat">下载 <b>' + (file.download_count || 0) + '</b></span>' +
+        '<span class="fdm-stat">收藏 <b>' + (file.favorite_count || 0) + '</b></span>' +
+      '</div>';
+      return;
+    }
     var viewHtml = '<span class="fd-meta-item fd-meta-view"><span class="fd-meta-icon">' + FD_ICONS.view + '</span> 浏览量：' + (file.view_count || 0) + '</span>';
     var dlHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.download + '</span> 下载量：' + (file.download_count || 0) + '</span>';
     var favHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.star + '</span> 收藏量：' + (file.favorite_count || 0) + '</span>';
@@ -418,6 +444,18 @@
     }
     var canEdit = currentUser && !_civilianMode && (file.is_uploader || (file.can_delete && currentUser.role !== 'user'));
     var penIcon = '<button class="fd-pen" onclick="fdEditField(this)" title="点击编辑">' + iconSvg('edit') + '</button>';
+    // 移动端：面包屑下方加「‹ 返回课程」行，返回资料列表
+    var backRow = document.getElementById('fdBackRow');
+    if (backRow) {
+      if (_fdIsMobile()) {
+        var backLabel = file.course_name || file.course_code || '';
+        backRow.hidden = false;
+        backRow.innerHTML = '<button type="button" class="fdm-back" aria-label="返回' + esc(backLabel || '课程') + '" onclick="fdBackToCourse()">' + iconSvg('chevron-left') + '<span class="fdm-back-text">返回' + esc(backLabel) + '</span></button>';
+      } else {
+        backRow.hidden = true;
+        backRow.innerHTML = '';
+      }
+    }
     var typeDropdownHtml = canEdit
       ? '<span class="fd-type-dropdown-wrap"><select class="fd-type-select" onchange="fdChangeType(' + (file.id || 0) + ',this)">' +
           MATERIAL_TYPES.map(function(t) {
@@ -436,22 +474,57 @@
     }
     var meta1 = document.querySelector('.fd-meta1');
     if (meta1) {
-      var fileNameHtml = '<span class="fd-meta-item fd-meta-file" title="' + esc(file.file_name || '') + '"><span class="fd-meta-icon">' + FD_ICONS.file + '</span><span class="fd-meta-file-text">' + esc(file.file_name || '') + '</span></span>';
-      var typeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.tag + '</span> ' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span>';
-      var dateHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.calendar + '</span> ' + esc(file.created_at || '') + '</span>';
-      var sizeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.storage + '</span> ' + formatSize(file.file_size) + '</span>';
-      var teacherHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.teacher + '</span> ' + (canEdit
-        ? '<span class="fd-editable" data-field="teacher" data-fid="' + (file.id || 0) + '">' + esc(file.teacher || '未填写') + '</span>' + penIcon
-        : esc(file.teacher || '未填写')) + '</span>';
-      meta1.innerHTML = '<div class="fd-meta-row">' + fileNameHtml + '<span class="fd-meta-sep">|</span>' + typeHtml + '<span class="fd-meta-sep">|</span>' + dateHtml + '<span class="fd-meta-sep">|</span>' + sizeHtml + '<span class="fd-meta-sep">|</span>' + teacherHtml + '</div>';
+      if (_fdIsMobile()) {
+        // 移动端：格式/分类轻量标签 + 大小/日期辅助行；课程、教师用字段名表达，缺失省略
+        var mCourseVal = esc(file.course_name || file.course_code || '');
+        var mTeacherHtml = canEdit
+          ? '<span class="fd-editable" data-field="teacher" data-fid="' + (file.id || 0) + '">' + esc(file.teacher || '') + '</span>' + penIcon
+          : esc(file.teacher || '');
+        var mFields = '';
+        if (mCourseVal) mFields += '<span class="fdm-field"><span class="fdm-field-name">课程</span><span class="fdm-field-value">' + mCourseVal + '</span></span>';
+        if (file.teacher) mFields += '<span class="fdm-field"><span class="fdm-field-name">教师</span><span class="fdm-field-value">' + mTeacherHtml + '</span></span>';
+        meta1.innerHTML =
+          '<div class="fdm-tags">' + extBadge(file.file_name) + '<span class="fdm-tag fdm-tag-type">' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span></div>' +
+          '<div class="fdm-aux">' + formatSize(file.file_size) + (file.created_at ? ' · ' + esc(file.created_at) + ' 上传' : '') + '</div>' +
+          (mFields ? '<div class="fdm-fields">' + mFields + '</div>' : '');
+      } else {
+        var fileNameHtml = '<span class="fd-meta-item fd-meta-file" title="' + esc(file.file_name || '') + '"><span class="fd-meta-icon">' + FD_ICONS.file + '</span><span class="fd-meta-file-text">' + esc(file.file_name || '') + '</span></span>';
+        var typeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.tag + '</span> ' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span>';
+        var dateHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.calendar + '</span> ' + esc(file.created_at || '') + '</span>';
+        var sizeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.storage + '</span> ' + formatSize(file.file_size) + '</span>';
+        var teacherHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.teacher + '</span> ' + (canEdit
+          ? '<span class="fd-editable" data-field="teacher" data-fid="' + (file.id || 0) + '">' + esc(file.teacher || '未填写') + '</span>' + penIcon
+          : esc(file.teacher || '未填写')) + '</span>';
+        meta1.innerHTML = '<div class="fd-meta-row">' + fileNameHtml + '<span class="fd-meta-sep">|</span>' + typeHtml + '<span class="fd-meta-sep">|</span>' + dateHtml + '<span class="fd-meta-sep">|</span>' + sizeHtml + '<span class="fd-meta-sep">|</span>' + teacherHtml + '</div>';
+      }
     }
     _renderFdStats(file);
     var descEl = document.querySelector('.fd-desc-area');
     if (descEl) {
-      var descContent = canEdit
-        ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description || '暂无简介') + '</span>' + penIcon
-        : esc(file.description || '暂无简介');
-      descEl.innerHTML = '<div class="fd-desc-card">' + descContent + '</div>';
+      if (_fdIsMobile()) {
+        // 移动端：无简介不渲染空卡片；长简介折叠可展开；管理模式保留添加/编辑入口
+        if (file.description) {
+          var mDescContent = canEdit
+            ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description) + '</span>' + penIcon
+            : esc(file.description);
+          descEl.innerHTML = '<div class="fd-desc-card fdm-desc">' + mDescContent + '</div>' +
+            '<button type="button" class="fdm-desc-toggle" hidden onclick="fdToggleDesc(this)">展开</button>';
+          requestAnimationFrame(function () {
+            var card = descEl.querySelector('.fdm-desc');
+            var toggle = descEl.querySelector('.fdm-desc-toggle');
+            if (card && toggle && card.scrollHeight > card.clientHeight + 2) toggle.hidden = false;
+          });
+        } else if (canEdit) {
+          descEl.innerHTML = '<button type="button" class="fdm-desc-add" onclick="fdAddDesc()">＋ 添加简介</button>';
+        } else {
+          descEl.innerHTML = '';
+        }
+      } else {
+        var descContent = canEdit
+          ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description || '暂无简介') + '</span>' + penIcon
+          : esc(file.description || '暂无简介');
+        descEl.innerHTML = '<div class="fd-desc-card">' + descContent + '</div>';
+      }
     }
     var uploaderEl = document.querySelector('.fd-uploader-card');
     if (uploaderEl) {
@@ -461,30 +534,45 @@
         ? '<img src="' + esc(file.uploader_avatar) + '" class="fdu-avatar-img" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
           '<div class="fdu-avatar" style="display:none">' + esc(initial) + '</div>'
         : '<div class="fdu-avatar">' + esc(initial) + '</div>';
+      var upLabel = _fdIsMobile() ? '上传' : '上传者';
       uploaderEl.innerHTML =
-        '<div class="fdu-card" onclick="showUserPublic(' + userId + ')">' +
+        '<div class="fdu-card" role="link" tabindex="0" onclick="showUserPublic(' + userId + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showUserPublic(' + userId + ')}">' +
           avatarHtml +
           '<div class="fdu-info">' +
             '<div class="fdu-name">' + esc(file.uploader || '匿名') + '</div>' +
-            '<div class="fdu-label">上传者</div>' +
+            '<div class="fdu-label">' + upLabel + '</div>' +
           '</div>' +
+          '<span class="fdu-arrow" aria-hidden="true">' + iconSvg('chevron-right') + '</span>' +
         '</div>';
     }
     var actionsEl = document.getElementById('fdActions');
     if (actionsEl) {
-      // 窄屏下方形图标钮只显示图标，文字标签由 aria-label 提供读屏名称
-      var dlBtn = '<button class="fd-btn fd-btn-primary" aria-label="下载" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载</button>';
-      var favBtn = currentUser
-        ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" aria-label="收藏" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
-        : '';
-      // 举报按钮：低调 ghost，收藏按钮右侧；大小与收藏一致（同 .fd-btn 基类）
-      var repBtn = currentUser
-        ? '<button class="fd-btn fd-btn-secondary fd-btn-report" id="fdRepBtn" aria-label="举报" onclick="openReportModal(' + (file.id || 0) + ', ' + (file.uploader_id || 0) + ')" title="举报资料问题">' + FD_ICONS.report + ' 举报</button>'
-        : '';
-      var delBtn = (file.can_delete && !_civilianMode)
-        ? '<button class="fd-btn fd-btn-danger" aria-label="删除" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + ' 删除</button>'
-        : '';
-      actionsEl.innerHTML = '<div class="fd-actions-inner">' + dlBtn + favBtn + repBtn + delBtn + '</div>';
+      if (_fdIsMobile()) {
+        // 移动端：下载为唯一主按钮；收藏为次按钮（收藏后显示「已收藏」）；
+        // 举报/删除收进「更多」底部菜单
+        var mDlBtn = '<button class="fd-btn fd-btn-primary fdm-dl-btn" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载文件</button>';
+        var mFavBtn = currentUser
+          ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
+          : '';
+        var mMoreBtn = currentUser
+          ? '<button class="fd-btn fd-btn-secondary fd-more-btn" id="fdMoreBtn" aria-label="更多操作" aria-haspopup="dialog" onclick="openFdMoreSheet(' + (file.id || 0) + ')">⋯</button>'
+          : '';
+        actionsEl.innerHTML = '<div class="fd-actions-inner">' + mDlBtn + mFavBtn + mMoreBtn + '</div>';
+      } else {
+        // 窄屏下方形图标钮只显示图标，文字标签由 aria-label 提供读屏名称
+        var dlBtn = '<button class="fd-btn fd-btn-primary" aria-label="下载" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载</button>';
+        var favBtn = currentUser
+          ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" aria-label="收藏" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
+          : '';
+        // 举报按钮：低调 ghost，收藏按钮右侧；大小与收藏一致（同 .fd-btn 基类）
+        var repBtn = currentUser
+          ? '<button class="fd-btn fd-btn-secondary fd-btn-report" id="fdRepBtn" aria-label="举报" onclick="openReportModal(' + (file.id || 0) + ', ' + (file.uploader_id || 0) + ')" title="举报资料问题">' + FD_ICONS.report + ' 举报</button>'
+          : '';
+        var delBtn = (file.can_delete && !_civilianMode)
+          ? '<button class="fd-btn fd-btn-danger" aria-label="删除" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + ' 删除</button>'
+          : '';
+        actionsEl.innerHTML = '<div class="fd-actions-inner">' + dlBtn + favBtn + repBtn + delBtn + '</div>';
+      }
       // 加载初始收藏状态
       if (currentUser) {
         if (file.is_favorited !== undefined) {
@@ -528,6 +616,20 @@
       }
       var extType = _isPreviewableExt(file.file_name);
       hint.textContent = extType === 'pdf' ? '预览最多显示前三页' : (extType === 'zip' ? '文件清单' : '');
+    }
+    // 移动端「文件信息」折叠区：原始文件名完整展示、允许长名换行（桌面隐藏）
+    var fileInfoEl = document.getElementById('fdFileInfo');
+    if (fileInfoEl) {
+      if (_fdIsMobile()) {
+        fileInfoEl.hidden = false;
+        fileInfoEl.open = false;
+        var fiBody = document.getElementById('fdFileInfoBody');
+        if (fiBody) {
+          fiBody.innerHTML = '<div class="fd-fi-row"><span class="fd-fi-name">原始文件名</span><span class="fd-fi-value">' + esc(file.file_name || '—') + '</span></div>';
+        }
+      } else {
+        fileInfoEl.hidden = true;
+      }
     }
     _loadFdPreview(file.id, file.file_name);
   }
@@ -598,8 +700,12 @@
         });
       }
     } catch(e) {
-      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">' + iconSvg('alert') + '</div><div class="pv-unsupported-text">预览加载失败，请尝试下载后查看</div></div>';
+      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">' + iconSvg('alert') + '</div><div class="pv-unsupported-text">预览加载失败，请尝试下载后查看</div><button type="button" class="pv-retry-btn" onclick="retryFdPreview()">' + iconSvg('refresh') + ' 重试</button></div>';
     }
+  }
+
+  function retryFdPreview() {
+    if (_currentDetailFile) _loadFdPreview(_currentDetailFile.id, _currentDetailFile.file_name);
   }
 
   async function toggleFdFavorite(fileId) {
@@ -826,4 +932,97 @@
       alert('保存失败：' + err.message);
     });
   }
+
+  // ── 移动端详情辅助：返回课程 / 简介展开 / 添加简介 / 更多菜单 ──
+  function fdBackToCourse() {
+    if (_fdBreadcrumbPath && _fdBreadcrumbPath.length) {
+      navToFdBreadcrumbDepth(_fdBreadcrumbPath.length);
+    } else if (_currentDetailFile && _currentDetailFile.course_code) {
+      if (typeof navToCourse === 'function') {
+        var genCode = _currentDetailFile.course_code.indexOf('GEN') === 0;
+        navToCourse(genCode ? '通识课' : '专业课', _currentDetailFile.course_code);
+      }
+    } else {
+      history.back();
+    }
+  }
+
+  function fdToggleDesc(btn) {
+    var card = btn.parentElement ? btn.parentElement.querySelector('.fdm-desc') : null;
+    if (!card) return;
+    var expanded = card.classList.toggle('fdm-desc-expanded');
+    btn.textContent = expanded ? '收起' : '展开';
+  }
+
+  function fdAddDesc() {
+    var area = document.querySelector('.fd-desc-area');
+    if (!area || !_currentDetailFile) return;
+    area.innerHTML = '<div class="fd-desc-card fdm-desc"><span class="fd-editable" data-field="description" data-fid="' + _currentDetailFile.id + '"></span><button type="button" class="fd-pen" title="点击编辑">' + iconSvg('edit') + '</button></div>';
+    var pen = area.querySelector('.fd-pen');
+    if (pen) fdEditField(pen);
+  }
+
+  function openFdMoreSheet(fileId) {
+    if (document.querySelector('.fdm-sheet-overlay')) { closeFdMoreSheet(); return; }
+    var file = _currentDetailFile || {};
+    var items = '<button type="button" class="fdm-menu-item" onclick="closeFdMoreSheet();openReportModal(' + fileId + ',' + (file.uploader_id || 0) + ')">' + iconSvg('flag') + '<span>举报资料</span></button>';
+    if (file.can_delete && !_civilianMode) {
+      items += '<button type="button" class="fdm-menu-item fdm-menu-danger" onclick="closeFdMoreSheet();deleteFileConfirm(' + fileId + ',null)">' + iconSvg('trash') + '<span>删除资料</span></button>';
+    }
+    var overlay = document.createElement('div');
+    overlay.className = 'fdm-sheet-overlay';
+    overlay.innerHTML =
+      '<div class="mf-sheet-backdrop" aria-hidden="true"></div>' +
+      '<div class="mf-sheet fdm-sheet" role="dialog" aria-modal="true" aria-label="更多操作">' +
+        '<div class="mf-sheet-handle" aria-hidden="true"></div>' +
+        '<div class="mf-sheet-head"><h2 class="mf-sheet-title">更多操作</h2>' +
+          '<button type="button" class="mf-sheet-close fdm-sheet-close" aria-label="关闭" onclick="closeFdMoreSheet()">' + iconSvg('close') + '</button></div>' +
+        items +
+      '</div>';
+    overlay.addEventListener('click', function (e) {
+      if (e.target.classList && e.target.classList.contains('mf-sheet-backdrop')) closeFdMoreSheet();
+    });
+    document.body.appendChild(overlay);
+    lockScroll();
+    _pushModalHistory(overlay.querySelector('.fdm-sheet'));
+    // 同步聚焦关闭钮：与筛选面板一致，避免 rAF 焦点在无绘制环境下被挂起
+    var firstCtl = overlay.querySelector('.fdm-sheet-close');
+    if (firstCtl) firstCtl.focus();
+  }
+
+  function closeFdMoreSheet() {
+    var overlay = document.querySelector('.fdm-sheet-overlay');
+    if (!overlay) return;
+    var sheet = overlay.querySelector('.fdm-sheet');
+    overlay.remove();
+    unlockScroll();
+    _popModalHistory(sheet);
+  }
+
+  // 横竖屏/窗口跨过 768px 断点：详情页按当前布局重渲染（两套信息区结构不同）。
+  // media query 变化事件为主，resize 节流兜底（个别 webview 不派发 mq change）。
+  (function () {
+    var lastLayoutMobile = _fdIsMobile();
+    function onMaybeChanged() {
+      var nowMobile = _fdIsMobile();
+      if (nowMobile === lastLayoutMobile) return;
+      lastLayoutMobile = nowMobile;
+      var v = document.getElementById('fileDetailView');
+      if (v && v.classList.contains('active') && _currentDetailFile) _renderFileDetail(_currentDetailFile);
+    }
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(max-width: 768px)');
+      if (mq.addEventListener) mq.addEventListener('change', onMaybeChanged);
+      else if (mq.addListener) mq.addListener(onMaybeChanged);
+    }
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(onMaybeChanged, 150);
+    });
+    // 移动端旋转兜底：个别 webview 只派发 orientationchange
+    window.addEventListener('orientationchange', function () {
+      setTimeout(onMaybeChanged, 200);
+    });
+  })();
   // ── 文件预览 ──

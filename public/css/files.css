@@ -370,8 +370,9 @@
   gap: 20px;
 }
 
-@media (max-width: 640px) {
-  .fd-container { padding: 0 20px 40px; }
+@media (max-width: 768px) {
+  .fd-container { padding: 0 16px 40px; }
+  .fd-layout { gap: 14px; }
 }
 
 /* 顶部信息区 — 单列 flex，宽屏时右侧 uploader 绝对定位 */
@@ -416,15 +417,12 @@
   }
 }
 
-/* 窄屏：uploader 移到文件信息和简介之间 */
+/* 窄屏信息区排序：标题 → 标签/字段（meta1）→ 上传者 → 统计行 → 简介 */
 @media (max-width: 768px) {
-  .fd-info-area .fd-uploader-card {
-    order: 1;
-    margin-top: 12px;
-  }
-  .fd-desc-area {
-    order: 2;
-  }
+  .fd-meta1 { order: 1; }
+  .fd-info-area .fd-uploader-card { order: 2; margin-top: 4px; }
+  .fd-meta2 { order: 3; }
+  .fd-desc-area { order: 4; }
 }
 
 .fd-title-area {
@@ -583,21 +581,40 @@
   margin-top: 2px;
 }
 
-/* 窄屏：上传者卡片变为横向 */
+/* 窄屏：上传者变为紧凑横向行（去卡片底），右侧主页箭头 */
 @media (max-width: 768px) {
   .fdu-card {
     flex-direction: row;
-    gap: 10px;
-    padding: 10px 14px;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+  }
+  .fdu-card:hover {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .fdu-card:focus-visible {
+    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
   .fdu-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 0.9rem;
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
   }
   .fdu-info {
     text-align: left;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
   }
+  .fdu-label { margin-top: 0; }
+  .fdu-arrow { margin-left: auto; color: var(--ink-faint); display: inline-flex; }
+  .fdu-arrow .ui-icon { width: 14px; height: 14px; }
 }
 
 /* 操作按钮区 */
@@ -611,25 +628,32 @@
   align-items: center;
 }
 
-/* 窄屏：四钮一行——「下载」占满剩余宽度，收藏/举报/删除为 44px 方形图标钮；
-   缺「删除」权限时方块尺寸不变，主按钮自动加宽补位（flex-grow） */
-@media (max-width: 480px) {
+/* 窄屏（≤768px）：移动端三钮行——「下载文件」占满剩余宽度，收藏保留文字，
+   举报/删除收进「更多」菜单（fdm-sheet）。触控高度统一 44px。 */
+@media (max-width: 768px) {
   .fd-actions-inner {
     flex-wrap: nowrap;
+    gap: 8px;
   }
   .fd-actions-inner .fd-btn {
-    flex: 0 0 44px;
-    height: 44px;
-    padding: 0;
-    gap: 0;
-    font-size: 0;
-    justify-content: center;
+    min-height: 44px;
   }
   .fd-actions-inner .fd-btn-primary {
     flex: 1 1 auto;
-    padding: 0 16px;
-    gap: 6px;
-    font-size: 0.88rem;
+    padding: 8px 16px;
+  }
+  .fd-actions-inner .fd-btn-fav {
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+  .fd-actions-inner .fd-more-btn {
+    flex: 0 0 44px;
+    width: 44px;
+    justify-content: center;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0;
   }
 }
 
@@ -846,8 +870,8 @@
 
 @media (max-width: 768px) {
   .fdu-avatar-img {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
   }
 }
 
@@ -965,3 +989,634 @@ html[data-bnu-theme="dark"] .mgmt-type-select {
   border-color: var(--border);
 }
 html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface); }
+
+/* ═══════════════════════════════════════════════════════════
+   v=204 移动端（≤768px）课程资料列表：纵向资料行 + 底部筛选面板
+   桌面表格布局不受影响（explorer-render 按断点渲染不同 DOM）。
+   ═══════════════════════════════════════════════════════════ */
+
+/* 标题行：课程名 + 上传主按钮；资料数量在课程名下方 */
+@media (max-width: 768px) {
+  .mf-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0 10px;
+  }
+  .mf-head-text { flex: 1 1 auto; min-width: 0; }
+  .mf-course-name {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .mf-count-line {
+    margin-top: 3px;
+    font-size: 0.74rem;
+    color: var(--ink-faint);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .mf-count-line .fa-codes { max-width: 100%; flex: 0 1 auto; }
+  .mf-upload-btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 9px;
+    background: var(--primary);
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .mf-upload-btn:hover { background: var(--primary-dark); }
+
+  /* 工具栏：合并筛选入口（显示当前条件）+ 轻量批量下载文字按钮 */
+  .mf-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .mf-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 42px;
+    padding: 0 12px;
+    max-width: 74%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .mf-filter-btn .ui-icon { width: 14px; height: 14px; color: var(--ink-faint); flex: 0 0 auto; }
+  .mf-filter-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mf-caret { color: var(--ink-faint); font-size: 0.7rem; flex: 0 0 auto; }
+  .mf-text-btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* 资料列表：类型图标 + 标题/辅助信息 + 下载小按钮 */
+  .mf-list {
+    background: var(--raised);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .mf-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    min-height: 64px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .mf-row:last-child { border-bottom: none; }
+  .mf-glyph { flex: 0 0 auto; display: inline-flex; }
+  .mf-glyph .ext-badge { margin-right: 0; }
+  .mf-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    font: inherit;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .mf-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .mf-meta {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .mf-pin-badge { margin-left: 5px; vertical-align: 1px; }
+  .mf-dl {
+    flex: 0 0 auto;
+    min-width: 52px;
+    min-height: 44px;
+    padding: 4px 9px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: none;
+    border-radius: 8px;
+    background: var(--primary-surface);
+    color: var(--primary);
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .mf-dl .ui-icon { width: 15px; height: 15px; }
+  .mf-dl-disabled {
+    background: var(--surface);
+    color: var(--ink-faint);
+    cursor: default;
+  }
+  .mf-chk-label {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mf-chk-label input[type="checkbox"],
+  .mf-select-all input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+
+  /* 批量模式：上方全选/计数，下方「下载所选（N）」 */
+  .mf-batch-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 2px 8px;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+  .mf-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .mf-selected-count { color: var(--ink-faint); }
+  .mf-batch-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .mf-batch-dl {
+    flex: 1 1 auto;
+    min-height: 44px;
+    border: none;
+    border-radius: 9px;
+    background: var(--primary);
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .mf-batch-dl:disabled { opacity: 0.5; cursor: not-allowed; }
+  .mf-batch-mgmt {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 9px;
+    border: 1px solid var(--danger-border);
+    background: var(--raised);
+    color: var(--danger);
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .mf-list-end {
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    margin-top: 14px;
+  }
+  .mf-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .mf-bottom .file-pagination {
+    padding: 14px 0 4px;
+    flex-basis: 100%;
+  }
+  .mf-empty {
+    padding: 36px 16px;
+    text-align: center;
+    color: var(--ink-faint);
+    font-size: 0.85rem;
+  }
+  .mf-row.highlight-row { animation: highlight-fade 2.5s ease forwards; }
+
+  .mf-text:focus-visible,
+  .mf-dl:focus-visible,
+  .mf-filter-btn:focus-visible,
+  .mf-text-btn:focus-visible,
+  .mf-upload-btn:focus-visible,
+  .mf-batch-dl:focus-visible,
+  .mf-batch-mgmt:focus-visible {
+    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+    outline-offset: 2px;
+  }
+}
+
+/* ── 移动端底部面板骨架（筛选排序 / 详情「更多」共用；仅移动端创建） ── */
+/* 批量工具条的 display 规则会盖过 hidden 属性，显式恢复默认隐藏行为 */
+.mf-batch-tools[hidden],
+.mf-batch-footer[hidden] { display: none; }
+
+.mf-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: flex-end;
+}
+.mf-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.2 0.02 250 / 0.45);
+}
+.mf-sheet {
+  position: relative;
+  width: 100%;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--raised);
+  border-radius: 18px 18px 0 0;
+  padding: 10px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 32px oklch(0.2 0.02 250 / 0.18);
+}
+.mf-sheet-handle {
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 2px auto 12px;
+}
+.mf-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.mf-sheet-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mf-sheet-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mf-sheet-close .ui-icon { width: 15px; height: 15px; }
+.mf-sheet-close:focus-visible,
+.mf-sheet-option:focus-visible,
+.mf-sheet-btn:focus-visible,
+.fdm-menu-item:focus-visible {
+  outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+  outline-offset: 2px;
+}
+.mf-sheet-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  margin: 4px 0 8px;
+}
+.mf-sheet-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mf-sheet-option {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.mf-sheet-option[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: var(--primary-surface);
+  color: var(--primary);
+  font-weight: 600;
+}
+.mf-sheet-footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.mf-sheet-btn {
+  min-height: 44px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mf-sheet-reset {
+  flex: 1 1 auto;
+  border: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--ink);
+}
+.mf-sheet-apply {
+  flex: 2 1 auto;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+}
+.fdm-menu-item {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.fdm-menu-item:last-child { border-bottom: none; }
+.fdm-menu-item .ui-icon { width: 16px; height: 16px; color: var(--ink-faint); }
+.fdm-menu-danger { color: var(--danger); }
+.fdm-menu-danger .ui-icon { color: var(--danger); }
+@media (prefers-reduced-motion: no-preference) {
+  .mf-sheet { animation: mf-sheet-in 0.22s ease-out; }
+  @keyframes mf-sheet-in {
+    from { transform: translateY(24px); opacity: 0.6; }
+    to { transform: none; opacity: 1; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   v=204 移动端（≤768px）文件详情：紧凑信息区
+   标题 22–24px · 轻量标签 · 字段行 · 弱化统计 · 文件信息折叠区
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .fdm-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    min-height: 44px;
+    padding: 6px 0;
+    margin-top: 2px;
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .fdm-back .ui-icon { width: 15px; height: 15px; }
+  .fd-title {
+    font-size: 1.42rem;
+    line-height: 1.4;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+  .fdm-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .fdm-tags .ext-badge { margin-right: 0; }
+  .fdm-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    border: 1px solid var(--border-light);
+    white-space: nowrap;
+  }
+  .fdm-tag-type {
+    background: var(--primary-surface);
+    color: var(--primary);
+    border-color: transparent;
+  }
+  .fdm-aux {
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    margin-top: 7px;
+    overflow-wrap: anywhere;
+  }
+  .fdm-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    font-size: 0.82rem;
+    margin-top: 10px;
+  }
+  .fdm-field { min-width: 0; max-width: 100%; }
+  .fdm-field-name { color: var(--ink-faint); margin-right: 6px; }
+  .fdm-field-value { color: var(--ink); overflow-wrap: anywhere; }
+
+  /* 弱化统计行：细分隔线上下夹住，保留零值 */
+  .fd-meta2 .fd-meta-row.fdm-stats {
+    display: flex;
+    gap: 20px;
+    padding: 11px 0;
+    margin-top: 6px;
+    border-top: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+  }
+  .fdm-stat b {
+    font-weight: 600;
+    color: var(--ink);
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 简介：默认折叠 4 行，溢出显示「展开」；无简介不渲染卡片 */
+  .fdm-desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .fdm-desc.fdm-desc-expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+  .fdm-desc-toggle,
+  .fdm-desc-add {
+    border: none;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 500;
+    min-height: 40px;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+  .fdm-desc-add {
+    color: var(--ink-faint);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    width: 100%;
+    text-align: left;
+  }
+  .fd-btn:focus-visible {
+    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+    outline-offset: 2px;
+  }
+  .fdm-back:focus-visible {
+    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* 文件信息折叠区：预览之后的原始文件名，长名换行完整展示 */
+  .fd-fileinfo {
+    border-top: 1px solid var(--border-light);
+    margin-top: 16px;
+    padding-top: 4px;
+    font-size: 0.82rem;
+  }
+  .fd-fileinfo summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 12px 0;
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    min-height: 44px;
+  }
+  .fd-fileinfo summary::-webkit-details-marker { display: none; }
+  .fd-fileinfo summary::before {
+    content: '▸';
+    color: var(--ink-faint);
+    font-size: 0.75rem;
+    transition: transform 0.15s ease;
+  }
+  .fd-fileinfo[open] summary::before { transform: rotate(90deg); }
+  .fd-fileinfo summary:focus-visible {
+    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .fd-fi-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 0 0 12px;
+    font-size: 0.78rem;
+  }
+  .fd-fi-name { color: var(--ink-faint); }
+  .fd-fi-value {
+    color: var(--ink);
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+}
+/* 桌面（>768px）隐藏移动端专属结构 */
+@media (min-width: 769px) {
+  .fd-back-row,
+  .fd-fileinfo,
+  .fdu-arrow { display: none; }
+}
+
+/* 预览加载失败重试按钮（桌面/移动共用） */
+.pv-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pv-retry-btn .ui-icon { width: 14px; height: 14px; }
+.pv-retry-btn:focus-visible {
+  outline: 2px solid oklch(from var(--primary) l c h / 0.55);
+  outline-offset: 2px;
+}
+
+/* 暗色主题：移动端面板与资料行使用语义变量，仅补个别写死色 */
+html[data-bnu-theme="dark"] .mf-sheet-backdrop { background: oklch(0 0 0 / 0.55); }
+html[data-bnu-theme="dark"] .mf-sheet { box-shadow: 0 -8px 32px oklch(0 0 0 / 0.4); }

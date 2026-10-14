@@ -76,7 +76,9 @@
   //        newcourse.js 一并更新，缓存键同步推进。
   // v338：admin.css 待审核卡片移动端上传者 pill 布局修复（.pc-meta span
   //        打散规则改为仅直接子级，pill 保持一行），缓存键同步推进。
-  var VERSION = '338';
+  // v339：explorer-render 移动端（≤768px）资料列表重制——纵向资料行、
+  //        筛选排序底部面板、批量选择与底部分页；缓存键同步推进。
+  var VERSION = '339';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
