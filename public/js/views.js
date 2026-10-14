@@ -437,6 +437,64 @@
   var _IC_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
   var _IC_ID = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4M7 13h4M15 9h2M15 13h2"/></svg>';
 
+  // 公开主页「分享主页」复制轻提示（独立于懒加载的课表模块 ttToast）
+  function _upToast(msg) {
+    var t = document.createElement('div');
+    t.className = 'up-toast';
+    t.setAttribute('role', 'status');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () {
+      t.classList.remove('show');
+      setTimeout(function () { t.remove(); }, 250);
+    }, 2400);
+  }
+
+  function _upLegacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  // 复制当前用户可直接访问的公开主页链接（SPA 路由 /user/{id}，缺 userId 时拒绝复制）
+  function copyUserProfileLink(userId, btn) {
+    var uid = parseInt(userId, 10);
+    if (!uid) { _upToast('链接无效，缺少用户标识'); return; }
+    var path = typeof routeToPath === 'function'
+      ? (routeToPath('userPublic', { userId: uid }) || '/user/' + uid)
+      : '/user/' + uid;
+    var url = location.origin + path;
+    var done = function () {
+      _upToast('已复制主页链接');
+      if (btn && btn.isConnected) {
+        btn.classList.add('up-btn-done');
+        btn.setAttribute('data-copied', '1');
+        setTimeout(function () {
+          btn.classList.remove('up-btn-done');
+          btn.removeAttribute('data-copied');
+        }, 2000);
+      }
+    };
+    var fail = function () { _upToast('复制失败，请手动复制：' + url); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () {
+        _upLegacyCopy(url) ? done() : fail();
+      });
+    } else {
+      _upLegacyCopy(url) ? done() : fail();
+    }
+  }
+
   function showLeaderboard(initialType) {
     var types = ['upload', 'download', 'collection'];
     if (types.indexOf(initialType) === -1) initialType = types.indexOf(_lbType) !== -1 ? _lbType : 'upload';
@@ -664,49 +722,85 @@
     });
   }
 
+  // 公开页资料行键盘可达：整行进详情，支持 Enter/Space 触发
+  function _upMakeRowsFocusable(scope) {
+    if (!scope) return;
+    scope.querySelectorAll('.user-public-files .pc-item[onclick]').forEach(function (row) {
+      row.setAttribute('tabindex', '0');
+      row.setAttribute('role', 'link');
+      var title = row.querySelector('.pc-item-title');
+      if (title) row.setAttribute('aria-label', (title.textContent || '').trim() + '，查看资料详情');
+      row.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          row.click();
+        }
+      });
+    });
+  }
+
   function _renderUserPublicHTML(container, userId, page, data) {
     var u = data.user;
     if (!u) { container.innerHTML = '<div class="empty-state compact">用户不存在</div>'; return; }
 
-    // 用户名片
+    var isSelf = !!(currentUser && parseInt(userId, 10) === currentUser.id);
+
+    // ── 紧凑贡献者名片：头像在左、身份在右，底部三列统计带 ──
     var initial = (u.nickname || '?').charAt(0).toUpperCase();
     var avatarHtml = u.avatar_url
-      ? '<img src="' + esc(u.avatar_url) + '" class="user-public-avatar">'
-      : '<div class="user-public-avatar-placeholder">' + esc(initial) + '</div>';
-    var contactHtml = '';
-    if (u.contact_email || u.contact_way) {
-      contactHtml = '<div class="upi-contact">';
-      if (u.contact_email) contactHtml += '<span class="upi-ico">' + _IC_MAIL + '</span> ' + esc(u.contact_email) + ' ';
-      if (u.contact_way) contactHtml += '<span class="upi-ico">' + _IC_MSG + '</span> ' + esc(u.contact_way);
-      contactHtml += '</div>';
-    }
-    // 注册时间（member_since 形如 "2026-08"）
-    var memberHtml = '';
+      ? '<img src="' + esc(u.avatar_url) + '" class="up-avatar" alt="' + esc(u.nickname || '用户头像') + '">'
+      : '<div class="up-avatar up-avatar-placeholder" aria-hidden="true">' + esc(initial) + '</div>';
+
+    // 身份行一：培养层次 · 专业；学院名较长，单独一行（后端已按公开开关过滤空值）
+    var identityShort = [u.education, u.major].filter(Boolean).map(esc).join(' · ');
+    var identityHtml = '';
+    if (identityShort) identityHtml += '<div class="up-identity up-identity-short">' + identityShort + '</div>';
+    if (u.college) identityHtml += '<div class="up-identity up-identity-college">' + esc(u.college) + '</div>';
+
+    // 简介仅有内容时显示，不再输出占位句
+    var bioHtml = u.bio ? '<div class="up-bio">' + esc(u.bio) + '</div>' : '';
+
+    // 弱化辅助信息：注册时间恒显示；联系方式仅有内容时显示
+    var metaParts = [];
     if (u.member_since && /^\d{4}-\d{2}$/.test(u.member_since)) {
       var ms = u.member_since.split('-');
-      memberHtml = '<div class="upi-member"><span class="upi-ico">' + _IC_CLOCK + '</span> 注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</div>';
+      metaParts.push('<span class="up-meta-item"><span class="upi-ico">' + _IC_CLOCK + '</span>注册于 ' + ms[0] + ' 年 ' + parseInt(ms[1], 10) + ' 月</span>');
     }
-    // 身份标签：后端已按三个公开开关分别过滤。
-    var identityHtml = '';
-    if (u.education || u.college || u.major) {
-      identityHtml = '<div class="upi-identity"><span class="upi-ico">' + _IC_ID + '</span> ' +
-        [u.education, u.college, u.major].filter(Boolean).map(esc).join(' · ') + '</div>';
+    if (u.contact_email) {
+      metaParts.push('<span class="up-meta-item"><span class="upi-ico">' + _IC_MAIL + '</span>' + esc(u.contact_email) + '</span>');
     }
-    var html = '<div class="user-public-card">' + avatarHtml +
-      '<div class="user-public-info">' +
-        '<div class="upi-name">' + esc(u.nickname) + '</div>' +
-        '<div class="upi-bio">' + esc(u.bio || '此人神秘，未留简介') + '</div>' +
-        identityHtml +
-        memberHtml +
-        contactHtml +
-      '</div></div>';
+    if (u.contact_way) {
+      metaParts.push('<span class="up-meta-item"><span class="upi-ico">' + _IC_MSG + '</span>' + esc(u.contact_way) + '</span>');
+    }
+    var metaHtml = metaParts.length ? '<div class="up-meta">' + metaParts.join('') + '</div>' : '';
 
-    // 统计数据
-    html += '<div class="user-stats-row">' +
-      '<div class="user-stat-card"><div class="usc-value">' + (u.upload_count || 0) + '</div><div class="usc-label">上传文件</div></div>' +
-      '<div class="user-stat-card"><div class="usc-value">' + (u.download_count || 0) + '</div><div class="usc-label">被下载次数</div></div>' +
-      '<div class="user-stat-card"><div class="usc-value">' + (u.collection_count || 0) + '</div><div class="usc-label">被收藏次数</div></div>' +
-    '</div>';
+    var actionsHtml = '<div class="up-actions">' +
+      '<button type="button" class="up-btn" onclick="copyUserProfileLink(' + userId + ', this)">' + iconSvg('link') + '<span>分享主页</span></button>' +
+      (isSelf
+        ? '<button type="button" class="up-btn" onclick="showProfile()">' + iconSvg('edit') + '<span>编辑资料</span></button>'
+        : '') +
+      '</div>';
+
+    var stat = function (value, label) {
+      return '<div class="up-stat"><span class="up-stat-num">' + (+value || 0) + '</span><span class="up-stat-label">' + label + '</span></div>';
+    };
+
+    var html = '<section class="up-card" aria-label="用户名片">' +
+      '<div class="up-head">' + avatarHtml +
+        '<div class="up-info">' +
+          '<h1 class="up-name">' + esc(u.nickname) + '</h1>' +
+          identityHtml +
+          bioHtml +
+          metaHtml +
+          actionsHtml +
+        '</div>' +
+      '</div>' +
+      '<div class="up-stats" role="group" aria-label="贡献统计">' +
+        stat(u.upload_count, '上传资料') +
+        stat(u.download_count, '被下载') +
+        stat(u.collection_count, '被收藏') +
+      '</div>' +
+    '</section>';
 
     var canTraceDownloads = currentUser && currentUser.role === 'super_admin' &&
       typeof isMgmtActive === 'function' && isMgmtActive();
@@ -730,18 +824,18 @@
       return;
     }
 
-    // 文件列表（v=164 与收藏/下载/上传统一用 _pcItem/_fileGlyph 组件）
+    // 文件列表：沿用 _pcItem/_fileGlyph 组件；标题带总数（接口 total），时间倒序 + 翻页不变
     if (data.materials && data.materials.length) {
-      html += '<h3 class="user-files-head">上传的文件</h3>';
-      html += '<div class="pc-list">';
+      html += '<h3 class="user-files-head">上传资料 · ' + (data.total || 0) + ' 份</h3>';
+      html += '<div class="pc-list user-public-files">';
       data.materials.forEach(function(m) {
-        // 点击直接打开文件详情（修复此前 showHome();navToLast 落到首页）
-        var side = '<span class="pc-side-icon">' + _IC_DOWN + '</span>' + m.download_count + ' 次下载';
+        // 下载次数是统计文字（非下载按钮）；chevron 为详情箭头，整行进文件详情
+        var side = '<span class="up-dl-count">' + (+m.download_count || 0) + ' 次下载</span>' +
+          '<span class="up-row-arrow" aria-hidden="true">' + iconSvg('chevron-right') + '</span>';
         html += _pcItem(
-          // v=164.1：优先用真实文件名推导扩展名（file_type 为脏值兜底）
           _fileGlyph(m.file_name, m.file_type),
           esc(m.title),
-          esc(m.course_name) + ' · ' + m.created_at,
+          esc(m.course_name) + (m.course_name ? ' · ' : '') + m.created_at,
           '',
           side,
           'event.preventDefault();showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})'
@@ -761,11 +855,12 @@
         html += '</div>';
       }
     } else {
-      html += _pcEmpty('该用户尚未上传资料', '等 TA 上传第一份课程资料，这里就会热闹起来。');
+      html += _pcEmpty('暂未分享公开资料', '通过审核的公开资料会展示在这里。');
     }
 
     html += '</div>';
     container.innerHTML = html;
+    _upMakeRowsFocusable(container);
   }
 
   async function renderUserPublic(userId, page) {
@@ -784,8 +879,15 @@
       _userPublicCache[userId][page] = { ts: Date.now(), data: data };
       _renderUserPublicHTML(container, userId, page, data);
     } catch(e) {
-      container.innerHTML = '<div class="empty-state compact">加载失败</div>';
+      // 加载失败给可操作的重试入口（重新走本函数，绕过前端缓存）
+      container.innerHTML = _pcEmpty('主页加载失败', esc(e && e.message || '网络异常或服务暂不可用。'),
+        '<button type="button" class="pc-empty-cta" onclick="retryUserPublic(' + userId + ',' + page + ')">' + iconSvg('refresh') + ' 重新加载</button>');
     }
+  }
+
+  function retryUserPublic(userId, page) {
+    if (_userPublicCache[userId]) delete _userPublicCache[userId][page];
+    renderUserPublic(userId, page);
   }
 
   /* ═══════════════════════════════════════════════════════════

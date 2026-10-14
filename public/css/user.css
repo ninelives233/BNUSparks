@@ -996,89 +996,172 @@
    Iter 7: 用户公开页
    ═══════════════════════════════════════════════════════════════ */
 
-.user-public-card {
+/* v=317：紧凑贡献者名片——头像在左、身份在右，底部细分隔线连接三列统计；
+   高度随内容增长，无固定高度 */
+.up-card {
   background: var(--raised);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: var(--space-xl);
-  margin-bottom: var(--space-lg);
+  padding: 24px;
+  margin-bottom: var(--space-md);
+}
+
+.up-head {
   display: flex;
-  gap: var(--space-lg);
   align-items: flex-start;
+  gap: var(--space-md);
 }
 
-.user-public-avatar {
+/* 圆形裁切/居中基础形态由 components.css 共享规则提供 */
+.up-avatar {
   width: 64px; height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.user-public-avatar-placeholder {
-  width: 64px; height: 64px;
-  border-radius: 50%;
   background: var(--primary-surface);
   color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: 1.4rem;
   font-weight: 600;
-  flex-shrink: 0;
 }
 
-.user-public-info { flex: 1; min-width: 0; }
+.up-info { flex: 1; min-width: 0; }
 
-.user-public-info .upi-name {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 4px;
+/* 昵称为页面主标题；长昵称自然换行，不截断 */
+.up-name {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
-.user-public-info .upi-bio {
-  font-size: 0.88rem;
+/* 身份行：培养层次 · 专业为短行，学院名单独一行；balance 防止单字孤行 */
+.up-identity {
+  font-size: 0.85rem;
   color: var(--ink-soft);
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.up-identity-short { margin-top: 3px; }
+.up-identity-college { margin-top: 1px; color: var(--ink-faint); }
+
+/* 简介仅有内容时渲染；保留换行，长链接断行 */
+.up-bio {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  line-height: 1.65;
   white-space: pre-wrap;
-  /* v=182：多行正文左对齐（覆盖窄屏 .user-public-card 继承的 center）+ 长链接断行 */
-  text-align: left;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-.user-public-info .upi-contact {
-  font-size: 0.82rem;
-  color: var(--ink-faint);
-  margin-top: 8px;
-  /* v=182：联系方式左对齐 + 长链接断行，防溢出截断 */
-  text-align: left;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-.user-public-info .upi-member {
+/* 弱化辅助信息：注册时间 + 联系方式（仅有内容时输出） */
+.up-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 10px;
   font-size: 0.78rem;
   color: var(--ink-faint);
-  margin-top: 6px;
 }
-
-/* v=183：公开卡身份标签（学院 · 专业） */
-.user-public-info .upi-identity {
-  font-size: 0.82rem;
-  color: var(--ink-soft);
-  margin-top: 8px;
-  overflow-wrap: break-word;
-}
-
-/* v=164：公开卡联系/注册信息 SVG 图标（去 emoji） */
-.user-public-info .upi-ico {
+.up-meta-item {
   display: inline-flex;
   align-items: center;
-  vertical-align: -2px;
-  margin-right: 2px;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.up-meta-item .upi-ico {
+  display: inline-flex;
+  flex-shrink: 0;
   color: var(--ink-faint);
 }
-.user-public-info .upi-ico svg { width: 14px; height: 14px; }
+.up-meta-item .upi-ico svg { width: 13px; height: 13px; }
+
+.up-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.up-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 14px;
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.up-btn .ui-icon { width: 14px; height: 14px; flex-shrink: 0; }
+.up-btn:hover {
+  border-color: var(--primary-light);
+  color: var(--primary);
+  background: var(--primary-surface);
+}
+.up-btn:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25);
+}
+.up-btn.up-btn-done {
+  border-color: var(--primary-light);
+  color: var(--primary);
+  background: var(--primary-surface);
+}
+
+/* 名片底部三列统计带：细分隔线连接，无独立边框 */
+.up-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
+.up-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 6px;
+}
+.up-stat + .up-stat { border-left: 1px solid var(--border-light); }
+.up-stat-num {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+/* 标签短（上传资料/被下载/被收藏），nowrap 保证常见手机宽度单行 */
+.up-stat-label {
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* 分享主页复制反馈轻提示（深浅色经 --ink/--raised 反转自适应） */
+.up-toast {
+  position: fixed; left: 50%; bottom: 36px; transform: translate(-50%, 12px);
+  z-index: 400; background: var(--ink); color: var(--raised);
+  font-size: var(--fs-sm); padding: 10px 18px; border-radius: var(--radius-full);
+  box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  max-width: 86vw; overflow-wrap: anywhere;
+}
+.up-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* v=189：总管理员管理模式下的用户下载追溯 */
 .user-public-admin-tabs { margin: 0 0 var(--space-md); }
@@ -1144,6 +1227,22 @@
   .tt-inline-shell .tt-inline-viewbar .pc-seg { width: 100%; }
   .tt-inline-shell .tt-inline-viewbar .pc-seg-btn { flex: 1; justify-content: center; }
   .user-trace-head { align-items: flex-start; flex-direction: column; gap: 2px; }
+  /* 名片保持头像在左、信息在右的横向排布（取消纵向居中），内边距与头像收紧 */
+  .up-card { padding: 16px; }
+  .up-head { gap: 12px; }
+  .up-avatar { width: 48px; height: 48px; font-size: 1.1rem; }
+  .up-name { font-size: 1.12rem; }
+  .up-stats { margin-top: 14px; padding-top: 12px; }
+  .up-stat-num { font-size: 1.15rem; }
+  .up-stat-label { font-size: 0.72rem; }
+  .up-btn { min-height: 36px; padding: 6px 12px; }
+  /* 下载次数移到文字区下方（对齐正文起点），不挤压标题；详情箭头保持行右缘 */
+  .user-public-files .pc-item { position: relative; flex-wrap: wrap; }
+  .user-public-files .pc-item-side { order: 3; margin: 3px 0 0 48px; }
+  .user-public-files .up-row-arrow {
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+  }
 }
 
 /* v=164：公开页文件列表与收藏/下载/上传统一为 pc-* 组件 */
@@ -1152,6 +1251,23 @@
   font-weight: 600;
   color: var(--ink);
   margin: var(--space-lg) 0 var(--space-sm);
+}
+
+/* v=317：公开页列表行——下载次数为统计文字（无下载图标，避免误读为下载按钮），
+   chevron 为详情箭头；键盘焦点可见。作用域限定 .user-public-files，
+   不影响个人中心/收藏/管理页共享的 pc-* 组件 */
+.user-public-files .pc-item-side { gap: 10px; }
+.up-dl-count { color: var(--ink-faint); }
+.up-row-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-faint);
+}
+.up-row-arrow .ui-icon { width: 16px; height: 16px; }
+.user-public-files .pc-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background: var(--primary-surface);
 }
 
 /* ═══════════════════════════════════════════════════════════════

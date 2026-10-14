@@ -245,7 +245,7 @@
 }
 
 /* ── 头像：图片类统一圆形裁切，首字类统一圆形居中 ── */
-:is(.admin-user-avatar, .lb-avatar, .cr-pill-avatar, .user-public-avatar,
+:is(.admin-user-avatar, .lb-avatar, .cr-pill-avatar, .up-avatar,
     .ai-avatar, .fdu-avatar-img) {
   border-radius: 50%;
   object-fit: cover;
@@ -253,7 +253,7 @@
   vertical-align: middle;
 }
 :is(.user-avatar-circle, .dm-avatar, .admin-user-avatar-placeholder,
-    .cr-pill-avatar-ph, .lb-avatar-placeholder, .user-public-avatar-placeholder,
+    .cr-pill-avatar-ph, .lb-avatar-placeholder, .up-avatar-placeholder,
     .ai-avatar-placeholder, .fdu-avatar, .profile-avatar-circle) {
   display: inline-flex;
   align-items: center;
