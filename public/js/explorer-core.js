@@ -524,29 +524,59 @@
   }
 
   // ── 共享面包屑渲染（renderBC / 文件详情统一使用）──
+  // 窄屏（≤640px，见 base.css）自动把中间层级折叠为「⋯」：移动端返回主要靠手势，
+  // 面包屑只承担「首页 / ⋯ / 末项」定位；点按 ⋯ 可临时展开完整路径。
+  // options.tailStatic：在路径之后追加的静态末项（如「文件详情」），路径整体按中间项折叠。
   function _renderBreadcrumb(el, path, options) {
     el.innerHTML = '';
+    el.classList.remove('bc-expanded');
     var homeLink = document.createElement('a');
     homeLink.textContent = '首页';
     homeLink.onclick = function(e) { e.preventDefault(); (options && options.homeOnClick || showHome)(); };
     el.appendChild(homeLink);
+    var hasTail = !!(options && options.tailStatic);
+    var lastMid = path.length - 1 - (hasTail ? 0 : 1); // 路径内最后一个中间项下标（-1 = 无中间项）
+    var ellipsis = null;
+    if (lastMid >= 0) {
+      ellipsis = document.createElement('button');
+      ellipsis.type = 'button';
+      ellipsis.className = 'bc-ellipsis';
+      ellipsis.textContent = '⋯';
+      ellipsis.title = '显示完整路径';
+      ellipsis.setAttribute('aria-label', '显示完整路径');
+      ellipsis.onclick = function() { el.classList.add('bc-expanded'); };
+    }
     for (var i = 0; i < path.length; i++) {
-      var sep = document.createElement('span');
-      sep.className = 'bc-sep'; sep.textContent = ' / ';
-      el.appendChild(sep);
       var isLast = (i === path.length - 1);
-      if (isLast && options && options.lastStatic) {
+      var isMid = hasTail || !isLast;
+      var sep = document.createElement('span');
+      sep.className = 'bc-sep' + (isMid && i > 0 ? ' bc-mid' : '');
+      sep.textContent = ' / ';
+      el.appendChild(sep);
+      var crumb = null;
+      if (isLast && !hasTail && options && options.lastStatic) {
         var cur = document.createElement('span');
         cur.className = 'bc-current'; cur.textContent = options.lastStatic;
         el.appendChild(cur);
       } else if (options && options.onNavigate) {
-        (function(text, depth) {
+        (function(text, depth, mid) {
           var link = document.createElement('a');
           link.textContent = text;
+          if (mid) link.classList.add('bc-mid');
           link.onclick = function(e) { e.preventDefault(); options.onNavigate(depth); };
-          el.appendChild(link);
-        })(path[i], i + 1);
+          crumb = link;
+        })(path[i], i + 1, isMid);
       }
+      if (crumb) el.appendChild(crumb);
+      if (isMid && i === lastMid && ellipsis) el.appendChild(ellipsis);
+    }
+    if (hasTail && options) {
+      var tailSep = document.createElement('span');
+      tailSep.className = 'bc-sep'; tailSep.textContent = ' / ';
+      el.appendChild(tailSep);
+      var tailCur = document.createElement('span');
+      tailCur.className = 'bc-current'; tailCur.textContent = options.tailStatic;
+      el.appendChild(tailCur);
     }
   }
 
@@ -596,13 +626,17 @@
     } else {
       // 普通浏览模式：目录工具栏提供「新建课程」申请入口（申请页内自选归属位置）；
       // 与管理模式「＋ 新建」互斥展示，随模式切换。未登录由 openNewCourseEntry 引导登录。
-      const newCourseBtn = document.createElement('button');
-      newCourseBtn.className = 'explorer-newcourse-btn';
-      newCourseBtn.innerHTML = iconSvg('document') + '<span>新建课程</span>';
-      newCourseBtn.setAttribute('aria-label', '新建课程（提交课程申请）');
-      newCourseBtn.onclick = function(e) { e.stopPropagation(); openNewCourseEntry(); };
-      actionGroup.appendChild(newCourseBtn);
-      actionGroup.hidden = false;
+      // 课程节点（资料列表视图）不提供：已归属具体课程，此处不再引导申请新建。
+      const node = getNode(expPath);
+      if (!(node && node.courseId)) {
+        const newCourseBtn = document.createElement('button');
+        newCourseBtn.className = 'explorer-newcourse-btn';
+        newCourseBtn.innerHTML = iconSvg('document') + '<span>新建课程</span>';
+        newCourseBtn.setAttribute('aria-label', '新建课程（提交课程申请）');
+        newCourseBtn.onclick = function(e) { e.stopPropagation(); openNewCourseEntry(); };
+        actionGroup.appendChild(newCourseBtn);
+        actionGroup.hidden = false;
+      }
     }
   }
 

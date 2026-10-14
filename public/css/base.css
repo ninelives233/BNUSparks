@@ -474,6 +474,33 @@
   .breadcrumb a:hover { background: var(--primary-surface); color: var(--primary); }
   .breadcrumb .bc-sep { color: var(--border); font-size: 0.7rem; user-select: none; }
   .breadcrumb .bc-current { color: var(--ink-soft); font-weight: 500; padding: 4px 6px; }
+  /* 窄屏折叠省略号（桌面恒隐，见下方 ≤640px 块）：样式对齐面包屑链接 */
+  .breadcrumb .bc-ellipsis {
+    display: none;
+    border: 0; background: none; font: inherit; font-weight: 700;
+    padding: 4px 8px; border-radius: var(--radius-sm);
+    color: var(--ink-faint); letter-spacing: 1px;
+    cursor: pointer; user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .breadcrumb .bc-ellipsis:hover { background: var(--primary-surface); color: var(--primary); }
+
+  /* 窄屏面包屑折叠为「首页 / ⋯ / 末项」：中间层级隐藏，点按 ⋯ 临时展开完整路径
+     （移动端返回主要靠手势，面包屑只承担定位，不再整段换行“乱飞”） */
+  @media (max-width: 640px) {
+    .breadcrumb { flex-wrap: nowrap; white-space: nowrap; min-width: 0; overflow: hidden; }
+    .breadcrumb .bc-mid { display: none; }
+    .breadcrumb .bc-ellipsis { display: inline-flex; align-items: center; }
+    .breadcrumb.bc-expanded { flex-wrap: wrap; white-space: normal; }
+    .breadcrumb.bc-expanded .bc-mid { display: inline-flex; align-items: center; }
+    .breadcrumb.bc-expanded .bc-ellipsis { display: none; }
+    /* 末项过长时收缩出省略号，不撑破单行 */
+    .breadcrumb > a:last-child,
+    .breadcrumb > .bc-current {
+      flex: 0 1 auto; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+  }
   .course-nav-bar {
     display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
     padding-top: var(--space-lg);

@@ -404,28 +404,16 @@
       if (treePath && treePath.length > 0) {
         _fdBreadcrumbPath = treePath;
         _renderBreadcrumb(bc, treePath, {
-          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); }
+          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
+          tailStatic: '文件详情'
         });
-        // 追加静态的"文件详情"（不与课程名重叠）
-        var sep = document.createElement('span');
-        sep.className = 'bc-sep'; sep.textContent = ' / ';
-        bc.appendChild(sep);
-        var cur = document.createElement('span');
-        cur.className = 'bc-current'; cur.textContent = '文件详情';
-        bc.appendChild(cur);
       } else {
         var type = file.course_code && file.course_code.startsWith('GEN') ? '通识课' : '专业课';
         _fdBreadcrumbPath = [type, file.course_name || ''];
         _renderBreadcrumb(bc, _fdBreadcrumbPath, {
-          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); }
+          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
+          tailStatic: '文件详情'
         });
-        // 追加静态的"文件详情"
-        var sep = document.createElement('span');
-        sep.className = 'bc-sep'; sep.textContent = ' / ';
-        bc.appendChild(sep);
-        var cur = document.createElement('span');
-        cur.className = 'bc-current'; cur.textContent = '文件详情';
-        bc.appendChild(cur);
       }
     }
     var canEdit = currentUser && !_civilianMode && (file.is_uploader || (file.can_delete && currentUser.role !== 'user'));
