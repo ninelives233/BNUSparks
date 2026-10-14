@@ -348,7 +348,7 @@
     var card = el('div', 'pv-unsupported pv-mobile-pdf');
     card.appendChild(svgEl('pv-unsupported-icon', TICONS.doc));
     card.appendChild(el('div', 'pv-unsupported-text', '手机浏览器暂不支持内嵌 PDF 预览'));
-    card.appendChild(el('div', 'pv-unsupported-sub', '请点击下方按钮，由系统查看器打开或下载文件'));
+    card.appendChild(el('div', 'pv-unsupported-sub', '下载后可使用支持 PDF 的应用查看'));
     var b = btnEl('pv-dl-btn', null, markName);
     b.appendChild(svgEl('', TICONS.down));
     b.appendChild(document.createTextNode(' 下载 PDF'));

@@ -196,13 +196,12 @@ window.addEventListener('popstate', async function(e) {
     return;
   }
   // 搜索覆层 / 驳回覆层 / 公告编辑器 / 移动端底部面板
-  var dynOverlay = document.querySelector('.search-overlay, .admin-reject-overlay, .announcement-editor-overlay, .course-switch-overlay, .campus-manager-overlay, .campus-more-overlay, .mf-sheet-overlay, .fdm-sheet-overlay');
+  var dynOverlay = document.querySelector('.search-overlay, .admin-reject-overlay, .announcement-editor-overlay, .course-switch-overlay, .campus-manager-overlay, .campus-more-overlay, .mf-sheet-overlay');
   if (dynOverlay) {
     if (dynOverlay.classList.contains('course-switch-overlay') && typeof closeCourseSwitchPanel === 'function') closeCourseSwitchPanel();
     else if (dynOverlay.classList.contains('campus-manager-overlay') && typeof closeCampusManager === 'function') closeCampusManager();
     else if (dynOverlay.classList.contains('campus-more-overlay') && typeof closeCampusLinksPanel === 'function') closeCampusLinksPanel();
     else if (dynOverlay.classList.contains('mf-sheet-overlay') && typeof closeMobileFilterSheet === 'function') closeMobileFilterSheet();
-    else if (dynOverlay.classList.contains('fdm-sheet-overlay') && typeof closeFdMoreSheet === 'function') closeFdMoreSheet();
     else _removeOverlay(dynOverlay);
     return;
   }

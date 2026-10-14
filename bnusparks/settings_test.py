@@ -28,6 +28,10 @@ MEDIA_ROOT = _TEST_ROOT / "materials"
 MEDIA_ROOT.mkdir()
 STATIC_ROOT = _TEST_ROOT / "staticfiles"
 DATABASES["default"]["NAME"] = _TEST_ROOT / "db.sqlite3"
+# 浏览器与 LiveServer 跨线程发起真实并发请求；内存 SQLite 的共享锁不等待，
+# 使用临时文件数据库验证与生产一致的锁等待行为。
+if os.environ.get("BNU_BROWSER_TESTS") == "1":
+    DATABASES["default"]["TEST"] = {"NAME": _TEST_ROOT / "browser.sqlite3"}
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

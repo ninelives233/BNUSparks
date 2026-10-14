@@ -43,7 +43,7 @@
     return '<div class="pv-unsupported pv-mobile-pdf">' +
       '<div class="pv-unsupported-icon">' + iconSvg('document') + '</div>' +
       '<div class="pv-unsupported-text">手机浏览器暂不支持内嵌 PDF 预览</div>' +
-      '<div class="pv-unsupported-sub">请点击下方按钮，由系统查看器打开或下载文件</div>' +
+      '<div class="pv-unsupported-sub">下载后可使用支持 PDF 的应用查看</div>' +
       '<button class="pv-dl-btn" onclick="doDirectDownload(' + fileId + ')">' + iconSvg('arrow-down') + ' 下载 PDF</button>' +
       '</div>';
   }

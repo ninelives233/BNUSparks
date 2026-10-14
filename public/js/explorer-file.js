@@ -97,12 +97,13 @@
     };
     input.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter') { fiSaveField(span, fid, field, input, penEl); }
-      if (ev.key === 'Escape') { span.textContent = original; penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fiEditField(penEl);}; }
+      if (ev.key === 'Escape') { if (_fdIsMobile() && field === 'description' && !original) parent.closest('.fd-desc-area').hidden = true; span.textContent = original; penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fiEditField(penEl);}; }
     });
     input.addEventListener('blur', function() {
       // small delay to allow click on save button
       setTimeout(function() {
         if (penEl.dataset.iconState !== 'saved') {
+          if (_fdIsMobile() && field === 'description' && !original) parent.closest('.fd-desc-area').hidden = true;
           span.textContent = original;
           penEl.innerHTML = iconSvg('edit');
           penEl.dataset.iconState = 'edit';
@@ -115,6 +116,11 @@
   function fiSaveField(spanEl, fid, field, input, penEl) {
     var val = input.value.trim();
     api('/api/files/' + fid + '/update/', { method: 'PATCH', body: (function(){var o={};o[field]=val;return o;})() }).then(function(data) {
+      if (_currentDetailFile && _currentDetailFile.id === fid) _currentDetailFile[field] = data[field] == null ? val : data[field];
+      if (_fdIsMobile() && _currentDetailFile && _currentDetailFile.id === fid) {
+        _renderFileDetail(_currentDetailFile);
+        return;
+      }
       spanEl.textContent = data[field] || val || '未填写';
       penEl.innerHTML = iconSvg('check');
       penEl.dataset.iconState = 'saved';
@@ -316,8 +322,9 @@
     if (uploaderEl) uploaderEl.innerHTML = '';
     var actionsEl = document.getElementById('fdActions');
     if (actionsEl) actionsEl.innerHTML = '';
-    var fileInfoEl = document.getElementById('fdFileInfo');
-    if (fileInfoEl) fileInfoEl.hidden = true;
+    ++_fdPreviewRequest;
+    var previewBody = document.getElementById('fdPreviewBody');
+    if (previewBody) previewBody.innerHTML = '';
     window.scrollTo({ top: 0 });
   }
 
@@ -328,13 +335,11 @@
   function _renderFdStats(file) {
     var meta2 = document.querySelector('.fd-meta2');
     if (!meta2) return;
-    // 移动端：弱化统计行（零值保留），点分隔单行，无分隔线无卡片
     if (_fdIsMobile()) {
-      meta2.innerHTML = '<div class="fd-meta-row fdm-stats">' +
-        '浏览 <b>' + (file.view_count || 0) + '</b><span class="fdm-attr-dot"> · </span>' +
-        '下载 <b>' + (file.download_count || 0) + '</b><span class="fdm-attr-dot"> · </span>' +
-        '收藏 <b>' + (file.favorite_count || 0) + '</b>' +
-      '</div>';
+      meta2.innerHTML = '<div class="fdm-stats">' +
+        [['view_count', '浏览'], ['download_count', '下载'], ['favorite_count', '收藏']].map(function(stat) {
+          return '<div class="fdm-stat"><b>' + esc(String(file[stat[0]] || 0)) + '</b><span>' + stat[1] + '</span></div>';
+        }).join('') + '</div>';
       return;
     }
     var viewHtml = '<span class="fd-meta-item fd-meta-view"><span class="fd-meta-icon">' + FD_ICONS.view + '</span> 浏览量：' + (file.view_count || 0) + '</span>';
@@ -441,7 +446,7 @@
       }
     }
     var canEdit = currentUser && !_civilianMode && (file.is_uploader || (file.can_delete && currentUser.role !== 'user'));
-    var penIcon = '<button class="fd-pen" onclick="fdEditField(this)" title="点击编辑">' + iconSvg('edit') + '</button>';
+    var penIcon = '<button class="fd-pen" onclick="fdEditField(this)" aria-label="编辑" title="点击编辑">' + iconSvg('edit') + '</button>';
     // 移动端返回定位完全由上方面包屑承担（可展开完整路径、逐级跳转），不再渲染独立返回行
     var typeDropdownHtml = canEdit
       ? '<span class="fd-type-dropdown-wrap"><select class="fd-type-select" onchange="fdChangeType(' + (file.id || 0) + ',this)">' +
@@ -462,20 +467,27 @@
     var meta1 = document.querySelector('.fd-meta1');
     if (meta1) {
       if (_fdIsMobile()) {
-        // 移动端：两行纯文字属性——「类型 · EXT · 大小」+「教师 · 日期 上传」，
-        // 类型蓝字、其余次级；缺失字段连同分隔符一起省略
         var mTeacherHtml = canEdit
           ? '<span class="fd-editable" data-field="teacher" data-fid="' + (file.id || 0) + '">' + esc(file.teacher || '') + '</span>' + penIcon
           : esc(file.teacher || '');
-        var mExtText = extLabel(file.file_name || '');
-        var mAttr1 = '<div class="fdm-attr"><span class="fdm-attr-type">' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span>';
-        if (mExtText) mAttr1 += '<span class="fdm-attr-dot"> · </span><span>' + esc(mExtText) + '</span>';
-        mAttr1 += '<span class="fdm-attr-dot"> · </span><span>' + formatSize(file.file_size) + '</span></div>';
-        var mAttr2Parts = [];
-        if (file.teacher) mAttr2Parts.push(mTeacherHtml);
-        if (file.created_at) mAttr2Parts.push(esc(file.created_at) + ' 上传');
-        var mAttr2 = mAttr2Parts.length ? '<div class="fdm-attr fdm-attr-sub">' + mAttr2Parts.join('<span class="fdm-attr-dot"> · </span>') + '</div>' : '';
-        meta1.innerHTML = mAttr1 + mAttr2;
+        var mType = [file.user_material_type, extLabel(file.file_name || '')].filter(Boolean).map(esc).join(' · ');
+        var attrs = [];
+        function addAttr(label, value, extraClass) {
+          if (value) attrs.push('<div class="fdm-attr"><span class="fdm-attr-label">' + label + '</span><span class="fdm-attr-value ' + (extraClass || '') + '">' + value + '</span></div>');
+        }
+        addAttr('类型', mType + typeDropdownHtml, 'fdm-attr-type');
+        if (file.file_size != null) addAttr('大小', formatSize(file.file_size));
+        if (file.teacher) addAttr('教师', mTeacherHtml);
+        if (file.created_at) addAttr('上传', esc(file.created_at));
+        meta1.innerHTML = '<div class="fdm-attrs">' + attrs.join('') + '</div>';
+        // 仅忽略扩展名/空白差异；不同的原始文件名仍完整展示。
+        var normalizedName = function(value) { return String(value || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase(); };
+        if (file.file_name && normalizedName(file.file_name) !== normalizedName(file.title) && normalizedName(file.file_name.replace(/\.[^.]+$/, '')) !== normalizedName(file.title)) {
+          meta1.innerHTML += '<div class="fdm-filename"><span>文件名</span><span>' + esc(file.file_name) + '</span></div>';
+        }
+        if (canEdit && !file.teacher) {
+          meta1.innerHTML += '<span class="fdm-add-field"><span class="fd-editable" data-field="teacher" data-fid="' + (file.id || 0) + '"></span><button type="button" class="fd-pen" aria-label="添加教师" onclick="fdEditField(this)">' + iconSvg('edit') + '</button></span>';
+        }
       } else {
         var fileNameHtml = '<span class="fd-meta-item fd-meta-file" title="' + esc(file.file_name || '') + '"><span class="fd-meta-icon">' + FD_ICONS.file + '</span><span class="fd-meta-file-text">' + esc(file.file_name || '') + '</span></span>';
         var typeHtml = '<span class="fd-meta-item"><span class="fd-meta-icon">' + FD_ICONS.tag + '</span> ' + esc(file.user_material_type || '其他') + typeDropdownHtml + '</span>';
@@ -491,24 +503,19 @@
     var descEl = document.querySelector('.fd-desc-area');
     if (descEl) {
       if (_fdIsMobile()) {
-        // 移动端：无简介不渲染空卡片；长简介折叠可展开；管理模式保留添加/编辑入口
-        if (file.description) {
-          var mDescContent = canEdit
+        descEl.innerHTML = file.description
+          ? '<div class="fdm-desc">' + (canEdit
             ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description) + '</span>' + penIcon
-            : esc(file.description);
-          descEl.innerHTML = '<div class="fd-desc-card fdm-desc">' + mDescContent + '</div>' +
-            '<button type="button" class="fdm-desc-toggle" hidden onclick="fdToggleDesc(this)">展开</button>';
-          requestAnimationFrame(function () {
-            var card = descEl.querySelector('.fdm-desc');
-            var toggle = descEl.querySelector('.fdm-desc-toggle');
-            if (card && toggle && card.scrollHeight > card.clientHeight + 2) toggle.hidden = false;
-          });
-        } else if (canEdit) {
-          descEl.innerHTML = '<button type="button" class="fdm-desc-add" onclick="fdAddDesc()">＋ 添加简介</button>';
-        } else {
-          descEl.innerHTML = '';
+            : esc(file.description)) + '</div>'
+          : '';
+        document.querySelector('.fd-title-area').appendChild(descEl);
+        descEl.hidden = !file.description;
+        if (!file.description && canEdit && titleEl) {
+          titleEl.innerHTML += '<button type="button" class="fd-pen" aria-label="添加简介" onclick="fdAddDesc()">' + iconSvg('document') + '</button>';
         }
       } else {
+        document.getElementById('fdInfoArea').appendChild(descEl);
+        descEl.hidden = false;
         var descContent = canEdit
           ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description || '暂无简介') + '</span>' + penIcon
           : esc(file.description || '暂无简介');
@@ -524,7 +531,7 @@
           '<div class="fdu-avatar" style="display:none">' + esc(initial) + '</div>'
         : '<div class="fdu-avatar">' + esc(initial) + '</div>';
       var upName = esc(file.uploader || '匿名');
-      // 移动端仅「头像 + 昵称 + 箭头」一行（语义由 aria-label 补足），桌面保留「上传者」标签
+      // 头像与昵称共享主页入口；桌面保留「上传者」标签
       var upLabelHtml = _fdIsMobile() ? '' : '<div class="fdu-label">' + '上传者' + '</div>';
       uploaderEl.innerHTML =
         '<div class="fdu-card" role="link" tabindex="0" aria-label="上传者 ' + upName + '，查看主页" onclick="showUserPublic(' + userId + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();showUserPublic(' + userId + ')}">' +
@@ -539,16 +546,17 @@
     var actionsEl = document.getElementById('fdActions');
     if (actionsEl) {
       if (_fdIsMobile()) {
-        // 移动端：下载为唯一主按钮；收藏为次按钮（收藏后显示「已收藏」）；
-        // 举报/删除收进「更多」底部菜单
         var mDlBtn = '<button class="fd-btn fd-btn-primary fdm-dl-btn" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载文件</button>';
         var mFavBtn = currentUser
-          ? '<button class="fd-btn fd-btn-secondary fd-btn-fav" id="fdFavBtn" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + ' 收藏</button>'
+          ? '<button class="fd-btn fd-btn-secondary fd-btn-fav fdm-icon-btn" id="fdFavBtn" aria-label="收藏" aria-pressed="false" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + '</button>'
           : '';
-        var mMoreBtn = currentUser
-          ? '<button class="fd-btn fd-btn-secondary fd-more-btn" id="fdMoreBtn" aria-label="更多操作" aria-haspopup="dialog" onclick="openFdMoreSheet(' + (file.id || 0) + ')">⋯</button>'
+        var mRepBtn = currentUser
+          ? '<button class="fd-btn fd-btn-secondary fd-btn-report fdm-icon-btn" id="fdRepBtn" aria-label="举报" onclick="openReportModal(' + (file.id || 0) + ',' + (file.uploader_id || 0) + ')">' + FD_ICONS.report + '</button>'
           : '';
-        actionsEl.innerHTML = '<div class="fd-actions-inner">' + mDlBtn + mFavBtn + mMoreBtn + '</div>';
+        var mDelBtn = (file.can_delete && !_civilianMode)
+          ? '<button class="fd-btn fd-btn-danger fdm-icon-btn" aria-label="删除" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + '</button>'
+          : '';
+        actionsEl.innerHTML = '<div class="fd-actions-inner">' + mDlBtn + mFavBtn + mRepBtn + mDelBtn + '</div>';
       } else {
         // 窄屏下方形图标钮只显示图标，文字标签由 aria-label 提供读屏名称
         var dlBtn = '<button class="fd-btn fd-btn-primary" aria-label="下载" onclick="handleDownloadClick(' + (file.id || 0) + ',this,event)">' + FD_ICONS.download + ' 下载</button>';
@@ -569,25 +577,28 @@
         if (file.is_favorited !== undefined) {
           var fb = document.getElementById('fdFavBtn');
           if (fb) {
-            fb.innerHTML = file.is_favorited ? FD_ICONS.starFilled + ' 已收藏' : FD_ICONS.star + ' 收藏';
-            fb.classList.toggle('favorited', file.is_favorited);
+            _setFdFavoriteState(fb, file.is_favorited);
           }
         } else {
           api('/api/files/' + (file.id || 0) + '/favorite-status/').then(function(fs) {
             var fb = document.getElementById('fdFavBtn');
             if (fb) {
-              fb.innerHTML = fs.favorited ? FD_ICONS.starFilled + ' 已收藏' : FD_ICONS.star + ' 收藏';
-              fb.classList.toggle('favorited', fs.favorited);
+              if (_currentDetailFile && _currentDetailFile.id === file.id) {
+                _currentDetailFile.is_favorited = fs.favorited;
+                _currentDetailFile.favorite_count = fs.favorite_count;
+                _setFdFavoriteState(fb, fs.favorited);
+                _renderFdStats(_currentDetailFile);
+              }
             }
           }).catch(function(){});
         }
         // 加载初始举报状态：已举报 → 按钮禁用「已举报」
         api('/api/files/' + (file.id || 0) + '/report-status/').then(function(rs) {
           var rb = document.getElementById('fdRepBtn');
-          if (rb && rs.reported) {
+          if (rb && rs.reported && _currentDetailFile && _currentDetailFile.id === file.id) {
             rb.classList.add('reported');
             rb.disabled = true;
-            rb.innerHTML = FD_ICONS.report + ' 已举报';
+            rb.innerHTML = FD_ICONS.report + (_fdIsMobile() ? '' : ' 已举报'); rb.setAttribute('aria-label', '已举报');
           }
         }).catch(function(){});
       }
@@ -596,102 +607,68 @@
     if (badgeEl) {
       badgeEl.innerHTML = extBadge(file.file_name);
     }
-    // 预览提示文字：PDF 显示"预览最多显示前三页"
-    var fdh = document.querySelector('.fd-preview-header');
-    if (fdh) {
-      var hint = fdh.querySelector('.pv-hint');
-      if (!hint) {
-        hint = document.createElement('span');
-        hint.className = 'pv-hint';
-        fdh.appendChild(hint);
-      }
-      var extType = _isPreviewableExt(file.file_name);
-      hint.textContent = extType === 'pdf' ? (_fdIsMobile() ? '前 3 页' : '预览最多显示前三页') : (extType === 'zip' ? '文件清单' : '');
+    // 后端可能降级为原文件；没有确认实际页数时不标注「前 3 页」。
+    var hint = document.querySelector('.fd-preview-header .pv-hint');
+    if (!hint) {
+      hint = document.createElement('span');
+      hint.className = 'pv-hint';
+      document.querySelector('.fd-preview-header').appendChild(hint);
     }
-    // 移动端「文件信息」折叠区：原始文件名完整展示、允许长名换行（桌面隐藏）
-    var fileInfoEl = document.getElementById('fdFileInfo');
-    if (fileInfoEl) {
-      if (_fdIsMobile()) {
-        fileInfoEl.hidden = false;
-        fileInfoEl.open = false;
-        var fiBody = document.getElementById('fdFileInfoBody');
-        if (fiBody) {
-          fiBody.innerHTML = '<div class="fd-fi-row"><span class="fd-fi-name">原始文件名</span><span class="fd-fi-value">' + esc(file.file_name || '—') + '</span></div>';
-        }
-      } else {
-        fileInfoEl.hidden = true;
-      }
-    }
+    hint.textContent = _isPreviewableExt(file.file_name) === 'zip' ? '文件清单' : '';
     _loadFdPreview(file.id, file.file_name);
   }
 
+  var _fdPreviewRequest = 0;
   async function _loadFdPreview(fileId, fileName) {
     var body = document.getElementById('fdPreviewBody');
     if (!body) return;
+    var request = ++_fdPreviewRequest;
     var area = document.getElementById('fdPreviewArea');
     var extType = _isPreviewableExt(fileName);
-
-    // 移动端无法可靠地在 iframe 内渲染 PDF。若仍创建 iframe，浏览器会把
-    // inline PDF 响应交给系统下载器，用户进入详情页时就会看到下载提示。
-    // 保留预览区域，但改为明确的用户主动下载入口。
+    function isCurrent() { return request === _fdPreviewRequest; }
+    function showFailure(message) {
+      if (!isCurrent()) return;
+      body.innerHTML = '<div class="pv-unsupported" role="status"><div class="pv-unsupported-icon">' + iconSvg('alert') + '</div><div class="pv-unsupported-text">' + esc(message) + '</div><button type="button" class="pv-retry-btn" onclick="retryFdPreview()">' + iconSvg('refresh') + ' 重试</button></div>';
+    }
+    if (area) area.style.display = '';
+    // 手机 PDF 仍使用显式下载，不隐式触发系统下载器。
     if (extType === 'pdf' && _isMobilePdfPreview()) {
-      if (area) area.style.display = '';
       body.innerHTML = _mobilePdfFallbackHtml(fileId, fileName);
       return;
     }
-
-    // Zip 文件：读取内部结构并展示文件树
-    if (extType === 'zip') {
-      if (area) area.style.display = '';
-      body.innerHTML = '<div class="pv-zip-loading">正在读取压缩包内的文件列表…</div>';
-      try {
-        var zdata = await _loadZipStructure(fileId);
-        if (zdata && Array.isArray(zdata.items)) {
-          renderZipTree(body, zdata.items, fileId, fileName, zdata.truncated);
-          return;
-        }
-      } catch(e) {}
-      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">' + iconSvg('archive') + '</div><div class="pv-unsupported-text">压缩包文件结构读取失败，文件可能已损坏</div></div>';
-      return;
-    }
-
-    // 非可预览类型 — 隐藏整个预览区域，干净利落
     if (extType === 'other' || extType === 'ppt') {
-      if (area) area.style.display = 'none';
+      if (_fdIsMobile()) {
+        body.innerHTML = '<div class="pv-unsupported" role="status"><div class="pv-unsupported-icon">' + iconSvg('document') + '</div><div class="pv-unsupported-text">此格式暂不支持在线预览，请下载后查看</div></div>';
+      } else if (area) area.style.display = 'none';
       return;
     }
-
-    // 可预览类型：确保预览区域可见
-    if (area) area.style.display = '';
-
-    body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon" style="font-size:1rem">' + iconSvg('refresh') + '</div><div class="pv-unsupported-text" style="font-size:0.85rem">正在加载预览…</div></div>';
+    body.innerHTML = '<div class="pv-unsupported" role="status"><div class="pv-unsupported-icon">' + iconSvg('refresh') + '</div><div class="pv-unsupported-text">正在加载预览…</div></div>';
     try {
+      if (extType === 'zip') {
+        var zdata = await _loadZipStructure(fileId);
+        if (isCurrent()) renderZipTree(body, zdata.items, fileId, fileName, zdata.truncated);
+        return;
+      }
       var previewUrl = await _previewUrl(fileId);
+      if (!isCurrent()) return;
       if (extType === 'pdf') {
-        body.innerHTML = '<iframe src="' + previewUrl + '" style="width:100%;height:85vh;border:none;border-radius:var(--radius-md)" class="pv-viewer"></iframe>';
+        body.innerHTML = '<iframe src="' + previewUrl + '" style="width:100%;height:85vh;border:none;border-radius:var(--radius-md)" class="pv-viewer" title="文件 PDF 预览"></iframe>';
       } else if (extType === 'image') {
-        body.innerHTML = '<img src="' + previewUrl + '" alt="预览" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
+        body.innerHTML = '<img src="' + previewUrl + '" alt="' + esc(fileName || '文件预览') + '" class="pv-viewer" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:var(--radius-md);box-shadow:0 4px 32px oklch(0 0 0 / 0.3)">';
+        body.querySelector('img').onerror = function() { showFailure('预览加载失败，请尝试下载后查看'); };
       } else if (extType === 'text') {
-        body.innerHTML = '<div class="pv-text-wrap"><pre class="pv-text" id="fdPvTextContent">加载中…</pre></div>';
-        fetch(previewUrl).then(function(r) {
-          if (!r.ok) throw new Error('加载失败');
-          return r.text();
-        }).then(function(text) {
-          var pre = document.getElementById('fdPvTextContent');
-          if (pre) {
-            pre.textContent = text.slice(0, 500);
-            var ext = (fileName || '').split('.').pop().toLowerCase();
-            if (['py','js','ts','css','html','json','xml','sh','md','c','cpp','java','go','rs'].includes(ext)) {
-              pre.className = 'pv-text pv-text-code';
-            }
-          }
-        }).catch(function() {
-          var pre = document.getElementById('fdPvTextContent');
-          if (pre) pre.textContent = '无法加载文件内容';
-        });
+        var response = await fetch(previewUrl);
+        if (!response.ok) throw new Error('加载失败');
+        var text = await response.text();
+        if (!isCurrent()) return;
+        body.innerHTML = '<div class="pv-text-wrap"><pre class="pv-text" id="fdPvTextContent"></pre></div>';
+        var pre = document.getElementById('fdPvTextContent');
+        pre.textContent = text.slice(0, 500);
+        var ext = (fileName || '').split('.').pop().toLowerCase();
+        if (['py','js','ts','css','html','json','xml','sh','md','c','cpp','java','go','rs'].includes(ext)) pre.classList.add('pv-text-code');
       }
     } catch(e) {
-      body.innerHTML = '<div class="pv-unsupported"><div class="pv-unsupported-icon">' + iconSvg('alert') + '</div><div class="pv-unsupported-text">预览加载失败，请尝试下载后查看</div><button type="button" class="pv-retry-btn" onclick="retryFdPreview()">' + iconSvg('refresh') + ' 重试</button></div>';
+      showFailure(extType === 'zip' ? '压缩包文件结构读取失败，请尝试下载后查看' : '预览加载失败，请尝试下载后查看');
     }
   }
 
@@ -699,13 +676,26 @@
     if (_currentDetailFile) _loadFdPreview(_currentDetailFile.id, _currentDetailFile.file_name);
   }
 
+  function _setFdFavoriteState(btn, favorited) {
+    btn.innerHTML = (favorited ? FD_ICONS.starFilled : FD_ICONS.star) + (_fdIsMobile() ? '' : (favorited ? ' 已收藏' : ' 收藏'));
+    btn.classList.toggle('favorited', favorited);
+    btn.setAttribute('aria-label', favorited ? '取消收藏' : '收藏');
+    btn.setAttribute('aria-pressed', String(!!favorited));
+  }
+
   async function toggleFdFavorite(fileId) {
     try {
       var data = await api('/api/files/' + fileId + '/favorite/', { method: 'POST' });
       var btn = document.getElementById('fdFavBtn');
       if (btn) {
-        btn.innerHTML = data.favorited ? FD_ICONS.starFilled + ' 已收藏' : FD_ICONS.star + ' 收藏';
-        btn.classList.toggle('favorited', data.favorited);
+        if (_currentDetailFile && _currentDetailFile.id === fileId) {
+          if (_currentDetailFile.is_favorited !== data.favorited) {
+            _currentDetailFile.favorite_count = Math.max(0, (_currentDetailFile.favorite_count || 0) + (data.favorited ? 1 : -1));
+          }
+          _currentDetailFile.is_favorited = data.favorited;
+          _renderFdStats(_currentDetailFile);
+          _setFdFavoriteState(btn, data.favorited);
+        }
       }
     } catch(e) {
       alert('操作失败：' + e.message);
@@ -847,7 +837,7 @@
       .then(function() {
         closeReportModal(null);
         var rb = document.getElementById('fdRepBtn');
-        if (rb) { rb.classList.add('reported'); rb.disabled = true; rb.innerHTML = FD_ICONS.report + ' 已举报'; }
+        if (rb) { rb.classList.add('reported'); rb.disabled = true; rb.innerHTML = FD_ICONS.report + (_fdIsMobile() ? '' : ' 已举报'); rb.setAttribute('aria-label', '已举报'); }
         alert('举报已提交，审核员将在 1-3 个工作日内处理');
       })
       .catch(function(err) {
@@ -882,11 +872,12 @@
     };
     input.addEventListener('keydown', function(ev) {
       if (ev.key === 'Enter') { fdSaveField(span, fid, field, input, penEl); }
-      if (ev.key === 'Escape') { span.textContent = original; penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fdEditField(penEl);}; }
+      if (ev.key === 'Escape') { if (_fdIsMobile() && field === 'description' && !original) parent.closest('.fd-desc-area').hidden = true; span.textContent = original; penEl.innerHTML = iconSvg('edit'); penEl.dataset.iconState = 'edit'; penEl.onclick = function(){fdEditField(penEl);}; }
     });
     input.addEventListener('blur', function() {
       setTimeout(function() {
         if (penEl.dataset.iconState !== 'saved') {
+          if (_fdIsMobile() && field === 'description' && !original) parent.closest('.fd-desc-area').hidden = true;
           span.textContent = original;
           penEl.innerHTML = iconSvg('edit');
           penEl.dataset.iconState = 'edit';
@@ -899,6 +890,11 @@
   function fdSaveField(spanEl, fid, field, input, penEl) {
     var val = input.value.trim();
     api('/api/files/' + fid + '/update/', { method: 'PATCH', body: (function(){var o={};o[field]=val;return o;})() }).then(function(data) {
+      if (_currentDetailFile && _currentDetailFile.id === fid) _currentDetailFile[field] = data[field] == null ? val : data[field];
+      if (_fdIsMobile() && _currentDetailFile && _currentDetailFile.id === fid) {
+        _renderFileDetail(_currentDetailFile);
+        return;
+      }
       spanEl.textContent = data[field] || val || '未填写';
       penEl.innerHTML = iconSvg('check-circle');
       penEl.dataset.iconState = 'saved';
@@ -924,57 +920,13 @@
     });
   }
 
-  // ── 移动端详情辅助：简介展开 / 添加简介 / 更多菜单 ──
-  function fdToggleDesc(btn) {
-    var card = btn.parentElement ? btn.parentElement.querySelector('.fdm-desc') : null;
-    if (!card) return;
-    var expanded = card.classList.toggle('fdm-desc-expanded');
-    btn.textContent = expanded ? '收起' : '展开';
-  }
-
+  // 无简介时，管理入口留在标题旁；编辑时再显示正文输入。
   function fdAddDesc() {
     var area = document.querySelector('.fd-desc-area');
     if (!area || !_currentDetailFile) return;
-    area.innerHTML = '<div class="fd-desc-card fdm-desc"><span class="fd-editable" data-field="description" data-fid="' + _currentDetailFile.id + '"></span><button type="button" class="fd-pen" title="点击编辑">' + iconSvg('edit') + '</button></div>';
-    var pen = area.querySelector('.fd-pen');
-    if (pen) fdEditField(pen);
-  }
-
-  function openFdMoreSheet(fileId) {
-    if (document.querySelector('.fdm-sheet-overlay')) { closeFdMoreSheet(); return; }
-    var file = _currentDetailFile || {};
-    var items = '<button type="button" class="fdm-menu-item" onclick="closeFdMoreSheet();openReportModal(' + fileId + ',' + (file.uploader_id || 0) + ')">' + iconSvg('flag') + '<span>举报资料</span></button>';
-    if (file.can_delete && !_civilianMode) {
-      items += '<button type="button" class="fdm-menu-item fdm-menu-danger" onclick="closeFdMoreSheet();deleteFileConfirm(' + fileId + ',null)">' + iconSvg('trash') + '<span>删除资料</span></button>';
-    }
-    var overlay = document.createElement('div');
-    overlay.className = 'fdm-sheet-overlay';
-    overlay.innerHTML =
-      '<div class="mf-sheet-backdrop" aria-hidden="true"></div>' +
-      '<div class="mf-sheet fdm-sheet" role="dialog" aria-modal="true" aria-label="更多操作">' +
-        '<div class="mf-sheet-handle" aria-hidden="true"></div>' +
-        '<div class="mf-sheet-head"><h2 class="mf-sheet-title">更多操作</h2>' +
-          '<button type="button" class="mf-sheet-close fdm-sheet-close" aria-label="关闭" onclick="closeFdMoreSheet()">' + iconSvg('close') + '</button></div>' +
-        items +
-      '</div>';
-    overlay.addEventListener('click', function (e) {
-      if (e.target.classList && e.target.classList.contains('mf-sheet-backdrop')) closeFdMoreSheet();
-    });
-    document.body.appendChild(overlay);
-    lockScroll();
-    _pushModalHistory(overlay.querySelector('.fdm-sheet'));
-    // 同步聚焦关闭钮：与筛选面板一致，避免 rAF 焦点在无绘制环境下被挂起
-    var firstCtl = overlay.querySelector('.fdm-sheet-close');
-    if (firstCtl) firstCtl.focus();
-  }
-
-  function closeFdMoreSheet() {
-    var overlay = document.querySelector('.fdm-sheet-overlay');
-    if (!overlay) return;
-    var sheet = overlay.querySelector('.fdm-sheet');
-    overlay.remove();
-    unlockScroll();
-    _popModalHistory(sheet);
+    area.hidden = false;
+    area.innerHTML = '<div class="fdm-desc"><span class="fd-editable" data-field="description" data-fid="' + _currentDetailFile.id + '"></span><button type="button" class="fd-pen" aria-label="编辑简介">' + iconSvg('edit') + '</button></div>';
+    fdEditField(area.querySelector('.fd-pen'));
   }
 
   // 横竖屏/窗口跨过 768px 断点：详情页按当前布局重渲染（两套信息区结构不同）。

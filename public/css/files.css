@@ -372,8 +372,7 @@
 
 @media (max-width: 768px) {
   .fd-container { padding: 0 16px 40px; }
-  /* 紧凑信息区：间距收细，区块间隔见下方排序块 */
-  .fd-layout { gap: 10px; }
+  .fd-layout { gap: 16px; }
   .fd-top-row { flex-direction: column; gap: 0; margin-bottom: 0; }
   /* 面包屑紧贴导航（12px），单行 13px，分隔符/当前页次级色 */
   .fd-top-row .breadcrumb { padding: 12px 0 0; font-size: 0.8125rem; }
@@ -421,19 +420,8 @@
   }
 }
 
-/* 窄屏：info-area 退化为透明容器（display:contents），区块直接参与 fd-layout
-   排序——预览紧跟操作按钮、简介到预览之后，桌面 DOM 顺序保持不变 */
-@media (max-width: 768px) {
-  .fd-info-area { display: contents; }
-  .fd-title-area { order: 0; }
-  .fd-meta1 { order: 1; }
-  .fd-info-area .fd-uploader-card { order: 2; margin-top: -2px; }
-  .fd-meta2 { order: 3; margin-top: -6px; }
-  .fd-actions { order: 4; margin: 2px 0 0; }
-  .fd-preview-area { order: 5; margin-top: 6px; }
-  .fd-desc-area { order: 6; margin-top: 4px; }
-  .fd-fileinfo { order: 7; margin-top: 6px; }
-}
+.fd-social-area { display: contents; }
+
 
 .fd-title-area {
   align-self: start;
@@ -648,40 +636,6 @@
   align-items: center;
 }
 
-/* 窄屏（≤768px）：移动端三钮行——「下载文件」占满剩余宽度，收藏保留文字，
-   举报/删除收进「更多」菜单（fdm-sheet）。触控高度统一 44px。 */
-@media (max-width: 768px) {
-  .fd-actions-inner {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-  .fd-actions-inner .fd-btn {
-    min-height: 44px;
-    border-radius: 8px;
-  }
-  .fd-actions-inner .fd-btn-primary {
-    flex: 1 1 auto;
-    padding: 8px 16px;
-  }
-  /* 轻描边：收藏/更多用 1px 细边（桌面保留 2px 品牌态） */
-  .fd-actions-inner .fd-btn-fav {
-    padding: 8px 12px;
-    min-width: 80px;
-    justify-content: center;
-    white-space: nowrap;
-    border-width: 1px;
-  }
-  .fd-actions-inner .fd-more-btn {
-    flex: 0 0 44px;
-    width: 44px;
-    justify-content: center;
-    font-size: 1.05rem;
-    font-weight: 700;
-    line-height: 1;
-    padding: 0;
-    border-width: 1px;
-  }
-}
 
 .fd-btn {
   display: inline-flex;
@@ -942,6 +896,10 @@
   justify-content: center;
   overflow: auto;
 }
+
+/* 加载/失败状态按内容收缩，成功预览继续使用原查看器尺寸。 */
+.fd-preview-body:has(.pv-unsupported) { min-height: 0; }
+.fd-preview-body > .pv-unsupported { padding: 16px; }
 
 .fd-preview-body .pv-viewer {
   width: 100%;
@@ -1296,7 +1254,7 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
   }
 }
 
-/* ── 移动端底部面板骨架（筛选排序 / 详情「更多」共用；仅移动端创建） ── */
+/* ── 移动端底部面板骨架（筛选排序；仅移动端创建） ── */
 /* 批量工具条的 display 规则会盖过 hidden 属性，显式恢复默认隐藏行为 */
 .mf-batch-tools[hidden],
 .mf-batch-footer[hidden] { display: none; }
@@ -1358,8 +1316,7 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
 .mf-sheet-close .ui-icon { width: 15px; height: 15px; }
 .mf-sheet-close:focus-visible,
 .mf-sheet-option:focus-visible,
-.mf-sheet-btn:focus-visible,
-.fdm-menu-item:focus-visible {
+.mf-sheet-btn:focus-visible {
   outline: 2px solid oklch(from var(--primary) l c h / 0.55);
   outline-offset: 2px;
 }
@@ -1417,26 +1374,6 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
   background: var(--primary);
   color: #fff;
 }
-.fdm-menu-item {
-  width: 100%;
-  min-height: 50px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 2px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--border-light);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.9rem;
-  text-align: left;
-  cursor: pointer;
-}
-.fdm-menu-item:last-child { border-bottom: none; }
-.fdm-menu-item .ui-icon { width: 16px; height: 16px; color: var(--ink-faint); }
-.fdm-menu-danger { color: var(--danger); }
-.fdm-menu-danger .ui-icon { color: var(--danger); }
 @media (prefers-reduced-motion: no-preference) {
   .mf-sheet { animation: mf-sheet-in 0.22s ease-out; }
   @keyframes mf-sheet-in {
@@ -1445,131 +1382,57 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   v=205 移动端（≤768px）文件详情：单行面包屑定位（无返回行）·
-   两行文字属性 · 紧凑上传者/统计 · 轻描边按钮 · 预览前移
-   ═══════════════════════════════════════════════════════════ */
+/* 移动端详情：内容、属性、上传者与统计、操作、预览依次排列。 */
 @media (max-width: 768px) {
-  .fd-title {
-    font-size: 1.375rem;
-    line-height: 1.4;
-    font-weight: 700;
-    overflow-wrap: anywhere;
-  }
-  /* 两行纯文字属性：「类型 · EXT · 大小」+「教师 · 日期 上传」，13px/20px */
-  .fdm-attr {
-    font-size: 0.8125rem;
-    line-height: 20px;
-    color: var(--ink-soft);
-    overflow-wrap: anywhere;
-  }
-  .fdm-attr + .fdm-attr { margin-top: 4px; }
-  .fdm-attr-type { color: var(--primary); font-weight: 500; }
-  .fdm-attr-dot { color: var(--ink-faint); }
-
-  /* 弱化统计行：12px 次级文字点分隔，无分隔线无卡片，保留零值 */
-  .fd-meta2 .fd-meta-row.fdm-stats {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--ink-faint);
-  }
-  .fdm-stats b {
-    font-weight: 600;
-    color: var(--ink-soft);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* 简介：默认折叠 4 行，溢出显示「展开」；无简介不渲染卡片 */
-  .fdm-desc {
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    min-height: 0;
-  }
-  .fdm-desc.fdm-desc-expanded {
-    display: block;
-    -webkit-line-clamp: unset;
-  }
-  .fdm-desc-toggle,
-  .fdm-desc-add {
-    border: none;
-    background: none;
-    color: var(--primary);
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 500;
-    min-height: 40px;
-    padding: 4px 0;
-    cursor: pointer;
-  }
-  .fdm-desc-add {
-    color: var(--ink-faint);
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    width: 100%;
-    text-align: left;
-  }
-  .fd-btn:focus-visible {
-    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
-    outline-offset: 2px;
-  }
-
-  /* 文件信息折叠区：预览之后的原始文件名，长名换行完整展示 */
-  .fd-fileinfo {
-    border-top: 1px solid var(--border-light);
-    padding-top: 4px;
-    font-size: 0.82rem;
-  }
-  .fd-fileinfo summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 12px 0;
-    color: var(--ink-soft);
-    font-size: 0.82rem;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    user-select: none;
-    min-height: 44px;
-  }
-  .fd-fileinfo summary::-webkit-details-marker { display: none; }
-  .fd-fileinfo summary::before {
-    content: '▸';
-    color: var(--ink-faint);
-    font-size: 0.75rem;
-    transition: transform 0.15s ease;
-  }
-  .fd-fileinfo[open] summary::before { transform: rotate(90deg); }
-  .fd-fileinfo summary:focus-visible {
-    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-  .fd-fi-row {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 0 0 12px;
-    font-size: 0.78rem;
-  }
-  .fd-fi-name { color: var(--ink-faint); }
-  .fd-fi-value {
-    color: var(--ink);
-    overflow-wrap: anywhere;
-    word-break: break-all;
-  }
-}
-/* 桌面（>768px）隐藏移动端专属结构 */
-@media (min-width: 769px) {
-  .fd-fileinfo,
+  .fd-top-row { margin-bottom: 16px; }
+  .fd-info-area { gap: 16px; min-width: 0; }
+  .fd-title-area { width: 100%; min-width: 0; }
+  .fd-title { font-size: 22px; line-height: 1.4; overflow-wrap: anywhere; }
+  .fd-desc-area { margin-top: 8px; }
+  .fd-desc-area[hidden] { display: none; }
+  .fdm-desc { font-size: 14px; line-height: 1.6; color: var(--ink-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fdm-attrs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+  .fdm-attr { display: flex; align-items: baseline; gap: 8px; min-width: 0; line-height: 20px; }
+  .fdm-attr-label { flex: 0 0 auto; font-size: 12px; color: var(--ink-faint); }
+  .fdm-attr-value { min-width: 0; font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+  .fdm-attr-type { color: var(--primary); }
+  .fdm-filename { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--ink-faint); }
+  .fdm-filename > :first-child { flex-shrink: 0; }
+  .fdm-filename > :last-child { min-width: 0; overflow-wrap: anywhere; }
+  .fdm-add-field { display: inline-flex; max-width: 100%; }
+  .fdm-attr .fi-edit-input, .fdm-add-field .fi-edit-input { width: 100%; min-width: 0; box-sizing: border-box; }
+  .fd-social-area { display: flex; align-items: center; gap: 16px; min-width: 0; }
+  .fd-social-area .fd-uploader-card { flex: 1; min-width: 0; }
+  .fd-social-area .fdu-card { padding: 0; gap: 8px; }
   .fdu-arrow { display: none; }
+  .fd-meta2 { flex: 0 0 132px; min-width: 0; }
+  .fdm-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; }
+  .fdm-stat { display: flex; flex-direction: column; gap: 2px; line-height: 1.4; min-width: 0; }
+  .fdm-stat b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); overflow-wrap: anywhere; }
+  .fdm-stat span { font-size: 11px; color: var(--ink-faint); }
+  .fd-actions { margin: 0; }
+  .fd-actions-inner { gap: 8px; flex-wrap: nowrap; }
+  .fd-actions-inner .fd-btn { height: 44px; min-height: 44px; box-sizing: border-box; border-radius: 8px; justify-content: center; }
+  .fd-actions-inner .fd-btn-primary { flex: 1; min-width: 0; padding: 0 8px; }
+  .fd-actions-inner .fdm-icon-btn { flex: 0 0 44px; width: 44px; padding: 0; border-width: 1px; }
+  .fd-actions-inner .fd-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .fd-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .fd-btn-secondary:hover { background: var(--surface); }
+  .fd-preview-area,
+  html[data-bnu-theme="dark"] .fd-preview-area { border: none; border-radius: 0; background: transparent; }
+  .fd-preview-header { border: none; padding: 0 0 8px; font-size: 16px; }
+  .fd-preview-header .pv-badge { display: none; }
+  .fd-preview-body { min-height: 0; background: var(--raised); border: 1px solid var(--border-light); border-radius: 8px; }
+  .fd-preview-body .pv-viewer { height: auto; min-height: 0; }
+  .fd-preview-body .pv-text { margin: 0; }
+  .fd-preview-body .pv-unsupported { width: 100%; padding: 16px; box-sizing: border-box; color: var(--ink-soft); }
+  .fd-preview-body .pv-unsupported-icon { margin: 0 0 8px; font-size: 20px; }
+  .fd-preview-body .pv-unsupported-icon .ui-icon { width: 20px; height: 20px; }
+  .fd-preview-body .pv-unsupported-text { font-size: 14px; line-height: 1.6; }
+  .fd-preview-body .pv-unsupported-sub { font-size: 12px; margin-bottom: 8px; opacity: 1; color: var(--ink-faint); }
 }
-
-/* 移动端操作区贴紧统计行（覆盖文件中部的桌面 margin 规则） */
-@media (max-width: 768px) {
-  .fd-actions { margin: 2px 0 0; }
+@media (min-width: 769px) {
+  .fdu-arrow { display: none; }
 }
 
 /* 预览加载失败重试按钮（桌面/移动共用） */
