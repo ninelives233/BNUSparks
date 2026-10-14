@@ -101,7 +101,7 @@ class MobileFileListContractTest(SimpleTestCase):
                       'fdm-icon-btn', 'aria-pressed', 'retryFdPreview', 'showUserPublic'):
             self.assertIn(token, self.file)
         self.assertIn("document.querySelector('.fd-title-area').appendChild(descEl)", self.file)
-        self.assertIn("descEl.hidden = !file.description", self.file)
+        self.assertIn("descEl.hidden = !hasDescription", self.file)
         for token in ('fdBackRow', 'fd-more-btn', 'openFdMoreSheet', 'fdToggleDesc', 'fdFileInfo'):
             self.assertNotIn(token, self.file)
         self.assertNotIn("hint.textContent = extType === 'pdf'", self.file)

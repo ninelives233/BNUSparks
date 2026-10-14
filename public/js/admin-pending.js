@@ -140,7 +140,7 @@
           '<button class="pc-seg-btn' + (_pendingType === 'file' ? ' active' : '') + '" data-type="file" onclick="switchPendingType(\'file\')">' + iconSvg('document') + ' 文件上传<span class="pc-seg-count">' + fileCount + '</span></button>' +
           '<button class="pc-seg-btn' + (_pendingType === 'course' ? ' active' : '') + '" data-type="course" onclick="switchPendingType(\'course\')">' + iconSvg('edit') + ' 课程创建<span class="pc-seg-count">' + courseRequests.length + '</span></button>' +
           (canQA ? '<button class="pc-seg-btn' + (_pendingType === 'forum' ? ' active' : '') + '" data-type="forum" onclick="switchPendingType(\'forum\')">' + iconSvg('comment') + ' 论坛管理<span class="pc-seg-count">' + (forumItems.length + forumDelReqs.length) + '</span></button>' : '') +
-          '<button class="pc-seg-btn' + (_pendingType === 'report' ? ' active' : '') + '" data-type="report" onclick="switchPendingType(\'report\')">' + iconSvg('flag') + ' 举报受理<span class="pc-seg-count">' + reportGroups.length + '</span></button>' +
+          '<button class="pc-seg-btn' + (_pendingType === 'report' ? ' active' : '') + '" data-type="report" onclick="switchPendingType(\'report\')">' + iconSvg('alert') + ' 举报受理<span class="pc-seg-count">' + reportGroups.length + '</span></button>' +
         '</div>';
       if (isMod && _pendingType !== 'report' && _pendingType !== 'forum') {
         html += '<span class="pc-seg-right">' +
@@ -167,19 +167,19 @@
           ug.forEach(function(g) { _reportGroups[g.group_key] = g; });
           qg.forEach(function(g) { _reportGroups[g.group_key] = g; });
           if (mg.length) {
-            html += '<div class="pc-section-label">' + iconSvg('flag') + ' 待处理资料举报</div><div class="admin-pending-list">';
+            html += '<div class="pc-section-label">' + iconSvg('alert') + ' 待处理资料举报</div><div class="admin-pending-list">';
             mg.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }
           if (ug.length) {
             if (mg.length) html += '<div class="pc-section-divider"></div>';
-            html += '<div class="pc-section-label">' + iconSvg('flag') + ' 待处理连带举报</div><div class="admin-pending-list">';
+            html += '<div class="pc-section-label">' + iconSvg('alert') + ' 待处理连带举报</div><div class="admin-pending-list">';
             ug.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }
           if (qg.length) {
             if (mg.length || ug.length) html += '<div class="pc-section-divider"></div>';
-            html += '<div class="pc-section-label">' + iconSvg('flag') + ' 待处理问答区举报</div><div class="admin-pending-list">';
+            html += '<div class="pc-section-label">' + iconSvg('alert') + ' 待处理问答区举报</div><div class="admin-pending-list">';
             qg.forEach(function(g) { html += _reportCardHtml(g); });
             html += '</div>';
           }

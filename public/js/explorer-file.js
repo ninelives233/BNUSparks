@@ -502,24 +502,25 @@
     _renderFdStats(file);
     var descEl = document.querySelector('.fd-desc-area');
     if (descEl) {
+      var hasDescription = !!(file.description || '').trim();
       if (_fdIsMobile()) {
-        descEl.innerHTML = file.description
-          ? '<div class="fdm-desc">' + (canEdit
+        descEl.innerHTML = hasDescription
+          ? '<div class="fdm-desc fd-desc-card"><div class="fd-desc-label">资料说明</div><div class="fd-desc-body">' + (canEdit
             ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description) + '</span>' + penIcon
-            : esc(file.description)) + '</div>'
+            : esc(file.description)) + '</div></div>'
           : '';
         document.querySelector('.fd-title-area').appendChild(descEl);
-        descEl.hidden = !file.description;
-        if (!file.description && canEdit && titleEl) {
+        descEl.hidden = !hasDescription;
+        if (!hasDescription && canEdit && titleEl) {
           titleEl.innerHTML += '<button type="button" class="fd-pen" aria-label="添加简介" onclick="fdAddDesc()">' + iconSvg('document') + '</button>';
         }
       } else {
         document.getElementById('fdInfoArea').appendChild(descEl);
-        descEl.hidden = false;
+        descEl.hidden = !hasDescription && !canEdit;
         var descContent = canEdit
           ? '<span class="fd-editable" data-field="description" data-fid="' + (file.id || 0) + '">' + esc(file.description || '暂无简介') + '</span>' + penIcon
-          : esc(file.description || '暂无简介');
-        descEl.innerHTML = '<div class="fd-desc-card">' + descContent + '</div>';
+          : esc(file.description || '');
+        descEl.innerHTML = descEl.hidden ? '' : '<div class="fd-desc-card"><div class="fd-desc-label">资料说明</div><div class="fd-desc-body">' + descContent + '</div></div>';
       }
     }
     var uploaderEl = document.querySelector('.fd-uploader-card');
@@ -551,7 +552,7 @@
           ? '<button class="fd-btn fd-btn-secondary fd-btn-fav fdm-icon-btn" id="fdFavBtn" aria-label="收藏" aria-pressed="false" onclick="toggleFdFavorite(' + (file.id || 0) + ')">' + FD_ICONS.star + '</button>'
           : '';
         var mRepBtn = currentUser
-          ? '<button class="fd-btn fd-btn-secondary fd-btn-report fdm-icon-btn" id="fdRepBtn" aria-label="举报" onclick="openReportModal(' + (file.id || 0) + ',' + (file.uploader_id || 0) + ')">' + FD_ICONS.report + '</button>'
+          ? '<button class="fd-btn fd-btn-secondary fd-btn-report fdm-icon-btn" id="fdRepBtn" aria-label="举报" title="举报资料问题" onclick="openReportModal(' + (file.id || 0) + ',' + (file.uploader_id || 0) + ')">' + FD_ICONS.report + '</button>'
           : '';
         var mDelBtn = (file.can_delete && !_civilianMode)
           ? '<button class="fd-btn fd-btn-danger fdm-icon-btn" aria-label="删除" onclick="deleteFileConfirm(' + (file.id || 0) + ',this)">' + FD_ICONS.trash + '</button>'
@@ -925,7 +926,7 @@
     var area = document.querySelector('.fd-desc-area');
     if (!area || !_currentDetailFile) return;
     area.hidden = false;
-    area.innerHTML = '<div class="fdm-desc"><span class="fd-editable" data-field="description" data-fid="' + _currentDetailFile.id + '"></span><button type="button" class="fd-pen" aria-label="编辑简介">' + iconSvg('edit') + '</button></div>';
+    area.innerHTML = '<div class="fdm-desc fd-desc-card"><div class="fd-desc-label">资料说明</div><div class="fd-desc-body"><span class="fd-editable" data-field="description" data-fid="' + _currentDetailFile.id + '"></span><button type="button" class="fd-pen" aria-label="编辑简介">' + iconSvg('edit') + '</button></div></div>';
     fdEditField(area.querySelector('.fd-pen'));
   }
 

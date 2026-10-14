@@ -182,6 +182,32 @@ class FileDetailBrowserTest(StaticLiveServerTestCase):
         self.assertIn('求函数', self.page.locator('#fdPvTextContent').inner_text())
         self.assertEqual(self.errors, [])
 
+    def test_description_panel_and_report_warning_icon(self):
+        for width in (320, 390, 1200):
+            for theme in ('warm', 'dark'):
+                self.open_file('description', width, theme)
+                self.assertEqual(self.page.locator('.fd-desc-label').inner_text(), '资料说明')
+                style = self.page.locator('.fd-desc-card').evaluate('''el => ({
+                    border: getComputedStyle(el).borderLeftWidth,
+                    overflow: el.scrollWidth > el.clientWidth
+                })''')
+                self.assertEqual(style['border'], '2px')
+                self.assertFalse(style['overflow'])
+                self.assertEqual(self.page.locator('#fdRepBtn use').get_attribute('href'), '#ui-icon-alert')
+                self.assertEqual(self.page.locator('#fdRepBtn svg').get_attribute('aria-hidden'), 'true')
+                self.screenshot(f'{width}-{theme}-description-warning')
+        content = '<img src=x onerror="window.unsafeDescription=true">\n' + '长简介内容' * 100
+        self.db_call(Material.objects.filter(pk=self.files['description'].pk).update, description=content)
+        self.open_file('description', 320)
+        self.assertEqual(self.page.locator('.fd-desc-body').inner_text(), content)
+        self.assertEqual(self.page.locator('.fd-desc-body img').count(), 0)
+        self.assertFalse(self.page.evaluate('Boolean(window.unsafeDescription)'))
+        self.db_call(Material.objects.filter(pk=self.files['description'].pk).update, description=' \n ')
+        for width in (320, 1200):
+            self.open_file('description', width)
+            self.assertFalse(self.page.locator('.fd-desc-area').is_visible())
+        self.assertEqual(self.errors, [])
+
     def test_missing_fields_long_values_and_escaping(self):
         material = self.files['long']
         material.teacher = '教师姓名很长需要在本列换行' * 6

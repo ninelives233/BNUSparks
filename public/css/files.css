@@ -516,17 +516,20 @@
   cursor: pointer;
 }
 
-/* 简介卡片 */
+/* 资料说明：轻量表面与侧线区分内容和文件属性 */
 .fd-desc-card {
   background: var(--raised);
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  padding: 12px 14px;
-  min-height: 60px;
-  font-size: 0.85rem;
+  background: color-mix(in oklab, var(--raised) 60%, var(--surface));
+  border-left: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
   color: var(--ink-soft);
   line-height: 1.6;
 }
+
+.fd-desc-label { margin-bottom: 4px; font-size: 12px; font-weight: 400; }
+.fd-desc-body { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* 上传者卡片 */
 .fdu-card {
@@ -705,7 +708,7 @@
   color: var(--ink-faint);
   border: 1px solid var(--border-light);
 }
-.fd-btn-report svg { opacity: 0.8; }
+.fd-btn-report svg { width: 20px; height: 20px; stroke-width: 1.8; opacity: 0.8; }
 .fd-btn-report:hover {
   background: oklch(0.96 0.012 60 / 0.5);
   border-color: oklch(0.72 0.06 50 / 0.6);
@@ -1390,7 +1393,7 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
   .fd-title { font-size: 22px; line-height: 1.4; overflow-wrap: anywhere; }
   .fd-desc-area { margin-top: 8px; }
   .fd-desc-area[hidden] { display: none; }
-  .fdm-desc { font-size: 14px; line-height: 1.6; color: var(--ink-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fdm-desc { font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
   .fdm-attrs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
   .fdm-attr { display: flex; align-items: baseline; gap: 8px; min-width: 0; line-height: 20px; }
   .fdm-attr-label { flex: 0 0 auto; font-size: 12px; color: var(--ink-faint); }
