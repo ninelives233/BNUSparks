@@ -372,7 +372,18 @@
 
 @media (max-width: 768px) {
   .fd-container { padding: 0 16px 40px; }
-  .fd-layout { gap: 14px; }
+  /* 紧凑信息区：间距收细，区块间隔见下方排序块 */
+  .fd-layout { gap: 10px; }
+  .fd-top-row { flex-direction: column; gap: 0; margin-bottom: 0; }
+  /* 面包屑紧贴导航（12px），单行 13px，分隔符/当前页次级色 */
+  .fd-top-row .breadcrumb { padding: 12px 0 0; font-size: 0.8125rem; }
+  .fd-top-row .breadcrumb a,
+  .fd-top-row .breadcrumb .bc-ellipsis { position: relative; }
+  /* 触控区扩展到约 44px 高，不增加视觉行高（叠放进上下留白） */
+  .fd-top-row .breadcrumb a::after,
+  .fd-top-row .breadcrumb .bc-ellipsis::after {
+    content: ''; position: absolute; inset: -8px -2px;
+  }
 }
 
 /* 顶部信息区 — 单列 flex，宽屏时右侧 uploader 绝对定位 */
@@ -395,13 +406,6 @@
   min-width: 0;
 }
 
-@media (max-width: 768px) {
-  .fd-top-row {
-    flex-direction: column;
-    gap: 8px;
-  }
-}
-
 /* 宽屏：uploader 绝对定位到右侧，不与标题共享行高 */
 @media (min-width: 769px) {
   .fd-info-area {
@@ -417,12 +421,18 @@
   }
 }
 
-/* 窄屏信息区排序：标题 → 标签/字段（meta1）→ 上传者 → 统计行 → 简介 */
+/* 窄屏：info-area 退化为透明容器（display:contents），区块直接参与 fd-layout
+   排序——预览紧跟操作按钮、简介到预览之后，桌面 DOM 顺序保持不变 */
 @media (max-width: 768px) {
+  .fd-info-area { display: contents; }
+  .fd-title-area { order: 0; }
   .fd-meta1 { order: 1; }
-  .fd-info-area .fd-uploader-card { order: 2; margin-top: 4px; }
-  .fd-meta2 { order: 3; }
-  .fd-desc-area { order: 4; }
+  .fd-info-area .fd-uploader-card { order: 2; margin-top: -2px; }
+  .fd-meta2 { order: 3; margin-top: -6px; }
+  .fd-actions { order: 4; margin: 2px 0 0; }
+  .fd-preview-area { order: 5; margin-top: 6px; }
+  .fd-desc-area { order: 6; margin-top: 4px; }
+  .fd-fileinfo { order: 7; margin-top: 6px; }
 }
 
 .fd-title-area {
@@ -581,13 +591,16 @@
   margin-top: 2px;
 }
 
-/* 窄屏：上传者变为紧凑横向行（去卡片底），右侧主页箭头 */
+/* 窄屏：上传者变为紧凑横向行（去卡片底），右侧主页箭头；
+   行高 44px 触控，长昵称省略但保留头像与箭头 */
 @media (max-width: 768px) {
   .fdu-card {
     flex-direction: row;
     align-items: center;
     gap: 9px;
     padding: 8px 0;
+    min-height: 44px;
+    box-sizing: border-box;
     background: none;
     border: none;
     border-radius: 0;
@@ -611,8 +624,15 @@
     display: flex;
     align-items: baseline;
     gap: 6px;
+    flex: 1;
+    min-width: 0;
   }
-  .fdu-label { margin-top: 0; }
+  .fdu-name {
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .fdu-arrow { margin-left: auto; color: var(--ink-faint); display: inline-flex; }
   .fdu-arrow .ui-icon { width: 14px; height: 14px; }
 }
@@ -637,14 +657,19 @@
   }
   .fd-actions-inner .fd-btn {
     min-height: 44px;
+    border-radius: 8px;
   }
   .fd-actions-inner .fd-btn-primary {
     flex: 1 1 auto;
     padding: 8px 16px;
   }
+  /* 轻描边：收藏/更多用 1px 细边（桌面保留 2px 品牌态） */
   .fd-actions-inner .fd-btn-fav {
     padding: 8px 12px;
+    min-width: 80px;
+    justify-content: center;
     white-space: nowrap;
+    border-width: 1px;
   }
   .fd-actions-inner .fd-more-btn {
     flex: 0 0 44px;
@@ -654,6 +679,7 @@
     font-weight: 700;
     line-height: 1;
     padding: 0;
+    border-width: 1px;
   }
 }
 
@@ -892,6 +918,12 @@
   font-weight: 600;
   color: var(--ink, #333);
   border-bottom: 1px solid var(--border-light, #e8e8e8);
+}
+
+/* 移动端预览头：16px/600 标题，不重复显示扩展名徽章，提示右对齐 12px */
+@media (max-width: 768px) {
+  .fd-preview-header { font-size: 1rem; padding: 10px 12px; }
+  .fd-preview-header .ext-badge { display: none; }
 }
 
 .pv-hint {
@@ -1414,89 +1446,36 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
 }
 
 /* ═══════════════════════════════════════════════════════════
-   v=204 移动端（≤768px）文件详情：紧凑信息区
-   标题 22–24px · 轻量标签 · 字段行 · 弱化统计 · 文件信息折叠区
+   v=205 移动端（≤768px）文件详情：单行面包屑定位（无返回行）·
+   两行文字属性 · 紧凑上传者/统计 · 轻描边按钮 · 预览前移
    ═══════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .fdm-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    min-height: 44px;
-    padding: 6px 0;
-    margin-top: 2px;
-    border: none;
-    background: none;
-    color: var(--ink-soft);
-    font: inherit;
-    font-size: 0.82rem;
-    cursor: pointer;
-  }
-  .fdm-back .ui-icon { width: 15px; height: 15px; }
   .fd-title {
-    font-size: 1.42rem;
+    font-size: 1.375rem;
     line-height: 1.4;
     font-weight: 700;
     overflow-wrap: anywhere;
   }
-  .fdm-tags {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-  }
-  .fdm-tags .ext-badge { margin-right: 0; }
-  .fdm-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: var(--surface);
+  /* 两行纯文字属性：「类型 · EXT · 大小」+「教师 · 日期 上传」，13px/20px */
+  .fdm-attr {
+    font-size: 0.8125rem;
+    line-height: 20px;
     color: var(--ink-soft);
-    border: 1px solid var(--border-light);
-    white-space: nowrap;
-  }
-  .fdm-tag-type {
-    background: var(--primary-surface);
-    color: var(--primary);
-    border-color: transparent;
-  }
-  .fdm-aux {
-    font-size: 0.78rem;
-    color: var(--ink-faint);
-    margin-top: 7px;
     overflow-wrap: anywhere;
   }
-  .fdm-fields {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 20px;
-    font-size: 0.82rem;
-    margin-top: 10px;
-  }
-  .fdm-field { min-width: 0; max-width: 100%; }
-  .fdm-field-name { color: var(--ink-faint); margin-right: 6px; }
-  .fdm-field-value { color: var(--ink); overflow-wrap: anywhere; }
+  .fdm-attr + .fdm-attr { margin-top: 4px; }
+  .fdm-attr-type { color: var(--primary); font-weight: 500; }
+  .fdm-attr-dot { color: var(--ink-faint); }
 
-  /* 弱化统计行：细分隔线上下夹住，保留零值 */
+  /* 弱化统计行：12px 次级文字点分隔，无分隔线无卡片，保留零值 */
   .fd-meta2 .fd-meta-row.fdm-stats {
-    display: flex;
-    gap: 20px;
-    padding: 11px 0;
-    margin-top: 6px;
-    border-top: 1px solid var(--border-light);
-    border-bottom: 1px solid var(--border-light);
-    font-size: 0.78rem;
+    display: block;
+    font-size: 0.75rem;
     color: var(--ink-faint);
   }
-  .fdm-stat b {
+  .fdm-stats b {
     font-weight: 600;
-    color: var(--ink);
-    margin-left: 4px;
+    color: var(--ink-soft);
     font-variant-numeric: tabular-nums;
   }
 
@@ -1536,16 +1515,10 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
     outline: 2px solid oklch(from var(--primary) l c h / 0.55);
     outline-offset: 2px;
   }
-  .fdm-back:focus-visible {
-    outline: 2px solid oklch(from var(--primary) l c h / 0.55);
-    outline-offset: 2px;
-    border-radius: 6px;
-  }
 
   /* 文件信息折叠区：预览之后的原始文件名，长名换行完整展示 */
   .fd-fileinfo {
     border-top: 1px solid var(--border-light);
-    margin-top: 16px;
     padding-top: 4px;
     font-size: 0.82rem;
   }
@@ -1590,9 +1563,13 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
 }
 /* 桌面（>768px）隐藏移动端专属结构 */
 @media (min-width: 769px) {
-  .fd-back-row,
   .fd-fileinfo,
   .fdu-arrow { display: none; }
+}
+
+/* 移动端操作区贴紧统计行（覆盖文件中部的桌面 margin 规则） */
+@media (max-width: 768px) {
+  .fd-actions { margin: 2px 0 0; }
 }
 
 /* 预览加载失败重试按钮（桌面/移动共用） */

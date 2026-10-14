@@ -1,9 +1,10 @@
-"""移动端（≤768px）课程资料列表与文件详情前端契约回归（v=204/340）。
+"""移动端（≤768px）课程资料列表与文件详情前端契约回归（v=205/340）。
 
 移动布局与桌面共用同一份数据、筛选与批量选择状态：列表改纵向资料行、
-筛选排序合并为底部面板、分页移到列表底部而每页条数并入面板；详情页缩短
-信息区、标签/字段分列、举报收进「更多」菜单、原始文件名进「文件信息」
-折叠区。桌面表格与既有按钮布局必须原样保留，此处一并守门防止回退。
+筛选排序合并为底部面板、分页移到列表底部而每页条数并入面板；详情页以
+面包屑承担返回定位（无独立返回行）、两行文字属性、紧凑上传者与统计、
+举报收进「更多」菜单、原始文件名进「文件信息」折叠区、预览紧跟操作区。
+桌面表格与既有按钮布局必须原样保留，此处一并守门防止回退。
 """
 from pathlib import Path
 
@@ -102,30 +103,41 @@ class MobileFileListContractTest(SimpleTestCase):
         self.assertNotIn("ppcShow", self.render)
 
     def test_detail_mobile_layout(self):
-        """详情页移动分支：标签/字段/弱化统计/更多菜单/返回行/文件信息折叠区"""
+        """详情页移动分支：面包屑定位无返回行、两行文字属性、紧凑统计、更多菜单、文件信息折叠区"""
         for token in (
             "_fdIsMobile",
-            "fdm-tags",
-            "fdm-tag-type",
-            "fdm-fields",
-            "fdm-field-name",
+            # 两行纯文字属性：类型蓝字 + 扩展名/大小，教师/日期缺失省略
+            "fdm-attr",
+            "fdm-attr-type",
+            "fdm-attr-dot",
+            "extLabel(file.file_name",
+            "' 上传'",
+            # 统计行点分隔、无分隔线
             "fdm-stats",
+            # 更多菜单/简介/文件信息折叠/预览重试
             "openFdMoreSheet",
             "closeFdMoreSheet",
-            "fdBackToCourse",
             "fdToggleDesc",
             "fdAddDesc",
             "原始文件名",
             "retryFdPreview",
         ):
             self.assertIn(token, self.file)
+        # 返回定位由面包屑承担：独立返回行与 fdBackToCourse 已删除
+        self.assertNotIn("fdBackToCourse", self.file)
+        self.assertNotIn("fdBackRow", self.file)
+        self.assertNotIn("fdBackRow", self.index)
+        # PDF 预览提示移动端简化为「前 3 页」（桌面文案保留）
+        self.assertIn("前 3 页", self.file)
+        self.assertIn("预览最多显示前三页", self.file)
         # 无简介不再渲染空卡片（占位句仅剩桌面分支使用）
         self.assertIn("fdm-desc-add", self.file)
         # 下载为唯一主按钮 + 收藏次按钮 + 更多菜单
         self.assertIn("fdm-dl-btn", self.file)
         self.assertIn("fd-more-btn", self.file)
-        # 上传者行带主页箭头并可键盘触发
+        # 上传者行带主页箭头并可键盘触发；移动端不带「上传」文字标签
         self.assertIn("fdu-arrow", self.file)
+        self.assertIn("查看主页", self.file)
         self.assertIn("showUserPublic", self.file)
 
     def test_detail_desktop_layout_preserved(self):
@@ -135,13 +147,30 @@ class MobileFileListContractTest(SimpleTestCase):
         self.assertIn("上传者", self.file)
         self.assertNotIn("@media (max-width: 480px)", self.files_css)
 
+    def test_detail_mobile_css_compact_layout(self):
+        """移动详情样式：info-area 透明化排序（预览紧跟操作）、面包屑触控扩展、轻描边"""
+        # 预览通过 order 排到操作按钮之后，简介再其后（桌面 DOM 顺序不变）
+        self.assertIn(".fd-info-area { display: contents; }", self.files_css)
+        self.assertIn(".fd-preview-area { order: 5;", self.files_css)
+        self.assertIn(".fd-desc-area { order: 6;", self.files_css)
+        # 面包屑 13px 且触控区无高度代价扩展
+        self.assertIn(".fd-top-row .breadcrumb a::after", self.files_css)
+        # 收藏/更多 1px 轻描边仅移动端（桌面 2px 品牌态保留）
+        fav_1px = ".fd-actions-inner .fd-btn-fav {\n    padding: 8px 12px;\n    min-width: 80px;\n    justify-content: center;\n    white-space: nowrap;\n    border-width: 1px;\n  }"
+        self.assertIn(fav_1px, self.files_css)
+        self.assertIn(".fd-btn-fav { border-width: 2px; }", self.files_css)
+        # 统计行无上下分隔线
+        self.assertNotIn("border-top: 1px solid var(--border-light);\n    border-bottom: 1px solid var(--border-light);", self.files_css)
+
     def test_index_structure_and_icon(self):
-        """详情视图包含移动端返回行与文件信息折叠区；漏斗图标符号可用"""
-        self.assertIn('id="fdBackRow"', self.index)
+        """详情视图包含移动端文件信息折叠区；漏斗图标符号可用；返回行已删除"""
+        self.assertNotIn('id="fdBackRow"', self.index)
         self.assertIn('id="fdFileInfo"', self.index)
         self.assertIn('id="ui-icon-filter"', self.index)
         # iconSvg 白名单纳入 filter（漏斗）
         self.assertIn("document edit filter flag", self.utils)
+        # 属性行复用共享扩展名取词（徽章与纯文字同源）
+        self.assertIn("function extLabel", self.utils)
 
     def test_sheets_integrated_with_modal_and_popstate(self):
         """底部面板接入统一弹窗 Escape 链与浏览器返回关闭链"""

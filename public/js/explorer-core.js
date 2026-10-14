@@ -535,7 +535,9 @@
     homeLink.onclick = function(e) { e.preventDefault(); (options && options.homeOnClick || showHome)(); };
     el.appendChild(homeLink);
     var hasTail = !!(options && options.tailStatic);
-    var lastMid = path.length - 1 - (hasTail ? 0 : 1); // 路径内最后一个中间项下标（-1 = 无中间项）
+    // 中间项 = 除末项外的全部层级（tailStatic 时末项是课程，同样保持可见），
+    // 「⋯」插在最后一个中间项之后；窄屏折叠成「首页 / ⋯ / 末项(/ 文件详情)」。
+    var lastMid = path.length - 2; // 路径内最后一个中间项下标（-1 = 无中间项）
     var ellipsis = null;
     if (lastMid >= 0) {
       ellipsis = document.createElement('button');
@@ -548,7 +550,7 @@
     }
     for (var i = 0; i < path.length; i++) {
       var isLast = (i === path.length - 1);
-      var isMid = hasTail || !isLast;
+      var isMid = !isLast;
       var sep = document.createElement('span');
       sep.className = 'bc-sep' + (isMid && i > 0 ? ' bc-mid' : '');
       sep.textContent = ' / ';

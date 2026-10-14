@@ -188,12 +188,17 @@
   }
 
   // 跨页面共享：文件扩展名徽章不能依赖 explorer 管理模块。
-  function extBadge(fileName) {
+  function extLabel(fileName) {
     if (!fileName) return '';
     const ext = fileName.split('.').pop().toLowerCase();
-    const label = {pdf:'PDF', ppt:'PPT', pptx:'PPT', doc:'DOC', docx:'DOC', xls:'XLS', xlsx:'XLS',
-                   jpg:'IMG', jpeg:'IMG', png:'IMG', gif:'IMG', webp:'IMG', md:'MD', txt:'TXT',
-                   zip:'ZIP', rar:'RAR', py:'PY', js:'JS', html:'HTML', css:'CSS'}[ext] || ext.toUpperCase().slice(0,4);
+    return {pdf:'PDF', ppt:'PPT', pptx:'PPT', doc:'DOC', docx:'DOC', xls:'XLS', xlsx:'XLS',
+            jpg:'IMG', jpeg:'IMG', png:'IMG', gif:'IMG', webp:'IMG', md:'MD', txt:'TXT',
+            zip:'ZIP', rar:'RAR', py:'PY', js:'JS', html:'HTML', css:'CSS'}[ext] || ext.toUpperCase().slice(0,4);
+  }
+
+  function extBadge(fileName) {
+    if (!fileName) return '';
+    const label = extLabel(fileName);
     var safeLabel = typeof esc === 'function'
       ? esc(label)
       : String(label).replace(/[&<>"'`]/g, function(ch) {
