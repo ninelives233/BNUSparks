@@ -78,7 +78,9 @@
   //        打散规则改为仅直接子级，pill 保持一行），缓存键同步推进。
   // v339：explorer-render 移动端（≤768px）资料列表重制——纵向资料行、
   //        筛选排序底部面板、批量选择与底部分页；缓存键同步推进。
-  var VERSION = '339';
+  // v340：explorer-render 每页条数并入移动端筛选底部面板，移除列表底部
+  //        独立下拉；缓存键同步推进。
+  var VERSION = '340';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

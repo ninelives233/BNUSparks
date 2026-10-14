@@ -330,15 +330,21 @@
     updateBatchDlBar();
   }
 
-  // ── 移动端筛选排序底部面板（类型 + 排序合并入口） ────────────
+  // ── 移动端筛选排序底部面板（类型 + 排序 + 每页条数合并入口） ────────────
   var _mfSheetType = '';
   var _mfSheetSort = 'date';
+  var _mfSheetPerPage = 10;
 
   function _mfSheetOptionsHtml(kind) {
-    var items = kind === 'type'
-      ? [{ v: '', label: '全部类型' }].concat(MATERIAL_TYPES.map(function (t) { return { v: t.name, label: t.name }; }))
-      : Object.keys(_MF_SORT_LABELS).map(function (k) { return { v: k, label: _MF_SORT_LABELS[k] }; });
-    var current = kind === 'type' ? _mfSheetType : _mfSheetSort;
+    var items;
+    if (kind === 'type') {
+      items = [{ v: '', label: '全部类型' }].concat(MATERIAL_TYPES.map(function (t) { return { v: t.name, label: t.name }; }));
+    } else if (kind === 'sort') {
+      items = Object.keys(_MF_SORT_LABELS).map(function (k) { return { v: k, label: _MF_SORT_LABELS[k] }; });
+    } else {
+      items = [10, 15, 20].map(function (n) { return { v: String(n), label: n + ' 条' }; });
+    }
+    var current = kind === 'type' ? _mfSheetType : kind === 'sort' ? _mfSheetSort : String(_mfSheetPerPage);
     return items.map(function (it) {
       return '<button type="button" class="mf-sheet-option" data-mf-' + kind + '="' + esc(it.v) + '" aria-pressed="' + (current === it.v) + '">' + esc(it.label) + '</button>';
     }).join('');
@@ -350,6 +356,8 @@
     if (typeHost) _mfMarkOptions(typeHost, 'data-mf-type', _mfSheetType);
     var sortHost = document.getElementById('mfSheetSortOpts');
     if (sortHost) _mfMarkOptions(sortHost, 'data-mf-sort', _mfSheetSort);
+    var ppHost = document.getElementById('mfSheetPerPageOpts');
+    if (ppHost) _mfMarkOptions(ppHost, 'data-mf-perpage', String(_mfSheetPerPage));
   }
 
   function _mfMarkOptions(host, attr, value) {
@@ -363,6 +371,7 @@
     if (document.querySelector('.mf-sheet-overlay')) { closeMobileFilterSheet(); return; }
     _mfSheetType = _typeFilter;
     _mfSheetSort = _sortBy;
+    _mfSheetPerPage = _filterSortPageSize;
     var overlay = document.createElement('div');
     overlay.className = 'mf-sheet-overlay';
     overlay.innerHTML =
@@ -375,6 +384,10 @@
         '<div class="mf-sheet-options" id="mfSheetTypeOpts">' + _mfSheetOptionsHtml('type') + '</div>' +
         '<div class="mf-sheet-label">排序方式</div>' +
         '<div class="mf-sheet-options" id="mfSheetSortOpts">' + _mfSheetOptionsHtml('sort') + '</div>' +
+        // 资料不超过最小每页条数时每页设置无意义，随面板省略
+        ((_allFilesCache && _allFilesCache.length > 10)
+          ? '<div class="mf-sheet-label">每页条数</div><div class="mf-sheet-options" id="mfSheetPerPageOpts">' + _mfSheetOptionsHtml('perpage') + '</div>'
+          : '') +
         '<div class="mf-sheet-footer">' +
           '<button type="button" class="mf-sheet-btn mf-sheet-reset" onclick="mfSheetReset()">重置</button>' +
           '<button type="button" class="mf-sheet-btn mf-sheet-apply" onclick="mfSheetApply()">应用</button>' +
@@ -385,7 +398,9 @@
       var t = e.target.closest('[data-mf-type]');
       if (t) { _mfSheetType = t.getAttribute('data-mf-type') || ''; _mfRefreshSheetOptions(); return; }
       var s = e.target.closest('[data-mf-sort]');
-      if (s) { _mfSheetSort = s.getAttribute('data-mf-sort') || 'date'; _mfRefreshSheetOptions(); }
+      if (s) { _mfSheetSort = s.getAttribute('data-mf-sort') || 'date'; _mfRefreshSheetOptions(); return; }
+      var pp = e.target.closest('[data-mf-perpage]');
+      if (pp) { _mfSheetPerPage = parseInt(pp.getAttribute('data-mf-perpage'), 10) || 10; _mfRefreshSheetOptions(); }
     });
     document.body.appendChild(overlay);
     lockScroll();
@@ -407,12 +422,14 @@
   function mfSheetReset() {
     _mfSheetType = '';
     _mfSheetSort = 'date';
+    _mfSheetPerPage = 10;
     _mfRefreshSheetOptions();
   }
 
   function mfSheetApply() {
     _typeFilter = _mfSheetType;
     _sortBy = _mfSheetSort;
+    _filterSortPageSize = _mfSheetPerPage;
     _filterSortPage = 1;
     closeMobileFilterSheet();
     _renderFilterSortLabels();
@@ -451,7 +468,7 @@
           '<button type="button" class="mf-batch-dl" id="mfBatchDlBtn" onclick="batchDownloadSelected()">' + iconSvg('arrow-down') + '下载所选（0）</button>' +
         '</div>' +
         '<div class="mf-list-end" id="mfListEnd"></div>' +
-        '<div class="mf-bottom" id="mfBottom"><span class="fa-per-page" id="perPageControl"></span></div>' +
+        '<div class="mf-bottom" id="mfBottom"></div>' +
       '</div>';
   }
 
@@ -748,11 +765,6 @@
         var mobileLayout = !!document.getElementById('mfFileList');
         if (total <= 1) {
           if (pag) pag.style.display = 'none';
-          // 移动端：仅一页时省略分页与每页条数设置
-          if (mobileLayout) {
-            var ppcHide = document.getElementById('perPageControl');
-            if (ppcHide) ppcHide.style.display = 'none';
-          }
           return;
         }
         if (!pag) {
@@ -760,17 +772,13 @@
           pag.id = 'filePagination';
           pag.className = 'file-pagination';
           if (mobileLayout) {
-            // 移动端：分页挂载到列表底部（与每页条数设置同区，分页在前）
+            // 移动端：分页挂载到列表底部（每页条数在筛选面板里设置）
             var mfBottom = document.getElementById('mfBottom');
             if (mfBottom) mfBottom.insertBefore(pag, mfBottom.firstChild);
           } else {
             var scrollHost = document.querySelector('.file-table-scroll');
             if (scrollHost) scrollHost.after(pag);
           }
-        }
-        if (mobileLayout) {
-          var ppcShow = document.getElementById('perPageControl');
-          if (ppcShow) ppcShow.style.display = '';
         }
 
         const numbers = getPageNumbers(page, total);
@@ -868,10 +876,6 @@
       function hidePagination() {
         const pag = document.getElementById('filePagination');
         if (pag) pag.style.display = 'none';
-        if (document.getElementById('mfFileList')) {
-          const ppc = document.getElementById('perPageControl');
-          if (ppc) ppc.style.display = 'none';
-        }
       }
 
       renderPage();

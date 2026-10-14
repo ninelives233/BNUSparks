@@ -1,9 +1,9 @@
-"""移动端（≤768px）课程资料列表与文件详情前端契约回归（v=204/339）。
+"""移动端（≤768px）课程资料列表与文件详情前端契约回归（v=204/340）。
 
 移动布局与桌面共用同一份数据、筛选与批量选择状态：列表改纵向资料行、
-筛选排序合并为底部面板、分页与每页条数移到列表底部；详情页缩短信息区、
-标签/字段分列、举报收进「更多」菜单、原始文件名进「文件信息」折叠区。
-桌面表格与既有按钮布局必须原样保留，此处一并守门防止回退。
+筛选排序合并为底部面板、分页移到列表底部而每页条数并入面板；详情页缩短
+信息区、标签/字段分列、举报收进「更多」菜单、原始文件名进「文件信息」
+折叠区。桌面表格与既有按钮布局必须原样保留，此处一并守门防止回退。
 """
 from pathlib import Path
 
@@ -57,7 +57,7 @@ class MobileFileListContractTest(SimpleTestCase):
         self.assertIn('class="th-uploader"', self.render)
 
     def test_filter_sheet_and_labels(self):
-        """筛选与排序合并为一个入口；底部面板含类型/排序/重置/应用"""
+        """筛选与排序合并为一个入口；底部面板含类型/排序/每页条数/重置/应用"""
         for token in (
             "openMobileFilterSheet",
             "closeMobileFilterSheet",
@@ -66,10 +66,17 @@ class MobileFileListContractTest(SimpleTestCase):
             "_mfSheetOptionsHtml",
             "data-mf-type",
             "data-mf-sort",
+            "每页条数",
+            "data-mf-perpage",
+            "mfSheetPerPageOpts",
+            "_mfSheetPerPage",
+            "_filterSortPageSize = _mfSheetPerPage",
             "重置",
             "应用",
         ):
             self.assertIn(token, self.render)
+        # 资料不超过最小每页条数时，每页设置随面板省略
+        self.assertIn("_allFilesCache.length > 10", self.render)
         # 按钮显示当前条件
         self.assertIn("mf-filter-label", self.render)
         self.assertIn("_MF_SORT_LABELS[_sortBy] || '上传时间'", self.file)
@@ -85,11 +92,14 @@ class MobileFileListContractTest(SimpleTestCase):
         # 删除资料后移动端行与计数同步移除
         self.assertIn('mf-row[data-file-id="', self.utils)
 
-    def test_pagination_bottom_and_single_page_omitted(self):
-        """移动端分页挂到底部容器；仅一页时省略分页与每页条数"""
+    def test_pagination_bottom_and_page_size_in_sheet(self):
+        """移动端分页挂到底部容器；每页条数只存在于面板，底部不再有独立下拉"""
         self.assertIn("insertBefore(pag, mfBottom.firstChild)", self.render)
-        self.assertIn("仅一页时省略分页与每页条数设置", self.render)
-        self.assertIn("ppcHide", self.render)
+        # 移动端外壳的底部容器不再嵌每页条数下拉（桌面外壳仍保留原控件）
+        self.assertIn('<div class="mf-bottom" id="mfBottom"></div>', self.render)
+        # 分页显隐逻辑不再操作每页控件
+        self.assertNotIn("ppcHide", self.render)
+        self.assertNotIn("ppcShow", self.render)
 
     def test_detail_mobile_layout(self):
         """详情页移动分支：标签/字段/弱化统计/更多菜单/返回行/文件信息折叠区"""
