@@ -18,9 +18,9 @@ class GroupQrRefContractTest(SimpleTestCase):
         views = (root / "public/js/views.js").read_text(encoding="utf-8")
         home = (root / "public/js/home.js").read_text(encoding="utf-8")
 
-        # 关于页（缩略图+大图链接）与首页轮播缩略图共 3 处引用
+        # 关于页（缩略图+大图链接）与首页轮播（缩略图+大图链接）共 4 处引用
         refs = re.findall(r"group-qr\.png\?v=(\d+)", views + home)
-        self.assertEqual(len(refs), 3)
+        self.assertEqual(len(refs), 4)
         self.assertEqual(len(set(refs)), 1, "group-qr 缓存键在各入口间不一致，会导致新旧二维码混用")
 
         # 有效期说明随码更新（换码时同步改这句）

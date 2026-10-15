@@ -4804,3 +4804,191 @@ html[data-bnu-theme="warm"] .home-eight {
   .campus-manager-modebar > button,
   .campus-featured-row button { transition: none; }
 }
+
+/* 桌面端不渲染收拢版管理入口：桌面保留「自定义入口／管理员精选」原样 */
+@media (min-width: 701px) {
+  #campusManageCompactButton { display: none !important; }
+}
+
+/* ═══ 紧凑首页 v325：移动端阅读层级 ═══════════════════════════
+   模块分工：公告轻量（标题+短摘要）、校园入口易点（44px 整块、名称可换行）、
+   推荐是主阅读区（减一层缩进、标题为视觉重点、低价值元信息降权）、
+   资料动态紧凑扫读（短日期、榜单各表其义）。只覆写 ≤700px 呈现，
+   顶部「上传／新建课程／统计」行（v19-v21）保持原样。 */
+@media (max-width: 700px) {
+  /* ── 区块头动作：44px 有效点击区，负 margin 保持现有行高不变 ── */
+  .home-eight .h8-section-head > .text-btn,
+  .home-eight .h8-head-actions .text-btn,
+  .home-eight .h8-head-actions button {
+    min-height: 44px;
+    margin-block: -10px;
+  }
+
+  /* ── 公告：标题 + 两行短摘要为主，收紧轮播与刻度线周围的空白 ── */
+  .home-eight .h8-carousel-notice .h8-carousel-excerpt {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 2px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: normal;
+  }
+  .home-eight .h8-carousel-promo .h8-carousel-visual {
+    flex-basis: 44px;
+    height: 48px;
+  }
+  .home-eight .h8-carousel-ticks {
+    gap: 12px;
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+  /* 刻度视觉保持小条，::before 把有效点击区补到约 44px 高 */
+  .home-eight .h8-carousel-ticks button {
+    width: 22px;
+    height: 12px;
+  }
+  .home-eight .h8-carousel-ticks button::before {
+    content: '';
+    position: absolute;
+    inset: -16px -6px;
+  }
+  .home-eight .h8-carousel-ticks button::after {
+    top: 5px;
+    right: 3px;
+    left: 3px;
+  }
+  /* 展开区的第 2、3 条公告：长标题允许换行，不再单行截断 */
+  .home-eight .h8-notice-rest .h8-notice-row strong {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.45;
+  }
+  /* 二维码大图链接：图片本身 44px，可独立点击 */
+  .home-eight .h8-carousel-body-link {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+  .home-eight .h8-carousel-body-link .h8-carousel-body {
+    display: block;
+  }
+  .home-eight .h8-carousel-qr-link {
+    display: block;
+    flex: 0 0 auto;
+    border-radius: var(--radius-sm);
+  }
+  .home-eight .h8-carousel-qr-link:active {
+    opacity: 0.7;
+  }
+
+  /* ── 校园入口：整块 44px 可点，名称换行，图标退到行尾示意方向 ── */
+  .home-eight .h8-top .h8-shortcuts nav a,
+  .home-eight .h8-top .h8-shortcuts nav button {
+    min-height: 44px;
+  }
+  .compact-campus-link span:first-child {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+  .compact-campus-link svg.ui-icon {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .compact-campus-link:active {
+    background: color-mix(in oklab, var(--primary-surface) 40%, transparent);
+  }
+  /* 配置操作收拢为单一「管理入口」，工作台内仍可切换个人/精选 */
+  #campusManageButton,
+  #campusFeaturedButton {
+    display: none !important;
+  }
+
+  /* ── 为你推荐：主阅读区。外面板与内卡只留一层缩进，卡片走轻描边； ──
+     标题是视觉重点；查看更多上移到区块标题右侧 */
+  .home-eight .h8-recommend {
+    margin-block: 16px;
+    padding: 14px 12px 10px;
+  }
+  .home-eight .h8-recommend > .h8-section-head {
+    padding-right: 96px;
+  }
+  .home-eight .h8-recommend-more {
+    position: absolute;
+    top: 7px;
+    right: 12px;
+    display: block;
+    margin: 0;
+  }
+  .home-eight .h8-card {
+    padding: 12px 14px 6px;
+    border-color: var(--border-light);
+    background: transparent;
+    box-shadow: none;
+  }
+  .home-eight .h8-card + .h8-card {
+    margin-top: 8px;
+  }
+  .home-eight #compactRecommendations > .h8-card:first-child {
+    border-color: var(--border);
+    background: var(--v9-surface);
+    box-shadow: none;
+  }
+  .home-eight .h8-card-head {
+    margin-bottom: 7px;
+  }
+  .home-eight .h8-card-head > span {
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+  .home-eight .h8-card-title {
+    font-size: 18px;
+    line-height: 1.5;
+  }
+  .home-eight .h8-card > p {
+    margin: 7px 0 10px;
+  }
+  .home-eight .h8-card-bottom {
+    padding-bottom: 2px;
+    font-size: 11px;
+  }
+  /* 重复的完整日期在首页降权：只保留下载量等真实差异信息 */
+  .home-eight .h8-card-meta-date {
+    display: none;
+  }
+  .home-eight .compact-material-favorite {
+    margin: -8px -8px -8px 0;
+  }
+
+  /* ── 资料动态：连续扫读的行列表；右列统一右对齐、等宽数字 ── */
+  .home-eight .compact-discovery-block {
+    margin-top: 16px;
+    padding: 14px 12px 2px;
+  }
+  .compact-discovery-item {
+    min-height: 48px;
+    padding: 10px 4px 10px 2px;
+  }
+  .compact-discovery-item:active {
+    background: color-mix(in oklab, var(--primary-surface) 55%, transparent);
+  }
+  .compact-discovery-info strong {
+    font-size: 0.845rem;
+    font-weight: 600;
+  }
+  .compact-discovery-count {
+    align-self: center;
+    color: var(--ink-soft);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}

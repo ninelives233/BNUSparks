@@ -54,7 +54,7 @@
   }
 </script>
 <link rel="stylesheet" href="/static/css/tokens.css?v=307">
-<link rel="stylesheet" href="/static/css/base.css?v=322">
+<link rel="stylesheet" href="/static/css/base.css?v=323">
 <link rel="stylesheet" href="/static/css/user.css?v=214">
 <link rel="stylesheet" href="/static/css/files.css?v=342">
 <link rel="stylesheet" href="/static/css/announcement.css?v=188">
@@ -251,6 +251,7 @@
             <span class="h8-head-actions">
               <button type="button" id="campusManageButton" style="display:none" onclick="openCampusManager()">自定义入口</button>
               <button type="button" id="campusFeaturedButton" style="display:none" onclick="openCampusManager('featured')">管理员精选</button>
+              <button type="button" id="campusManageCompactButton" style="display:none">管理入口</button>
               <button type="button" id="compactCampusMore" class="text-btn compact-campus-more" data-campus-more aria-controls="compactAnnouncement compactCampusLinks" aria-expanded="false" hidden>展开入口 →</button>
             </span>
           </div>
@@ -314,9 +315,9 @@
           <a id="compactDiscoveryMore" class="text-btn" href="/recent">更多 →</a>
         </div>
         <div class="compact-discovery-tabs" role="tablist" aria-label="资料动态排序">
-          <button type="button" role="tab" aria-selected="true" class="is-active" data-discovery="recent">最近上传</button>
-          <button type="button" role="tab" aria-selected="false" data-discovery="download">下载榜</button>
-          <button type="button" role="tab" aria-selected="false" data-discovery="favorite">收藏榜</button>
+          <button type="button" id="compactDiscoveryTab-recent" role="tab" aria-selected="true" aria-controls="compactDiscoveryList" class="is-active" data-discovery="recent">最近上传</button>
+          <button type="button" id="compactDiscoveryTab-download" role="tab" aria-selected="false" aria-controls="compactDiscoveryList" data-discovery="download">下载榜</button>
+          <button type="button" id="compactDiscoveryTab-favorite" role="tab" aria-selected="false" aria-controls="compactDiscoveryList" data-discovery="favorite">收藏榜</button>
         </div>
         <div id="compactDiscoveryList" class="compact-discovery-list" aria-busy="true">
           <div class="h8-skeleton-row" aria-hidden="true"><span class="sk-line"></span><span class="sk-col"><span class="sk-line sk-main"></span><span class="sk-line sk-sub"></span></span><span class="sk-line sk-metric"></span></div>
@@ -1604,7 +1605,7 @@
 <script src="/static/js/explorer-core.js?v=229" defer></script>
 <script src="/static/js/explorer-file.js?v=343" defer></script>
 <script src="/static/js/explorer-preview.js?v=341" defer></script>
-<script src="/static/js/home.js?v=323" defer></script>
+<script src="/static/js/home.js?v=324" defer></script>
 <script src="/static/js/feature-loader.js?v=342" defer></script>
 <script src="/static/js/app.js?v=342" defer></script>
 

@@ -99,11 +99,17 @@
     var reason = recommended ? (item.reason || '') : '';
     var title = compactRecommendationTitle(item.title);
     var course = htmlEscape(item.course_name || item.course_code || '');
+    // v325：零下载量是低价值信息，不再占版面；日期拆成独立 span 供窄屏降权。
+    var meta = Number(item.download_count) > 0 ? htmlEscape(item.download_count) + ' 次下载' : '';
+    if (item.created_at) {
+      meta += (meta ? '<span class="h8-meta-sep" aria-hidden="true"> · </span>' : '') +
+        '<span class="h8-card-meta-date">' + htmlEscape(String(item.created_at).slice(0, 10)) + '</span>';
+    }
     return '<article class="h8-card compact-material-card" data-material-id="' + id + '">' +
       '<div class="h8-card-head"><a href="/file/' + id + '" data-material-link="' + id + '">' + course + '</a><span>' + htmlEscape(materialTypeLabel(item.material_type || item.file_type)) + '</span></div>' +
       '<a class="h8-card-title" href="/file/' + id + '" data-material-link="' + id + '" title="' + title.full + '" aria-label="' + title.full + '">' + title.display + '</a>' +
       (reason ? '<p>' + htmlEscape(reason) + '</p>' : '<p>' + htmlEscape(item.file_name || '已审核资料') + '</p>') +
-      '<div class="h8-card-bottom"><span>' + (item.download_count != null ? htmlEscape(item.download_count) + ' 次下载' : '') + (item.created_at ? ' · ' + htmlEscape(String(item.created_at).slice(0, 10)) : '') + '</span>' +
+      '<div class="h8-card-bottom"><span class="h8-card-meta">' + meta + '</span>' +
       (recommended ? '<button type="button" class="icon-btn bookmark compact-material-favorite' + (favorite ? ' is-favorited' : '') + '" data-favorite-id="' + id + '" aria-label="' + (favorite ? '取消收藏' : '收藏资料') + '">' + icon('star', favorite) + '</button>' : '') + '</div>' +
     '</article>';
   }
@@ -203,12 +209,14 @@
     }
     // v324：常青教程帧（不进公告列表/未读计数，不用数据库伪造公告）；
     // 顺序：最新公告（如果有）→ 使用教程 → 用户群 → 意见反馈。
+    // v325：用户群帧拆成两个目标——正文仍进「关于 → 联系我们」，二维码本身
+    // 直开原图（与关于页「点击二维码可查看大图」同一路径），避免嵌套 a 标签。
     slides.push(
       '<a class="h8-carousel-slide h8-carousel-promo h8-carousel-tutorial compact-announcement-link" href="/tutorial" data-tutorial-entry="home-carousel" data-tick-label="使用教程">' +
         '<span class="h8-carousel-visual" aria-hidden="true"><span class="h8-carousel-paper h8-carousel-paper-1"></span><span class="h8-carousel-paper h8-carousel-paper-2"></span><span class="h8-carousel-play">▶</span></span>' +
         '<span class="h8-carousel-body"><span class="h8-label">使用教程</span><strong>这些用法，值得认识一下</strong><span class="h8-carousel-text">找资料、整理课表、收藏与分享，选一组看看。</span></span>' +
         '<span class="h8-carousel-cta">打开教程 →</span></a>',
-      '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1" data-tick-label="用户群"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span><img class="h8-carousel-qr" src="/static/group-qr.png?v=316" width="56" height="56" alt="用户交流群二维码" loading="lazy"></a>',
+      '<div class="h8-carousel-slide h8-carousel-promo" data-tick-label="用户群"><a class="h8-carousel-body-link compact-announcement-link" href="/about" data-about-contact="1"><span class="h8-carousel-body"><span class="h8-label">用户群</span><strong>加入用户交流群</strong><span class="h8-carousel-text">微信扫码进群，和同学、维护者直接交流。</span></span></a><a class="h8-carousel-qr-link" href="/static/group-qr.png?v=316" target="_blank" rel="noopener" aria-label="查看用户群二维码大图"><img class="h8-carousel-qr" src="/static/group-qr.png?v=316" width="56" height="56" alt="用户交流群二维码，点击查看大图" loading="lazy"></a></div>',
       '<a class="h8-carousel-slide h8-carousel-promo compact-announcement-link" href="/about" data-about-contact="1" data-tick-label="意见反馈"><span class="h8-carousel-body"><span class="h8-label">反馈问卷</span><strong>意见反馈</strong><span class="h8-carousel-text">一分钟填完，问题和建议都会被认真看到。</span></span></a>'
     );
     return slides;
@@ -441,6 +449,8 @@
         node.setAttribute('tabindex', '-1');
         node.setAttribute('inert', '');
         ['href', 'data-announcement-id', 'data-about-contact', 'data-tutorial-entry', 'data-tick-label'].forEach(function (attr) { node.removeAttribute(attr); });
+        // v325：内层链接（二维码大图/正文）一并去 href，防止无 inert 的旧内核可聚焦
+        Array.prototype.forEach.call(node.querySelectorAll('a[href]'), function (inner) { inner.removeAttribute('href'); });
       };
       if (track.children.length >= 2) {
         var cloneLast = track.lastElementChild.cloneNode(true);
@@ -502,6 +512,7 @@
         node.setAttribute('tabindex', '-1');
         node.setAttribute('inert', '');
         ['href', 'data-announcement-id', 'data-about-contact', 'data-tutorial-entry', 'data-tick-label'].forEach(function (attr) { node.removeAttribute(attr); });
+        Array.prototype.forEach.call(node.querySelectorAll('a[href]'), function (inner) { inner.removeAttribute('href'); });
       };
       if (track.children.length >= 2) {
         var cloneLast = track.lastElementChild.cloneNode(true);
@@ -533,6 +544,7 @@
     var block = document.querySelector('.compact-campus-block');
     var button = document.getElementById('campusManageButton');
     var featuredButton = document.getElementById('campusFeaturedButton');
+    var compactManage = document.getElementById('campusManageCompactButton');
     var title = document.getElementById('compactCampusTitle');
     var moreLink = document.getElementById('compactCampusMore');
     if (!host) return;
@@ -540,6 +552,7 @@
       if (block) block.hidden = false;
       if (button) button.style.display = canManageCampus() ? '' : 'none';
       if (featuredButton) featuredButton.style.display = 'none';
+      if (compactManage) compactManage.style.display = canManageCampus() ? '' : 'none';
       if (moreLink) moreLink.hidden = true;
       setHostError(host, '校园入口暂时无法读取。', 'campus');
       updateHelperVisibility();
@@ -557,10 +570,15 @@
       button.style.display = canEdit ? '' : 'none';
       button.textContent = mode === 'personal' ? '编辑我的入口' : '自定义入口';
     }
+    var showFeaturedAction = canEdit && ((mode === 'personal' && featuredItems.length) || canManageFeaturedCampus());
     if (featuredButton) {
-      var showFeaturedAction = canEdit && ((mode === 'personal' && featuredItems.length) || canManageFeaturedCampus());
       featuredButton.style.display = showFeaturedAction ? '' : 'none';
       featuredButton.textContent = canManageFeaturedCampus() ? '管理精选' : '管理员精选';
+    }
+    // v325：窄屏把两个配置入口收拢成一个「管理入口」；工作台内部仍可切换
+    // 个人入口 / 管理员精选，能力不减。
+    if (compactManage) {
+      compactManage.style.display = canEdit || showFeaturedAction ? '' : 'none';
     }
     // 访客没有可显示入口时隐藏模块；登录用户即使个人清单为空也保留编辑落点。
     if (!items.length && !canEdit) {
@@ -844,11 +862,19 @@
     _compactData.discoveryKind = kind;
     _patchHomeViewState({ homeDiscoveryKind: _compactData.discoveryKind });
     if (note) note.textContent = kind === 'download' ? '按累计下载量排列' : kind === 'favorite' ? '按累计收藏数排列' : '按上传日期排列';
+    var activeTabId = '';
     document.querySelectorAll('.compact-discovery-tabs [data-discovery]').forEach(function (tab) {
       var active = tab.getAttribute('data-discovery') === kind;
       tab.classList.toggle('is-active', active);
       tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      if (active) activeTabId = tab.id || '';
     });
+    // v325：标签与列表建立 tab → tabpanel 关联，辅助技术可感知内容随标签切换。
+    var listPanel = document.getElementById('compactDiscoveryList');
+    if (listPanel && activeTabId) {
+      listPanel.setAttribute('role', 'tabpanel');
+      listPanel.setAttribute('aria-labelledby', activeTabId);
+    }
     if (more) {
       more.textContent = kind === 'recent' ? '查看全部上传 →' : '查看排行榜 →';
       more.setAttribute('href', kind === 'recent' ? '/recent' : '/rankings');
@@ -860,7 +886,8 @@
     }
     renderHtmlWithMotion(host, items.map(function (item, index) {
       var marker = kind === 'recent' ? '' : '<span class="compact-discovery-rank">' + String(index + 1).padStart(2, '0') + '</span>';
-      var count = kind === 'favorite' ? ((item.favorite_count || 0) + ' 收藏') : kind === 'download' ? ((item.download_count || 0) + ' 下载') : String(item.created_at || '').slice(0, 10);
+      // v325：最近上传只给「月 / 日」短日期，完整日期留给资料详情；榜单展示各自指标。
+      var count = kind === 'favorite' ? ((item.favorite_count || 0) + ' 收藏') : kind === 'download' ? ((item.download_count || 0) + ' 下载') : String(item.created_at || '').slice(5, 10).replace('-', ' / ');
       return '<button type="button" class="compact-discovery-item" data-material-id="' + (Number(item.id) || 0) + '">' + marker + '<span class="compact-discovery-info"><strong>' + htmlEscape(item.title || '未命名资料') + '</strong><small>' + (kind === 'recent' ? recentMetaMarkup(item) : htmlEscape(item.course_name || '')) + '</small></span><span class="compact-discovery-count">' + htmlEscape(count) + '</span></button>';
     }).join(''), animate);
   }
@@ -1233,6 +1260,13 @@
         } else {
           setCompactTopExpanded(!_compactData.campusExpanded);
         }
+        return;
+      }
+      // v325：窄屏收拢后的管理入口，按当前显示模式落到对应工作台（openCampusManager
+      // 内部再做权限校正：无精选管理权时一律落个人入口）。
+      var compactManage = event.target.closest('#campusManageCompactButton');
+      if (compactManage) {
+        openCampusManager((_compactData.campusPayload || {}).mode === 'personal' ? 'personal' : 'featured');
         return;
       }
       var tab = event.target.closest('[data-discovery]');
