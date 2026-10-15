@@ -390,6 +390,31 @@ window.addEventListener('popstate', async function(e) {
     if (state.view === 'timetable' && typeof ttNavTimetable === 'function') {
       ttNavTimetable(state.userId || null);
     }
+    // D5：跨刷新边界兜底——about/announcements/broad/leaderboard/other/
+    // profile/notif/userPublic 没有专属恢复分支，只 switchView 会留下空壳
+    // （刷新后前进/后退到这些条目时正文空白）。统一走完整入口重渲染，
+    // 其内部 pushViewState 被 _suppressingPushState 压掉，不会新增历史条目。
+    var _staticReentry = null;
+    if (state.view === 'about') _staticReentry = function () { showAbout(state.aboutSection || 'introduction'); };
+    else if (state.view === 'announcements') _staticReentry = function () { showAnnouncements(state.announcementId); };
+    else if (state.view === 'broad') _staticReentry = function () { showBroad(); };
+    else if (state.view === 'leaderboard') _staticReentry = function () { showLeaderboard(state.leaderboardType); };
+    else if (state.view === 'other') _staticReentry = function () { showOther(); };
+    else if (state.view === 'profile') _staticReentry = function () { showProfile(); };
+    else if (state.view === 'notif') _staticReentry = function () { showNotifFull(); };
+    else if (state.view === 'userPublic') _staticReentry = function () { if (state.userId) showUserPublic(state.userId); };
+    if (_staticReentry && typeof showAbout === 'function') {
+      _suppressingPushState = true;
+      try { _staticReentry(); } finally { _suppressingPushState = false; }
+      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+    }
+    // D1/D5：返回/前进到首页时恢复离开时的滚动位置；跨刷新边界到达时
+    // 紧凑首页数据尚未渲染，补一次加载（内部有请求合并与 API 缓存）。
+    if (state.view === 'home') {
+      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      var _hotList = document.getElementById('compactHotList');
+      if (typeof loadCompactHome === 'function' && (!_hotList || !_hotList.childElementCount)) loadCompactHome();
+    }
     // 更新侧栏高亮
     if (state.view === 'fileDetail' && state.prevView) {
       if (typeof updateSidebar === 'function') updateSidebar(state.prevView);
@@ -666,7 +691,7 @@ function renderNavDrawer() {
     item.innerHTML = '<span class="dm-ico"><svg class="sn-icon sidebar-icon" aria-hidden="true"><use href="' +
       (use ? use.getAttribute('href') : '') + '"></use></svg></span><span>' + a.textContent.trim() + '</span>';
     item.addEventListener('click', function () {
-      closeNavDrawer();
+      closeNavDrawerAndGo();
       if (view === 'home') showHome();
       else if (view === 'allCourses') showAllCourses();
       else if (view === 'qa') showQa();
@@ -696,6 +721,8 @@ function openNavDrawer() {
 function closeNavDrawer(e) {
   if (e && e.target !== e.currentTarget) return;
   var drawer = document.getElementById('navDrawer');
+  // D4：幂等守卫——popstate 收尾路径会再次调用本函数，此时抽屉已隐藏，
+  // 不得重复解锁滚动或再次回退历史。
   if (!drawer || drawer.style.display !== 'flex') return;
   drawer.style.display = 'none';
   drawer.setAttribute('aria-hidden', 'true');
@@ -707,4 +734,20 @@ function closeNavDrawer(e) {
     _navDrawerOpener.focus();
   }
   _navDrawerOpener = null;
+  // D4：✕/遮罩/菜单项关闭属于「用户关抽屉」，交还本次打开压入的历史条目；
+  // 系统返回触发的关闭走到此处时 history.state 已是目的地条目，不再回退。
+  // 若调用方已置 _replaceNextPush（关抽屉并立即导航），则交由随后的
+  // pushViewState 以 replace 复用本条目，不走异步回退（避免吞掉 push）。
+  var st = history.state;
+  if (st && st._bnusparks && st.view === 'navDrawer' && !_replaceNextPush) history.back();
+}
+
+// D4：导航抽屉菜单项「关抽屉并进入目标页」。抽屉未打开时不置标志，避免误
+// 把下一条 push 变成 replace。语义与 closeNotifDrawerAndGo 一致。
+function closeNavDrawerAndGo() {
+  var drawer = document.getElementById('navDrawer');
+  var wasOpen = !!(drawer && drawer.style.display === 'flex') &&
+    !!(history.state && history.state._bnusparks && history.state.view === 'navDrawer');
+  if (wasOpen && typeof _replaceNextPush !== 'undefined') _replaceNextPush = true;
+  closeNavDrawer();
 }

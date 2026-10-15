@@ -92,7 +92,9 @@
     document.getElementById('drawerMenu').style.display = 'none';
     document.getElementById('drawerNotif').style.display = '';
     loadNotifications();
-    pushViewState('drawer', { sub: 'notif' });
+    // D4：子视图 replace 复用打开时压入的那条 drawer 条目——关闭时只需
+    // 交还一条，返回不会先「重开抽屉」再「关闭」。
+    pushViewState('drawer', { sub: 'notif' }, true);
   }
 
   async function showDrawerDownloads() {
@@ -113,7 +115,7 @@
         return;
       }
       list.innerHTML = data.map(function(r) {
-        return '<div class="notif-item notif-item-read" style="cursor:pointer" onclick="closeNotifDrawer();navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
+        return '<div class="notif-item notif-item-read" style="cursor:pointer" onclick="closeNotifDrawerAndGo();navToMaterial(' + r.material_id + ',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name) + '\')">' +
           '<div class="notif-item-header">' +
             '<div class="notif-item-content">' +
               '<div class="notif-item-title">' + esc(r.material_title) + '</div>' +
@@ -163,12 +165,12 @@
         '</div>' +
       '</div>' +
       '<div class="dm-divider"></div>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showProfile()"><span class="dm-ico dm-ico-user">' + DM_ICONS.user + '</span>个人中心</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawerAndGo();showProfile()"><span class="dm-ico dm-ico-user">' + DM_ICONS.user + '</span>个人中心</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerAppearance()"><span class="dm-ico dm-ico-user">✦</span>外观调整</a>' +
       '<a href="javascript:void(0)" class="dm-item" onclick="showDrawerNotif()"><span class="dm-ico dm-ico-bell">' + DM_ICONS.bell + '</span>通知中心' + notifBadgeHtml + '</a>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyUploadsPage()"><span class="dm-ico dm-ico-upload">' + DM_ICONS.upload + '</span>我的上传</a>' +
-      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyDownloadsPage()"><span class="dm-ico dm-ico-download">' + DM_ICONS.download + '</span>我的下载</a>' +
-	      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawer();showMyFavoritesPage()"><span class="dm-ico dm-ico-star">' + DM_ICONS.star + '</span>我的收藏</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawerAndGo();showMyUploadsPage()"><span class="dm-ico dm-ico-upload">' + DM_ICONS.upload + '</span>我的上传</a>' +
+      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawerAndGo();showMyDownloadsPage()"><span class="dm-ico dm-ico-download">' + DM_ICONS.download + '</span>我的下载</a>' +
+	      '<a href="javascript:void(0)" class="dm-item" onclick="closeNotifDrawerAndGo();showMyFavoritesPage()"><span class="dm-ico dm-ico-star">' + DM_ICONS.star + '</span>我的收藏</a>' +
       '<div class="dm-divider"></div>' +
       (showAdmin ? mgmtToggle + civilianToggle + '<div class="dm-divider"></div>' : '') +
       '<a href="javascript:void(0)" class="dm-item dm-logout" onclick="logout()"><span class="dm-ico dm-ico-logout">' + DM_ICONS.logout + '</span>退出登录</a>';
@@ -176,11 +178,33 @@
 
   function closeNotifDrawer(e) {
     if (e && e.target !== e.currentTarget) return;
-    document.getElementById('notifDrawer').style.display = 'none';
+    var drawer = document.getElementById('notifDrawer');
+    // D4：幂等守卫——popstate 收尾路径会再次调用本函数，此时抽屉已隐藏，
+    // 不得重复解锁滚动或再次回退历史。
+    if (!drawer || drawer.style.display !== 'flex') return;
+    drawer.style.display = 'none';
     unlockScroll();
     // 外观子页会注册为 active dialog；关闭抽屉时一并清理，避免后续 Escape
     // 被隐藏的外观弹层拦截，导致其他浮层无法关闭。
     if (typeof deactivateDialog === 'function') deactivateDialog();
+    // D4：✕/遮罩/菜单项关闭属于「用户关抽屉」，把本次打开压入的历史条目
+    // 交还（打开一次只占一条，子视图以 replace 复用）。系统返回触发的关闭
+    // 走到此处时 history.state 已是目的地条目，不会重复回退。
+    // 若调用方已置 _replaceNextPush（关抽屉并立即导航），则交由随后的
+    // pushViewState 以 replace 复用本条目，不走异步回退（避免吞掉 push）。
+    var st = history.state;
+    if (st && st._bnusparks && st.view === 'drawer' && !_replaceNextPush) history.back();
+  }
+
+  // D4：抽屉菜单项「关抽屉并进入目标页」。视觉上关闭抽屉，随后目标页面的
+  // pushViewState 会以 replace 复用抽屉条目——返回一步即回来源页，抽屉不
+  // 占用返回栈。
+  function closeNotifDrawerAndGo() {
+    var drawer = document.getElementById('notifDrawer');
+    var wasOpen = !!(drawer && drawer.style.display === 'flex') &&
+      !!(history.state && history.state._bnusparks && history.state.view === 'drawer');
+    if (wasOpen && typeof _replaceNextPush !== 'undefined') _replaceNextPush = true;
+    closeNotifDrawer();
   }
 
   // ── 模式切换（Iter 6） ──
@@ -276,16 +300,16 @@
           var linkHtml = '';
           if (n.material_id) {
             if (n.type === 'disagree') {
-              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a></div>';
+              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawerAndGo();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a></div>';
             } else if (n.type === 'rejected') {
               linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="navToReUpload(\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')" style="font-weight:600">↻ 跳转到文件目录并重新上传 →</a></div>';
             } else if (n.type === 'operation') {
               // 操作通知：如果有 material_id 则跳转到文件
               if (n.material_id) {
-                linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看资料详情 →</a></div>';
+                linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawerAndGo();navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看资料详情 →</a></div>';
               }
             } else {
-              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawer();navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看相关资料 →</a></div>';
+              linkHtml = '<div class="notif-item-link"><a href="javascript:void(0)" onclick="closeNotifDrawerAndGo();navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看相关资料 →</a></div>';
             }
           }
           return '<div class="notif-item ' + unreadClass + '" data-nid="' + n.id + '">' +
@@ -311,7 +335,7 @@
       }
       // v=164：底部单一跳转按钮——有通知「查看全部N条通知」，无通知「进入通知中心」
       html += '<div class="notif-footer">' +
-        '<button class="notif-view-all" onclick="closeNotifDrawer();showNotifFull()"><span class="dm-ico notif-btn-ico">' + DM_ICONS.list + '</span>' + (total > 0 ? '查看全部' + total + '条通知' : '进入通知中心') + '</button>' +
+        '<button class="notif-view-all" onclick="closeNotifDrawerAndGo();showNotifFull()"><span class="dm-ico notif-btn-ico">' + DM_ICONS.list + '</span>' + (total > 0 ? '查看全部' + total + '条通知' : '进入通知中心') + '</button>' +
         '</div>';
       list.innerHTML = html;
     } catch (err) {
@@ -530,7 +554,7 @@
           '</div>' +
           '<div class="notif-full-body" style="display:none">' +
             '<div class="notif-full-msg">' + (n.message ? esc(n.message) : '') + '</div>' +
-            (n.material_id ? '<div class="notif-full-link">' + (n.type === 'disagree' ? '<a href="javascript:void(0)" onclick="closeNotifDrawer();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a>' : '<a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看相关资料 →</a>') + '</div>' : '') +
+            (n.material_id ? '<div class="notif-full-link">' + (n.type === 'disagree' ? '<a href="javascript:void(0)" onclick="closeNotifDrawerAndGo();navToReviewDispute(' + n.material_id + ')">管理后台查看异议 →</a>' : '<a href="javascript:void(0)" onclick="navToMaterial(' + n.material_id + ',\'' + escJs(n.course_code || '') + '\',\'' + escJs(n.course_name || '') + '\')">查看相关资料 →</a>') + '</div>' : '') +
           '</div>' +
         '</div>';
       }

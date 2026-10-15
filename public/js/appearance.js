@@ -432,7 +432,8 @@
       lockScroll();
     }
     if (typeof activateDialog === 'function') activateDialog(drawerAppearance);
-    if (!guest && typeof pushViewState === 'function') pushViewState('drawer', { sub: 'appearance' });
+    // D4：子视图 replace 复用打开抽屉时的那条历史条目（关闭只交还一条）
+    if (!guest && typeof pushViewState === 'function') pushViewState('drawer', { sub: 'appearance' }, true);
   }
 
   function init() {

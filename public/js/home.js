@@ -174,7 +174,7 @@
 
   function setCompactTopExpanded(expanded) {
     _compactData.campusExpanded = !!expanded;
-    if (typeof patchViewState === 'function') patchViewState({ homeCampusExpanded: _compactData.campusExpanded });
+    _patchHomeViewState({ homeCampusExpanded: _compactData.campusExpanded });
     syncCompactTopState();
     renderCompactAnnouncement({ value: { items: _compactData.announcements }, error: null });
     renderCompactCampus({ value: _compactData.campusPayload || { items: _compactData.campus }, error: null });
@@ -759,6 +759,17 @@
     else if (typeof showTopDownloaded === 'function') showTopDownloaded(undefined, kind === 'favorite' ? 'favorite' : 'download');
   }
 
+  // D6：首页面板字段只允许写进 home 历史条目。此前深链启动窗口内
+  // （homeView 因静态标记处于 active、认证先于课程树返回）这些异步渲染会
+  // 把当前条目——可能是 /explorer/… /file/… /qa——的 URL 改写成 '/' 并混入
+  // 首页字段（patchViewState 按 current.view 生成 URL）。
+  function _patchHomeViewState(extra) {
+    if (typeof patchViewState !== 'function' || typeof getPersistedViewState !== 'function') return;
+    var cur = getPersistedViewState();
+    if (!cur || cur.view !== 'home') return;
+    patchViewState(extra);
+  }
+
   function renderCompactHot(kind, animate) {
     var host = document.getElementById('compactHotList');
     var more = document.getElementById('compactHotMore');
@@ -768,7 +779,7 @@
     var key = kind === 'favorite' ? 'top_favorited' : 'top_downloaded';
     var items = Array.isArray(stats[key]) ? stats[key].slice(0, 8) : [];
     _compactData.hotKind = kind === 'favorite' ? 'favorite' : 'download';
-    if (typeof patchViewState === 'function') patchViewState({ homeHotKind: _compactData.hotKind });
+    _patchHomeViewState({ homeHotKind: _compactData.hotKind });
     document.querySelectorAll('.h8-rank-tabs [data-hot]').forEach(function (tab) {
       var active = tab.getAttribute('data-hot') === _compactData.hotKind;
       tab.classList.toggle('is-active', active);
@@ -831,7 +842,7 @@
     var key = kind === 'download' ? 'top_downloaded' : kind === 'favorite' ? 'top_favorited' : 'recent_uploads';
     var items = Array.isArray(stats[key]) ? stats[key].slice(0, 8) : [];
     _compactData.discoveryKind = kind;
-    if (typeof patchViewState === 'function') patchViewState({ homeDiscoveryKind: _compactData.discoveryKind });
+    _patchHomeViewState({ homeDiscoveryKind: _compactData.discoveryKind });
     if (note) note.textContent = kind === 'download' ? '按累计下载量排列' : kind === 'favorite' ? '按累计收藏数排列' : '按上传日期排列';
     document.querySelectorAll('.compact-discovery-tabs [data-discovery]').forEach(function (tab) {
       var active = tab.getAttribute('data-discovery') === kind;

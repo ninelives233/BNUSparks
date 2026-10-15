@@ -263,6 +263,11 @@
 
   // ── 浏览器历史导航 ──
   let _suppressingPushState = false;
+  // D4：抽屉菜单项「关抽屉并立即进入目标页」时置位——目标页面以 replace
+  // 复用抽屉压入的那条历史条目，避免异步 history.back() 与随后的 pushState
+  // 竞态（回退任务晚于 push 执行时会把目标页弹掉）。语义同 qa F01 的就地
+  // 替换，但不需要调用方自行 replaceState。
+  let _replaceNextPush = false;
   let _initialNav = true;  // 首次加载用 replaceState 代替 pushState，避免按返回退出网站
 
   // 读取当前 SPA 状态。弹窗会临时占用 history.state，因此优先回退到
@@ -288,6 +293,23 @@
 
   function pushViewState(view, extra, replace) {
     if (_suppressingPushState) return;
+    if (!replace && _replaceNextPush) {
+      replace = true;
+      _replaceNextPush = false;
+    }
+    if (!replace) {
+      // D1（滚动恢复口径）：压入新条目前，先把「当前页面此刻的滚动」写回当前
+      // 条目。此前 scrollY 只在压入时捕获（=上一页的滚动），目标条目自己被
+      // 离开时的位置从未被记录，返回到该条目就永远跳回顶部。replace 路径
+      // （同视图层级变化）随后会用最新 scrollY 整体重写条目，无需先补写。
+      var prev = history.state;
+      if (prev && prev._bnusparks && !prev._modal && prev.view && prev.scrollY !== window.scrollY) {
+        var prevNext = {};
+        for (var pk in prev) prevNext[pk] = prev[pk];
+        prevNext.scrollY = window.scrollY;
+        history.replaceState(prevNext, '');
+      }
+    }
     const state = { _bnusparks: true, view, scrollY: window.scrollY, ...extra };
     // 同步写入 URL（v=171 SPA 路由）：每个视图一个可分享/可刷新/可返回的干净路径；
     // drawer 等浮层返回 null → 保持当前 URL

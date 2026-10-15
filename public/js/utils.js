@@ -254,6 +254,26 @@
   var _activeDialog = null;
   var _dialogOpener = null;
 
+  // D1（滚动恢复口径）补充：用户在当前页面滚动时，把位置同步进当前历史条目
+  // （200ms 节流）。弹层打开时 body 为 fixed、scrollY 不变，无写放大；
+  // 非视图条目（弹层 _modal、null）不写。与 pushViewState 的离开补写互为兜底：
+  // 前者覆盖「滚完不动、直接按返回」，后者覆盖「滚完立刻点走」。
+  var _scrollSyncTimer = 0;
+  window.addEventListener('scroll', function () {
+    if (_scrollSyncTimer) return;
+    _scrollSyncTimer = window.setTimeout(function () {
+      _scrollSyncTimer = 0;
+      var st = history.state;
+      if (!st || !st._bnusparks || st._modal || !st.view) return;
+      var y = Math.round(window.scrollY);
+      if (st.scrollY === y) return;
+      var next = {};
+      for (var k in st) next[k] = st[k];
+      next.scrollY = y;
+      history.replaceState(next, '');
+    }, 200);
+  }, { passive: true });
+
   function _dialogFocusable(dialog) {
     return Array.from(dialog.querySelectorAll(
       'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
@@ -814,6 +834,51 @@
   // 失败/超时不再静默吞掉，给出可见的失败层。
   let _searchSeq = 0;
 
+  // D2：顶栏搜索结果浮层与问答/上传搜索浮层共用同一套弹层历史语义
+  // （lockScroll + 一条 _modal 历史条目）。此前该浮层不占历史，系统返回
+  // 会被 app.js 的浮层分支吞掉一次并跳过视图恢复，造成 URL 与内容不一致。
+  // 关闭（非导航）走 closeTopSearchOverlay：移除浮层并交还历史条目；
+  // 点击结果后还要导航，不能走异步 history.back()，用 keepEntry 把浮层
+  // 条目就地替换回打开前的页面状态（与 qa.js _closeQaSearchKeepEntry 同模式）。
+  function _closeTopSearchLayer(el) {
+    if (!el) return;
+    el.remove();
+    unlockScroll();
+    if (typeof deactivateDialog === 'function') deactivateDialog(el);
+  }
+
+  function _closeTopSearchKeepEntry(el) {
+    el = el || document.querySelector('.search-overlay');
+    if (!el) return;
+    var restored = (el._bnusparksReturnState && el._bnusparksReturnState._bnusparks)
+      ? el._bnusparksReturnState
+      : (typeof getPersistedViewState === 'function' ? getPersistedViewState() : null);
+    if (!restored) restored = { _bnusparks: true, view: 'home', scrollY: 0 };
+    var wasModal = !!(history.state && history.state._modal);
+    _closeTopSearchLayer(el);
+    if (wasModal) {
+      var url = typeof routeToPath === 'function' ? routeToPath(restored.view, restored) : null;
+      history.replaceState(restored, '', url || location.pathname);
+    }
+  }
+
+  function closeTopSearchOverlay(el) {
+    el = el || document.querySelector('.search-overlay');
+    if (!el) return;
+    var wasModal = !!(history.state && history.state._modal);
+    _closeTopSearchLayer(el);
+    if (wasModal) history.back();
+  }
+
+  // 展示新的顶栏搜索浮层前，先按各自的生命周期清掉旧浮层：本函数创建的
+  // 浮层要解锁并（由后续 push 复用其历史条目），其它浮层维持原样仅移除。
+  function _removeTopSearchOverlays() {
+    document.querySelectorAll('.search-overlay').forEach(function (el) {
+      if (el._bnusparksTopSearch) _closeTopSearchLayer(el);
+      else el.remove();
+    });
+  }
+
   async function searchQuery(q) {
     const seq = ++_searchSeq;
     let results;
@@ -822,18 +887,22 @@
     } catch (e) {
       if (seq !== _searchSeq) return; // 已有更新的搜索
       if (typeof currentUser === 'undefined' || !currentUser) return; // 已登出
-      document.querySelectorAll('.search-overlay').forEach(function (el) { el.remove(); });
+      _removeTopSearchOverlays();
       const errOverlay = document.createElement('div');
       errOverlay.className = 'search-overlay';
+      errOverlay._bnusparksTopSearch = true;
       errOverlay.innerHTML =
         '<div class="search-overlay-inner sg-inner"><div class="sg-header">' +
-        '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>' +
+        '<button class="sg-close" onclick="closeTopSearchOverlay(this.closest(\'.search-overlay\'))" aria-label="关闭">✕</button>' +
         '<div class="sg-title-row"><span class="sg-title-icon">' + iconSvg('search') + '</span><h3 class="sg-title">' + esc(q) + '</h3></div>' +
         '<p class="sg-subtitle">' + esc((e && e.message) || '搜索失败') + '</p></div>' +
         '<div class="sg-body"><div class="sg-empty">' +
         '<div class="sg-empty-icon">' + iconSvg('alert') + '</div><div class="sg-empty-title">搜索失败</div>' +
         '<div class="sg-empty-desc">请检查网络后重试</div></div></div></div>';
       document.body.appendChild(errOverlay);
+      lockScroll();
+      errOverlay._bnusparksReturnState = history.state;
+      _pushModalHistory(errOverlay);
       return;
     }
     if (seq !== _searchSeq) return; // 已有更新的搜索：丢弃旧结果，不叠窗口
@@ -852,7 +921,7 @@
 
       /* 头部 */
       html += '<div class="sg-header">';
-      html += '<button class="sg-close" onclick="this.closest(\'.search-overlay\').remove()" aria-label="关闭">✕</button>';
+      html += '<button class="sg-close" onclick="closeTopSearchOverlay(this.closest(\'.search-overlay\'))" aria-label="关闭">✕</button>';
       html += '<div class="sg-title-row">';
       html += '<span class="sg-title-icon">' + iconSvg('search') + '</span>';
       html += '<h3 class="sg-title">' + esc(q) + '</h3>';
@@ -875,7 +944,7 @@
         results.courses.forEach(function(c) {
           var typeLabel = c.course_type === 'general' ? '通识' : '专业';
           var typeClass = c.course_type === 'general' ? 'sg-pill-general' : 'sg-pill-major';
-          html += '<div class="sg-item" onclick="this.closest(\'.search-overlay\').remove();navToCourse(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\',\'' + escJs(c.code) + '\')">';
+          html += '<div class="sg-item" onclick="_closeTopSearchKeepEntry(this.closest(\'.search-overlay\'));navToCourse(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\',\'' + escJs(c.code) + '\')">';
           html += '<div class="sg-item-body">';
           html += '<span class="sg-item-name">' + esc(c.name) + '</span>';
           html += '<span class="sg-item-meta">';
@@ -904,7 +973,7 @@
           if (m.review_status && m.review_status !== 'approved') {
             badgeHtml = '<span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem;margin-left:6px">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          html += '<div class="sg-item sg-item-link" onclick="this.closest(\'.search-overlay\').remove();showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})">';
+          html += '<div class="sg-item sg-item-link" onclick="_closeTopSearchKeepEntry(this.closest(\'.search-overlay\'));showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})">';
           html += '<div class="sg-item-body">';
           html += '<span class="sg-item-name">' + esc(m.title) + badgeHtml + '</span>';
           html += '<span class="sg-item-meta">';
@@ -932,8 +1001,15 @@
 
       overlay.innerHTML = html;
       // 单一活动结果层：展示新结果前移除旧的搜索覆层
-      document.querySelectorAll('.search-overlay').forEach(function (el) { el.remove(); });
+      _removeTopSearchOverlays();
       document.body.appendChild(overlay);
+      overlay._bnusparksTopSearch = true;
+      lockScroll();
+      // 记录浮层打开前的 SPA 状态：结果点击时就地恢复（keepEntry），
+      // 系统返回则经 app.js 浮层分支 + _popModalHistory 交还本条目。
+      overlay._bnusparksReturnState = history.state;
+      _pushModalHistory(overlay);
+      overlay.onclick = function (e) { if (e.target === overlay) closeTopSearchOverlay(overlay); };
   }
 
   /* ═══════════════════════════════════════════════════════════

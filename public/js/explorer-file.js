@@ -330,6 +330,16 @@
 
   var _currentDetailFile = null;
 
+  // D3：详情主体为异步加载（搜索/通知/排行榜等入口只带最小对象）。慢网下
+  // 响应可能晚于用户离开或切换到其它资料；交付前核对历史条目仍是「本文件
+  // 的详情条目」，否则丢弃——既不覆盖用户当前所在页面，失败回退也不得把
+  // 用户推走。与 _loadFdPreview 的 _fdPreviewRequest、qa 列表的 _qaListSeq
+  // 同属「过期响应不得渲染」守卫。
+  function _fdLoadIsCurrent(fid) {
+    var st = history.state;
+    return !!(st && st._bnusparks && !st._modal && st.view === 'fileDetail' && st.fileId === fid);
+  }
+
   var _fdPrevSidebar = null; // 保存进入文件详情前的侧边栏状态
 
   function _renderFdStats(file) {
@@ -383,12 +393,14 @@
         updateSidebar(_fdPrevSidebar);
         pushViewState('fileDetail', { fileId: fid, prevView: _fdPrevSidebar });
         api('/api/files/' + fid + '/').then(function(fullFile) {
+          if (!_fdLoadIsCurrent(fid)) return; // 已离开详情或切到别的资料：迟到响应不覆盖当前页面
           _currentDetailFile = fullFile;
           var v = document.getElementById('fileDetailView');
           if (v) { v.style.display = 'block'; v.classList.add('active'); }
           _renderFileDetail(fullFile);
           _recordFdView(fid);
         }).catch(function() {
+          if (!_fdLoadIsCurrent(fid)) return; // 同上：失败的旧请求也不得把用户推走
           // API 失败时回退到课程页
           if (file.course_code) {
             var t = file.course_code.startsWith('GEN') ? '通识课' : '专业课';
