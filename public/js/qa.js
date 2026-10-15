@@ -527,7 +527,8 @@ async function renderQaDetail(id, opts) {
     if (opts.answerId) {
       _qaFocusAnswer(opts.answerId);
     } else if (opts.scrollY) {
-      requestAnimationFrame(function() { window.scrollTo({ top: opts.scrollY }); });
+      // 恢复滚动位置：瞬时落位，不吃全局平滑滚动（迟到帧会覆盖恢复位置）
+      requestAnimationFrame(function() { scrollToInstant(opts.scrollY); });
     }
   } catch (err) {
     if (seq !== _qaDetailSeq) return;

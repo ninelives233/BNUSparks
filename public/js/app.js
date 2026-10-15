@@ -331,17 +331,23 @@ window.addEventListener('popstate', async function(e) {
       if (typeof updateSidebar === 'function') {
         updateSidebar('allCourses');
       }
-      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
     }
     // 文件详情页：重新加载（优先缓存，否则 API）
     if (state.view === 'fileDetail' && state.fileId) {
-      // 尝试从文件缓存恢复
-      if (window._fileLookup && window._fileLookup[state.fileId]) {
-        showFileDetail(window._fileLookup[state.fileId]);
-      } else {
-        showFileDetail({ id: state.fileId, title: '' });
-      }
-      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      // 遍历路径不得再入栈：showFileDetail 内部的 pushViewState 会复制一条
+      // 详情条目（历史栈每次前进/后退都在增长，下一次返回落在复制品上而非
+      // 列表）。与下方 D5 静态视图重入同款压栈处理。
+      _suppressingPushState = true;
+      try {
+        // 尝试从文件缓存恢复
+        if (window._fileLookup && window._fileLookup[state.fileId]) {
+          showFileDetail(window._fileLookup[state.fileId]);
+        } else {
+          showFileDetail({ id: state.fileId, title: '' });
+        }
+      } finally { _suppressingPushState = false; }
+      if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
     }
     // 新建课程页：重渲染面包屑与表单；newcourse.js 属懒加载模块，跨刷新边界的
     // 旧条目可能尚未加载，先补齐 explorer 模块再渲染，避免留下空壳视图。
@@ -349,7 +355,7 @@ window.addEventListener('popstate', async function(e) {
       var _renderNewCourse = function () {
         if (typeof renderNewCourseView !== 'function') return;
         renderNewCourseView();
-        if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+        if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
       };
       if (typeof renderNewCourseView === 'function') _renderNewCourse();
       else if (typeof ensureFeature === 'function') ensureFeature('explorer').then(_renderNewCourse).catch(function() {});
@@ -385,7 +391,7 @@ window.addEventListener('popstate', async function(e) {
           showQaCompose({ type: state.type || 'question', action: state.action || 'create', qid: state.qid, aid: state.aid });
         } finally { _suppressingPushState = false; }
       }
-      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
     }
     if (state.view === 'timetable' && typeof ttNavTimetable === 'function') {
       ttNavTimetable(state.userId || null);
@@ -406,12 +412,12 @@ window.addEventListener('popstate', async function(e) {
     if (_staticReentry && typeof showAbout === 'function') {
       _suppressingPushState = true;
       try { _staticReentry(); } finally { _suppressingPushState = false; }
-      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
     }
     // D1/D5：返回/前进到首页时恢复离开时的滚动位置；跨刷新边界到达时
     // 紧凑首页数据尚未渲染，补一次加载（内部有请求合并与 API 缓存）。
     if (state.view === 'home') {
-      if (state.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: state.scrollY}); });
+      if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
       var _hotList = document.getElementById('compactHotList');
       if (typeof loadCompactHome === 'function' && (!_hotList || !_hotList.childElementCount)) loadCompactHome();
     }
@@ -592,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
           renderExplorer();
           switchView('explorer', true);
           updateSidebar('allCourses');
-          if (saved.scrollY) requestAnimationFrame(function(){ window.scrollTo({top: saved.scrollY}); });
+          if (saved.scrollY) requestAnimationFrame(function(){ scrollToInstant(saved.scrollY); });
           break;
         // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
         // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑

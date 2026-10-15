@@ -325,7 +325,7 @@
     ++_fdPreviewRequest;
     var previewBody = document.getElementById('fdPreviewBody');
     if (previewBody) previewBody.innerHTML = '';
-    window.scrollTo({ top: 0 });
+    scrollToInstant(0);
   }
 
   var _currentDetailFile = null;
@@ -388,10 +388,12 @@
         // 异步从 API 获取完整数据
         var fid = file.id;
         var fTitle = file.title || '';
+        // 骨架屏会瞬时落底：离开位置先捕获，供 pushViewState 的离开补写使用
+        var departY = window.scrollY;
         // 先渲染骨架屏
         _showFileDetailSkeleton();
         updateSidebar(_fdPrevSidebar);
-        pushViewState('fileDetail', { fileId: fid, prevView: _fdPrevSidebar });
+        pushViewState('fileDetail', { fileId: fid, prevView: _fdPrevSidebar }, false, departY);
         api('/api/files/' + fid + '/').then(function(fullFile) {
           if (!_fdLoadIsCurrent(fid)) return; // 已离开详情或切到别的资料：迟到响应不覆盖当前页面
           _currentDetailFile = fullFile;
@@ -421,8 +423,13 @@
     var v = document.getElementById('fileDetailView');
     if (v) { v.style.display = 'block'; v.classList.add('active'); }
     updateSidebar(_fdPrevSidebar);
-    window.scrollTo({ top: 0 });
-    pushViewState('fileDetail', { fileId: file.id, prevView: _fdPrevSidebar });
+    // 必须瞬时落位：pushViewState 会把 scrollY 存进新条目，tokens.css 的全局
+    // 平滑滚动让动画中途值（实测出现过最大滚动值）被当成当前位置存档。
+    // 离开位置先捕获传给离开补写（departY）；详情条目自身存落底后的 0，
+    // 返回到详情条目应回顶部而不是继承列表的位置。
+    var departY = window.scrollY;
+    scrollToInstant(0);
+    pushViewState('fileDetail', { fileId: file.id, prevView: _fdPrevSidebar }, false, departY);
     _renderFileDetail(file);
     _recordFdView(file.id);
   }

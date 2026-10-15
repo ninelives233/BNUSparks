@@ -254,25 +254,26 @@
   var _activeDialog = null;
   var _dialogOpener = null;
 
-  // D1（滚动恢复口径）补充：用户在当前页面滚动时，把位置同步进当前历史条目
-  // （200ms 节流）。弹层打开时 body 为 fixed、scrollY 不变，无写放大；
-  // 非视图条目（弹层 _modal、null）不写。与 pushViewState 的离开补写互为兜底：
-  // 前者覆盖「滚完不动、直接按返回」，后者覆盖「滚完立刻点走」。
-  var _scrollSyncTimer = 0;
-  window.addEventListener('scroll', function () {
-    if (_scrollSyncTimer) return;
-    _scrollSyncTimer = window.setTimeout(function () {
-      _scrollSyncTimer = 0;
-      var st = history.state;
-      if (!st || !st._bnusparks || st._modal || !st.view) return;
-      var y = Math.round(window.scrollY);
-      if (st.scrollY === y) return;
-      var next = {};
-      for (var k in st) next[k] = st[k];
-      next.scrollY = y;
-      history.replaceState(next, '');
-    }, 200);
-  }, { passive: true });
+  // 不做「滚动时把 scrollY 同步进当前历史条目」的补写（D1 的早期补充，v=343 移除）：
+  // X5 类移动内核把 history 变更当导航处理，滚动期间节流再细的 replaceState
+  // 也会让顶部假加载条反复出现。滚动恢复完全由 pushViewState 的离开补写覆盖
+  // （滚动后点走时写入当前条目）；「滚完原地返回」的场景恢复到最后一次写入
+  // 的位置。新增滚动相关逻辑时不得写 history。
+
+  // ── 即时滚动（历史恢复/落位机制专用）──
+  // tokens.css 给 html 设了 scroll-behavior: smooth，任何不带 behavior 的
+  // scrollTo 都是异步动画：恢复位置会被迟到帧覆盖，动画中途的 scrollY 会
+  // 被 pushViewState 当作当前位置写进历史条目（实测捕获过最大滚动值）。
+  // behavior:'instant' 在不认识的旧内核是非法枚举值会抛 TypeError，退回
+  // 双参形式（旧内核本就不实现平滑滚动）。
+  function scrollToInstant(top) {
+    try {
+      window.scrollTo({ top: top, behavior: 'instant' });
+    } catch (e) {
+      window.scrollTo(0, top);
+    }
+  }
+  window.scrollToInstant = scrollToInstant;
 
   function _dialogFocusable(dialog) {
     return Array.from(dialog.querySelectorAll(

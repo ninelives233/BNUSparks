@@ -291,7 +291,7 @@
     try { sessionStorage.setItem('bnusparks_view', JSON.stringify(state)); } catch(e) {}
   }
 
-  function pushViewState(view, extra, replace) {
+  function pushViewState(view, extra, replace, departY) {
     if (_suppressingPushState) return;
     if (!replace && _replaceNextPush) {
       replace = true;
@@ -302,11 +302,14 @@
       // 条目。此前 scrollY 只在压入时捕获（=上一页的滚动），目标条目自己被
       // 离开时的位置从未被记录，返回到该条目就永远跳回顶部。replace 路径
       // （同视图层级变化）随后会用最新 scrollY 整体重写条目，无需先补写。
+      // departY：调用方已先行落底（如详情页 scrollToInstant(0)）时显式传入
+      // 离开位置，否则补写读到的是落底后的 0，返回不再恢复。
       var prev = history.state;
-      if (prev && prev._bnusparks && !prev._modal && prev.view && prev.scrollY !== window.scrollY) {
+      var y = departY !== undefined ? departY : window.scrollY;
+      if (prev && prev._bnusparks && !prev._modal && prev.view && prev.scrollY !== y) {
         var prevNext = {};
         for (var pk in prev) prevNext[pk] = prev[pk];
-        prevNext.scrollY = window.scrollY;
+        prevNext.scrollY = y;
         history.replaceState(prevNext, '');
       }
     }

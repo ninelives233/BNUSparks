@@ -1,7 +1,9 @@
 """移动端导航修复回归（真实页面、真实 API，可选 Playwright）。
 
-覆盖 2026-10-15 排查报告 D1–D6 的行为回归：
-  D1 返回恢复离开时的滚动位置（含 scrollY=0 不误恢复）
+覆盖 2026-10-15 排查报告 D1–D6 的行为回归，以及同日两轮线上回归：
+  D1 返回恢复离开时的滚动位置（含 scrollY=0 不误恢复）；
+     滚动期间不得写 history（X5 类内核会弹顶部假加载条）；
+     前进/后退遍历不得复制历史条目
   D2 顶栏搜索浮层占一条历史：返回只关浮层；结果点击后返回栈正确
   D3 迟到的详情响应不覆盖已离开的页面
   D4 抽屉 ✕ 关闭后一次返回不重开抽屉、不烧返回栈
@@ -188,6 +190,7 @@ class NavFixBrowserTest(StaticLiveServerTestCase):
         self._open_file('a')
         self.page.wait_for_timeout(300)
         self.assertEqual(self.page.evaluate('window.scrollY'), 0, '进入详情应回到顶部')
+        hist_len = self.page.evaluate('history.length')
         self.page.evaluate('history.back()')
         self.page.wait_for_timeout(500)
         after = self.page.evaluate('window.scrollY')
@@ -199,6 +202,9 @@ class NavFixBrowserTest(StaticLiveServerTestCase):
         self.page.evaluate('history.back()')
         self.page.wait_for_timeout(500)
         self.assertEqual(self.page.evaluate('window.scrollY'), before)
+        # popstate 遍历路径重开详情不得复制历史条目（否则下一次返回落在复制品上）
+        self.assertEqual(self.page.evaluate('history.length'), hist_len,
+                         '前进/后退遍历不得增长历史栈')
 
     def test_d1_top_of_list_stays_zero(self):
         self._login(self.reader)
@@ -209,6 +215,30 @@ class NavFixBrowserTest(StaticLiveServerTestCase):
         self.page.evaluate('history.back()')
         self.page.wait_for_timeout(500)
         self.assertEqual(self.page.evaluate('window.scrollY'), 0, '离开时在顶部，返回后也应为 0')
+
+    def test_d1_scrolling_never_writes_history(self):
+        """滚动期间不得写 history：X5 类内核把 history 变更当导航处理，会弹出
+        顶部假加载条，滚动一触发 replaceState 就等于「一滑一个加载提示」
+        （2026-10-15 线上回归）。"""
+        self._login(self.reader)
+        self._goto_root_ready()
+        self.page.wait_for_timeout(1200)  # 等首页异步面板的迟到渲染窗口过去
+        state_before = self.page.evaluate('history.state')
+        self.page.evaluate('''() => {
+            window.__hsWrites = 0;
+            const rs = history.replaceState.bind(history);
+            history.replaceState = function (...a) { window.__hsWrites += 1; return rs(...a); };
+            const ps = history.pushState.bind(history);
+            history.pushState = function (...a) { window.__hsWrites += 1; return ps(...a); };
+        }''')
+        # 连续滚动超过已移除的滚动同步的 200ms 节流窗口
+        for y in (200, 400, 600, 350):
+            self.page.evaluate('window.scrollTo(0, %d)' % y)
+            self.page.wait_for_timeout(260)
+        self.assertEqual(self.page.evaluate('window.__hsWrites'), 0,
+                         '滚动不得触发任何 history 写入（会触发移动内核假加载条）')
+        self.assertEqual(self.page.evaluate('history.state'), state_before,
+                         '滚动不得改写当前历史条目（含 scrollY）')
 
     # ── D2：顶栏搜索浮层的返回语义 ──
     def test_d2_top_search_back_closes_overlay_only(self):
