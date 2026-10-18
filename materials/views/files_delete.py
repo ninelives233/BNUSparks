@@ -17,7 +17,7 @@ from .utils import (
     _perform_soft_delete, _purge_expired_trash, TrashStageError,
     _create_notification,
     require_login,
-    UserProfile, Material, Notification,
+    UserProfile, Material, Notification, course_display_names,
 )
 
 
@@ -191,6 +191,11 @@ def api_file_detail(request, file_id):
     is_favorited = Favorite.objects.filter(user=user, material=material).exists() if user.is_authenticated else False
     rs = material.review_status
     uploader_profile = getattr(material.uploader, 'profile', None) if material.uploader else None
+    # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+    tree_course_name = (
+        course_display_names([material.course_id]).get(material.course_id)
+        if material.course_id else None
+    )
     return _ok({
         "id": material.id,
         "title": material.title,
@@ -203,7 +208,7 @@ def api_file_detail(request, file_id):
         "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
         "teacher": material.teacher,
         "description": material.description or "",
-        "course_name": material.course.name if material.course else "",
+        "course_name": tree_course_name or (material.course.name if material.course else ""),
         "course_code": material.course.code if material.course else "",
         "view_count": material.view_count,
         "download_count": material.download_count,

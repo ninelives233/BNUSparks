@@ -35,7 +35,7 @@ from .utils_course_tree import (
     _get_courses_in_category, _get_courses_in_category_preloaded,
     _merged_codes_map, _node_contains_course, _node_under, _thread_local,
     _normalize_course_code, _normalized_course_code_expression,
-    _unique_college_names,
+    _unique_college_names, course_display_names,
 )
 from .utils_trash import (
     TRASH_RETENTION, TrashStageError, _perform_soft_delete, _purge_expired_trash,

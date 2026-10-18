@@ -5,7 +5,9 @@ from unittest.mock import patch
 
 from django.utils import timezone
 
-from .helpers import AuthClient, create_course, create_material, create_user
+from .helpers import (
+    AuthClient, create_category, create_course, create_material, create_user,
+)
 from django.test import TestCase
 from ..models import (
     CourseCreationRequest,
@@ -157,6 +159,43 @@ class AdminMonitoringTest(TestCase):
         traced = self._get(f"/api/admin/users/{self.user.id}/downloads/").json()["data"]
         self.assertEqual(traced["total"], 2)
         self.assertFalse(traced["items"][0]["can_open"])
+
+    def test_access_records_follow_renamed_tree_node(self):
+        """重命名树节点后，访问记录流与单用户追溯都应显示新目录名。"""
+        root = create_category(name="根")
+        category = create_category(name="旧目录名", parent=root, course=self.course)
+
+        stream = self._get("/api/admin/monitoring/?section=downloads").json()["data"]
+        self.assertEqual(
+            [item["course_name"] for item in stream["items"]],
+            ["旧目录名", "旧目录名"],
+        )
+
+        category.name = "新目录名"
+        category.save(update_fields=["name"])
+
+        stream = self._get("/api/admin/monitoring/?section=downloads").json()["data"]
+        self.assertEqual(
+            [item["course_name"] for item in stream["items"]],
+            ["新目录名", "新目录名"],
+        )
+        traced = self._get(f"/api/admin/users/{self.user.id}/downloads/").json()["data"]
+        self.assertEqual(
+            [item["course_name"] for item in traced["items"]],
+            ["新目录名", "新目录名"],
+        )
+
+    def test_access_records_keep_snapshot_when_course_code_diverges(self):
+        """资料换课或历史改码导致快照代码与当前课程不一致时，保留原快照名。"""
+        DownloadRecord.objects.create(
+            user=self.user, material=self.material,
+            course_code="HIST999", course_name="历史快照名",
+            material_title="换课资料", file_name="moved.pdf",
+        )
+        stream = self._get("/api/admin/monitoring/?section=downloads").json()["data"]
+        names = {item["course_code"]: item["course_name"] for item in stream["items"]}
+        self.assertEqual(names["HIST999"], "历史快照名")
+        self.assertEqual(names[self.course.code], self.course.name)
 
     def test_health_payload_is_live_and_structured(self):
         response = self._get("/api/admin/monitoring/?section=health")

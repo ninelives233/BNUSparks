@@ -22,7 +22,7 @@ from .utils import (
     _report_candidates, _all_super_admins, _check_report_quota,
     _refund_report_quota,
     _perform_soft_delete, _check_moderator_access, require_login, require_role,
-    _safe_int, DAILY_REPORT_LIMIT,
+    _safe_int, DAILY_REPORT_LIMIT, course_display_names,
     UserProfile, Material, Notification, DeletionRecord,
 )
 from .qa_helpers import _qa_moderator_audience
@@ -358,6 +358,20 @@ def api_report_pending(request):
 
     # ── 材料举报聚合（pending）──
     mat_rows = [r for r in qs if r.kind == Report.Kind.MATERIAL]
+    # 举报行 course_name 是创建时的 Course.name 快照；资料还在且课程代码与
+    # 快照一致时改用导航树名展示，否则保留快照以免混淆历史归属。
+    report_tree_names = course_display_names({
+        r.material.course_id for r in mat_rows
+        if r.material_id and r.material.course_id
+        and r.material.course.code == r.course_code
+    })
+
+    def _report_course_name(r):
+        mat = r.material
+        if mat is not None and mat.course_id and mat.course.code == r.course_code:
+            return report_tree_names.get(mat.course_id) or r.course_name
+        return r.course_name
+
     groups = {}
     for r in mat_rows:
         key = r.material_pk if r.material_pk is not None else f"row:{r.id}"
@@ -392,7 +406,7 @@ def api_report_pending(request):
             "material_id": latest.material_pk,
             "material_title": latest.material_title or (mat.title if mat else ""),
             "course_code": latest.course_code,
-            "course_name": latest.course_name,
+            "course_name": _report_course_name(latest),
             "uploader_name": (mat.uploader_name or _display_name(mat.uploader)) if mat else "匿名",
             "uploader_id": mat.uploader_id if mat else None,
             "material_exists": latest.material_pk in alive_ids if latest.material_pk else False,
@@ -812,12 +826,25 @@ def api_report_history(request):
     page = _safe_int(request.GET.get("page"), 1, 1)
     per_page = _safe_int(request.GET.get("per_page"), 20, 1, 100)
     qs = _report_accessible_qs(request.user).select_related(
-        "reporter", "handled_by",
+        "reporter", "handled_by", "material", "material__course",
     ).order_by("-created_at")
     total = qs.count()
     total_pages = (total + per_page - 1) // per_page if total else 1
     page = min(page, total_pages)
-    items = qs[(page - 1) * per_page: page * per_page]
+    items = list(qs[(page - 1) * per_page: page * per_page])
+
+    # 举报行 course_name 是创建时的快照；资料还在且课程代码一致时以树名展示
+    history_tree_names = course_display_names({
+        r.material.course_id for r in items
+        if r.material_id and r.material.course_id
+        and r.material.course.code == r.course_code
+    })
+
+    def _report_course_name(r):
+        mat = r.material
+        if mat is not None and mat.course_id and mat.course.code == r.course_code:
+            return history_tree_names.get(mat.course_id) or r.course_name
+        return r.course_name
 
     def _serialize(r):
         # v173：升级到总管理的举报，在记录里标「已提交」
@@ -832,7 +859,7 @@ def api_report_history(request):
             "qa_question_title": r.qa_question_title or "",
             "target_user_name": r.target_user_name or "",
             "course_code": r.course_code,
-            "course_name": r.course_name,
+            "course_name": _report_course_name(r),
             "reporter_name": r.reporter_name or "匿名",
             "reasons": r.reasons or [],
             "reason_labels": [label(rc) for rc in (r.reasons or [])],

@@ -24,6 +24,7 @@ from .utils import (
     _create_notification, _user_can_edit_material,
     _follow_merge, _merged_codes_map,
     _normalize_course_code, _normalized_course_code_expression,
+    course_display_names,
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
@@ -76,13 +77,16 @@ def api_courses(request):
             Q(code__icontains=s) | Q(name__icontains=s)
         )
     qs = qs.order_by("code")[:100]
+    course_list = list(qs)
+    # 课程名与导航树一致：重命名目录只改 CourseCategory.name，不同步 Course.name
+    tree_names = course_display_names({c.id for c in course_list})
     return _ok([{
         "code": c.code,
-        "name": c.name,
+        "name": tree_names.get(c.id) or c.name,
         "course_type": c.course_type,
         "college_name": c.college.short_name if c.college_id else "",
         "material_count": c._material_count,
-    } for c in qs])
+    } for c in course_list])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -113,6 +117,9 @@ def api_course_files(request, course_code):
             course = courses.first()
     # 同名合并别名课程：资料目录跟随主课程
     course = _follow_merge(course)
+
+    # 列表内全部资料同属此课程；课程名与导航树一致（重命名目录不同步 Course.name）
+    tree_course_name = course_display_names([course.id]).get(course.id) or course.name
 
     user = _get_user(request)
 
@@ -193,7 +200,7 @@ def api_course_files(request, course_code):
             "uploader_id": m.uploader_id or 0,
             "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
             "teacher": m.teacher, "description": m.description or "",
-            "course_name": m.course.name if m.course else "",
+            "course_name": tree_course_name,
             "course_code": m.course.code if m.course else "",
             "download_count": m.download_count,
             "favorite_count": getattr(m, "favorite_count", 0),
@@ -346,11 +353,13 @@ def api_search(request):
         seen = set()
         results["courses"] = []
         merged_codes_all = _merged_codes_map()
+        kept_courses = []
         for c in courses_qs:
             if c.merged_into_id:
                 continue
             if c.code not in seen:
                 seen.add(c.code)
+                kept_courses.append(c)
                 codes = [c.code]
                 for _alias_id, alias_code in merged_codes_all.get(c.id, []):
                     if alias_code not in codes:
@@ -364,17 +373,27 @@ def api_search(request):
                 })
                 if len(results["courses"]) >= 20:
                     break
+        # 课程名与导航树一致（重命名目录只改 CourseCategory.name）
+        course_tree_names = course_display_names({c.id for c in kept_courses})
+        for row, c in zip(results["courses"], kept_courses):
+            row["name"] = course_tree_names.get(c.id) or row["name"]
 
     if search_type in ("all", "material"):
         q = Q(title__icontains=query) | Q(teacher__icontains=query) | Q(description__icontains=query)
         materials_qs = Material.objects.filter(q, review_status="approved").select_related("course")[:50]
+        material_list = list(materials_qs)
+        material_tree_names = course_display_names({
+            m.course_id for m in material_list if m.course_id
+        })
         results["materials"] = [{
             "id": m.id,
             "title": m.title,
             "course_code": m.course.code if m.course_id else "",
-            "course_name": m.course.name if m.course_id else "",
+            "course_name": (
+                material_tree_names.get(m.course_id) or m.course.name
+            ) if m.course_id else "",
             "file_type": m.file_type,
-        } for m in materials_qs]
+        } for m in material_list]
 
     return _ok(results)
 
@@ -430,27 +449,7 @@ def api_stats(request):
         for material in popular + favorited + recent
         if material.course_id
     }
-    course_name_by_id = {}
-    if course_ids:
-        categories = list(CourseCategory.objects.only(
-            "id", "parent_id", "order", "name", "course_id", "is_divider"
-        ).order_by("order", "id"))
-        children_by_parent = {}
-        for category in categories:
-            children_by_parent.setdefault(category.parent_id, []).append(category)
-
-        def collect_course_names(nodes):
-            for category in nodes:
-                children = children_by_parent.get(category.id, [])
-                if (not category.is_divider and not children
-                        and category.course_id in course_ids and category.name):
-                    course_name_by_id.setdefault(category.course_id, category.name)
-                if children:
-                    collect_course_names(children)
-
-        for root in children_by_parent.get(None, []):
-            # api_course_tree exposes each root's children, not the root itself.
-            collect_course_names(children_by_parent.get(root.id, []))
+    course_name_by_id = course_display_names(course_ids)
 
     def displayed_course_name(material):
         if not material.course_id:

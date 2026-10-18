@@ -10,9 +10,12 @@
 
 from .helpers import (
     BnuTestCase, create_college, create_course, create_category,
+    create_material,
 )
 
-from ..models import CourseCategory, Course
+from ..models import (
+    CourseCategory, Course, CourseFavorite, Favorite, Material, Report,
+)
 
 
 class CourseTreeTest(BnuTestCase):
@@ -203,3 +206,145 @@ class CourseTreeTest(BnuTestCase):
 
         for root_name, root in tree.items():
             walk(root.get("children") or [], [root_name])
+
+
+class CourseDisplayNameContractTest(BnuTestCase):
+    """课程名展示契约：所有展示端课程名以导航树叶子名为准。
+
+    管理模式重命名只改 CourseCategory.name，不同步 Course.name；
+    任何课程名展示位不得直接读 Course.name（或写入时的快照）而不做树名解析。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.course = create_course(code="DISP001", name="旧课程名")
+        self.material = create_material(self.course, self.user, review_status="approved")
+        Material.objects.filter(id=self.material.id).update(title="树名契约资料")
+        self.material.refresh_from_db()
+        # 树：根 → 叶子（改名后的目录名）
+        root = create_category(name="根")
+        self.leaf = create_category(name="新目录名", parent=root, course=self.course)
+
+    def _get(self, path, user=None):
+        if user is not None:
+            self.client.set_token(user)
+        resp = self.client.get_json(path)
+        self.assertEqual(resp.status_code, 200, path)
+        return resp.json()["data"]
+
+    def test_courses_list_and_search_follow_tree_name(self):
+        courses = self._get("/api/courses/")
+        row = next(c for c in courses if c["code"] == "DISP001")
+        self.assertEqual(row["name"], "新目录名")
+
+        search = self.client.get_json(
+            "/api/search/", data={"q": "DISP001", "type": "course"})
+        self.assertEqual(search.status_code, 200)
+        course_hit = next(
+            c for c in search.json()["data"]["courses"] if c["code"] == "DISP001"
+        )
+        self.assertEqual(course_hit["name"], "新目录名")
+
+        search = self.client.get_json("/api/search/", data={"q": "树名契约", "type": "material"})
+        self.assertEqual(search.status_code, 200)
+        material_hit = next(
+            m for m in search.json()["data"]["materials"] if m["id"] == self.material.id
+        )
+        self.assertEqual(material_hit["course_name"], "新目录名")
+
+    def test_course_files_and_file_detail_follow_tree_name(self):
+        files = self._get("/api/courses/DISP001/files/")
+        self.assertTrue(files)
+        self.assertEqual(files[0]["course_name"], "新目录名")
+
+        detail = self._get(f"/api/files/{self.material.id}/", self.user)
+        self.assertEqual(detail["course_name"], "新目录名")
+
+    def test_favorites_and_uploads_follow_tree_name(self):
+        Favorite.objects.create(user=self.user, material=self.material)
+        CourseFavorite.objects.create(user=self.user, course=self.course)
+        Material.objects.create(
+            course=self.course, title="我的待审上传", teacher="张老师",
+            file_name="b.pdf", file_path="DISP001/b.pdf", file_size=1,
+            uploader=self.user, uploader_name=self.user.first_name,
+            review_status="pending",
+        )
+
+        favs = self._get("/api/user/favorites/", self.user)
+        self.assertEqual(favs["items"][0]["course_name"], "新目录名")
+
+        course_favs = self._get("/api/user/course-favorites/", self.user)
+        self.assertEqual(course_favs["items"][0]["course_name"], "新目录名")
+
+        uploads = self._get("/api/user/uploads/", self.user)
+        names = {row["title"]: row["course_name"] for row in uploads}
+        self.assertEqual(names["树名契约资料"], "新目录名")
+        self.assertEqual(names["我的待审上传"], "新目录名")
+
+        public_page = self._get(f"/api/user/public/{self.user.id}/")
+        self.assertEqual(public_page["materials"][0]["course_name"], "新目录名")
+
+    def test_moderation_queues_follow_tree_name(self):
+        Material.objects.create(
+            course=self.course, title="待审核资料", teacher="张老师",
+            file_name="c.pdf", file_path="DISP001/c.pdf", file_size=1,
+            uploader=self.user, uploader_name=self.user.first_name,
+            review_status="pending",
+        )
+
+        pending = self._get("/api/moderation/pending/", self.admin)
+        pending_names = {row["title"]: row["course_name"] for row in pending}
+        self.assertEqual(pending_names["待审核资料"], "新目录名")
+
+        Material.objects.filter(id=self.material.id).update(review_status="approved")
+        history = self._get("/api/moderation/history/", self.admin)
+        history_names = {row["title"]: row["course_name"] for row in history["items"]}
+        self.assertEqual(history_names["树名契约资料"], "新目录名")
+
+    def test_report_displays_follow_tree_name_with_code_guard(self):
+        """举报行显示树名；快照代码与当前课程不一致时保留原快照名。"""
+        other_course = create_course(code="DISP002", name="另一门课")
+        other_material = create_material(other_course, self.user, review_status="approved")
+        Report.objects.create(
+            kind=Report.Kind.MATERIAL, material=self.material,
+            material_pk=self.material.id, reporter=self.user,
+            reporter_name=self.user.first_name, reasons=["spam"],
+            course_code=self.course.code, course_name="旧课程名",
+        )
+        Report.objects.create(
+            kind=Report.Kind.MATERIAL, material=other_material,
+            material_pk=other_material.id, reporter=self.user,
+            reporter_name=self.user.first_name, reasons=["spam"],
+            course_code="HIST999", course_name="历史快照名",
+        )
+
+        pending = self._get("/api/moderation/reports/pending/", self.admin)
+        pending_names = {
+            g["course_code"]: g["course_name"]
+            for g in pending["material_groups"]
+        }
+        self.assertEqual(pending_names["DISP001"], "新目录名")
+        self.assertEqual(pending_names["HIST999"], "历史快照名")
+
+        history = self._get("/api/moderation/reports/history/", self.admin)
+        history_names = {
+            r["course_code"]: r["course_name"] for r in history["items"]
+        }
+        self.assertEqual(history_names["DISP001"], "新目录名")
+        self.assertEqual(history_names["HIST999"], "历史快照名")
+
+    def test_course_outside_tree_falls_back_to_course_name(self):
+        """未挂树或叶子无名的课程仍显示 Course.name。"""
+        orphan = create_course(code="DISP003", name="孤儿课程")
+        orphan_material = create_material(orphan, self.user, review_status="approved")
+        Material.objects.filter(id=orphan_material.id).update(title="孤儿资料")
+        orphan_material.refresh_from_db()
+
+        detail = self._get(f"/api/files/{orphan_material.id}/", self.user)
+        self.assertEqual(detail["course_name"], "孤儿课程")
+
+        search = self.client.get_json("/api/search/", data={"q": "孤儿资料", "type": "material"})
+        material_hit = next(
+            m for m in search.json()["data"]["materials"] if m["id"] == orphan_material.id
+        )
+        self.assertEqual(material_hit["course_name"], "孤儿课程")

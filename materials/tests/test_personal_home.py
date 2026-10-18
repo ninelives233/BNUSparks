@@ -4,7 +4,10 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from .helpers import BnuTestCase, create_college, create_course, create_material, create_user
+from .helpers import (
+    BnuTestCase, create_category, create_college, create_course,
+    create_material, create_user,
+)
 from ..models import CampusLink, DownloadRecord, Favorite, Material, UserProfile, UserTimetable
 
 
@@ -81,6 +84,26 @@ class PersonalHomeApiTest(BnuTestCase):
         response = self.client.get_json("/api/auth/profile/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["data"]["download_count"], 7)
+
+    def test_my_downloads_show_renamed_tree_node_name(self):
+        """我的下载应显示重命名后的树节点名，而非 Course.name 旧快照。"""
+        course = create_course(code="GEN9901", name="旧课程名")
+        material = create_material(course, self.user, review_status="approved")
+        DownloadRecord.objects.create(
+            user=self.user, material=material,
+            activity_type=DownloadRecord.ActivityType.DOWNLOAD,
+            course_code=course.code, course_name=course.name,
+            material_title=material.title, file_name=material.file_name,
+        )
+
+        response = self.client.get_json("/api/user/downloads/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"][0]["course_name"], "旧课程名")
+
+        root = create_category(name="根")
+        create_category(name="新目录名", parent=root, course=course)
+        response = self.client.get_json("/api/user/downloads/")
+        self.assertEqual(response.json()["data"][0]["course_name"], "新目录名")
 
     def test_appearance_rejects_unknown_enum(self):
         response = self.client.patch_json("/api/auth/profile/", {"color_theme": "neon"})

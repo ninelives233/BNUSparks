@@ -10,7 +10,7 @@ from django.db import IntegrityError
 
 from .utils import (
     _err, _ok, _get_or_create_profile, require_login, _safe_int,
-    Favorite, Material, _bump_user_public_gen,
+    Favorite, Material, _bump_user_public_gen, course_display_names,
 )
 from ..models import Course, CourseFavorite
 
@@ -80,7 +80,11 @@ def api_my_favorites(request):
     ).order_by("-created_at")
 
     total = favorites.count()
-    items = favorites[offset:offset + page_size]
+    item_list = list(favorites[offset:offset + page_size])
+    # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+    tree_names = course_display_names({
+        fav.material.course_id for fav in item_list if fav.material.course_id
+    })
 
     total_pages = max(1, (total + page_size - 1) // page_size)
 
@@ -93,10 +97,12 @@ def api_my_favorites(request):
             "title": fav.material.title,
             "file_name": fav.material.file_name,
             "course_code": fav.material.course.code if fav.material.course else "",
-            "course_name": fav.material.course.name if fav.material.course else "",
+            "course_name": (
+                tree_names.get(fav.material.course_id) or fav.material.course.name
+            ) if fav.material.course else "",
             "created_at": fav.material.created_at.strftime("%Y-%m-%d"),
             "favorited_at": fav.created_at.strftime("%Y-%m-%d"),
-        } for fav in items],
+        } for fav in item_list],
     })
 
 
@@ -156,6 +162,7 @@ def api_my_course_favorites(request):
     ).select_related("course", "course__college").order_by("-created_at")
 
     seen = {}
+    kept = {}
     for fav in favs:
         code = fav.course.code
         if not code or code in seen:
@@ -167,4 +174,9 @@ def api_my_course_favorites(request):
             "college_name": fav.course.college.name if fav.course.college_id else "",
             "favorited_at": fav.created_at.strftime("%Y-%m-%d"),
         }
+        kept[code] = fav
+    # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+    tree_names = course_display_names({fav.course_id for fav in kept.values()})
+    for code, row in seen.items():
+        row["course_name"] = tree_names.get(kept[code].course_id) or row["course_name"]
     return _ok({"items": list(seen.values())})

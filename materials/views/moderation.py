@@ -20,7 +20,7 @@ from .utils import (
     _get_moderated_material_qs, _get_subordinate_covered_course_ids,
     _get_courses_in_category, _check_moderator_access, _user_covers_course,
     _get_visible_deletion_records, require_login, require_role, _safe_int,
-    _get_category_preload, _purge_expired_trash,
+    _get_category_preload, _purge_expired_trash, course_display_names,
     UserProfile, Material, CourseCategory, Notification,
     ReviewComment, DeletionRecord, Course, _bump_user_public_gen,
 )
@@ -83,7 +83,10 @@ def api_moderation_pending(request):
         _course = m.course  # select_related 已加载；悬空外键时 Django 置 None
         _creq = m.creation_request if m.creation_request_id else None
         # 新建课程申请随附文件 course 可为 NULL/悬空，回退到申请信息
-        _cname = _course.name if _course else (
+        # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+        _cname = (
+            pending_tree_names.get(m.course_id) or _course.name
+        ) if _course else (
             _creq.course_name if _creq else "新建课程申请"
         )
         _ccode = _course.code if _course else (
@@ -111,7 +114,12 @@ def api_moderation_pending(request):
         }
 
     try:
-        return _ok([_serialize(m) for m in qs])
+        pending_items = list(qs)
+        # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+        pending_tree_names = course_display_names({
+            m.course_id for m in pending_items if m.course_id
+        })
+        return _ok([_serialize(m) for m in pending_items])
     except Exception:
         # 安全网：任一条目序列化异常不返回 500 HTML（前端会报 Unexpected token '<'），
         # 而是记录日志并返回可读 JSON 错误。
@@ -477,7 +485,11 @@ def api_moderation_history(request):
     page = max(1, page)
     per_page = min(100, max(1, per_page))
     total = qs.count()
-    items = qs[(page - 1) * per_page : page * per_page]
+    history_items = list(qs[(page - 1) * per_page : page * per_page])
+    # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+    history_tree_names = course_display_names({
+        m.course_id for m in history_items if m.course_id
+    })
 
     # v=182：异议窗口 24h→48h（用户拍板，只放宽窗口、不加后端校验）
     recently = timezone.now() - timedelta(hours=48)
@@ -490,7 +502,9 @@ def api_moderation_history(request):
             {
                 "id": m.id,
                 "title": m.title,
-                "course_name": m.course.name if m.course_id else (
+                "course_name": (
+                    history_tree_names.get(m.course_id) or m.course.name
+                ) if m.course_id else (
                     m.creation_request.course_name if m.creation_request_id else "新建课程申请"
                 ),
                 "course_code": m.course.code if m.course_id else (
@@ -504,7 +518,7 @@ def api_moderation_history(request):
                 "created_at": m.created_at.strftime("%Y-%m-%d %H:%M"),
                 "can_object": m.review_status == "approved" and m.reviewed_at and m.reviewed_at >= recently and m.reviewed_by_id != request.user.id,
                 "is_admin_uploaded": m.reviewed_by is None and m.review_status == "approved",
-            } for m in items
+            } for m in history_items
         ],
     })
 

@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from .utils import (
-    _err, _ok, _safe_int, require_role,
+    _err, _ok, _safe_int, require_role, course_display_names,
     DownloadRecord, Material, UserProfile,
 )
 from ..models import (
@@ -406,8 +406,27 @@ def _download_page(qs, page, per_page):
     total_pages = max(1, (total + per_page - 1) // per_page)
     visible_total_pages = min(total_pages, MONITOR_MAX_PAGE)
     page = max(1, min(page, visible_total_pages))
+    records = list(qs.select_related(
+        "user", "user__profile", "material", "material__course",
+    )[(page - 1) * per_page:page * per_page])
+    # 记录里的 course_name 是写入时的 Course.name 快照；管理员重命名目录只改
+    # 树节点名。资料还在且课程代码与快照一致时，改用树节点名展示（与面包屑
+    # 一致）；课程代码已变或资料已删除时保留原快照，不混淆历史归属。
+    tree_names = course_display_names({
+        record.material.course_id
+        for record in records
+        if record.material_id
+        and record.material.course_id
+        and record.material.course.code == record.course_code
+    })
     items = []
-    for record in qs[(page - 1) * per_page:page * per_page]:
+    for record in records:
+        display_course_name = record.course_name
+        if (record.material_id and record.material.course_id
+                and record.material.course.code == record.course_code):
+            display_course_name = (
+                tree_names.get(record.material.course_id) or display_course_name
+            )
         profile = _profile_of(record.user)
         local_created = _local(record.created_at)
         items.append({
@@ -422,7 +441,7 @@ def _download_page(qs, page, per_page):
             "material_title": record.material_title or record.file_name or "已删除资料",
             "file_name": record.file_name,
             "course_code": record.course_code,
-            "course_name": record.course_name,
+            "course_name": display_course_name,
             "created_at": local_created.strftime("%Y-%m-%d %H:%M"),
             "date": local_created.strftime("%Y-%m-%d"),
             "can_open": record.material_id is not None,

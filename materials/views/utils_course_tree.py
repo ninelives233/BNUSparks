@@ -370,6 +370,40 @@ def _find_nodes_containing_course(root, course):
     return found
 
 
+def course_display_names(course_ids):
+    """course_id → 导航树叶子节点名的映射。
+
+    管理员重命名目录只改 CourseCategory.name，不同步 Course.name；
+    展示端（首页、访问记录等）统一以树节点名为准，与面包屑一致。
+    同一课程被多个叶子引用时取树序（order, id）第一个；查不到的
+    course_id 不在返回映射中，调用方自行回退到 Course.name / 快照。
+    """
+    wanted = {cid for cid in course_ids if cid}
+    if not wanted:
+        return {}
+    names = {}
+    categories = CourseCategory.objects.only(
+        "id", "parent_id", "order", "name", "course_id", "is_divider"
+    ).order_by("order", "id")
+    children_by_parent = {}
+    for category in categories:
+        children_by_parent.setdefault(category.parent_id, []).append(category)
+
+    def collect(nodes):
+        for category in nodes:
+            children = children_by_parent.get(category.id, [])
+            if (not category.is_divider and not children
+                    and category.course_id in wanted and category.name):
+                names.setdefault(category.course_id, category.name)
+            if children:
+                collect(children)
+
+    for root in children_by_parent.get(None, []):
+        # 对外暴露的树从根节点的 children 开始，根本身不参与命名。
+        collect(children_by_parent.get(root.id, []))
+    return names
+
+
 # ═══════════════════════════════════════════════════════════════
 # 管辖范围显示
 # ═══════════════════════════════════════════════════════════════

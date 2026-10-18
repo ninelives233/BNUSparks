@@ -25,7 +25,7 @@ from .utils import (
     require_login, Notification,
     UserProfile, Material, DownloadRecord, DeletionRecord, ReviewComment,
     Course, CourseCategory, F, Favorite, _bump_user_public_gen,
-    DAILY_DOWNLOAD_LIMIT,
+    DAILY_DOWNLOAD_LIMIT, course_display_names,
 )
 
 
@@ -287,6 +287,9 @@ def api_my_uploads(request):
     qs = Material.objects.filter(uploader=user).select_related(
         "course", "material_type", "creation_request",
     ).order_by("-created_at")
+    uploads = list(qs)
+    # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+    tree_names = course_display_names({m.course_id for m in uploads if m.course_id})
 
     return _ok([{
         "id": m.id,
@@ -294,7 +297,9 @@ def api_my_uploads(request):
         "course_code": m.course.code if m.course_id else (
             m.creation_request.course_code if m.creation_request_id else ""
         ),
-        "course_name": m.course.name if m.course_id else (
+        "course_name": (
+            tree_names.get(m.course_id) or m.course.name
+        ) if m.course_id else (
             m.creation_request.course_name if m.creation_request_id else ""
         ),
         "course_type": m.course.course_type if m.course_id else "",
@@ -306,7 +311,7 @@ def api_my_uploads(request):
         "review_notes": (m.review_notes or "") if m.review_status == "rejected" else "",
         "download_count": m.download_count,
         "created_at": m.created_at.strftime("%Y-%m-%d %H:%M") if m.created_at else "",
-    } for m in qs])
+    } for m in uploads])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -320,6 +325,23 @@ def api_my_downloads(request):
         user=request.user,
         activity_type__in=(DownloadRecord.ActivityType.LEGACY, DownloadRecord.ActivityType.DOWNLOAD),
     ).order_by("-created_at")
+    records = list(qs.select_related("material", "material__course"))
+
+    # course_name 是写入时的 Course.name 快照；管理员重命名目录只改树节点名。
+    # 课程代码与快照一致时以树节点名展示，否则保留原快照以免混淆历史归属。
+    tree_names = course_display_names({
+        record.material.course_id
+        for record in records
+        if record.material_id
+        and record.material.course_id
+        and record.material.course.code == record.course_code
+    })
+
+    def _display_name(record):
+        if (record.material_id and record.material.course_id
+                and record.material.course.code == record.course_code):
+            return tree_names.get(record.material.course_id) or record.course_name
+        return record.course_name
 
     return _ok([{
         "id": r.id,
@@ -328,9 +350,9 @@ def api_my_downloads(request):
         "material_title": r.material_title,
         "file_name": r.file_name,
         "course_code": r.course_code,
-        "course_name": r.course_name,
+        "course_name": _display_name(r),
         "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
-    } for r in qs])
+    } for r in records])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -443,12 +465,17 @@ def api_user_public(request, uid):
     offset = (page - 1) * per_page
 
     materials_list = []
-    for m in materials_qs[offset:offset + per_page]:
+    page_items = list(materials_qs[offset:offset + per_page])
+    # 课程名与导航树一致（重命名目录只改 CourseCategory.name，不同步 Course.name）
+    tree_names = course_display_names({m.course_id for m in page_items if m.course_id})
+    for m in page_items:
         materials_list.append({
             "id": m.id,
             "title": m.title,
             "course_code": m.course.code if m.course_id else "",
-            "course_name": m.course.name if m.course_id else "",
+            "course_name": (
+                tree_names.get(m.course_id) or m.course.name
+            ) if m.course_id else "",
             "file_type": m.file_type,
             # v=164.1：补 file_name——file_type 是脏值（中文类别名/大写/空），
             # 前端文件图标需从真实文件名推导扩展名
