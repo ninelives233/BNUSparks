@@ -3634,7 +3634,7 @@ html[data-bnu-theme="dark"] .home-eight {
 
 .home-eight .h8-top .h8-shortcuts nav {
   flex: 1 1 auto;
-  /* 两卡等高时由行均摊剩余高度（auto 行随 align-content 拉伸），入口卡不再底部留白 */
+  /* 两卡等高时增量由三行均摊（当前 ≈ +11px/行），入口卡底部不会留白 */
   align-content: stretch;
 }
 
@@ -4650,6 +4650,8 @@ html[data-bnu-theme="warm"] .home-eight {
   text-align: left;
 }
 .home-eight .h8-carousel-promo { flex-direction: row; align-items: center; gap: 16px; }
+/* 文字链接自身撑满剩余宽度，二维码才能贴到色块右缘（body 的 flex:1 隔层无效） */
+.home-eight .h8-carousel-body-link { flex: 1 1 auto; min-width: 0; }
 /* 公告帧是纵向布局，帧被拉伸后标题+摘要垂直居中；促销帧由 align-items 居中 */
 .home-eight .h8-carousel-notice { justify-content: center; }
 .home-eight .h8-carousel-body { flex: 1; min-width: 0; }
@@ -4659,8 +4661,8 @@ html[data-bnu-theme="warm"] .home-eight {
 .home-eight .h8-carousel-promo strong { display: block; margin: 4px 0 5px; color: var(--ink); font-family: var(--serif); font-size: 20px; font-weight: 650; letter-spacing: -0.3px; line-height: 1.4; }
 .home-eight .h8-carousel-notice .h8-carousel-excerpt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 .home-eight .h8-carousel-promo .h8-carousel-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; }
-/* 二维码放大到可直接扫的尺寸：白底留 5px 边距，框高由它撑起（≈150px） */
-.home-eight .h8-carousel-qr { flex: 0 0 120px; width: 120px; height: 120px; padding: 5px; border: 1px solid var(--v9-border); border-radius: var(--radius-sm); background: #fff; box-sizing: border-box; }
+/* 二维码 88px：色块自然高度保持与入口卡同量级（不抬高整行），拉伸时随色块居中贴右 */
+.home-eight .h8-carousel-qr { flex: 0 0 88px; width: 88px; height: 88px; padding: 5px; border: 1px solid var(--v9-border); border-radius: var(--radius-sm); background: #fff; box-sizing: border-box; }
 /* v324：常青教程帧——两张轻叠纸卡 + 播放符号（纯 CSS，不在轮播内播放教程动画） */
 .home-eight .h8-carousel-tutorial .h8-carousel-visual { position: relative; flex: 0 0 52px; height: 56px; }
 .home-eight .h8-carousel-paper {
