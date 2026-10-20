@@ -80,7 +80,10 @@
   //        筛选排序底部面板、批量选择与底部分页；缓存键同步推进。
   // v340：explorer-render 每页条数并入移动端筛选底部面板，移除列表底部
   //        独立下拉；缓存键同步推进。
-  var VERSION = '343';
+  // v344：timetable 课表导入解析加固——表格展开为网格后定位表头，兼容
+  //        WPS/Excel 重存文件（无 thead/tbody、rowspan 两行表头、个人信息
+  //        行被清空）；timetable.js 一并更新，缓存键同步推进。
+  var VERSION = '344';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

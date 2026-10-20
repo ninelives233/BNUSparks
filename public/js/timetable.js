@@ -10,6 +10,9 @@
 //    SheetJS 解析（xlsx.full.min.js，仅此路径加载）。该格式无资料目录
 //    体系，导入仅作课程表使用（blob 标记 noLink），本科身份同硕博处理：
 //    不链接资料目录、不提供建课入口。
+// 两条路径都先把表格展开成二维网格再定位表头，因此被 WPS/Excel 打开后
+// 另存（丢失 thead/tbody、表头拆成 rowspan 两行、个人信息行被清空）的
+// 文件同样可解析。
 //
 // 教务文件结构：支持“课程明细表”和新版“按星期网格”两种导出布局。
 // 课程明细表结构：
@@ -119,16 +122,37 @@ function ttReadHiddenMeta(doc, meta) {
   }
 }
 
+function ttEmptyMeta() {
+  return { semester: '', studentName: '', studentId: '', className: '', courseCount: 0, credits: '' };
+}
+
+// 标题与个人信息文字 → meta。原始导出里这些文字在表格之外，WPS/Excel 重存后
+// 进了表格单元格，且单元格之间可能没有空白分隔，所以取值要在下一个标签处截断；
+// 任一项缺失（用户删掉学号姓名再导入）只是留空，不影响课程解析。
+function ttReadMetaText(text, meta) {
+  var m;
+  if (!meta.semester && (m = text.match(/[（(]((?:19|20)\d{2}[^（）()]*?学年[^（）()]*?学期)[）)]/))) meta.semester = m[1];
+  // 珠海标题行直接内嵌学期（「…2026-2027学年秋季学期学生课表」），无括号
+  if (!meta.semester && (m = text.match(/(?:19|20)\d{2}[-—~－](?:19|20)\d{2}学年(?:秋季学期|春季学期|第[一二12]学期|秋季|春季)/))) meta.semester = m[0];
+  if (!meta.studentId && (m = text.match(/学号[:：]\s*([A-Za-z0-9]+)/))) meta.studentId = m[1];
+  if (!meta.studentName && (m = text.match(/姓名[:：]\s*(\S+?)(?=\s|所在班级|学号[:：]|选课课程门数|总学分|$)/))) meta.studentName = m[1];
+  if (!meta.className && (m = text.match(/所在班级[:：]\s*(\S+?)(?=\s|选课课程门数|总学分|学号[:：]|姓名[:：]|$)/))) meta.className = m[1];
+  if (!meta.courseCount && (m = text.match(/选课课程门数[:：]\s*(\d+)/))) meta.courseCount = parseInt(m[1], 10);
+  if (!meta.credits && (m = text.match(/总学分[:：]\s*(\d+(?:\.\d+)?)/))) meta.credits = m[1];
+}
+
 // ── 解析：表头列映射 + 单行 → course（北京本科 HTML 明细表与
 // 珠海校区二进制 .xls 明细表共用） ──
 
 // 表头标签 → 列号。两代表头措辞不同（课程名称/上课时间地点），按包含关系匹配。
+// 标签先去掉空白和分隔符：原始导出表头用 <br> 换行（取文本后成「总,学时」），
+// 多行表头拼接后也可能带分隔符。
 function ttHeaderIndex(labels) {
   var idx = {};
   Array.prototype.forEach.call(labels, function (label, k) {
-    var lb = String(label || '').replace(/\s+/g, '');
+    var lb = String(label || '').replace(/[\s,，、;；]+/g, '');
     if (!lb) return;
-    if (lb.indexOf('课程代码') >= 0) idx.code = k;
+    if (lb.indexOf('课程代码') >= 0 || /^课程(?:编号|号)$/.test(lb)) idx.code = k;
     else if (lb.indexOf('课程名') >= 0) idx.name = k;
     else if (lb.indexOf('学时') >= 0) idx.hours = k;
     else if (lb.indexOf('学分') >= 0) idx.credits = k;
@@ -143,12 +167,16 @@ function ttHeaderIndex(labels) {
   return idx;
 }
 
-// 一行数据（cells 按列号取文本）→ course 对象；无课程名的行返回 null。
+// 表头碎片、汇总行与个人信息标签不是课程：WPS/Excel 重存会把这些文字放进
+// 普通表格行，网格扫描时它们可能出现在表头之后。
+var TT_NOISE_NAME = /^(?:[\[【]?课程号[\]】]?课程名|课程名称?|课程代码|总?学时|(?:上课)?班号|(?:修读)?性质|(?:辅修)?标志|(?:是否)?免听|合计|总计|小计|备注|说明|学号|姓名|所在班级|选课课程门数|总学分)(?:[:：]|$)/;
+
+// 一行数据（cells 按列号取文本）→ course 对象；无课程名或命中噪声标签的行返回 null。
 // 珠海格式课程代码独立成列，北京格式从名称方括号里取，两者取并。
 function ttCourseRow(cells, idx) {
   if (!idx || idx.name === undefined || !cells[idx.name]) return null;
   var rawName = String(cells[idx.name]).trim();
-  if (!rawName) return null;
+  if (!rawName || TT_NOISE_NAME.test(rawName)) return null;
   var parsed = ttSplitCourseName(rawName);
   if (!parsed.name) return null;
   var pick = function (k) {
@@ -170,40 +198,170 @@ function ttCourseRow(cells, idx) {
   };
 }
 
-// ── 解析：二进制 Excel（珠海校区教务「学生课表.xls」，BIFF/xlsx）→ { meta, courses } ──
-// 表头不在固定行：在前几行里找同时含「课程名」「上课时间」的行。
-// 该导出没有资料目录体系：返回 noLink 标记，导入仅作课程表使用（本科身份同硕博处理）。
-function ttParseGridImport(rows) {
-  rows = (rows || []).map(function (row) {
-    return (row || []).map(function (v) { return v === null || v === undefined ? '' : String(v); });
-  });
-  var meta = { semester: '', studentName: '', studentId: '', className: '', courseCount: 0, credits: '' };
-  var flat = rows.map(function (r) { return r.join(' '); }).join(' ');
-  var m;
-  if ((m = flat.match(/[（(]((?:19|20)\d{2}[^（）()]*?学年[^（）()]*?学期)[）)]/))) meta.semester = m[1];
-  // 珠海标题行直接内嵌学期（「…2026-2027学年秋季学期学生课表」），无括号
-  if (!meta.semester && (m = flat.match(/(?:19|20)\d{2}[-—~－](?:19|20)\d{2}学年(?:秋季学期|春季学期|第[一二12]学期|秋季|春季)/))) meta.semester = m[0];
+// ── 解析：表格 → 二维网格 → 课程列表（HTML 明细表与二进制 .xls 共用） ──
+// 教务原始导出的表头在 <thead> 单行里、「总<br>学时」靠 <br> 换行。经 WPS/Excel
+// 打开再保存后：thead/tbody 消失、<br> 表头被拆成 rowspan 两行（「总」「学时」）、
+// display:none 的隐藏列变成无表头的空列、学号/姓名行可能被用户清空。因此不依赖
+// thead，而是把表格按 rowspan/colspan（HTML）或合并单元格（SheetJS）展开成网格：
+// 被跨越的位置与来源格共用同一对象，合并多行表头时据此去重。
 
-  var idx = null, headerRow = -1;
-  for (var r = 0; r < Math.min(rows.length, 10); r++) {
-    var cand = ttHeaderIndex(rows[r]);
-    if (cand.name !== undefined && cand.time !== undefined) { idx = cand; headerRow = r; break; }
+// 单元格文本：<br> 转分隔符避免多行内容粘连，&nbsp; 还原为空格
+function ttCellText(td) {
+  var clone = td.cloneNode(true);
+  Array.prototype.forEach.call(clone.querySelectorAll('br'), function (br) {
+    br.parentNode && br.parentNode.replaceChild(document.createTextNode(','), br);
+  });
+  return (clone.textContent || '').replace(/\u00a0/g, ' ').trim();
+}
+
+// <table> → 网格。只取本表自身的行（table.rows 不含嵌套表的行），展开后
+// 行列号与视觉位置一致。
+function ttTableGrid(table) {
+  var grid = [], spans = [], rows = table.rows || [];
+  var span = function (td, name) {
+    var v = parseInt(td.getAttribute(name), 10);
+    return v > 1 ? Math.min(v, 200) : 1;
+  };
+  for (var r = 0; r < rows.length; r++) {
+    var cells = rows[r].cells, line = [], c = 0;
+    for (var k = 0; k < cells.length; k++) {
+      while (spans[c] && spans[c].left > 0) { line[c] = spans[c].cell; spans[c].left--; c++; }
+      var cell = { t: ttCellText(cells[k]) };
+      var cs = span(cells[k], 'colspan'), rs = span(cells[k], 'rowspan');
+      for (var j = 0; j < cs; j++) {
+        line[c] = cell;
+        if (rs > 1) spans[c] = { left: rs - 1, cell: cell };
+        c++;
+      }
+    }
+    for (; c < spans.length; c++) {
+      if (spans[c] && spans[c].left > 0) { line[c] = spans[c].cell; spans[c].left--; }
+    }
+    grid.push(line);
   }
-  if (!idx) return { meta: meta, courses: [] };
-  var courses = [], creditsSum = 0, hasCredits = false;
-  for (var r2 = headerRow + 1; r2 < rows.length; r2++) {
-    var c = ttCourseRow(rows[r2], idx);
-    if (!c) continue;
-    courses.push(c);
-    if (!meta.studentId && idx.studentId !== undefined && rows[r2][idx.studentId]) meta.studentId = rows[r2][idx.studentId].trim();
-    if (!meta.studentName && idx.studentName !== undefined && rows[r2][idx.studentName]) meta.studentName = rows[r2][idx.studentName].trim();
-    if (!meta.className && idx.className !== undefined && rows[r2][idx.className]) meta.className = rows[r2][idx.className].trim();
+  return grid;
+}
+
+// SheetJS 工作表 → 网格。行数组按从 A1 起的绝对坐标取（默认从 !ref 起点取，
+// 会与 !merges 的绝对坐标错位），合并区域内所有位置复用左上角单元格对象。
+function ttSheetGrid(ws) {
+  if (!ws || !ws['!ref']) return [];
+  var range = XLSX.utils.decode_range(ws['!ref']);
+  var end = { r: Math.min(range.e.r, 2000), c: Math.min(range.e.c, 255) };
+  var rows = XLSX.utils.sheet_to_json(ws, {
+    header: 1, raw: false, defval: '', blankrows: true,
+    range: { s: { r: 0, c: 0 }, e: end }
+  });
+  var grid = rows.map(function (row) {
+    return row.map(function (v) { return { t: v === null || v === undefined ? '' : String(v).trim() }; });
+  });
+  (ws['!merges'] || []).forEach(function (m) {
+    var origin = m && m.s && m.e && grid[m.s.r] && grid[m.s.r][m.s.c];
+    if (!origin) return;
+    for (var r = m.s.r; r <= m.e.r && r < grid.length; r++) {
+      for (var c = m.s.c; c <= m.e.c && c <= end.c; c++) grid[r][c] = origin;
+    }
+  });
+  return grid;
+}
+
+function ttGridTexts(row) {
+  return (row || []).map(function (cell) { return cell ? cell.t : ''; });
+}
+
+function ttGridIsHeaderRow(row) {
+  var idx = ttHeaderIndex(ttGridTexts(row));
+  return idx.name !== undefined && idx.time !== undefined;
+}
+
+// 「按周方式显示」网格导出的首行是「星期一…星期日」；WPS/Excel 重存会丢掉
+// 原模板的 xkinfo 类名，改按这一文本签名识别。
+function ttGridIsWeekLayout(grid) {
+  return grid.some(function (row) {
+    var hits = 0;
+    ttGridTexts(row).forEach(function (t) {
+      if (/^(?:星期|周)[一二三四五六日天]$/.test(t.replace(/\s+/g, ''))) hits++;
+    });
+    return hits >= 5;
+  });
+}
+
+// 网格 → { idx, courses }；找不到课程表头返回 null。
+// 自上而下找首个同时含「课程名」「上课时间」的行作表头起点；表头高度取该行各格
+// 向下延伸的最大行数（rowspan / 合并单元格），多行表头按列拼接不同来源格的文字
+// （「总」+「学时」→「总学时」）后再做列映射。表头之前的标题、个人信息行不参与
+// 课程解析，之后再次出现的表头行跳过。meta 里为空的学号/姓名/班级按列补齐
+// （珠海格式这些字段独立成列）。
+function ttGridCourses(grid, meta) {
+  var top = -1;
+  for (var r = 0; r < grid.length; r++) {
+    if (ttGridIsHeaderRow(grid[r])) { top = r; break; }
+  }
+  if (top < 0) return null;
+  var depth = 1;
+  grid[top].forEach(function (cell, c) {
+    var d = 1;
+    while (cell && grid[top + d] && grid[top + d][c] === cell) d++;
+    if (d > depth) depth = d;
+  });
+  // 合并信息丢失的导出（表头第二行是独立的空格 + 短标签）：紧随表头、课程名与
+  // 时间列为空、其余非空格都是不含数字的短标签的行，同样并入表头
+  var head = ttHeaderIndex(ttGridTexts(grid[top]));
+  var next = ttGridTexts(grid[top + depth]);
+  if (next.length && !next[head.name] && !next[head.time]) {
+    var labels = next.filter(Boolean);
+    if (labels.length && labels.every(function (s) { return s.length <= 8 && !/\d/.test(s); })) depth++;
+  }
+  var width = 0;
+  for (var h = 0; h < depth; h++) width = Math.max(width, (grid[top + h] || []).length);
+  var merged = [];
+  for (var c2 = 0; c2 < width; c2++) {
+    var parts = [], seen = [];
+    for (var h2 = 0; h2 < depth; h2++) {
+      var cell = grid[top + h2] && grid[top + h2][c2];
+      if (!cell || seen.indexOf(cell) >= 0) continue;
+      seen.push(cell);
+      if (cell.t) parts.push(cell.t);
+    }
+    merged.push(parts.join(''));
+  }
+  var idx = ttHeaderIndex(merged);
+  var courses = [];
+  for (var r2 = top + depth; r2 < grid.length; r2++) {
+    if (ttGridIsHeaderRow(grid[r2])) continue;
+    var cells = ttGridTexts(grid[r2]);
+    var course = ttCourseRow(cells, idx);
+    if (!course) continue;
+    courses.push(course);
+    if (meta) {
+      ['studentId', 'studentName', 'className'].forEach(function (key) {
+        if (!meta[key] && idx[key] !== undefined && cells[idx[key]]) meta[key] = cells[idx[key]];
+      });
+    }
+  }
+  return { idx: idx, courses: courses };
+}
+
+// ── 解析：二进制 Excel 网格（珠海校区教务「学生课表.xls」，或经 WPS/Excel 另存为
+// 真 Excel 的明细表）→ { meta, courses } ──
+// 该导出没有资料目录体系：返回 noLink 标记，导入仅作课程表使用（本科身份同硕博处理）。
+function ttParseGridImport(grid) {
+  var meta = ttEmptyMeta();
+  ttReadMetaText(grid.map(function (row) { return ttGridTexts(row).join(' '); }).join(' '), meta);
+  var found = ttGridCourses(grid, meta);
+  if (!found) {
+    return ttGridIsWeekLayout(grid)
+      ? { meta: meta, courses: [], rejected: 'grid' }
+      : { meta: meta, courses: [] };
+  }
+  var creditsSum = 0, hasCredits = false;
+  found.courses.forEach(function (c) {
     if (c.credits && parseFloat(c.credits)) { creditsSum += parseFloat(c.credits); hasCredits = true; }
-  }
-  if (hasCredits) meta.credits = creditsSum.toFixed(1);
-  meta.courseCount = courses.length;
+  });
+  if (!meta.credits && hasCredits) meta.credits = creditsSum.toFixed(1);
+  if (!meta.courseCount) meta.courseCount = found.courses.length;
   meta.sourceFormat = 'detail-table-xls';
-  return { meta: meta, courses: courses, noLink: true };
+  return { meta: meta, courses: found.courses, noLink: true };
 }
 
 // 二进制 Excel 检测：BIFF 复合文档（.xls）或 zip 容器（.xlsx）魔数。
@@ -231,25 +389,24 @@ function ttLoadXlsxLib() {
 function ttParseBinaryExcel(buffer) {
   return ttLoadXlsxLib().then(function () {
     var wb = XLSX.read(buffer, { type: 'array' });
-    var ws = wb.Sheets && wb.Sheets[wb.SheetNames[0]];
-    if (!ws) throw new Error('文件中没有工作表');
-    return ttParseGridImport(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }));
+    var names = (wb && wb.SheetNames) || [];
+    if (!names.length) throw new Error('文件中没有工作表');
+    // 课表通常在首个工作表；另存时若被挪到其他表，取首个解析出课程的工作表
+    var first = null;
+    for (var i = 0; i < names.length; i++) {
+      var parsed = ttParseGridImport(ttSheetGrid(wb.Sheets[names[i]]));
+      if (parsed.courses.length) return parsed;
+      if (!first) first = parsed;
+    }
+    return first;
   });
 }
 
 // ── 解析：HTML 文本 → { meta, courses } ──
 function ttParseImport(htmlText) {
   var doc = new DOMParser().parseFromString(htmlText, 'text/html');
-  var plain = (doc.body && doc.body.textContent) || '';
-  var meta = { semester: '', studentName: '', studentId: '', className: '', courseCount: 0, credits: '' };
-  var m;
-  if ((m = plain.match(/[（(]((?:19|20)\d{2}[^（）()]*?学年[^（）()]*?学期)[）)]/))) meta.semester = m[1];
-  if (!meta.semester && (m = plain.match(/(?:19|20)\d{2}[-—~－](?:19|20)\d{2}学年(?:秋季学期|春季学期|第[一二12]学期|秋季|春季)/))) meta.semester = m[0];
-  if ((m = plain.match(/学号[:：]\s*(\S+)/))) meta.studentId = m[1];
-  if ((m = plain.match(/姓名[:：]\s*(\S+)/))) meta.studentName = m[1];
-  if ((m = plain.match(/所在班级[:：]\s*(\S+)/))) meta.className = m[1];
-  if ((m = plain.match(/选课课程门数[:：]\s*(\d+)/))) meta.courseCount = parseInt(m[1], 10);
-  if ((m = plain.match(/总学分[:：]\s*([\d.]+)/))) meta.credits = m[1];
+  var meta = ttEmptyMeta();
+  ttReadMetaText((doc.body && doc.body.textContent) || '', meta);
   ttReadHiddenMeta(doc, meta);
 
   // 「按周方式显示」网格导出（xkinfo 模板）直接拒收：不带课程代码、一格堆多个
@@ -257,40 +414,20 @@ function ttParseImport(htmlText) {
   // rejected 标记由 ttOnFilePicked 转成「说明原因 + 重弹教程」。
   if (doc.querySelector('.xkinfo')) return { meta: meta, courses: [], rejected: 'grid' };
 
-  // 定位课程表：表头需同时含「课程名」和「上课时间」
-  var table = null, col = null;
-  var tables = Array.prototype.slice.call(doc.querySelectorAll('table'));
-  for (var i = 0; i < tables.length && !table; i++) {
-    var ths = tables[i].querySelectorAll('thead td, thead th');
-    if (!ths.length) continue;
-    var idx = ttHeaderIndex(Array.prototype.map.call(ths, function (td) { return td.textContent || ''; }));
-    if (idx.name !== undefined && idx.time !== undefined) { table = tables[i]; col = idx; }
+  // 定位课程表：首个表头同时含「课程名」和「上课时间」的表格（含嵌套表）
+  var tables = doc.querySelectorAll('table');
+  var weekly = false;
+  for (var i = 0; i < tables.length; i++) {
+    var grid = ttTableGrid(tables[i]);
+    var found = ttGridCourses(grid, meta);
+    if (found) {
+      meta.sourceFormat = 'detail-table';
+      return { meta: meta, courses: found.courses };
+    }
+    if (ttGridIsWeekLayout(grid)) weekly = true;
   }
-  if (!table) return { meta: meta, courses: [] };
-
-  var courses = [];
-  var rows = table.querySelectorAll('tbody tr');
-  Array.prototype.forEach.call(rows, function (tr) {
-    var tds = tr.querySelectorAll('td');
-    if (tds.length <= col.name || tds.length <= col.time) return;
-    var cellText = function (k) {
-      if (k === undefined || !tds[k]) return '';
-      // <br> 转换为分隔符再取文本，避免多行内容粘连
-      var clone = tds[k].cloneNode(true);
-      var brs = clone.querySelectorAll('br');
-      Array.prototype.forEach.call(brs, function (br) {
-        br.parentNode && br.parentNode.replaceChild(document.createTextNode(','), br);
-      });
-      return (clone.textContent || '').replace(/\u00a0/g, ' ').trim();
-    };
-    var cells = {};
-    [col.code, col.name, col.teachers, col.hours, col.credits, col.classNo, col.nature, col.time]
-      .forEach(function (k) { if (k !== undefined) cells[k] = cellText(k); });
-    var c = ttCourseRow(cells, col);
-    if (c) courses.push(c);
-  });
-  meta.sourceFormat = 'detail-table';
-  return { meta: meta, courses: courses };
+  if (weekly) return { meta: meta, courses: [], rejected: 'grid' };
+  return { meta: meta, courses: [] };
 }
 
 // 「[ECO12004]中级微观经济学」→ { code, name }
