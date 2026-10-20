@@ -3531,6 +3531,8 @@ html[data-bnu-theme="dark"] .home-eight {
 }
 
 .home-eight .h8-top > .h8-shortcuts {
+  display: flex;
+  flex-direction: column;
   padding: 16px 22px 14px;
   border-color: color-mix(in oklab, var(--primary) 24%, var(--h8-outline));
   background: var(--h8-campus-surface);
@@ -3631,7 +3633,9 @@ html[data-bnu-theme="dark"] .home-eight {
 }
 
 .home-eight .h8-top .h8-shortcuts nav {
-  align-content: start;
+  flex: 1 1 auto;
+  /* 两卡等高时由行均摊剩余高度（auto 行随 align-content 拉伸），入口卡不再底部留白 */
+  align-content: stretch;
 }
 
 .home-eight .h8-top .h8-shortcuts nav a,
@@ -4621,11 +4625,13 @@ html[data-bnu-theme="warm"] .home-eight {
    头条解剖（铜色左轨 + 染色卡面 + 衬线标题），置于文件末尾以拥有级联，
    不与上方 .h8-notice-main 旧规则互相牵扯。刻度线页脚兼任轮播与下方
    公告列表的分隔线，激活刻度染铜色。点击常青帧跳「关于 → 联系我们」。 */
-/* 裁剪窗在外层包裹元素上：overflow 与 transform 同元素会让裁剪窗跟着平移 */
-.home-eight .h8-carousel { overflow: hidden; touch-action: pan-y; cursor: grab; }
+/* 裁剪窗在外层包裹元素上：overflow 与 transform 同元素会让裁剪窗跟着平移。
+   与入口卡等高拉伸（h8-top 的 align-items: stretch）时，轮播撑满公告卡剩余
+   高度、各帧拉伸至同一高度后内容垂直居中，刻度线钉在卡底，不留顶部空白。 */
+.home-eight .h8-carousel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; touch-action: pan-y; cursor: grab; }
 .home-eight .h8-carousel.is-dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
 .home-eight .h8-carousel a { -webkit-user-drag: none; }
-.home-eight .h8-carousel-track { display: flex; align-items: flex-start; transition: transform 360ms var(--ease-out-strong); }
+.home-eight .h8-carousel-track { display: flex; flex: 1 1 auto; align-items: stretch; transition: transform 360ms var(--ease-out-strong); }
 .home-eight .h8-carousel.is-dragging .h8-carousel-track { transition: none; }
 .home-eight .h8-carousel-slide { flex: 0 0 100%; min-width: 0; }
 .home-eight .h8-carousel-notice,
@@ -4644,6 +4650,8 @@ html[data-bnu-theme="warm"] .home-eight {
   text-align: left;
 }
 .home-eight .h8-carousel-promo { flex-direction: row; align-items: center; gap: 16px; }
+/* 公告帧是纵向布局，帧被拉伸后标题+摘要垂直居中；促销帧由 align-items 居中 */
+.home-eight .h8-carousel-notice { justify-content: center; }
 .home-eight .h8-carousel-body { flex: 1; min-width: 0; }
 .home-eight .h8-carousel-notice .h8-label,
 .home-eight .h8-carousel-promo .h8-label { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; }
@@ -4651,7 +4659,8 @@ html[data-bnu-theme="warm"] .home-eight {
 .home-eight .h8-carousel-promo strong { display: block; margin: 4px 0 5px; color: var(--ink); font-family: var(--serif); font-size: 20px; font-weight: 650; letter-spacing: -0.3px; line-height: 1.4; }
 .home-eight .h8-carousel-notice .h8-carousel-excerpt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 .home-eight .h8-carousel-promo .h8-carousel-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 12px; }
-.home-eight .h8-carousel-qr { flex: 0 0 56px; width: 56px; height: 56px; border: 1px solid var(--v9-border); border-radius: var(--radius-sm); background: #fff; }
+/* 二维码放大到可直接扫的尺寸：白底留 5px 边距，框高由它撑起（≈150px） */
+.home-eight .h8-carousel-qr { flex: 0 0 120px; width: 120px; height: 120px; padding: 5px; border: 1px solid var(--v9-border); border-radius: var(--radius-sm); background: #fff; box-sizing: border-box; }
 /* v324：常青教程帧——两张轻叠纸卡 + 播放符号（纯 CSS，不在轮播内播放教程动画） */
 .home-eight .h8-carousel-tutorial .h8-carousel-visual { position: relative; flex: 0 0 52px; height: 56px; }
 .home-eight .h8-carousel-paper {
