@@ -2877,7 +2877,10 @@
   .compact-campus-link:hover { color: var(--primary); }
   .h8-recommend { margin: 22px 0; padding: 20px 24px; border: 1px solid var(--v9-border); border-radius: var(--radius-md); background: var(--raised); }
   .h8-recommend > .h8-section-head { margin-bottom: 20px; }
-  .h8-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  /* 推荐卡列数跟随侧边栏可见性：侧边栏在位（>900px）一律单列，
+     放不下的文字交给卡片内既有的 line-clamp/ellipsis 截断；
+     ≤900px 侧边栏退场后切两列；≤700px 移动端回到单列阅读流 */
+  .h8-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .h8-card { display: flex; min-width: 0; min-height: 158px; flex-direction: column; padding: 14px 16px 8px; border-radius: var(--radius-md); background: var(--v9-surface); }
   .h8-card-head { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-bottom: 13px; color: var(--ink-faint); font-size: 12px; }
   .h8-card-head a { overflow-wrap: anywhere; color: var(--primary); font-weight: 550; }
@@ -2919,9 +2922,13 @@
     .home-eight { padding-left: 24px; padding-right: 24px; }
     .h8-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
     .h8-scale { justify-content: flex-start; }
-    .h8-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .h8-bottom > section { padding-right: 18px; padding-left: 18px; }
     .h8-bottom .h8-section-head { flex-wrap: wrap; gap: 3px; }
+  }
+
+  /* 两列只在侧边栏已退场的 701–900px 出现；≤700px 由下方单列规则接管 */
+  @media (max-width: 900px) {
+    .h8-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   @media (max-width: 700px) {
@@ -3256,11 +3263,9 @@
     box-shadow: var(--shadow-sm);
   }
 
-  /* 宽屏只让首张推荐卡承担 lead card 的比例，不增加额外颜色。 */
+  /* 宽屏只让首张推荐卡承担 lead card 的份量，不增加额外颜色；
+     列数已随侧边栏可见性定为单列，这里不再改网格。 */
   @media (min-width: 1201px) {
-    .home-eight .h8-cards {
-      grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr));
-    }
     .home-eight #compactRecommendations > .h8-card:first-child {
       padding: 18px 20px 10px;
     }
@@ -3352,9 +3357,8 @@
   }
 
   /* ═══ 紧凑首页 v317：按窗口比例分档，而非只看宽度 ═══════════════
-     截图所在的 1.9:1 左右桌面视口属于「宽而矮」档：保留四列推荐队列，
-     用视口高度收紧纵向留白，把首屏内容往上托；较高/偏竖的桌面视口则切成
-     两列，让标题获得稳定的阅读宽度。移动端仍由 max-width:700px 规则接管。 */
+     「宽而矮」的桌面视口用视口高度收紧纵向留白，把首屏内容往上托。
+     列数不再随比例分档：推荐卡始终跟随侧边栏可见性（见 .h8-cards 处注释）。 */
   @media (min-width: 701px) and (min-aspect-ratio: 8/5) {
     .home-eight {
       padding-top: clamp(20px, 4.2vh, 28px);
@@ -3376,15 +3380,6 @@
     }
     .home-eight .h8-card {
       min-height: clamp(142px, 23vh, 158px);
-    }
-  }
-
-  @media (min-width: 1101px) and (max-aspect-ratio: 8/5) {
-    .home-eight .h8-cards {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .home-eight .h8-card {
-      min-height: 174px;
     }
   }
 
