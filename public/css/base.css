@@ -2877,10 +2877,10 @@
   .compact-campus-link:hover { color: var(--primary); }
   .h8-recommend { margin: 22px 0; padding: 20px 24px; border: 1px solid var(--v9-border); border-radius: var(--radius-md); background: var(--raised); }
   .h8-recommend > .h8-section-head { margin-bottom: 20px; }
-  /* 推荐卡列数跟随侧边栏可见性：侧边栏在位（>900px）一律单列，
-     放不下的文字交给卡片内既有的 line-clamp/ellipsis 截断；
-     ≤900px 侧边栏退场后切两列；≤700px 移动端回到单列阅读流 */
-  .h8-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  /* 推荐卡始终排成一行：侧边栏在位（>900px）固定四列不换行，窗口变窄时
+     靠卡片内既有的 line-clamp/ellipsis 截断；≤900px 侧边栏退场后才换行成
+     两列；≤700px 移动端回到单列阅读流 */
+  .h8-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .h8-card { display: flex; min-width: 0; min-height: 158px; flex-direction: column; padding: 14px 16px 8px; border-radius: var(--radius-md); background: var(--v9-surface); }
   .h8-card-head { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-bottom: 13px; color: var(--ink-faint); font-size: 12px; }
   .h8-card-head a { overflow-wrap: anywhere; color: var(--primary); font-weight: 550; }
@@ -3241,6 +3241,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* 窄卡里底部元信息不再把日期折成两截，放不下整体省略 */
+  .home-eight .h8-card-bottom > .h8-card-meta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .home-eight .h8-card-title {
     display: -webkit-box;
     overflow: hidden;
@@ -3264,8 +3271,11 @@
   }
 
   /* 宽屏只让首张推荐卡承担 lead card 的份量，不增加额外颜色；
-     列数已随侧边栏可见性定为单列，这里不再改网格。 */
+     仍是一行四列，首卡比例略宽。 */
   @media (min-width: 1201px) {
+    .home-eight .h8-cards {
+      grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr));
+    }
     .home-eight #compactRecommendations > .h8-card:first-child {
       padding: 18px 20px 10px;
     }
@@ -3358,7 +3368,7 @@
 
   /* ═══ 紧凑首页 v317：按窗口比例分档，而非只看宽度 ═══════════════
      「宽而矮」的桌面视口用视口高度收紧纵向留白，把首屏内容往上托。
-     列数不再随比例分档：推荐卡始终跟随侧边栏可见性（见 .h8-cards 处注释）。 */
+     列数不再随比例分档：一行四列、只随侧边栏可见性切换（见 .h8-cards 处注释）。 */
   @media (min-width: 701px) and (min-aspect-ratio: 8/5) {
     .home-eight {
       padding-top: clamp(20px, 4.2vh, 28px);
