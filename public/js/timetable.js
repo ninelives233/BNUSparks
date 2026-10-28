@@ -47,6 +47,11 @@ function ttTimeKey() {
   return 'bnusparks_timetable_time_u' + (currentUser && currentUser.id ? currentUser.id : 'anon');
 }
 
+// 教室查询内测：仅总管理员/版主/小版主可见；普通用户无入口，接口同样受限（materials/views/classrooms.py）
+function ttClassroomsAllowed() {
+  return !!(currentUser && currentUser.role && currentUser.role !== 'user');
+}
+
 // 配色方案（默认「暖秋」即 CSS 基础变量）。每套 = 暖组 w（有资料）× 冷组 c
 // （无资料）成对设计，切换时两组一起换。冷暖安全区：暖组 ∈ [322,85]、
 // 冷组 ∈ [158,305]，组间间隔 ≥76°；组内区分度由 CSS 八档水洗阶梯承担。
@@ -1298,6 +1303,7 @@ function ttLoadUserData() {
   // 课程为主体：默认课程列表，周课表是它的一种看法；记住用户上次的视图
   try { ttState.view = ['grid','list','classrooms'].includes(localStorage.getItem(ttViewKey())) ? localStorage.getItem(ttViewKey()) : 'list'; }
   catch (e) { ttState.view = 'list'; }
+  if (ttState.view === 'classrooms' && !ttClassroomsAllowed()) ttState.view = 'list';
   // 节次时间显示为设备级外观偏好，缺省显示
   try { ttState.showTime = localStorage.getItem(ttTimeKey()) !== '0'; }
   catch (e) { ttState.showTime = true; }
@@ -1503,7 +1509,7 @@ function ttApplyViewMode() {
   document.querySelectorAll('#ttViewMenu [data-view]').forEach(function (button) {
     button.setAttribute('aria-checked', button.dataset.view === ttState.view ? 'true' : 'false');
   });
-  document.querySelectorAll('#ttShell [data-view=classrooms]').forEach(function (button) { button.hidden = !!ttState.viewerMode; });
+  document.querySelectorAll('#ttShell [data-view=classrooms]').forEach(function (button) { button.hidden = !!ttState.viewerMode || !ttClassroomsAllowed(); });
   var manage = document.getElementById('ttManageBtn');
   if (manage) manage.textContent = ttState.view === 'classrooms' ? '筛选与设置' : ttState.editing ? '完成' : '管理';
   if (seg) seg.querySelectorAll('[data-view]').forEach(function (button) {
@@ -1536,7 +1542,8 @@ function ttToggleTimePref() {
 }
 
 function ttSetView(view) {
-  if (!['grid', 'list', 'classrooms'].includes(view) || (view === 'classrooms' && ttState.viewerMode)) return;
+  if (!['grid', 'list', 'classrooms'].includes(view) ||
+      (view === 'classrooms' && (ttState.viewerMode || !ttClassroomsAllowed()))) return;
   var fromPicker = document.getElementById('ttViewMenu')?.contains(document.activeElement);
   ttCloseViewPicker();
   if (fromPicker) document.getElementById('ttViewPicker').focus();
@@ -1891,6 +1898,11 @@ function ttDeleteSlot(sid, btn) {
 function ttRenderAll(options) {
   var body = ttScopedElement('ttBody');
   if (!body) return;
+  if (ttState.view === 'classrooms' && !ttState.viewerMode && !ttClassroomsAllowed()) {
+    // 无权限却停留在教室查询（旧视图记录/会话中角色变动）：静默回落课程列表
+    ttState.view = 'list';
+    try { localStorage.setItem(ttViewKey(), 'list'); } catch (e) {}
+  }
   ttApplyViewMode();
   if (ttState.view === 'classrooms' && !ttState.viewerMode && currentUser) {
     window.BnuClassrooms.mount(body, ttClassroomConfig());

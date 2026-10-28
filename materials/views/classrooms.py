@@ -1,9 +1,12 @@
-"""Authenticated, same-origin public classroom queries. Personal schedules stay client-side."""
+"""Moderator-beta classroom queries (总管理员/版主/小版主). Personal schedules stay client-side."""
 import datetime as dt
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
-from .utils import require_login
+from ..models import UserProfile
+from .utils import require_role
 from ..services import classrooms as source
+
+_STAFF_ROLES = (UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 
 
 def _response(data, status=200):
@@ -16,7 +19,7 @@ def _response(data, status=200):
 
 
 @require_GET
-@require_login
+@require_role(*_STAFF_ROLES)
 def api_classroom_context(request):
     now = dt.datetime.now(source.TZ)
     date, period, _ = source.now_target(now)
@@ -34,7 +37,7 @@ def _params(request, required, optional=()):
 
 
 @require_GET
-@require_login
+@require_role(*_STAFF_ROLES)
 def api_classroom_catalog(request):
     try:
         values = _params(request, ('building',))
@@ -48,7 +51,7 @@ def api_classroom_catalog(request):
 
 
 @require_GET
-@require_login
+@require_role(*_STAFF_ROLES)
 def api_classroom_query(request):
     try:
         values = _params(request, ('date', 'period', 'duration'), ('periods', 'force'))

@@ -159,13 +159,26 @@ class ClassroomSourceTests(SimpleTestCase):
 class ClassroomApiTests(TestCase):
     def setUp(self):
         self.client = AuthClient()
-        self.client.set_token(create_user('209911900090'))
+        self.client.set_token(create_user('209911900090', role='moderator'))
 
     def test_all_endpoints_require_authentication_and_are_get_only(self):
         for name in ['context', 'catalog', 'query']:
             url = '/api/classrooms/' + name + '/'
             self.assertEqual(AuthClient().get(url).status_code, 401)
             self.assertEqual(self.client.post_json(url).status_code, 405)
+
+    def test_query_endpoints_are_hidden_from_plain_users_but_open_to_staff_roles(self):
+        matrix = [('user', 403), ('sub_moderator', 200), ('moderator', 200), ('super_admin', 200)]
+        for index, (role, expected) in enumerate(matrix):
+            client = AuthClient()
+            client.set_token(create_user('20991190010%d' % index, role=role))
+            with patch.object(source, 'lookup', return_value={'count': 0, 'rooms': []}), \
+                    self.subTest(role=role):
+                self.assertEqual(client.get('/api/classrooms/context/').status_code, expected)
+                self.assertEqual(client.get('/api/classrooms/catalog/?building=教七楼').status_code, expected)
+                self.assertEqual(
+                    client.get('/api/classrooms/query/?date=2026-10-28&period=1&duration=1').status_code,
+                    expected)
 
     def test_context_uses_server_beijing_time_without_fetching_upstream(self):
         with patch.object(source, 'request_source', side_effect=AssertionError('unexpected source call')):

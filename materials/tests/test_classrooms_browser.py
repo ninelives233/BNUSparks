@@ -42,8 +42,9 @@ STAMP = '2026-10-28T14:00:00+08:00'
 class ClassroomIntegrationBrowserTest(StaticLiveServerTestCase):
     def setUp(self):
         from playwright.sync_api import sync_playwright
-        self.user = create_user('209911900091')
-        self.other_user = create_user('209911900092')
+        self.user = create_user('209911900091', role='moderator')
+        self.other_user = create_user('209911900092', role='moderator')
+        self.plain_user = create_user('209911900093')
         UserTimetable.objects.create(user=self.user, data=DATA)
         client = AuthClient()
         client.set_token(self.user)
@@ -210,6 +211,22 @@ class ClassroomIntegrationBrowserTest(StaticLiveServerTestCase):
         self.page.evaluate('clearAuthToken()')
         self.page.wait_for_timeout(100)
         self.assertEqual(self.page.locator('.cr-app').count(), 0)
+
+    def test_plain_users_never_see_the_entry_and_stale_classroom_views_fall_back(self):
+        page = self.page.context.new_page()
+        page.add_init_script("""(() => {
+          const s = %s;
+          sessionStorage.setItem('token', s.token);
+          localStorage.setItem('bnusparks_user_id', String(s.uid));
+          localStorage.setItem('bnusparks_timetable_view_u' + s.uid, 'classrooms');
+        })();""" % json.dumps({'uid': self.plain_user.id, 'token': _make_jwt(self.plain_user.id)}))
+        page.goto(self.live_server_url + '/timetable')
+        page.wait_for_function('typeof ttSetView === "function" && currentUser')
+        self.assertEqual(page.evaluate('ttState.view'), 'list')
+        self.assertTrue(page.locator('#ttViewSeg [data-view=classrooms]').is_hidden())
+        self.assertTrue(page.locator('#ttViewMenu [data-view=classrooms]').is_hidden())
+        self.assertEqual(page.evaluate('ttSetView("classrooms"); ttState.view'), 'list')
+        page.close()
 
     def choose_date(self, date):
         self.page.locator('#cr-plan').click()
