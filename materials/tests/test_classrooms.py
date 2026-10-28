@@ -119,6 +119,24 @@ class ClassroomSourceTests(SimpleTestCase):
             self.assertFalse(request.has_header('Authorization'))
             self.assertFalse(request.has_header('Cookie'))
 
+    @override_settings(CLASSROOM_SOURCE_TUNNEL_PORT=18080)
+    def test_optional_tunnel_is_loopback_only_and_preserves_the_fixed_host(self):
+        with tempfile.TemporaryDirectory() as folder, override_settings(CLASSROOM_LOCK_DIR=folder), \
+                source.source_lock(), patch.object(source.urllib.request, 'build_opener') as build:
+            response = build.return_value.open.return_value.__enter__.return_value
+            response.status = 200
+            response.read.return_value = b'ok'
+            self.assertEqual(source.request_source('/public/example', {'x': '1'}), b'ok')
+            request = build.return_value.open.call_args.args[0]
+            self.assertEqual(request.full_url, 'http://127.0.0.1:18080/public/example')
+            self.assertEqual(request.get_header('Host'), 'zyfw.prsc.bnu.edu.cn')
+            self.assertFalse(request.has_header('Authorization'))
+            self.assertFalse(request.has_header('Cookie'))
+        for port in [-1, 65536, '18080', True]:
+            with self.subTest(port=port), override_settings(CLASSROOM_SOURCE_TUNNEL_PORT=port):
+                with self.assertRaises(source.SourceError):
+                    source.request_source('/public/example', {})
+
     def test_lock_excludes_a_separate_python_worker_and_releases_on_exit(self):
         with tempfile.TemporaryDirectory() as folder, override_settings(CLASSROOM_LOCK_DIR=folder):
             script = ('from pathlib import Path;from django.conf import settings;'

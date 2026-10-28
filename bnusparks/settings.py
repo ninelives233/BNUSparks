@@ -24,6 +24,13 @@ if not SECRET_KEY:
 DEBUG = True
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
+# Optional fixed-host SSH transport; 0 keeps direct campus-network access.
+CLASSROOM_SOURCE_TUNNEL_PORT = int(os.environ.get(
+    'BNUSPARKS_CLASSROOM_TUNNEL_PORT', _env_vars.get('BNUSPARKS_CLASSROOM_TUNNEL_PORT', '0')
+))
+if not 0 <= CLASSROOM_SOURCE_TUNNEL_PORT <= 65535:
+    raise RuntimeError('BNUSPARKS_CLASSROOM_TUNNEL_PORT 必须为 0–65535')
+
 # ── 应用 ──
 INSTALLED_APPS = [
     'django.contrib.admin',

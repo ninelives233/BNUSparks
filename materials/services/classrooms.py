@@ -95,6 +95,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def request_source(path, fields):
     """No user URL, cookies, credentials or environment proxy; fixed public host."""
+    port = getattr(settings, 'CLASSROOM_SOURCE_TUNNEL_PORT', 0)
+    if type(port) is not int or not 0 <= port <= 65535:
+        raise SourceError('教务连接配置不合法。')
     fd = _SOURCE_FD.get()
     if fd is None:
         raise RuntimeError('Upstream calls require the process-shared source lock')
@@ -110,7 +113,10 @@ def request_source(path, fields):
     os.write(fd, str(time.monotonic()).encode('ascii'))
     os.ftruncate(fd, os.lseek(fd, 0, os.SEEK_CUR))
     data = urllib.parse.urlencode(fields).encode('ascii')
-    req = urllib.request.Request(UPSTREAM + path, data=data, headers={
+    # Only the transport can change: the logical upstream and Host remain fixed.
+    target = f'http://127.0.0.1:{port}' if port else UPSTREAM
+    req = urllib.request.Request(target + path, data=data, headers={
+        'Host': urllib.parse.urlsplit(UPSTREAM).netloc,
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'BNUSparks-Classrooms/1.0',
     })
