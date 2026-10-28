@@ -103,9 +103,20 @@
   // 认证表单仍有内联控件入口；显式暴露，避免脚本加载方式变化时按钮找不到函数。
   window.togglePwdVisibility = togglePwdVisibility;
 
+  // 认证弹窗不刷新页面，上次手选的后缀会残留在 DOM 里；
+  // 每次弹窗出现时恢复默认后缀，用户不手动切换就不能变。
+  var EMAIL_SUFFIX_DEFAULT = '@mail.bnu.edu.cn';
+  function _resetEmailSuffixDefaults() {
+    ['loginEmailSuffix', 'regEmailSuffix', 'forgotSuffix'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = EMAIL_SUFFIX_DEFAULT;
+    });
+  }
+
   function showLoginModal() {
     var modal = document.getElementById('loginModal');
     modal.style.display = 'flex';
+    _resetEmailSuffixDefaults();
     _hideLoginResendAction();
     lockScroll();
     _pushModalHistory(modal);
@@ -115,6 +126,7 @@
     document.getElementById('loginModal').style.display = 'none';
     var modal = document.getElementById('registerModal');
     modal.style.display = 'flex';
+    _resetEmailSuffixDefaults();
     if (options.showResend) {
       _showVerificationResendAction(options.message);
     } else {
@@ -138,6 +150,7 @@
     document.getElementById('registerModal').style.display = 'none';
     var modal = document.getElementById('loginModal');
     modal.style.display = 'flex';
+    _resetEmailSuffixDefaults();
     _hideLoginResendAction();
     activateDialog(modal);
   }
@@ -433,6 +446,7 @@
     document.getElementById('registerModal').style.display = 'none';
     var modal = document.getElementById('forgotPwdModal');
     modal.style.display = 'flex';
+    _resetEmailSuffixDefaults();
     document.getElementById('forgotPwdForm').style.display = 'block';
     document.getElementById('forgotPwdSuccess').style.display = 'none';
     document.getElementById('forgotPwdError').style.display = 'none';
