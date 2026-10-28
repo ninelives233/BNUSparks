@@ -6,6 +6,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("classrooms/context/", views.api_classroom_context, name="api_classroom_context"),
+    path("classrooms/catalog/", views.api_classroom_catalog, name="api_classroom_catalog"),
+    path("classrooms/query/", views.api_classroom_query, name="api_classroom_query"),
     # 认证
     path("auth/register/", views.api_register, name="api_register"),
     path("auth/resend-verification/", views.api_resend_verification, name="api_resend_verification"),

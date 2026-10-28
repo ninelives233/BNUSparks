@@ -929,30 +929,30 @@
 
   /* 网格视图满屏：一屏内完整看完一周 12 节，不做垂直滚动（实用性优先）；
      列表视图保持常规文档流 */
-  #ttShell.tt-shell:not(.tt-mode-list) {
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) {
     display: flex; flex-direction: column;
     height: calc(100vh - var(--header-height) - var(--space-md));
     height: calc(100dvh - var(--header-height) - var(--space-md));
   }
   /* 视图行加入后收紧各留白，满屏网格仍一屏放下 */
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-top { margin: 4px 0 6px; flex-wrap: nowrap; }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-viewbar { margin: 0 0 6px; }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-weekbar { margin-bottom: 6px; }
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) .tt-top { margin: 4px 0 6px; flex-wrap: nowrap; }
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) .tt-viewbar { margin: 0 0 6px; }
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) .tt-weekbar { margin-bottom: 6px; }
   /* 高度经 #ttBody 一层层传给 .tt-scroll（后者是 container，高度不能来自内容） */
-  #ttShell.tt-shell:not(.tt-mode-list) #ttBody {
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) #ttBody {
     flex: 1; min-height: 0; display: flex; flex-direction: column;
   }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-scroll {
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) .tt-scroll {
     flex: 1; min-height: 0; overflow: hidden;
     container-type: size; /* 供 cqh 字体随可视高度缩放 */
   }
   /* 统计/图例是次级信息：绝对定位挂在满屏画布正下方（视口外），
      下滑一小段才能看到；画布因此独占整屏高度。
      top 补上 shell 高度里扣掉的 --space-md，确保完全压在 fold 之外 */
-  #ttShell.tt-shell:not(.tt-mode-list) {
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) {
     position: relative;
   }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-foot {
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) .tt-foot {
     position: absolute; top: calc(100% + var(--space-md)); left: 0; right: 0;
     margin: 6px 0 0;
   }
@@ -1060,7 +1060,7 @@
     align-items: center; box-sizing: border-box;
   }
   /* 覆盖网格视图满屏规则中的 flex 布局，避免工具栏被推到页面中部。 */
-  #ttShell.tt-shell:not(.tt-mode-list) {
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) {
     display: grid; grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto minmax(0, 1fr);
     padding-top: 8px;
@@ -1117,7 +1117,7 @@
     width: 100%;
   }
   #ttShell .tt-viewbar { margin-bottom: 0; }
-  #ttShell.tt-shell:not(.tt-mode-list) .tt-viewbar { margin: 0; }
+  #ttShell.tt-shell:not(.tt-mode-list):not(.tt-mode-classrooms) .tt-viewbar { margin: 0; }
   #ttShell .tt-weekbar { margin-bottom: 6px; }
   #ttShell .tt-foot { padding-inline: 8px; }
 }
@@ -1134,3 +1134,12 @@
 .tt-toast { background: var(--ink) !important; color: var(--raised) !important; }
 html[data-bnu-theme="dark"] .tt-shell { --tt-gutter: oklch(0.24 0.015 250); --tt-line-soft: oklch(0.34 0.018 250); }
 html[data-bnu-theme="dark"] .tt-shell .tt-card { background: oklch(0.27 0.018 250); color: var(--ink); }
+
+/* Three views on wide layouts, one picker when the viewbar is constrained. */
+.tt-view-select{display:none;position:relative}.tt-view-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:80;min-width:145px;padding:5px;background:var(--raised);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md)}
+.tt-view-menu[hidden]{display:none}.tt-view-menu button{display:block;width:100%;padding:9px 12px;border:0;border-radius:4px;text-align:left;background:transparent;color:var(--ink);font:inherit;white-space:nowrap}.tt-view-menu button:hover,.tt-view-menu [aria-checked=true]{background:var(--primary-surface);color:var(--primary)}
+#ttShell .tt-switch-compact #ttViewSeg{display:none}#ttShell .tt-switch-compact .tt-view-select{display:block}
+#ttShell.tt-mode-classrooms .tt-weeknav-top{display:none}#ttShell.tt-mode-classrooms{height:auto;overflow:visible;padding-bottom:20px}#ttShell.tt-mode-classrooms #ttBody{overflow:visible;height:auto}
+@media(max-width:600px){#ttShell #ttViewSeg{display:none}#ttShell .tt-view-select{display:block}}
+
+#ttShell .tt-viewbar [data-view][hidden]{display:none!important}

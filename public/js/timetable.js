@@ -1194,7 +1194,7 @@ function ttInitShell(viewerUserId) {
       if (!ttState.viewerMode) ttMigrateLegacyStore();
       // 从其他 tab 回来时保留已经渲染好的课表；只有 DOM 缺失才静默补画。
       var body = ttScopedElement('ttBody');
-      var expected = ttState.data && ttState.data.courses.length
+      var expected = ttState.view === 'classrooms' ? '.cr-app' : ttState.data && ttState.data.courses.length
         ? (ttState.view === 'list' ? '#ttList' : '#ttGrid') : '.tt-empty';
       if (!body || !body.querySelector(expected)) ttRenderAll({ animate: false });
       if (!ttState.viewerMode && ttState.data && ttState._countError) ttLoadCourseCounts();
@@ -1215,7 +1215,14 @@ function ttInitShell(viewerUserId) {
       '<div class="pc-seg" id="ttViewSeg" role="tablist" aria-label="视图切换">' +
         '<button type="button" class="pc-seg-btn" data-view="list" aria-pressed="true"><span class="seg-l">课程列表</span><span class="seg-s">列表</span></button>' +
         '<button type="button" class="pc-seg-btn" data-view="grid" aria-pressed="false"><span class="seg-l">周课表</span><span class="seg-s">课表</span></button>' +
+        '<button type="button" class="pc-seg-btn" data-view="classrooms" aria-pressed="false">教室查询</button>' +
       '</div>' +
+      '<div class="tt-view-select"><button type="button" class="tt-btn" id="ttViewPicker" aria-haspopup="menu" aria-expanded="false" aria-controls="ttViewMenu">课程列表 ▾</button>' +
+        '<div id="ttViewMenu" class="tt-view-menu" role="menu" aria-label="切换我的课程视图" hidden>' +
+          '<button type="button" role="menuitemradio" tabindex="-1" data-view="list">课程列表</button>' +
+          '<button type="button" role="menuitemradio" tabindex="-1" data-view="grid">周课表</button>' +
+          '<button type="button" role="menuitemradio" tabindex="-1" data-view="classrooms">教室查询</button>' +
+        '</div></div>' +
       // 周次导航的顶栏镜像：桌面隐藏；移动端与视图分段同排，周条整行让位给课表画布
       '<div class="tt-weeknav tt-weeknav-top" id="ttWeekNavTop">' +
         '<button type="button" class="tt-wbtn" data-w="prev" aria-label="上一周">‹</button>' +
@@ -1230,14 +1237,16 @@ function ttInitShell(viewerUserId) {
   document.getElementById('ttManageBtn').addEventListener('click', function (e) {
     e.stopPropagation();
     // 编辑态下按钮即「完成」：一键退出，不必再进菜单
+    if (ttState.view === 'classrooms' && window.BnuClassrooms) { window.BnuClassrooms.openSettings(); return; }
     if (ttState.editing) { ttToggleEdit(); return; }
     ttToggleManagePop();
   });
-  document.getElementById('ttViewSeg').addEventListener('click', function (e) {
+  document.querySelector('#ttShell .tt-viewbar').addEventListener('click', function (e) {
     var btn = e.target.closest('[data-view]');
     if (!btn) return;
     ttSetView(btn.getAttribute('data-view'));
   });
+  ttInitViewPicker();
   // 顶栏周次导航（移动端可见）：与周条按钮同逻辑；空课表时无周可切
   var navTop = document.getElementById('ttWeekNavTop');
   if (navTop) navTop.addEventListener('click', function (e) {
@@ -1287,7 +1296,7 @@ function ttLoadUserData() {
     }
   } catch (e) { ttState.scheme = 'zhongguo'; }
   // 课程为主体：默认课程列表，周课表是它的一种看法；记住用户上次的视图
-  try { ttState.view = localStorage.getItem(ttViewKey()) === 'grid' ? 'grid' : 'list'; }
+  try { ttState.view = ['grid','list','classrooms'].includes(localStorage.getItem(ttViewKey())) ? localStorage.getItem(ttViewKey()) : 'list'; }
   catch (e) { ttState.view = 'list'; }
   // 节次时间显示为设备级外观偏好，缺省显示
   try { ttState.showTime = localStorage.getItem(ttTimeKey()) !== '0'; }
@@ -1307,6 +1316,8 @@ function ttLoadUserData() {
 function ttLoadAdminUserData(userId) {
   ttState._renderRoot = null;
   ttState._inlineBody = null;
+  if (ttState.view === 'classrooms') ttState.view = 'grid';
+  if (window.BnuClassrooms) window.BnuClassrooms.destroy();
   ttState.mode = 'viewer';
   ttState.viewerMode = true;
   ttState.uid = Number(userId);
@@ -1483,13 +1494,32 @@ window.addEventListener('bnuappearancechange', ttApplyCardTextAlign);
 function ttApplyViewMode() {
   var shell = document.getElementById('ttShell');
   var seg = document.getElementById('ttViewSeg');
-  if (shell) shell.classList.toggle('tt-mode-list', ttState.view === 'list');
-  if (seg) {
-    seg.querySelectorAll('[data-view]').forEach(function (b) {
-      var on = b.getAttribute('data-view') === ttState.view;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
+  if (shell) {
+    shell.classList.toggle('tt-mode-list', ttState.view === 'list');
+    shell.classList.toggle('tt-mode-classrooms', ttState.view === 'classrooms');
+  }
+  var picker = document.getElementById('ttViewPicker');
+  if (picker) picker.textContent = ({ list: '课程列表', grid: '周课表', classrooms: '教室查询' }[ttState.view] || '课程列表') + ' ▾';
+  document.querySelectorAll('#ttViewMenu [data-view]').forEach(function (button) {
+    button.setAttribute('aria-checked', button.dataset.view === ttState.view ? 'true' : 'false');
+  });
+  document.querySelectorAll('#ttShell [data-view=classrooms]').forEach(function (button) { button.hidden = !!ttState.viewerMode; });
+  var manage = document.getElementById('ttManageBtn');
+  if (manage) manage.textContent = ttState.view === 'classrooms' ? '筛选与设置' : ttState.editing ? '完成' : '管理';
+  if (seg) seg.querySelectorAll('[data-view]').forEach(function (button) {
+    var on = button.dataset.view === ttState.view;
+    button.id = 'ttView-' + button.dataset.view;
+    button.classList.toggle('active', on);
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', 'ttBody');
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    button.setAttribute('aria-selected', on ? 'true' : 'false');
+    button.tabIndex = on ? 0 : -1;
+  });
+  var body = document.getElementById('ttBody');
+  if (body) {
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute('aria-labelledby', 'ttView-' + ttState.view);
   }
 }
 
@@ -1506,8 +1536,14 @@ function ttToggleTimePref() {
 }
 
 function ttSetView(view) {
-  if (view !== 'grid' && view !== 'list') return;
+  if (!['grid', 'list', 'classrooms'].includes(view) || (view === 'classrooms' && ttState.viewerMode)) return;
+  var fromPicker = document.getElementById('ttViewMenu')?.contains(document.activeElement);
+  ttCloseViewPicker();
+  if (fromPicker) document.getElementById('ttViewPicker').focus();
   if (view === ttState.view) return;
+  if (view === 'classrooms' && ttState.editing) { ttState.editing = false; ttApplyEditMode(); }
+  var pop = document.getElementById('ttManagePop');
+  if (pop) pop.remove();
   ttState.view = view;
   try { localStorage.setItem(ttViewKey(), ttState.view); } catch (e) {}
   ttApplyViewMode();
@@ -1855,6 +1891,12 @@ function ttDeleteSlot(sid, btn) {
 function ttRenderAll(options) {
   var body = ttScopedElement('ttBody');
   if (!body) return;
+  ttApplyViewMode();
+  if (ttState.view === 'classrooms' && !ttState.viewerMode && currentUser) {
+    window.BnuClassrooms.mount(body, ttClassroomConfig());
+    return;
+  }
+  if (window.BnuClassrooms) window.BnuClassrooms.destroy();
   var animate = !options || options.animate !== false;
   ttApplyCardTextAlign();
   var hasData = !!(ttState.data && ttState.data.courses.length);
@@ -3598,6 +3640,7 @@ function ttStepWeek(d) {
 // 课程树异步就绪后重绘当前视图（链接状态可能已变化）
 function ttRepaintCurrent(animate) {
   if (!ttState.data) return;
+  if (ttState.view === 'classrooms') { ttRenderAll({ animate: false }); return; }
   var shouldAnimate = animate === true;
   if (ttState.view === 'list') {
     var body = ttScopedElement('ttBody');
@@ -4180,4 +4223,122 @@ function __ttLoadHtmlText(text) {
   ttRenderAll();
   ttLoadCourseCounts();
   return parsed;
+}
+
+
+// Read the active account's imported timetable and reuse its course palette.
+function ttClassroomConfig() {
+  var uid = currentUser.id;
+  return {
+    uid: uid,
+    campus: currentUser.campus,
+    isActive: function () {
+      var view = document.getElementById('timetableView');
+      return !!(currentUser && currentUser.id === uid && ttState.uid === uid &&
+        !ttState.viewerMode && ttState.view === 'classrooms' && view && view.classList.contains('active'));
+    },
+    getLessons: function (date) {
+      var data = ttState.data;
+      var start = data && (data.start || ttState.start);
+      var courses = data && data.courses || [];
+      var day = new Date(date + 'T12:00:00+08:00');
+      var week = start ? Math.floor((day - new Date(start + 'T12:00:00+08:00')) / 604800000) + 1 : 0;
+      var weekday = (day.getUTCDay() + 6) % 7 + 1;
+      var lessons = [];
+      if (week > 0) courses.forEach(function (course, ci) {
+        (course.meetings || []).forEach(function (meeting, mi) {
+          if (meeting.day !== weekday || !ttMeetingInWeek(meeting, week) ||
+              !Number.isInteger(meeting.ps) || !Number.isInteger(meeting.pe) ||
+              meeting.ps < 1 || meeting.pe > 12 || meeting.ps > meeting.pe) return;
+          var palette = ttClassroomPalette(course);
+          var room = String(meeting.room || '地点待定');
+          lessons.push({
+            key: String(course.id || ci) + '-' + mi,
+            name: String(course.name || ''), room: room,
+            ps: meeting.ps, pe: meeting.pe,
+            onsite: !/(线上教学|线上授课|在线教学|在线自学|网上自学|网络教学|online)/i.test(room),
+            bg: palette.bg, ink: palette.ink
+          });
+        });
+      });
+      return { status: 'ok', date: date, available: !!start && !!courses.length, week: week, lessons: lessons };
+    }
+  };
+}
+
+function ttClassroomPalette(course) {
+  var probe = document.createElement('div');
+  var link = course.code && ttState.links[course.code];
+  var richness = ttLinksEnabled() ? (link && link.state === 'linked' ? ttRichClass(link.fileCount) : ' tt-rich-0') : '';
+  probe.className = 'tt-card ttp' + ttToneOf(course) + richness;
+  probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;width:0;height:0';
+  document.getElementById('ttShell').appendChild(probe);
+  var style = getComputedStyle(probe);
+  function number(name, fallback) {
+    var value = parseFloat(style.getPropertyValue(name));
+    return Number.isFinite(value) ? value : fallback;
+  }
+  // The card hue/richness variables also retain course identity in dark mode.
+  var dl = number('--tdl', 0), dc = number('--tdc', 0), hue = number('--th', 25);
+  var result = {
+    bg: 'oklch(' + (number('--tt-l', .91) + dl) + ' ' + Math.max(0, number('--tt-c', .06) + dc) + ' ' + hue + ')',
+    ink: 'oklch(' + (number('--tt-il', .4) + dl) + ' ' + Math.max(0, number('--tt-ic', .09) + dc) + ' ' + hue + ')'
+  };
+  probe.remove();
+  return result;
+}
+
+function ttCloseViewPicker() {
+  var menu = document.getElementById('ttViewMenu');
+  var button = document.getElementById('ttViewPicker');
+  if (menu) menu.hidden = true;
+  if (button) button.setAttribute('aria-expanded', 'false');
+}
+
+function ttInitViewPicker() {
+  if (ttInitViewPicker.cleanup) ttInitViewPicker.cleanup();
+  var picker = document.getElementById('ttViewPicker');
+  var menu = document.getElementById('ttViewMenu');
+  var bar = document.querySelector('#ttShell .tt-viewbar');
+  var lifetime = new AbortController();
+  picker.addEventListener('click', function (event) {
+    event.stopPropagation();
+    var open = menu.hidden;
+    menu.hidden = !open;
+    picker.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('[data-view="' + ttState.view + '"]')?.focus();
+  });
+  document.addEventListener('click', function (event) {
+    if (!picker.parentElement.contains(event.target)) ttCloseViewPicker();
+  }, { signal: lifetime.signal });
+  picker.parentElement.addEventListener('focusout', function (event) {
+    if (event.relatedTarget && !picker.parentElement.contains(event.relatedTarget)) ttCloseViewPicker();
+  });
+  menu.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+      ttCloseViewPicker(); picker.focus(); event.preventDefault(); return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    var items = Array.from(menu.querySelectorAll('button')).filter(function (b) { return !b.hidden; });
+    var index = items.indexOf(document.activeElement);
+    var next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 :
+      (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[next].focus(); event.preventDefault();
+  });
+  var seg = document.getElementById('ttViewSeg');
+  seg.addEventListener('keydown', function (event) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    var items = Array.from(seg.querySelectorAll('button')).filter(function (b) { return !b.hidden; });
+    var index = items.indexOf(document.activeElement);
+    var next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 :
+      (index + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+    ttSetView(items[next].dataset.view); items[next].focus(); event.preventDefault();
+  });
+  var observer = new ResizeObserver(function () {
+    var compact = bar.clientWidth < 580;
+    bar.classList.toggle('tt-switch-compact', compact);
+    if (!compact) ttCloseViewPicker();
+  });
+  observer.observe(bar);
+  ttInitViewPicker.cleanup = function () { lifetime.abort(); observer.disconnect(); };
 }

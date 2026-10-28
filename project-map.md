@@ -18,6 +18,7 @@
 | 文件与目录管理 | `operations_*.py` |
 | 通知、公告、收藏、反馈 | `notifications.py`、`announcements.py`、`favorites.py`、`feedback.py` |
 | 问答区 | `qa_*.py`、`qa_helpers.py`、`qa_tasks.py` |
+| 教室查询（我的课程） | `materials/views/classrooms.py`、`materials/services/classrooms.py`、`public/js/classrooms.js`、`public/css/classrooms.css` |
 | 我的课程/课表 | `user_timetable.py`、`public/js/timetable.js`、`public/css/timetable.css` |
 | 监测与管理员状态 | `monitoring_events.py`、`admin_monitoring.py`、`public/js/admin-*.js` |
 | 前端启动与路由 | `public/index.html`、`public/js/app.js`、`views.js`、`feature-loader.js` |

@@ -83,7 +83,8 @@
   // v344：timetable 课表导入解析加固——表格展开为网格后定位表头，兼容
   //        WPS/Excel 重存文件（无 thead/tbody、rowspan 两行表头、个人信息
   //        行被清空）；timetable.js 一并更新，缓存键同步推进。
-  var VERSION = '344';
+  // v345：我的课程接入教室查询，宽屏三视图、窄屏统一选择器。
+  var VERSION = '345';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -120,6 +121,7 @@
       'qa-admin.js'
     ],
     timetable: [
+      'classrooms.js',
       'timetable.js'
     ],
     tutorial: [
@@ -137,7 +139,7 @@
     'admin-pending': ['admin.css'],
     'admin-records': ['admin.css'],
     'admin-qa': ['admin.css', 'qa.css'],
-    timetable: ['timetable.css'],
+    timetable: ['timetable.css', 'classrooms.css'],
     // 演示 DOM 复用站点真实 class：教程需要 Explorer/问答/课表的业务 CSS 同源渲染
     tutorial: ['tutorial.css', 'course.css', 'qa.css', 'timetable.css']
   };

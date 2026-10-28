@@ -78,6 +78,7 @@ Browser
 | `utils_moderation.py`、`moderation.py` | 审核作用域、分配、批准与驳回 |
 | `reports.py` | 资料和问答举报、候选处理人和限额 |
 | `qa_*.py` | 问答公开接口、用户操作、管理操作和任务 |
+| `classrooms.py`、`services/classrooms.py` | 登录后的教室目录与实时空闲查询、上游报表校验和共享缓存 |
 | `user_timetable.py` | 课表同步、revision 仲裁和权限 |
 | `admin_monitoring.py`、`monitoring_events.py` | 健康状态、活动聚合和隐私化事件 |
 
@@ -100,7 +101,7 @@ Browser
 | 个人中心 | `profile.js`、`user.css` |
 | 后台管理 | `admin-*.js`、`admin.css` |
 | 问答 | `qa*.js`、`qa.css` |
-| 我的课程 | `timetable.js`、`timetable.css` |
+| 我的课程 | `timetable.js`、`timetable.css`；教室查询子视图 `classrooms.js`、`classrooms.css` |
 | 公告 | `announcement.css` 和对应视图逻辑 |
 | 设计令牌与组件 | `tokens.css`、`components.css` |
 | 动画使用教程 | `tutorial-entry.js`（静态入口/首次调度）、`tutorial-data/scenes/player.js`（懒加载）、`tutorial.css`；状态接口 `materials/views/tutorial.py` |
@@ -152,6 +153,12 @@ timetable.js → /api/user/timetable/ → user_timetable.py → UserTimetable.re
 ```
 
 写入必须携带并校验 revision；SQLite 上不能假定行锁能解决并发覆盖。
+
+教室查询通过 `/api/classrooms/context/`、`catalog/`、`query/` 使用站内认证。
+后端固定访问北京教务公开源，校验报表的校区、教学周和节次；目录与查询结果由
+Django 缓存跨进程共享，上游调用通过本地文件锁串行并限速。排队返回 429，客户端稍后重试。
+课表联动直接读取当前账号已经导入的课表及配色，不向教务发送个人课表；显示偏好按账号
+保存在浏览器。退出账号或离开子视图时中止查询并清理实例，管理员查看他人课表不提供此子视图。
 
 ## 7. 权限原则
 

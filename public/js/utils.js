@@ -77,6 +77,7 @@
   }
 
   function clearAuthToken() {
+    if (window.BnuClassrooms) window.BnuClassrooms.destroy();
     _cachedToken = null;
     _apiCache.clear();
     _apiInflight.clear();

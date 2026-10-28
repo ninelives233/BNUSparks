@@ -143,3 +143,6 @@ from .utils import (
 
 # ── 专业目录（v259 身份标签三级联动数据源）──
 from .majors import api_majors
+
+# Public classroom queries
+from .classrooms import api_classroom_context, api_classroom_catalog, api_classroom_query
