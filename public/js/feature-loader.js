@@ -84,7 +84,8 @@
   //        WPS/Excel 重存文件（无 thead/tbody、rowspan 两行表头、个人信息
   //        行被清空）；timetable.js 一并更新，缓存键同步推进。
   // v345：我的课程接入教室查询，宽屏三视图、窄屏统一选择器。
-  var VERSION = '345';
+  // v346：所选日期的上课教室在楼内置顶，保留本节教室优先。
+  var VERSION = '346';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

@@ -19,12 +19,21 @@ DATA = {'meta': {'semester': '2026-2027学年秋季学期'}, 'start': '2026-09-0
         'importedAt': 1793160000000, 'courses': [
             {'id': 'onsite', 'code': 'MAT02008', 'name': '合成线性代数', 'meetings': [
                 {'ws': 1, 'we': 16, 'parity': 0, 'day': 3, 'ps': 5, 'pe': 6, 'room': '七206'}]},
+            {'id': 'next-day', 'code': 'GEN00002', 'name': '合成人工智能导论', 'meetings': [
+                {'ws': 1, 'we': 16, 'parity': 0, 'day': 4, 'ps': 3, 'pe': 4, 'room': '九102'}]},
+            {'id': 'next-day-later', 'code': 'GEN00003', 'name': '合成研讨课', 'meetings': [
+                {'ws': 1, 'we': 16, 'parity': 0, 'day': 4, 'ps': 7, 'pe': 8, 'room': '九205'}]},
+            {'id': 'next-day-other', 'code': 'GEN00004', 'name': '合成跨楼课程', 'meetings': [
+                {'ws': 1, 'we': 16, 'parity': 0, 'day': 4, 'ps': 1, 'pe': 2, 'room': '二204'}]},
+            {'id': 'past-day', 'code': 'GEN00005', 'name': '合成已结束课程', 'meetings': [
+                {'ws': 1, 'we': 16, 'parity': 0, 'day': 2, 'ps': 3, 'pe': 4, 'room': '九204'}]},
             {'id': 'online', 'code': 'GEN00001', 'name': '合成线上课', 'meetings': [
                 {'ws': 1, 'we': 16, 'parity': 0, 'day': 3, 'ps': 11, 'pe': 12, 'room': '网上自学'}]}]}
 BUILDINGS = ['教二楼', '教三楼', '教四楼', '教七楼', '教八楼', '教九楼', '化学楼', '生地楼', '艺术楼', '电子楼']
 ROOMS = [[b, prefix + str(200 + n), '多媒体教室', 30 + n * 10]
          for b, prefix in zip(BUILDINGS, ['二', '三', '四', '七', '八', '九', '化', '生', '艺', '电'])
          for n in range(1, 8)]
+ROOMS += [['教九楼', '九101', '多媒体教室', 60], ['教九楼', '九102', '多媒体教室', 60]]
 STAMP = '2026-10-28T14:00:00+08:00'
 
 
@@ -79,7 +88,7 @@ class ClassroomIntegrationBrowserTest(StaticLiveServerTestCase):
             periods = list(map(int, params['periods'].split(','))) if 'periods' in params else list(range(period, period + duration))
             rows = [r for i, r in enumerate(ROOMS) if all((i + p) % 4 for p in periods)]
             data = {'status': 'ok', 'query': {'date': params['date'], 'period': period, 'duration': duration,
-                    'periods': periods, 'week': 8, 'day': 3, 'term': {'xn': 2026, 'xq_m': '0', 'name': '秋季学期'}},
+                    'periods': periods, 'week': 8, 'day': dt.date.fromisoformat(params['date']).isoweekday(), 'term': {'xn': 2026, 'xq_m': '0', 'name': '秋季学期'}},
                     'rooms': rows, 'count': len(rows), 'fetched_at': STAMP,
                     'expires_at': '2026-10-28T14:35:00+08:00', 'cache_hit': False}
         route.fulfill(json={'ok': True, 'data': data})
@@ -201,3 +210,39 @@ class ClassroomIntegrationBrowserTest(StaticLiveServerTestCase):
         self.page.evaluate('clearAuthToken()')
         self.page.wait_for_timeout(100)
         self.assertEqual(self.page.locator('.cr-app').count(), 0)
+
+    def choose_date(self, date):
+        self.page.locator('#cr-plan').click()
+        self.page.locator('#cr-date').fill(date)
+        self.page.locator('#cr-date').dispatch_event('change')
+        self.page.wait_for_function('(date)=>document.getElementById("cr-date").value===date && !document.getElementById("cr-dateDialog").open', arg=date)
+
+    def test_selected_date_course_rooms_are_pinned_without_a_current_class(self):
+        self.enter()
+        self.choose_date('2026-10-29')
+        self.page.locator('#cr-buildingOverview [data-building="教九楼"]').click()
+        self.page.wait_for_function('document.getElementById("cr-roomsTitle").textContent.includes("教九楼")')
+        rows = self.page.locator('.browse-table tbody tr')
+        self.assertEqual(rows.nth(0).locator('.matrix-room').inner_text(), '九102\n上课教室')
+        self.assertEqual(rows.nth(1).locator('.matrix-room').inner_text(), '九205\n上课教室')
+        self.assertEqual(rows.nth(2).locator('.matrix-room').inner_text(), '九101')
+        self.page.locator('#cr-linkTimetable').uncheck()
+        self.assertEqual(rows.first.locator('.matrix-room').inner_text(), '九101')
+        self.assertEqual(self.page.locator('.current-course-room').count(), 0)
+        self.page.locator('#cr-linkTimetable').check()
+        self.page.wait_for_function('document.querySelector(".matrix-room")?.textContent.includes("九102")')
+        self.choose_date('2026-10-27')
+        self.page.wait_for_function('document.querySelector(".matrix-room")?.textContent.includes("九204")')
+        self.assertEqual(rows.first.locator('.matrix-room').inner_text(), '九204\n上课教室')
+        self.choose_date('2026-10-30')
+        self.page.wait_for_function('document.querySelector(".matrix-room")?.textContent === "九101"')
+        self.assertEqual(self.page.locator('.current-course-room').count(), 0)
+
+    def test_all_buildings_keeps_groups_and_pins_course_rooms_within_each_building(self):
+        self.enter()
+        self.page.locator('#cr-browseAll').click()
+        self.page.wait_for_function('document.querySelectorAll(".browse-table tbody tr").length === 44')
+        groups = self.page.locator('.browse-table tbody tr').evaluate_all('(rows)=>[...new Set(rows.map(row=>row.dataset.rowBuilding))]')
+        self.assertEqual(groups, BUILDINGS[:6])
+        room = self.page.locator('.browse-table tbody tr[data-row-building="教七楼"]').first.locator('.matrix-room')
+        self.assertEqual(room.inner_text(), '七206\n本节教室\n教七楼')
