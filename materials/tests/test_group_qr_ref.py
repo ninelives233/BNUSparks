@@ -24,4 +24,4 @@ class GroupQrRefContractTest(SimpleTestCase):
         self.assertEqual(len(set(refs)), 1, "group-qr 缓存键在各入口间不一致，会导致新旧二维码混用")
 
         # 有效期说明随码更新（换码时同步改这句）
-        self.assertIn("10 月 27 日前有效", views)
+        self.assertIn("11 月 5 日前有效", views)
