@@ -96,7 +96,8 @@
 .cr-app .primary:hover{background:var(--blue);filter:brightness(.95)}
 .cr-app footer{border-top:1px solid var(--line);margin-top:25px;padding-top:14px;font-size:11px;color:var(--sub);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .cr-app .linkbutton{padding:3px;border:0;background:transparent;color:var(--sub);font-size:11px;white-space:nowrap;min-height:36px}
-.cr-app dialog{width:min(590px,calc(100% - 24px));max-height:88dvh;padding:0;border:1px solid var(--line);border-radius:17px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+/* Restore native dialog centering after the site's universal margin reset. */
+.cr-app dialog{position:fixed;inset:0;margin:auto;width:min(590px,calc(100% - 24px));max-height:88dvh;overflow:auto;overscroll-behavior:contain;padding:0;border:1px solid var(--line);border-radius:17px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
 .cr-app dialog::backdrop{background:#11263288;backdrop-filter:blur(3px)}
 .cr-app .dialoginner{padding:24px}
 .cr-app .dialoghead{display:flex;align-items:start;justify-content:space-between;gap:20px;margin-bottom:18px}
@@ -235,17 +236,8 @@
 .cr-app .range-note{font-size:10px}
 .cr-app .range-ends button{min-height:56px}
 .cr-app .whole-day strong{font-size:13px}}
-.cr-app .time-disclosure>summary{display:none;cursor:pointer;list-style:none}
-.cr-app .time-disclosure>summary::-webkit-details-marker{display:none}
-.cr-app .compact-time strong{display:block;font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
-.cr-app .compact-time small{display:block;font-size:11px;color:var(--sub);margin-top:3px}
-.cr-app .disclosure-chevron{font-size:20px;color:var(--sub)}
-.cr-app .time-disclosure[open] .disclosure-chevron{transform:rotate(180deg)}
-.cr-app .time-disclosure>summary:focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:8px}
-@media (max-width:720px){.cr-app .time-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--quiet);border-radius:9px;min-height:61px}
-.cr-app .time-disclosure[open] .time-options{padding-top:13px}
-.cr-app .time-disclosure .timeaxis{grid-template-columns:repeat(3,minmax(0,1fr))}
-.cr-app .time-disclosure .axishead{margin-bottom:8px}
+@media (max-width:720px){.cr-app .time-options .timeaxis{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cr-app .time-options .axishead{margin-bottom:8px}
 .cr-app .currenthead .context{display:none}
 .cr-app .currenthead h1{font-size:23px;line-height:1.35}
 .cr-app .currenthead{margin-bottom:13px}
@@ -268,8 +260,7 @@
 .cr-app .roomheading>#cr-prefetchStatus{display:none}
 .cr-app .roomheading{margin-bottom:11px}
 .cr-app .roomlegend{font-size:11px;gap:9px}}
-@media (max-width:350px){.cr-app .compact-time strong{font-size:13px}
-.cr-app .roombtn{padding:12px}
+@media (max-width:350px){.cr-app .roombtn{padding:12px}
 .cr-app .roomname{font-size:16px}
 .cr-app .buildingtile{padding:8px 11px;gap:7px}}
 .cr-app .overview-tools{display:flex;gap:10px;align-items:center;min-width:0}
@@ -366,19 +357,15 @@
 .cr-app .selection-tools{display:flex;gap:6px;flex-shrink:0}
 .cr-app .selection-tools button{font-size:12px;min-height:35px;padding:6px 10px}
 .cr-app .selection-tools button[aria-pressed=true]{background:var(--bluewash);color:var(--blue);border-color:var(--blue)}
-.cr-app #cr-finishTime{display:none}
 @media (max-width:720px){.cr-app .selection-footer{align-items:start;flex-direction:column;gap:10px}
 .cr-app .selection-tools{width:100%}
 .cr-app .selection-tools button{min-height:38px}
-.cr-app .selection-tools #cr-finishTime{display:block;margin-left:auto}
-.cr-app .compact-time{min-width:0}
-.cr-app .compact-time small{overflow-wrap:anywhere}
 .cr-app .axishead{gap:6px}
 .cr-app .axishead>span{font-size:11px}
 .cr-app .range-trigger{font-size:10px;padding:4px 6px}
 .cr-app .timegroup .timecell .clock{font-size:10px}
 .cr-app .selection-footer strong{font-size:13px}}
-@media (max-width:720px){.cr-app .time-disclosure .timeaxis{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:720px){.cr-app .time-options .timeaxis{grid-template-columns:repeat(2,minmax(0,1fr))}
 .cr-app .timegroup .timecell{min-height:56px}
 .cr-app .timegroup .timecell strong{font-size:13px}
 .cr-app .timegroup .timecell .clock{font-size:11px}}
@@ -413,7 +400,7 @@
 .cr-app button,.cr-app input[type=date],.cr-app input[type=search],.cr-app select,.cr-app textarea{border-radius:var(--radius-sm)}
 .cr-app .timepanel,.cr-app .roombtn,.cr-app .statebox,.cr-app .browse-scroll{border-radius:var(--radius-md)}
 .cr-app .seg{border-radius:var(--radius-md)}
-.cr-app .seg button,.cr-app .timegroup,.cr-app .timegroup .timecell,.cr-app .time-disclosure>summary{border-radius:var(--radius-sm)}
+.cr-app .seg button,.cr-app .timegroup,.cr-app .timegroup .timecell{border-radius:var(--radius-sm)}
 .cr-app dialog{border-radius:var(--radius-lg)}
 .cr-app .sitehead{background:var(--surface)}
 .cr-app .brandmark{border-radius:var(--radius-sm);background:var(--accent);color:var(--on-primary);font-size:21px}
@@ -446,7 +433,7 @@
 .cr-app .browse-status{padding:5px 2px}
 .cr-app .overview-tools{flex-wrap:wrap;justify-content:flex-end;row-gap:3px}}
 .cr-app .buildingtile[aria-pressed=true],.cr-app .timecell[aria-pressed=true],.cr-app .durationrow button[aria-pressed=true],.cr-app .range-ends button[aria-pressed=true],.cr-app .selection-tools button[aria-pressed=true],.cr-app .custom-choice:has(input:checked){border-color:var(--selection-border);box-shadow:none}
-.cr-app button:focus-visible,.cr-app a:focus-visible,.cr-app input:focus-visible,.cr-app select:focus-visible,.cr-app textarea:focus-visible,.cr-app .time-disclosure>summary:focus-visible,.cr-app .browse-scroll:focus-visible{outline-width:2px;outline-offset:3px}
+.cr-app button:focus-visible,.cr-app a:focus-visible,.cr-app input:focus-visible,.cr-app select:focus-visible,.cr-app textarea:focus-visible,.cr-app .browse-scroll:focus-visible{outline-width:2px;outline-offset:3px}
 .cr-app .room-slots{border-top:1px solid var(--border-light);padding-top:8px;gap:6px}
 .cr-app .slot-badge.in,.cr-app .slot-badge.out,.cr-app .slot-badge.pending,.cr-app .slot-badge.unknown{background:transparent;border:0;padding:0;text-align:left;color:var(--ink-soft)}
 .cr-app .slot-period{color:var(--ink-soft)}
@@ -469,7 +456,7 @@
 .cr-app .timetable-switch input:checked+.switch-track{background:var(--primary)}
 .cr-app .timetable-switch input:checked+.switch-track:after{left:16px;background:var(--on-primary)}
 .cr-app .timetable-switch input:focus-visible+.switch-track{outline:2px solid var(--primary);outline-offset:3px}
-.cr-app .time-disclosure .timeaxis.lesson-axis{grid-template-columns:repeat(var(--axis-cols),minmax(0,1fr));gap:7px}
+.cr-app .time-options .timeaxis.lesson-axis{grid-template-columns:repeat(var(--axis-cols),minmax(0,1fr));gap:7px}
 .cr-app .lesson-axis .timegroup.solo{grid-template-columns:1fr}
 .cr-app .lesson-band{position:relative;min-width:0;min-height:60px;border-radius:var(--radius-sm);background:var(--lesson-bg);color:var(--lesson-ink);border:1px solid color-mix(in oklab,var(--lesson-ink) 25%,var(--lesson-bg));overflow:hidden}
 .cr-app .lesson-hits{display:grid;grid-template-columns:repeat(var(--lesson-span),minmax(0,1fr));height:100%;min-height:60px}

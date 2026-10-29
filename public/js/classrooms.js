@@ -7,7 +7,7 @@ const markup=`<div class="shell cr-main">
 <section class="timepanel" aria-label="选择学习时间">
  <div class="intentrow"><div class="seg" role="group" aria-label="查询日期"><button id="cr-now" aria-pressed="true">今天</button><button id="cr-plan" aria-pressed="false">选日期</button></div><div class="time-tools"><span id="cr-followLabel" class="followlabel">自动跟随时间</span><label class="timetable-switch"><input id="cr-linkTimetable" type="checkbox" checked><span class="switch-track" aria-hidden="true"></span><span>课表联动</span></label></div></div>
  <div id="cr-durationButtons" class="durationrow" role="group" aria-label="学习时长"></div>
- <details id="cr-timeDisclosure" class="time-disclosure"><summary><span class="compact-time"><strong id="cr-compactRange"></strong><small id="cr-compactRangeHint">调整时间</small></span><span class="disclosure-chevron" aria-hidden="true">⌄</span></summary><div class="time-options"><div class="axishead"><span id="cr-axisDate"></span><button id="cr-rangePicker" class="range-trigger" aria-haspopup="dialog" aria-controls="cr-rangeDialog">连续选到… ▾</button></div><div id="cr-timeAxis" class="timeaxis" role="group" aria-label="逐节多选，点已选节次取消"></div><div class="selection-footer"><div><strong id="cr-selectionCount" role="status" aria-live="polite"></strong><p id="cr-selectionHelp"></p></div><div class="selection-tools"><button id="cr-selectAllPeriods" aria-pressed="false">全天</button><button id="cr-clearPeriods">清空</button><button id="cr-finishTime" class="primary">完成选择</button></div></div></div></details>
+ <div class="time-options"><div class="axishead"><span id="cr-axisDate"></span><button id="cr-rangePicker" class="range-trigger" aria-haspopup="dialog" aria-controls="cr-rangeDialog">连续选到… ▾</button></div><div id="cr-timeAxis" class="timeaxis" role="group" aria-label="逐节多选，点已选节次取消"></div><div class="selection-footer"><div><strong id="cr-selectionCount" role="status" aria-live="polite"></strong><p id="cr-selectionHelp"></p></div><div class="selection-tools"><button id="cr-selectAllPeriods" aria-pressed="false">全天</button><button id="cr-clearPeriods">清空</button></div></div></div>
  <p id="cr-rangeNote" class="range-note" hidden></p>
 </section>
 <section class="buildings" aria-labelledby="cr-buildingTitle"><div class="sectionhead"><div class="overview-heading"><h2 id="cr-buildingTitle">楼宇概况</h2><span id="cr-overviewSummary" class="subtle" role="status"></span></div><div class="overview-tools"><button id="cr-browseAll" class="edit-combo" aria-label="查看当前范围全部教学楼" hidden>全部楼宇</button><button id="cr-browseMode" class="edit-combo" aria-label="按楼浏览全部教室，不限制空闲时段">看全部教室</button><button id="cr-editCustomMain" class="edit-combo" hidden>编辑组合</button></div></div><div id="cr-buildingOverview" class="buildingoverview" role="group" aria-label="点击教学楼直接查看教室"></div><p id="cr-customNotice" class="subtle" role="status" hidden></p></section>
@@ -47,7 +47,6 @@ const id=r=>JSON.stringify([r[0],r[1]]);
 const records=new Map(),pending=new Map(),inflightSingles=new Map();
 const narrow=matchMedia('(max-width: 720px)');
 let overviewSelection='';
-$('timeDisclosure').open=!narrow.matches;
 let prefs={};try{const value=JSON.parse(localStorage.getItem(preferenceKey)||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))prefs=value;}catch{}
 const savedCustom=Array.isArray(prefs.customBuildings)?[...new Set(prefs.customBuildings.filter(x=>typeof x==='string'&&x.trim()&&x.length<=120).map(x=>x.trim()))].slice(0,200):[];
 savedCustom.forEach(x=>knownBuildings.add(x));
@@ -101,9 +100,6 @@ function periodState(room,p){
 }
 function confirmedEnd(room){let last=s.period-1;for(let p=s.period;p<=12;p++){if(periodState(room,p)!=='in')break;last=p;}return last;}
 
-function collapseTime(){
- if(narrow.matches&&$('timeDisclosure').open){$('timeDisclosure').open=false;$('timeDisclosure').querySelector('summary').focus({preventScroll:true});}
-}
 function keepBuildingInView(){
  if(!narrow.matches)return;
  const box=$('buildingOverview'),selected=box.querySelector('[aria-pressed="true"]');if(!selected)return;
@@ -111,7 +107,7 @@ function keepBuildingInView(){
  if(left<box.scrollLeft)box.scrollLeft=Math.max(0,left-3);
  else if(left+selected.offsetWidth>box.scrollLeft+box.clientWidth)box.scrollLeft=left+selected.offsetWidth-box.clientWidth+3;
 }
-listen(narrow,'change',event=>{$('timeDisclosure').open=!event.matches;keepBuildingInView();renderTime();});
+listen(narrow,'change',()=>{keepBuildingInView();renderTime();});
 listen(lessonNarrow,"change",()=>renderTime());
 function dayLessons(){return s.linkTimetable?(timetables.get(s.date)?.lessons||[]).filter(x=>x.onsite):[];}
 function lessonAt(p){return dayLessons().find(c=>c.ps<=p&&p<=c.pe);}
@@ -180,9 +176,6 @@ function timetableHeaders(){
  return html;
 }
 function renderTime(){
- const dateLabel=s.date===today()?'今天':s.date===addDays(today(),1)?'明天':s.date.slice(5);
- $('compactRange').textContent=`${dateLabel} · ${!s.duration?'直接看教室':continuous(s.periods)?selectionLabel():`分段 ${s.duration} 节`}`;
- $('compactRangeHint').textContent=(s.duration?periodLabel(s.periods)+' · '+learningLength(s.periods):'不选时间，也可选楼看全天')+` · ${$('timeDisclosure').open?'收起':'调整时间'}`;
  $('axisDate').textContent=(s.date===today()?'今天':s.date.slice(5))+' · 点选课节，可多选';
  $('selectionCount').textContent=s.duration?`已选 ${s.duration} 节 · ${learningLength(s.periods)}`:'未选课节 · 浏览全天安排';
  $('selectionHelp').textContent=s.duration?'点已选课节取消，点未选课节加入；自动查询。':'直接选楼看全天；选课节则只找空闲教室。';
@@ -320,17 +313,15 @@ function showRange(){
  $('rangeEnds').innerHTML=times.map((t,i)=>`<button data-end="${i+1}" aria-pressed="${end()===i+1}" ${i+1<s.period?'disabled':''} aria-label="学到第${i+1}节 ${t[1]}为止"><strong>第${i+1}节</strong><small>${t[1]}</small></button>`).join('');
  $('rangeDialog').showModal();
 }
-$('timeDisclosure').addEventListener('toggle',()=>{const hint=$('compactRangeHint');hint.textContent=hint.textContent.replace(/ · (调整时间|收起)$/,` · ${$('timeDisclosure').open?'收起':'调整时间'}`);});
 $('rangePicker').addEventListener('click',showRange);
 $('wholeDay').addEventListener('click',()=>applyRange(1,12,'allday'));
 $('browseAll').addEventListener('click',()=>{s.browseAll=true;render();});
-$('browseMode').addEventListener('click',()=>{editPeriods([]);collapseTime();$('buildingOverview').querySelector('[aria-pressed=true]')?.focus({preventScroll:true});});
+$('browseMode').addEventListener('click',()=>{editPeriods([]);$('buildingOverview').querySelector('[aria-pressed=true]')?.focus({preventScroll:true});});
 $('selectAllPeriods').addEventListener('click',()=>editPeriods(sequence(1,12),'allday'));
 $('clearPeriods').addEventListener('click',()=>editPeriods([]));
-$('finishTime').addEventListener('click',()=>{if(debounce){clearTimeout(debounce);debounce=null;void load(false);}collapseTime();});
-function chooseDate(date){s.date=date;s.mode='custom';s.building='';s.buildingManual=false;courseBuilding='';sync();$('dateDialog').close();collapseTime();void load(false);}
+function chooseDate(date){s.date=date;s.mode='custom';s.building='';s.buildingManual=false;courseBuilding='';sync();$('dateDialog').close();void load(false);}
 function showDates(){const date=today();$('dateShortcuts').innerHTML=['今天','明天','后天'].map((label,i)=>`<button data-date="${addDays(date,i)}">${label}</button>`).join('');$('dateDialog').showModal();}
-$('now').addEventListener('click',()=>{if(s.date!==today())chooseDate(today());else collapseTime();});$('plan').addEventListener('click',showDates);$('refresh').addEventListener('click',()=>!s.duration?ensureBrowse(true):s.mode==='custom'?load(true):goNow(s.mode,false));
+$('now').addEventListener('click',()=>{if(s.date!==today())chooseDate(today());});$('plan').addEventListener('click',showDates);$('refresh').addEventListener('click',()=>!s.duration?ensureBrowse(true):s.mode==='custom'?load(true):goNow(s.mode,false));
 $('date').addEventListener('change',()=>chooseDate($('date').value));$('settings').addEventListener('click',()=>{stopCatalogWarmup();$('settingsDialog').showModal();});$('about').addEventListener('click',()=>$('infoDialog').showModal());
 function customCount(){
  $('customCount').textContent=customDraft.size?`已选 ${customDraft.size} 栋`:'至少选择一栋';$('saveCustom').disabled=customDraft.size===0;
@@ -579,7 +570,7 @@ async function tick(){
  if(disposed||document.hidden)return;
  if(s.status==='ok'&&!fresh(s.data)){s.status='stale';render();}
  if(!s.duration){const stamp=browseCourseStamp();if(stamp!==browseClassStamp&&!modalOpen()){browseClassStamp=stamp;render();}if(s.auto&&!s.autoSuspended&&!modalOpen()&&!browseTask?.active&&refreshAt&&Date.now()>=refreshAt)void ensureBrowse(true);return;}
- if(!s.auto||s.autoSuspended||s.status==='loading'||modalOpen()||(narrow.matches&&$('timeDisclosure').open)||['empty','selecting','error','unsupported','file','invalid'].includes(s.status)||document.activeElement?.matches('input,select,textarea')||document.activeElement?.closest('#cr-results'))return;
+ if(!s.auto||s.autoSuspended||s.status==='loading'||modalOpen()||['empty','selecting','error','unsupported','file','invalid'].includes(s.status)||document.activeElement?.matches('input,select,textarea')||document.activeElement?.closest('#cr-results'))return;
  if(s.mode!=='custom'){const t=deriveTarget(s.mode);if(key(t.date,t.period)!==s.anchor){await goNow(s.mode,false,true);return;}}
  if(refreshAt&&Date.now()>=refreshAt){if(s.mode==='custom')await load(true,true);else await goNow(s.mode,false,true);}
 }

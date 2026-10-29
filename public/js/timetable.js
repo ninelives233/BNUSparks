@@ -4346,11 +4346,15 @@ function ttInitViewPicker() {
       (index + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
     ttSetView(items[next].dataset.view); items[next].focus(); event.preventDefault();
   });
+  var resizeFrame = 0;
   var observer = new ResizeObserver(function () {
-    var compact = bar.clientWidth < 580;
-    bar.classList.toggle('tt-switch-compact', compact);
-    if (!compact) ttCloseViewPicker();
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(function () {
+      var compact = bar.clientWidth < 580;
+      bar.classList.toggle('tt-switch-compact', compact);
+      if (!compact) ttCloseViewPicker();
+    });
   });
   observer.observe(bar);
-  ttInitViewPicker.cleanup = function () { lifetime.abort(); observer.disconnect(); };
+  ttInitViewPicker.cleanup = function () { lifetime.abort(); observer.disconnect(); cancelAnimationFrame(resizeFrame); };
 }

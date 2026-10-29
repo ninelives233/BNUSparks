@@ -99,6 +99,41 @@ class ClassroomIntegrationBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_function('document.querySelector("#cr-sourceMessage").textContent.includes("12/12")')
         self.page.wait_for_selector('#cr-results .browse-table')
 
+    def assert_dialog_centered(self, name):
+        dialog = self.page.locator('#cr-' + name + '[open]')
+        dialog.wait_for(state='visible')
+        box = dialog.bounding_box()
+        viewport = self.page.viewport_size
+        self.assertAlmostEqual(box['x'], (viewport['width'] - box['width']) / 2, delta=2)
+        self.assertAlmostEqual(box['y'], (viewport['height'] - box['height']) / 2, delta=2)
+        self.assertGreaterEqual(box['x'], 0)
+        self.assertGreaterEqual(box['y'], 0)
+
+    def test_dialogs_stay_centered_after_scrolling_resizing_and_loading(self):
+        self.enter()
+        for viewport in [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}]:
+            with self.subTest(viewport=viewport):
+                self.page.set_viewport_size(viewport)
+                self.page.locator('.matrix-room').first.click()
+                self.assert_dialog_centered('roomDialog')
+                self.page.wait_for_function('document.getElementById("cr-detailProgress").textContent.includes("12/12")')
+                self.assert_dialog_centered('roomDialog')
+                self.page.locator('#cr-roomDialog .close').click()
+                for trigger, name in [('#cr-plan', 'dateDialog'), ('#cr-rangePicker', 'rangeDialog'),
+                                      ('#ttManageBtn', 'settingsDialog'), ('#cr-about', 'infoDialog')]:
+                    self.page.locator(trigger).click()
+                    self.assert_dialog_centered(name)
+                    if name == 'settingsDialog':
+                        self.page.locator('#cr-scope').select_option('custom')
+                        self.assert_dialog_centered('customDialog')
+                        self.page.locator('#cr-customDialog .close').click()
+                    self.page.locator('#cr-' + name + ' .close').click()
+        self.page.locator('.matrix-room').first.click()
+        self.page.set_viewport_size({'width': 844, 'height': 390})
+        self.assert_dialog_centered('roomDialog')
+        self.page.keyboard.press('Escape')
+        self.assertFalse(self.page.locator('#cr-roomDialog').is_visible())
+
     def test_wide_view_uses_current_schedule_and_keeps_calendar_and_status_blocks(self):
         self.assertEqual(self.page.locator('#ttViewSeg button').count(), 3)
         self.enter()
@@ -137,11 +172,22 @@ class ClassroomIntegrationBrowserTest(StaticLiveServerTestCase):
         self.page.locator('#ttViewPicker').click()
         self.page.locator('#ttViewMenu [data-view=classrooms]').click()
         self.page.wait_for_selector('.browse-table')
+        self.assertTrue(self.page.locator('#cr-timeAxis').is_visible())
+        self.assertTrue(self.page.locator('.lesson-band').is_visible())
+        self.assertEqual(self.page.locator('.timepanel summary').count(), 0)
+        self.assertEqual(self.page.locator('#cr-finishTime').count(), 0)
         self.assertEqual(self.page.locator('#cr-timeAxis [aria-pressed=true]').count(), 0)
+        self.page.locator('#cr-timeAxis [data-period="5"]').click()
+        self.page.locator('#cr-timeAxis [data-period="6"]').click()
+        self.page.locator('#cr-timeAxis [data-period="5"]').click()
+        self.assertEqual(self.page.locator('#cr-timeAxis [aria-pressed=true]').count(), 1)
+        self.page.locator('#cr-clearPeriods').click()
+        self.assertTrue(self.page.locator('#cr-timeAxis').is_visible())
         self.assertEqual(self.page.locator('#cr-buildingOverview .tilechart:visible').count(), 0)
         self.assertTrue(self.page.evaluate('document.body.scrollWidth <= innerWidth'))
         self.page.locator('#cr-buildingOverview [data-building="教八楼"]').click()
         self.page.wait_for_function('document.getElementById("cr-roomsTitle").textContent.includes("教八楼")')
+        self.page.wait_for_selector('.lesson-head')
         self.assertTrue(self.page.locator('.lesson-head').is_visible())
         self.assertIn('lesson-away', self.page.locator('.lesson-head').get_attribute('class'))
 

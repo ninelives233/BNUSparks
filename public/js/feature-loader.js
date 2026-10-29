@@ -85,7 +85,8 @@
   //        行被清空）；timetable.js 一并更新，缓存键同步推进。
   // v345：我的课程接入教室查询，宽屏三视图、窄屏统一选择器。
   // v346：所选日期的上课教室在楼内置顶，保留本节教室优先。
-  var VERSION = '347';
+  // v348：教室查询浮窗居中，手机直接展示未选中的全天时间轴。
+  var VERSION = '348';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
