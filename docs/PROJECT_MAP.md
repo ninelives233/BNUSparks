@@ -151,16 +151,13 @@ explorer-core.js → /api/courses/tree/ → courses.py → utils_course_tree.py
 ### 独立搜索结果页
 
 ```text
-utils.js setupSearch → showSearch(views.js) → /search 路由 → BnuSearch(search.js)
-  → /api/search/?v=2（课程/资料） + /api/qa/search/?v=2（问答）
-课程结果 → navToCoursePath（explorer-core.js，显式路径定位）
-资料结果 → showFileDetail(returnSearch) → 详情「← 返回搜索结果」
-问答结果 → qaOpenDetail(returnSearch) → qaBackToList 识别搜索来源
+setupSearch → showSearch(views.js) → /search → BnuSearch(search.js)
+  → /api/search/?v=2（课程/资料） + /api/qa/search/?v=2（问答；只接受显式 v=2，旧结构兼容）
+课程 → navToCoursePath；资料 → showFileDetail(returnSearch)；问答 → qaOpenDetail(returnSearch)
 ```
 
-v2 接口只接受显式 `v=2`（旧结构保持兼容）；搜索结果页按账号代次隔离内存快照，
-`/api/search/?v=2` 在前端 api() 缓存政策中豁免。教程搜索场景使用 `.td-search-page`
-纯 DOM 演示（不发真实搜索 API）。
+搜索快照按账号代次隔离；`/api/search/?v=2` 豁免前端 api() 缓存；教程搜索场景用
+`.td-search-page` 纯 DOM 演示，不发真实搜索 API。
 
 ### 课表同步
 
