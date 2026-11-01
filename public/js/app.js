@@ -333,18 +333,19 @@ window.addEventListener('popstate', async function(e) {
       }
       if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
     }
-    // 文件详情页：重新加载（优先缓存，否则 API）
+    // 文件详情页：重新加载（优先缓存，否则 API）；搜索来源随条目透传
     if (state.view === 'fileDetail' && state.fileId) {
       // 遍历路径不得再入栈：showFileDetail 内部的 pushViewState 会复制一条
       // 详情条目（历史栈每次前进/后退都在增长，下一次返回落在复制品上而非
       // 列表）。与下方 D5 静态视图重入同款压栈处理。
       _suppressingPushState = true;
       try {
+        var _fdOptions = state.returnSearch ? { returnSearch: state.returnSearch } : {};
         // 尝试从文件缓存恢复
         if (window._fileLookup && window._fileLookup[state.fileId]) {
-          showFileDetail(window._fileLookup[state.fileId]);
+          showFileDetail(window._fileLookup[state.fileId], _fdOptions);
         } else {
-          showFileDetail({ id: state.fileId, title: '' });
+          showFileDetail({ id: state.fileId, title: '' }, _fdOptions);
         }
       } finally { _suppressingPushState = false; }
       if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
@@ -376,6 +377,15 @@ window.addEventListener('popstate', async function(e) {
         _suppressingPushState = true;
         try { showQa(state.qaId, state); } finally { _suppressingPushState = false; }
       }
+    }
+    // 独立搜索结果页：历史恢复只渲染，绝不额外 push（showSearch fromHistory）
+    if (state.view === 'search') {
+      _suppressingPushState = true;
+      try { showSearch({ fromHistory: true }); } finally { _suppressingPushState = false; }
+      // 滚动/焦点由 BnuSearch 在数据就绪后恢复；无关键词时立即回顶
+      if (!state.searchQuery) requestAnimationFrame(function () { scrollToInstant(state.scrollY || 0); });
+      if (typeof updateSidebar === 'function') updateSidebar('search');
+      return;
     }
     // 问答区发布/编辑：从历史状态恢复 mode 后重渲染（v175）；qa-compose.js 未加载时
     // 走 showQaCompose 完整入口补齐（压掉其 pushViewState）。
@@ -451,11 +461,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (route && route.view === 'rankings' && new URLSearchParams(location.search).get('type') === 'favorite') route.rankingType = 'favorite';
   if (route) {
     // URL 决定视图层级；同一路由下的 session 状态补充内部 Tab/筛选器。
-    // 动态路由的参数不能被旧 session 覆盖（尤其 qaCompose 的 type/action/qid/aid）。
+    // 动态路由的参数不能被旧 session 覆盖（尤其 qaCompose 的 type/action/qid/aid
+    // 与 search 的 q/type/page/筛选——搜索的完整缺省状态由 parseRoute 给出）。
     saved = Object.assign({ _bnusparks: true }, route);
-    var dynamicRouteViews = ['explorer', 'userPublic', 'fileDetail', 'timetable', 'qaCompose'];
+    var dynamicRouteViews = ['explorer', 'userPublic', 'fileDetail', 'timetable', 'qaCompose', 'search'];
     if (stored && stored._bnusparks && stored.view === route.view && dynamicRouteViews.indexOf(route.view) === -1) {
       saved = Object.assign({}, stored, route);
+    }
+    // 资料详情刷新：仅从路由目标一致的 session 快照恢复 returnSearch
+    //（owner 一致性由按钮渲染与 BnuSearch 校验，URL 的 fileId 永远优先）
+    if (route.view === 'fileDetail' && stored && stored._bnusparks &&
+        stored.view === 'fileDetail' && stored.fileId === route.fileId && stored.returnSearch) {
+      saved.returnSearch = stored.returnSearch;
     }
   } else {
     saved = stored;
@@ -463,6 +480,8 @@ document.addEventListener('DOMContentLoaded', () => {
   var initialView = saved && saved._bnusparks ? saved.view : 'home';
   var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose', 'timetable'];
   var needsAuth = authViews.indexOf(initialView) !== -1;
+  // 搜索页不是受保护视图，但渲染需等认证完成（访客深链显示需登录态，不误判）
+  var needsAuthWait = needsAuth || initialView === 'search';
   var isRootLanding = location.pathname === '/';
   var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
   // 根路径是“打开网站”的默认入口；有会话时等认证完成，才能按账号偏好决定首页或我的课程。
@@ -477,6 +496,8 @@ document.addEventListener('DOMContentLoaded', () => {
     viewFeaturePromise = ensureFeature('admin');
   } else if (initialView === 'timetable') {
     viewFeaturePromise = ensureFeature('timetable');
+  } else if (initialView === 'search') {
+    viewFeaturePromise = ensureFeature('search');
   }
 
   // 刷新课表时先保留目标视图，避免认证/懒加载期间短暂显示首页，
@@ -606,6 +627,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // F02：初始恢复携带筛选/页码状态（/qa?scope=&topic=&sort=&page= 深链）
         case 'qa': showQa(saved.qaId, saved); break;
         case 'qaCompose': if (typeof showQaCompose === 'function') showQaCompose(saved); else showQa(); break;
+        // 独立搜索结果页：只渲染/replace 初始化，绝不额外 push
+        case 'search': showSearch({ fromHistory: true }); break;
         case 'leaderboard': showLeaderboard(saved.leaderboardType); break;
         case 'other': showOther(); break;
         case 'recentAll': showRecentAll(); break;
@@ -630,11 +653,12 @@ document.addEventListener('DOMContentLoaded', () => {
         case 'mydownloads': showMyDownloadsPage(); break;
         case 'myfavorites': showMyFavoritesPage(saved.myFavoriteTab); break;
         case 'fileDetail':
-          // 尝试从文件缓存恢复，否则从 API 获取
+          // 尝试从文件缓存恢复，否则从 API 获取；搜索来源随条目透传
+          var _fdRestoreOptions = saved.returnSearch ? { returnSearch: saved.returnSearch } : {};
           if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
-            showFileDetail(window._fileLookup[saved.fileId]);
+            showFileDetail(window._fileLookup[saved.fileId], _fdRestoreOptions);
           } else if (saved.fileId) {
-            showFileDetail({ id: saved.fileId, title: '' });
+            showFileDetail({ id: saved.fileId, title: '' }, _fdRestoreOptions);
           } else {
             showHome();
           }
@@ -659,7 +683,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 只有课程树或受保护视图需要等待；首页/静态页在此之前即可交互。
-  Promise.all([treePromise, (needsAuth || needsLandingAuth) ? authPromise : Promise.resolve()])
+  Promise.all([treePromise, (needsAuthWait || needsLandingAuth) ? authPromise : Promise.resolve()])
     .then(renderInitialView)
     .catch(function() { renderInitialView(); });
 

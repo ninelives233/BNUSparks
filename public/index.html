@@ -647,6 +647,32 @@
   </div>
 </div>
 
+<!-- ═══ 独立搜索结果页（v=350）View ═══ -->
+<div class="view-section" id="searchView">
+  <div class="about-page search-page">
+    <div class="container">
+      <nav class="page-navigation" aria-label="当前位置">
+        <div class="breadcrumb">
+          <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+          <span class="bc-sep"> / </span>
+          <span class="bc-current">搜索</span>
+        </div>
+        <button type="button" id="searchSourceBtn" class="search-source-btn" hidden>← 返回来源页</button>
+      </nav>
+      <header class="search-head">
+        <h1 class="search-title" id="searchTitle" tabindex="-1">搜索</h1>
+        <p class="search-sub" id="searchSub"></p>
+      </header>
+      <nav class="sr-tabs" id="searchTabs" aria-label="结果类型"></nav>
+      <div class="search-toolbar" id="searchToolbar" hidden></div>
+      <div class="search-body" id="searchBody" aria-busy="false">
+        <div class="search-loading" role="status">搜索模块加载中…</div>
+      </div>
+      <div class="search-live" id="searchLive" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ User Leaderboard View (Iter 7) ═══ -->
 <div class="view-section" id="leaderboardView">
   <nav class="page-navigation" aria-label="当前位置">
@@ -1049,6 +1075,8 @@
       <span class="bc-sep"> / </span>
       <span class="bc-current">文件详情</span>
     </div>
+    <button type="button" id="fdReturnSearchBtn" class="fd-return-search" hidden
+      onclick="returnToSearchFromDetailState()">← 返回搜索结果</button>
   </nav>
   <div class="fd-container">
     <div class="fd-layout" id="fdLayout">
@@ -1625,21 +1653,21 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=345" defer></script>
+<script src="/static/js/utils.js?v=350" defer></script>
 <script src="/static/js/monitoring-events.js?v=300" defer></script>
 <script src="/static/js/appearance.js?v=11" defer></script>
 <script src="/static/js/auth.js?v=345" defer></script>
 <script src="/static/js/profile.js?v=222" defer></script>
 <script src="/static/js/notifications.js?v=307" defer></script>
 <script src="/static/js/admin-core.js?v=301" defer></script>
-<script src="/static/js/views.js?v=322" defer></script>
+<script src="/static/js/views.js?v=350" defer></script>
 <script src="/static/js/tutorial-entry.js?v=330" defer></script>
-<script src="/static/js/explorer-core.js?v=230" defer></script>
-<script src="/static/js/explorer-file.js?v=344" defer></script>
+<script src="/static/js/explorer-core.js?v=350" defer></script>
+<script src="/static/js/explorer-file.js?v=350" defer></script>
 <script src="/static/js/explorer-preview.js?v=341" defer></script>
 <script src="/static/js/home.js?v=327" defer></script>
-<script src="/static/js/feature-loader.js?v=349" defer></script>
-<script src="/static/js/app.js?v=343" defer></script>
+<script src="/static/js/feature-loader.js?v=350" defer></script>
+<script src="/static/js/app.js?v=350" defer></script>
 
 </body>
 </html>

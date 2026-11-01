@@ -264,7 +264,7 @@
 }
 
 /* ── 类型标签 / 审核徽章：统一胶囊形态 ── */
-:is(.cr-tag, .sg-pill, .sg-pill-general, .sg-pill-major, .hc-tag-general, .hc-tag-major) {
+:is(.cr-tag, .hc-tag-general, .hc-tag-major) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -285,12 +285,12 @@
 }
 
 /* ── Overlay 关闭钮：统一游标/过渡/悬停反馈 ── */
-:is(.modal-close, .search-overlay-close, .sg-close, .notif-drawer-close, .preview-close) {
+:is(.modal-close, .search-overlay-close, .notif-drawer-close, .preview-close) {
   cursor: pointer;
   line-height: 1;
   transition: background-color var(--t-fast), color var(--t-fast), opacity var(--t-fast);
 }
-:is(.modal-close, .search-overlay-close, .sg-close, .notif-drawer-close):hover {
+:is(.modal-close, .search-overlay-close, .notif-drawer-close):hover {
   color: var(--ink);
   background: var(--primary-surface);
 }

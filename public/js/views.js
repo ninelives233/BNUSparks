@@ -137,7 +137,7 @@
       title: '使用帮助',
       sections: [
         { icon: 'book', heading: '浏览资料', text: '通过左侧导航栏选择通识课或专业课分类，逐层进入课程页面，即可浏览和下载资料。' },
-        { icon: 'search', heading: '搜索功能', text: '在顶栏搜索框输入课程名、课程代码或资料标题，按回车或点击搜索按钮即可快速查找。' },
+        { icon: 'search', heading: '搜索功能', text: '在顶栏搜索框输入课程名、课程代码、资料标题、任课教师或资料描述，按回车进入独立搜索结果页。结果页可切换「全部 / 课程 / 资料 / 问答」类型，分类列表支持筛选、排序和翻页；点击课程进入课程目录，点击资料直接打开详情，问答命中可定位到具体回答。' },
         { icon: 'upload', heading: '上传资料', text: '登录后在任意课程页面点击"上传资料"按钮，填写信息并选择文件即可分享你的学习资源。' },
       ]
     },
@@ -202,7 +202,7 @@
         { icon: 'user', heading: '欢迎', text: '欢迎使用 BNU Sparks（木铎星火），北京师范大学同学的课程资料共享平台。你可以在这里查找、下载、分享课程教材、笔记、讲义、PPT、试卷、论文和软件教程，也可以在问答区交流新生指南类问题。未登录时可以浏览课程、搜索资料、查看公告和排行榜；注册并验证北师大邮箱后，才能上传、下载、收藏、参与问答和使用个人中心。' },
         { icon: 'lock', heading: '注册与登录', text: '平台使用北师大校内邮箱注册：点击「注册」，填写 @bnu.edu.cn 或 @mail.bnu.edu.cn 邮箱、昵称和至少 8 位密码。提交后前往校园邮箱查收验证邮件，点击邮件链接激活账号。登录时可以输入完整邮箱或学号；勾选「记住我」可以延长登录状态。忘记密码时点击「忘记密码」，按邮件中的链接设置新密码；修改或重置密码后需要重新登录。' },
         { icon: 'calendar', heading: '我的课程', text: '注册并验证北师大邮箱、登录后，左侧导航栏会在「首页」下方显示「我的课程」；所有注册用户都可以使用。首次进入后可导入教务系统导出的「按列表方式显示」课程表，或手动添加课程；之后可在「课程列表」与「周课表」之间切换，课程代码匹配到平台课程时可直接查看资料。导入文件只在浏览器本地解析，解析出的课程数据会同步到本人账号，换设备登录同一账号即可查看。' },
-        { icon: 'search', heading: '搜索课程和资料', text: '顶部搜索框支持按课程名称、课程代码、资料标题、任课教师或资料描述搜索。点击课程结果进入课程目录，点击资料结果直接打开资料详情；记不清代码时直接搜索课程名即可，通识课代码通常以 GEN 开头。进入问答区后，搜索框会自动切换为搜索问题和回答。' },
+        { icon: 'search', heading: '搜索课程和资料', text: '顶部搜索框支持按课程名称、课程代码、资料标题、任课教师或资料描述搜索，回车后进入独立搜索结果页。结果页可切换全部、课程、资料、问答类型；课程结果可进入课程目录，资料结果直接打开详情；进入问答区后搜索默认搜问答问题和回答。记不清代码时直接搜索课程名即可，通识课代码通常以 GEN 开头。' },
         { icon: 'folder', heading: '浏览课程', text: '从首页或左侧导航进入「通识课」或「专业课」，按课程树逐层展开：通识课通常是「通识分类 → 课程 → 资料」，专业课通常是「学院 → 专业/方向 → 课程 → 资料」。课程资料列表支持按资料类型筛选，并按上传时间、下载量、收藏量或任课教师排序；管理员置顶资料会优先显示。' },
         { icon: 'document', heading: '查看、预览和收藏', text: '点击资料行或文件名可查看标题、课程、文件大小、资料类型、教师、上传者、简介、下载量和收藏量。可在线预览 PDF、图片和常见文本/代码文件；ZIP 文件可以查看内部目录结构。PPT/PPTX 等暂不支持在线渲染，可直接下载。觉得资料有用时点击「收藏」，之后从右上角头像菜单 →「我的收藏」查看课程、资料和问答帖子。' },
         { icon: 'arrow-down', heading: '下载资料', text: '登录后点击资料右侧「下载」即可保存。普通用户每天最多下载 15 个不同资料，管理员角色不限额；待审核资料通过后才会对其他用户开放。一次要下多份时，可点列表上方的「批量下载」进入选择模式，勾选多行后点「下载选中」。部分浏览器（如 Edge）会限制连续多文件下载，建议允许本站的多文件下载权限，或使用 Chrome、分小批下载。' },
@@ -504,6 +504,137 @@
     updateSidebar('leaderboard');
     _lbPage = 1;
     renderLeaderboard(_lbType, 1);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     独立搜索结果页（v=350）：静态轻量入口。
+     先写历史/切视图/显示骨架，再等待 search 特性懒加载，最后交给
+     window.BnuSearch 渲染。模块加载失败在 searchView 内给出重试，
+     不退回首页、不弹 alert。
+     ═══════════════════════════════════════════════════════════ */
+
+  // 来源快照白名单：只复制标量/数组字段，不保存 DOM、响应全文或外部 URL
+  var _SEARCH_SOURCE_FIELDS = ['view', 'scrollY', 'expPath', 'userId', 'fileId',
+    'prevView', 'qaId', 'answerId', 'tagL1', 'tagL2', 'sort', 'page',
+    'rankingType', 'leaderboardType', 'announcementId', 'aboutSection',
+    'myUploadTab', 'myFavoriteTab'];
+
+  function _searchSourceSnapshot() {
+    var current = (typeof getPersistedViewState === 'function') ? getPersistedViewState() : null;
+    if (!current || current._modal || current.view === 'search') return null;
+    var snap = {};
+    _SEARCH_SOURCE_FIELDS.forEach(function (key) {
+      if (typeof current[key] !== 'undefined') snap[key] = current[key];
+    });
+    if (!snap.view) return null;
+    return snap;
+  }
+
+  function _searchEntryId() {
+    return 'se' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  // 由 showSearch 选项 + 当前来源构造完整搜索状态（含 entry/owner/来源快照）
+  function _buildSearchState(options) {
+    var state = {
+      _bnusparks: true,
+      view: 'search',
+      searchQuery: String(options.q || '').trim().slice(0, 200),
+      searchType: ['all', 'course', 'material', 'qa'].indexOf(options.type) >= 0 ? options.type : 'all',
+      searchPage: 1,
+      searchSort: options.type === 'qa' ? 'default' : 'relevance',
+      searchFilters: {
+        course_type: '', college: null,
+        material_type: null, format: '',
+        tag_l1: null, tag_l2: null,
+      },
+      searchEntryId: _searchEntryId(),
+      searchOwnerId: currentUser && currentUser.id ? currentUser.id : null,
+      scrollY: 0,
+    };
+    // 新关键词继承最初的非搜索来源；搜索页内再搜不嵌套前一次搜索
+    var src = _searchSourceSnapshot();
+    if (src) state.searchSource = src;
+    return state;
+  }
+
+  function showSearch(options) {
+    options = options || {};
+    var fromHistory = !!options.fromHistory;
+    var replaceEntry = !!options.replace;
+    var restoreState = options.restore || null;
+    if (!fromHistory) {
+      var entryState = restoreState || _buildSearchState(options);
+      if (replaceEntry) {
+        // 返回搜索：以 replace 复用当前（详情）条目，不制造搜索↔详情往返
+        var url = routeToPath('search', entryState);
+        history.replaceState(entryState, '', url || location.pathname);
+        try { sessionStorage.setItem('bnusparks_view', JSON.stringify(entryState)); } catch (e) {}
+      } else {
+        pushViewState('search', entryState);
+      }
+    }
+    switchView('search');
+    updateSidebar('search');
+    var body = document.getElementById('searchBody');
+    var shell = document.getElementById('searchView');
+    if (!shell) return;
+    // 骨架只在无内容时显示，返回恢复时保留既有 DOM 直到数据就绪
+    if (body && !body.childElementCount) {
+      body.innerHTML = '<div class="search-loading" role="status" aria-busy="true">搜索模块加载中…</div>';
+    }
+    var ready = (typeof ensureFeature === 'function') ? ensureFeature('search') : Promise.reject(new Error('no loader'));
+    ready.then(function () {
+      var active = document.getElementById('searchView');
+      if (!active || !active.classList.contains('active')) return; // 等待期间已离页
+      if (!window.BnuSearch || typeof window.BnuSearch.render !== 'function') {
+        throw new Error('搜索模块未就绪');
+      }
+      window.BnuSearch.render(history.state, { restore: !!restoreState || fromHistory });
+    }).catch(function () {
+      var errBody = document.getElementById('searchBody');
+      if (!errBody || !shell.classList.contains('active')) return;
+      errBody.innerHTML =
+        '<div class="search-error search-error--fatal">' +
+          '<div class="search-error-title">搜索模块加载失败</div>' +
+          '<div class="search-error-desc">请检查网络后重试</div>' +
+          '<button type="button" class="search-retry-btn" onclick="showSearch({ fromHistory: true, restore: null, retry: true })">' +
+            iconSvg('refresh') + ' 重试</button>' +
+        '</div>';
+    });
+  }
+
+  // 详情（资料/问答）返回搜索结果：以 replace 恢复搜索条目。
+  // returnSearch 由搜索页在点击结果时写入详情历史状态（含白名单快照、
+  // entry/owner、焦点键），owner 校验在 BnuSearch.render 内完成。
+  function returnToSearchFromDetail(returnSearch) {
+    if (!returnSearch || !returnSearch.snapshot) { showHome(); return; }
+    var snap = returnSearch.snapshot;
+    if (returnSearch.ownerId && currentUser && returnSearch.ownerId !== currentUser.id) {
+      // 账号已切换：不恢复旧来源状态，按快照关键词重新加载
+      snap = Object.assign({}, snap, { scrollY: 0 });
+      delete snap.searchFocusKey;
+    }
+    showSearch({ restore: snap, replace: true });
+  }
+
+  // 详情返回按钮的统一入口（资料详情 / 问答详情共用）：
+  // 当前详情由该搜索直接 push 且期间没有新增普通条目时用 history.back()
+  // （后退到搜索、前进回详情，不复制条目）；否则快照 replace 恢复。
+  // 刷新后内存标记丢失，自然落入 replace 路径。
+  function returnToSearchFromDetailState() {
+    var st = history.state;
+    var rs = st && st.returnSearch;
+    if (!rs || !rs.snapshot) return false;
+    var marker = window._bnuSearchReturn;
+    if (marker && !marker.stale && st._seq === marker.detailSeq) {
+      window._bnuSearchReturn = null;
+      history.back();
+      return true;
+    }
+    window._bnuSearchReturn = null;
+    returnToSearchFromDetail(rs);
+    return true;
   }
 
   function showQa() {

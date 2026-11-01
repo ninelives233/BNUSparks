@@ -13,7 +13,15 @@
     '/api/user/rankings/': 30000,
   };
 
-  function _apiCachePolicy(pathname) {
+  function _apiCachePolicy(pathname, url) {
+    // 搜索 v2（独立结果页）豁免内存缓存与在途合并：旧 pathname TTL 会覆盖
+    // 新版本，旧共享在途请求也不是搜索模块可独占取消的；账号代次隔离由
+    // 搜索模块自行负责。v1 政策保持不变。
+    if (pathname === '/api/search/' && url) {
+      try {
+        if (new URL(url, location.origin).searchParams.get('v') === '2') return 0;
+      } catch (e) { /* URL 解析失败按旧政策 */ }
+    }
     for (const p in API_CACHE_TTL) {
       if (pathname === p || pathname.indexOf(p) === 0) return API_CACHE_TTL[p];
     }
@@ -149,7 +157,7 @@
     const isGet = !opts.method || opts.method === 'GET';
     let pathname = url;
     try { pathname = new URL(url, location.origin).pathname; } catch (e) { /* 相对路径兜底 */ }
-    const ttl = isGet ? _apiCachePolicy(pathname) : 0;
+    const ttl = isGet ? _apiCachePolicy(pathname, url) : 0;
     const cacheKey = isGet ? _apiCacheKey(url) : null;
 
     if (cacheKey && ttl > 0) {
@@ -321,7 +329,7 @@
     if (!dialog || !dialog.isConnected || getComputedStyle(dialog).display === 'none') return;
     if (event.key === 'Escape') {
       // .tutorial-close：教程浮窗复用同一套 Escape 关闭链（v324）
-      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.sg-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close,.mf-sheet-close');
+      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close,.mf-sheet-close');
       if (close) { event.preventDefault(); close.click(); }
       return;
     }
@@ -436,7 +444,7 @@
     recentAll: '/recent', recommendations: '/recommendations', leaderboard: '/leaderboard', profile: '/profile',
     myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
     admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa',
-    qaCompose: '/qa/compose', timetable: '/timetable' };
+    qaCompose: '/qa/compose', timetable: '/timetable', search: '/search' };
 
   // state = { view, expPath, userId, fileId, ... } → 路径字符串；返回 null 表示保持当前 URL
   function routeToPath(view, state) {
@@ -485,6 +493,40 @@
       return qlist;
     }
     if (view === 'rankings' && state && state.rankingType === 'favorite') return '/rankings?type=favorite';
+    // 独立搜索结果页（v=350）：/search?q=&type=&筛选=&page=&sort=，缺省参数省略，
+    // 序列化顺序固定；全部页只保留 q/type
+    if (view === 'search') {
+      var sp = '/search';
+      var sq = [];
+      var qRaw = state && state.searchQuery ? String(state.searchQuery) : '';
+      if (qRaw) sq.push('q=' + encodeURIComponent(qRaw));
+      var sType = (state && state.searchType) || 'all';
+      if (sType !== 'all') sq.push('type=' + encodeURIComponent(sType));
+      var sf = (state && state.searchFilters) || {};
+      if (sType === 'course' || sType === 'material') {
+        if (sf.course_type) sq.push('course_type=' + encodeURIComponent(sf.course_type));
+        if (sf.college) sq.push('college=' + parseInt(sf.college, 10));
+      }
+      if (sType === 'material') {
+        if (sf.material_type) sq.push('material_type=' + parseInt(sf.material_type, 10));
+        if (sf.format) sq.push('format=' + encodeURIComponent(sf.format));
+      }
+      if (sType === 'qa') {
+        if (sf.tag_l1) sq.push('tag_l1=' + parseInt(sf.tag_l1, 10));
+        if (sf.tag_l2) sq.push('tag_l2=' + parseInt(sf.tag_l2, 10));
+      }
+      if (sType !== 'all') {
+        var sSort = state && state.searchSort;
+        if (sSort && !(sType === 'course' && sSort === 'relevance') &&
+            !(sType === 'material' && sSort === 'relevance') &&
+            !(sType === 'qa' && sSort === 'default')) {
+          sq.push('sort=' + encodeURIComponent(sSort));
+        }
+      }
+      if (state && state.searchPage && state.searchPage > 1) sq.push('page=' + state.searchPage);
+      if (sq.length) sp += '?' + sq.join('&');
+      return sp;
+    }
     return VIEW_ROUTES[view] || null;
   }
 
@@ -542,6 +584,61 @@
         if (page) qroute.page = parseInt(page, 10) || 1;
       } catch (e) { /* URLSearchParams 不可用时忽略查询参数 */ }
       return qroute;
+    }
+    // /search 独立搜索结果页：URL 给出完整缺省状态（动态路由，URL 优先，
+    // session 同名字段不覆盖缺省值）；非法枚举/数字/不适用筛选回缺省值
+    if (head === 'search') {
+      var searchRoute = {
+        view: 'search',
+        searchQuery: '',
+        searchType: 'all',
+        searchPage: 1,
+        searchSort: 'relevance',
+        searchFilters: {
+          course_type: '', college: null,
+          material_type: null, format: '',
+          tag_l1: null, tag_l2: null,
+        },
+      };
+      try {
+        var ssp = new URLSearchParams(location.search);
+        var srq = (ssp.get('q') || '').trim();
+        if (srq) searchRoute.searchQuery = srq.slice(0, 200);
+        var srType = ssp.get('type') || 'all';
+        if (['all', 'course', 'material', 'qa'].indexOf(srType) === -1) srType = 'all';
+        searchRoute.searchType = srType;
+        var srPage = parseInt(ssp.get('page'), 10);
+        if (srPage >= 1) searchRoute.searchPage = srPage;
+        var sf = searchRoute.searchFilters;
+        var srCourseType = ssp.get('course_type') || '';
+        if (srCourseType === 'major' || srCourseType === 'general') sf.course_type = srCourseType;
+        var srCollege = parseInt(ssp.get('college'), 10);
+        if (srCollege >= 1) sf.college = srCollege;
+        var srMt = parseInt(ssp.get('material_type'), 10);
+        if (srMt >= 1) sf.material_type = srMt;
+        var srFmt = (ssp.get('format') || '').toLowerCase().replace(/^\./, '');
+        if (srFmt) sf.format = srFmt;
+        var srL1 = parseInt(ssp.get('tag_l1'), 10);
+        if (srL1 >= 1) sf.tag_l1 = srL1;
+        var srL2 = parseInt(ssp.get('tag_l2'), 10);
+        if (srL2 >= 1) sf.tag_l2 = srL2;
+        var srSort = ssp.get('sort') || '';
+        var sortOk = (srType === 'course' && (srSort === '' || srSort === 'relevance' || srSort === 'name')) ||
+          (srType === 'material' && (srSort === '' || ['relevance', 'latest', 'downloads'].indexOf(srSort) >= 0)) ||
+          (srType === 'qa' && (srSort === '' || srSort === 'default' || srSort === 'latest'));
+        searchRoute.searchSort = sortOk && srSort ? srSort : (srType === 'qa' ? 'default' : 'relevance');
+        // 不适用筛选回缺省：全部页不保留类型筛选
+        if (srType === 'all') {
+          searchRoute.searchFilters = {
+            course_type: '', college: null,
+            material_type: null, format: '',
+            tag_l1: null, tag_l2: null,
+          };
+          searchRoute.searchSort = 'relevance';
+          searchRoute.searchPage = 1;
+        }
+      } catch (e) { /* URLSearchParams 不可用时保持缺省 */ }
+      return searchRoute;
     }
     var v = Object.keys(VIEW_ROUTES).find(function(k) { return VIEW_ROUTES[k] === '/' + head; });
     return v ? { view: v } : null;
@@ -798,220 +895,35 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     搜索
+     搜索（v=350：顶栏搜索进入独立结果页 /search，不再弹结果浮层。
+     上传选课的课程选择浮层（views.js openCourseSearchUpload）与本入口
+     无关，继续使用旧 /api/search/ v1 接口。）
      ═══════════════════════════════════════════════════════════ */
 
   function setupSearch() {
     const input = document.querySelector('.search-box input');
     const btn = document.querySelector('.search-box button');
     if (!input) return;
+    if (input.maxLength > 0) input.maxLength = 200;
     function go() {
-      // 问答区视图内：搜索框自动切为帖子搜索（未登录时统一唤起登录弹窗）
-      if (typeof isQaViewActive === 'function' && isQaViewActive()) {
-        if (!currentUser) { showLoginModal(); return; }
-        const qaQ = input.value.trim();
-        if (!qaQ) return;
-        if (typeof qaSearch === 'function') {
-          qaSearch(qaQ);
-        } else if (typeof ensureFeature === 'function') {
-          ensureFeature('qa').then(function() {
-            var qaView = document.getElementById('qaView');
-            if (qaView && qaView.classList.contains('active') && typeof qaSearch === 'function') qaSearch(qaQ);
-          }).catch(function() {
-            alert('问答模块加载失败，请刷新重试。');
-          });
-        }
-        return;
-      }
-      // v=164：未登录回车提交在此拦截（点击搜索框/按钮已由 app.js capture 拦截器兜底）
+      // 中文输入法确认文字的 Enter 不触发搜索
+      if (go._composing) return;
+      const q = input.value.trim();
+      if (!q) return;
+      // 未登录保留旧政策：先登录，不开放访客搜索
       if (!currentUser) { showLoginModal(); return; }
-      const q = input.value.trim(); if (q) searchQuery(q);
+      // 问答区视图内提交默认搜问答类型；其余进入全部聚合
+      var type = (typeof isQaViewActive === 'function' && isQaViewActive()) ? 'qa' : 'all';
+      if (typeof showSearch === 'function') {
+        showSearch({ q: q, type: type });
+      }
     }
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
-    if (btn) btn.addEventListener('click', go);
-  }
-
-  // F14 搜索竞态保护：只有序号最新（且账号未变）的请求允许渲染结果；
-  // 打开新结果层前先移除旧的搜索覆层，快速连搜不再叠出多个窗口；
-  // 失败/超时不再静默吞掉，给出可见的失败层。
-  let _searchSeq = 0;
-
-  // D2：顶栏搜索结果浮层与问答/上传搜索浮层共用同一套弹层历史语义
-  // （lockScroll + 一条 _modal 历史条目）。此前该浮层不占历史，系统返回
-  // 会被 app.js 的浮层分支吞掉一次并跳过视图恢复，造成 URL 与内容不一致。
-  // 关闭（非导航）走 closeTopSearchOverlay：移除浮层并交还历史条目；
-  // 点击结果后还要导航，不能走异步 history.back()，用 keepEntry 把浮层
-  // 条目就地替换回打开前的页面状态（与 qa.js _closeQaSearchKeepEntry 同模式）。
-  function _closeTopSearchLayer(el) {
-    if (!el) return;
-    el.remove();
-    unlockScroll();
-    if (typeof deactivateDialog === 'function') deactivateDialog(el);
-  }
-
-  function _closeTopSearchKeepEntry(el) {
-    el = el || document.querySelector('.search-overlay');
-    if (!el) return;
-    var restored = (el._bnusparksReturnState && el._bnusparksReturnState._bnusparks)
-      ? el._bnusparksReturnState
-      : (typeof getPersistedViewState === 'function' ? getPersistedViewState() : null);
-    if (!restored) restored = { _bnusparks: true, view: 'home', scrollY: 0 };
-    var wasModal = !!(history.state && history.state._modal);
-    _closeTopSearchLayer(el);
-    if (wasModal) {
-      var url = typeof routeToPath === 'function' ? routeToPath(restored.view, restored) : null;
-      history.replaceState(restored, '', url || location.pathname);
-    }
-  }
-
-  function closeTopSearchOverlay(el) {
-    el = el || document.querySelector('.search-overlay');
-    if (!el) return;
-    var wasModal = !!(history.state && history.state._modal);
-    _closeTopSearchLayer(el);
-    if (wasModal) history.back();
-  }
-
-  // 展示新的顶栏搜索浮层前，先按各自的生命周期清掉旧浮层：本函数创建的
-  // 浮层要解锁并（由后续 push 复用其历史条目），其它浮层维持原样仅移除。
-  function _removeTopSearchOverlays() {
-    document.querySelectorAll('.search-overlay').forEach(function (el) {
-      if (el._bnusparksTopSearch) _closeTopSearchLayer(el);
-      else el.remove();
+    input.addEventListener('compositionstart', function () { go._composing = true; });
+    input.addEventListener('compositionend', function () { go._composing = false; });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.isComposing) go();
     });
-  }
-
-  async function searchQuery(q) {
-    const seq = ++_searchSeq;
-    let results;
-    try {
-      results = await api('/api/search/?q=' + encodeURIComponent(q));
-    } catch (e) {
-      if (seq !== _searchSeq) return; // 已有更新的搜索
-      if (typeof currentUser === 'undefined' || !currentUser) return; // 已登出
-      _removeTopSearchOverlays();
-      const errOverlay = document.createElement('div');
-      errOverlay.className = 'search-overlay';
-      errOverlay._bnusparksTopSearch = true;
-      errOverlay.innerHTML =
-        '<div class="search-overlay-inner sg-inner"><div class="sg-header">' +
-        '<button class="sg-close" onclick="closeTopSearchOverlay(this.closest(\'.search-overlay\'))" aria-label="关闭">✕</button>' +
-        '<div class="sg-title-row"><span class="sg-title-icon">' + iconSvg('search') + '</span><h3 class="sg-title">' + esc(q) + '</h3></div>' +
-        '<p class="sg-subtitle">' + esc((e && e.message) || '搜索失败') + '</p></div>' +
-        '<div class="sg-body"><div class="sg-empty">' +
-        '<div class="sg-empty-icon">' + iconSvg('alert') + '</div><div class="sg-empty-title">搜索失败</div>' +
-        '<div class="sg-empty-desc">请检查网络后重试</div></div></div></div>';
-      document.body.appendChild(errOverlay);
-      lockScroll();
-      errOverlay._bnusparksReturnState = history.state;
-      _pushModalHistory(errOverlay);
-      return;
-    }
-    if (seq !== _searchSeq) return; // 已有更新的搜索：丢弃旧结果，不叠窗口
-    if (typeof currentUser === 'undefined' || !currentUser) return;
-    if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
-      window.BnuMonitoring.track('search.execute');
-      if (!(results.courses || []).length && !(results.materials || []).length) {
-        window.BnuMonitoring.track('search.no_result');
-      }
-    }
-      const overlay = document.createElement('div');
-      overlay.className = 'search-overlay';
-
-      /* ---------- 搜索覆层 — 全新设计 ---------- */
-      let html = '<div class="search-overlay-inner sg-inner">';
-
-      /* 头部 */
-      html += '<div class="sg-header">';
-      html += '<button class="sg-close" onclick="closeTopSearchOverlay(this.closest(\'.search-overlay\'))" aria-label="关闭">✕</button>';
-      html += '<div class="sg-title-row">';
-      html += '<span class="sg-title-icon">' + iconSvg('search') + '</span>';
-      html += '<h3 class="sg-title">' + esc(q) + '</h3>';
-      html += '</div>';
-      html += '<p class="sg-subtitle">搜索结果</p>';
-      html += '</div>';
-
-      /* 结果区 */
-      html += '<div class="sg-body">';
-
-      /* ── 课程结果 ── */
-      if (results.courses.length) {
-        html += '<div class="sg-section">';
-        html += '<div class="sg-section-header">';
-        html += '<svg class="sg-section-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="10" x2="14" y2="10"/></svg>';
-        html += '<span class="sg-section-label">课程</span>';
-        html += '<span class="sg-section-badge">' + results.courses.length + '</span>';
-        html += '</div>';
-        html += '<div class="sg-section-body">';
-        results.courses.forEach(function(c) {
-          var typeLabel = c.course_type === 'general' ? '通识' : '专业';
-          var typeClass = c.course_type === 'general' ? 'sg-pill-general' : 'sg-pill-major';
-          html += '<div class="sg-item" onclick="_closeTopSearchKeepEntry(this.closest(\'.search-overlay\'));navToCourse(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\',\'' + escJs(c.code) + '\')">';
-          html += '<div class="sg-item-body">';
-          html += '<span class="sg-item-name">' + esc(c.name) + '</span>';
-          html += '<span class="sg-item-meta">';
-          html += '<span class="sg-pill ' + typeClass + '">' + typeLabel + '</span>';
-          html += '<span class="sg-item-code">' + esc((c.codes && c.codes.length > 1 ? c.codes : [c.code]).join(' · ')) + '</span>';
-          html += '</span>';
-          html += '</div>';
-          html += '<span class="sg-item-arrow">→</span>';
-          html += '</div>';
-        });
-        html += '</div>';
-        html += '</div>';
-      }
-
-      /* ── 资料结果 ── */
-      if (results.materials.length) {
-        html += '<div class="sg-section">';
-        html += '<div class="sg-section-header">';
-        html += '<svg class="sg-section-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/><polyline points="14 2 14 8 10 5 6 8 6 2"/></svg>';
-        html += '<span class="sg-section-label">资料</span>';
-        html += '<span class="sg-section-badge">' + results.materials.length + '</span>';
-        html += '</div>';
-        html += '<div class="sg-section-body">';
-        results.materials.forEach(function(m) {
-          var badgeHtml = '';
-          if (m.review_status && m.review_status !== 'approved') {
-            badgeHtml = '<span class="review-badge review-badge-' + m.review_status + '" style="font-size:0.65rem;margin-left:6px">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
-          }
-          html += '<div class="sg-item sg-item-link" onclick="_closeTopSearchKeepEntry(this.closest(\'.search-overlay\'));showFileDetail({id:' + m.id + ',title:\'' + escJs(m.title) + '\',course_code:\'' + escJs(m.course_code) + '\',course_name:\'' + escJs(m.course_name) + '\'})">';
-          html += '<div class="sg-item-body">';
-          html += '<span class="sg-item-name">' + esc(m.title) + badgeHtml + '</span>';
-          html += '<span class="sg-item-meta">';
-          html += '<span class="sg-item-code">' + esc(m.course_name) + '</span>';
-          html += '</span>';
-          html += '</div>';
-          html += '<span class="sg-item-arrow">→</span>';
-          html += '</div>';
-        });
-        html += '</div>';
-        html += '</div>';
-      }
-
-      /* ── 空状态 ── */
-      if (!results.courses.length && !results.materials.length) {
-        html += '<div class="sg-empty">';
-        html += '<div class="sg-empty-icon">' + iconSvg('search') + '</div>';
-        html += '<div class="sg-empty-title">未找到相关结果</div>';
-        html += '<div class="sg-empty-desc">试试其他关键词，或使用课程代码搜索</div>';
-        html += '</div>';
-      }
-
-      html += '</div>'; /* /.sg-body */
-      html += '</div>'; /* /.search-overlay-inner */
-
-      overlay.innerHTML = html;
-      // 单一活动结果层：展示新结果前移除旧的搜索覆层
-      _removeTopSearchOverlays();
-      document.body.appendChild(overlay);
-      overlay._bnusparksTopSearch = true;
-      lockScroll();
-      // 记录浮层打开前的 SPA 状态：结果点击时就地恢复（keepEntry），
-      // 系统返回则经 app.js 浮层分支 + _popModalHistory 交还本条目。
-      overlay._bnusparksReturnState = history.state;
-      _pushModalHistory(overlay);
-      overlay.onclick = function (e) { if (e.target === overlay) closeTopSearchOverlay(overlay); };
+    if (btn) btn.addEventListener('click', go);
   }
 
   /* ═══════════════════════════════════════════════════════════

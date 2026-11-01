@@ -69,6 +69,7 @@ Browser
 | `auth.py`、`utils_auth.py` | 注册、登录、验证、JWT、账号有效性、下载令牌 |
 | `profile.py`、`majors.py` | 个人资料、身份选项、专业目录 |
 | `courses.py`、`utils_course_tree.py` | 课程树、课程资料、别名解析和缓存 |
+| `search.py` | 搜索 v2（独立结果页）：课程/资料聚合与问答 v2；旧入口在 `courses.py`/`qa_public.py` 内按 `v` 参数分发，无 `v` 或 `v=1` 保持旧结构 |
 | `course_requests.py` | 新课程申请、状态和合并 |
 | `recommendations.py` | 首页及独立页的个性化推荐 |
 | `files_upload.py`、`utils_upload.py` | 上传校验、落盘和失败补偿 |
@@ -101,6 +102,7 @@ Browser
 | 个人中心 | `profile.js`、`user.css` |
 | 后台管理 | `admin-*.js`、`admin.css` |
 | 问答 | `qa*.js`、`qa.css` |
+| 搜索结果页 | `search.js`、`search.css`；静态入口 `views.js showSearch`，路由 `/search`（`utils.js` 编解码），详情返回经 `returnSearch` 历史状态 |
 | 我的课程 | `timetable.js`、`timetable.css`；教室查询子视图 `classrooms.js`、`classrooms.css` |
 | 公告 | `announcement.css` 和对应视图逻辑 |
 | 设计令牌与组件 | `tokens.css`、`components.css` |
@@ -145,6 +147,20 @@ explorer-core.js → /api/courses/tree/ → courses.py → utils_course_tree.py
 
 课程别名和合并最终跟随主课程。前端从搜索、榜单、收藏或课表进入课程时，应复用既有统一
 导航入口，避免异步渲染互相覆盖。
+
+### 独立搜索结果页
+
+```text
+utils.js setupSearch → showSearch(views.js) → /search 路由 → BnuSearch(search.js)
+  → /api/search/?v=2（课程/资料） + /api/qa/search/?v=2（问答）
+课程结果 → navToCoursePath（explorer-core.js，显式路径定位）
+资料结果 → showFileDetail(returnSearch) → 详情「← 返回搜索结果」
+问答结果 → qaOpenDetail(returnSearch) → qaBackToList 识别搜索来源
+```
+
+v2 接口只接受显式 `v=2`（旧结构保持兼容）；搜索结果页按账号代次隔离内存快照，
+`/api/search/?v=2` 在前端 api() 缓存政策中豁免。教程搜索场景使用 `.td-search-page`
+纯 DOM 演示（不发真实搜索 API）。
 
 ### 课表同步
 

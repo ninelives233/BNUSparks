@@ -240,43 +240,49 @@ class NavFixBrowserTest(StaticLiveServerTestCase):
         self.assertEqual(self.page.evaluate('history.state'), state_before,
                          '滚动不得改写当前历史条目（含 scrollY）')
 
-    # ── D2：顶栏搜索浮层的返回语义 ──
+    # ── D2：顶栏搜索（v=350 起为独立结果页 /search，不再有结果浮层）──
     def test_d2_top_search_back_closes_overlay_only(self):
+        """搜索页占一条历史：返回回到发起搜索的页面；再退才回上级目录。"""
         self._login(self.reader)
         self._nav_to_file_list()
         self.page.fill('.search-box input', '导航回归')
         self.page.press('.search-box input', 'Enter')
-        self.page.wait_for_selector('.search-overlay .sg-item')
-        path_before = self._path()
+        self.page.wait_for_url('**/search**')
+        self.page.wait_for_selector('#searchView.active')
         exp_before = self.page.evaluate('expPath.slice()')
         self.page.evaluate('history.back()')
-        self.page.wait_for_timeout(500)
+        self.page.wait_for_timeout(600)
         snap = self._snapshot()
-        self.assertEqual(snap['overlays'], [], '一次返回应关闭搜索浮层')
-        self.assertEqual(snap['url'], path_before, '关闭浮层不应回退视图层级')
-        self.assertEqual(snap['expPath'], exp_before, '浮层关闭后目录上下文不得残留浮层前的旧值')
-        self.assertTrue(snap['view'] == 'explorerView')
-        # 浮层条目已交还：再一次返回应真正回到上一级目录
+        self.assertEqual(snap['overlays'], [], '不得残留任何搜索结果浮层')
+        self.assertEqual(snap['view'], 'explorerView', '返回应回到发起搜索的课程目录')
+        self.assertEqual(snap['expPath'], exp_before, '目录上下文应与离开前一致')
+        self.assertTrue(snap['url'].startswith('/explorer/'), '返回后 URL 应回到目录路径')
+        # 再一次返回应真正回到上一级目录
         self.page.evaluate('history.back()')
         self.page.wait_for_timeout(500)
         self.assertEqual(self._path(), '/explorer/专业课/回归测试学院/数学/第一学年')
 
     def test_d2_top_search_result_navigation(self):
+        """首页提交 → 搜索页 → 点资料结果进详情 → 返回搜索页（无 _modal 僵尸条目）。"""
         self._login(self.reader)
         self._goto_root_ready()
         self.page.fill('.search-box input', '导航回归资料A')
         self.page.press('.search-box input', 'Enter')
-        self.page.wait_for_selector('.search-overlay .sg-item-link')
-        self.page.locator('.sg-item-link').first.click()
+        self.page.wait_for_url('**/search**')
+        self.page.wait_for_selector('[data-sr-group="material"] .sr-item-title')
+        self.page.click('[data-sr-group="material"] .sr-item-title')
         self.page.wait_for_timeout(600)
         fid = self.files['a'].id
         self.assertEqual(self._path(), f'/file/{fid}', '点击资料结果应进入详情')
         self.page.evaluate('history.back()')
-        self.page.wait_for_timeout(500)
+        self.page.wait_for_timeout(600)
         snap = self._snapshot()
-        self.assertEqual(snap['url'], '/', '详情返回应回到发起搜索的页面，而不是残留弹层条目')
-        self.assertEqual(snap['view'], 'homeView')
+        self.assertEqual(snap['url'], '/search', '详情返回应回到搜索页条目')
+        self.assertEqual(snap['view'], 'searchView')
+        self.assertEqual((snap['state'] or {}).get('searchQuery'), '导航回归资料A')
         self.assertIsNone(snap['state'] and snap['state'].get('_modal'), '返回后不得落在 _modal 僵尸条目上')
+        # 搜索结果在返回后仍可见（快照即时恢复或重新加载均可）
+        self.page.wait_for_selector('[data-sr-group="material"] .sr-item-title')
 
     # ── D3：迟到的详情响应不覆盖已离开的页面 ──
     def test_d3_late_detail_response_no_hijack(self):
@@ -290,10 +296,12 @@ class NavFixBrowserTest(StaticLiveServerTestCase):
             holder['resp'] = resp
 
         self.page.route(re.compile(re.escape(self.live_server_url) + r'/api/files/\d+/$'), hold_detail)
+        # v=350：从独立搜索页进入详情（原为顶栏搜索浮层选结果）
         self.page.fill('.search-box input', '导航回归资料A')
         self.page.press('.search-box input', 'Enter')
-        self.page.wait_for_selector('.search-overlay .sg-item-link')
-        self.page.locator('.sg-item-link').first.click()
+        self.page.wait_for_url('**/search**')
+        self.page.wait_for_selector('[data-sr-group="material"] .sr-item-title')
+        self.page.click('[data-sr-group="material"] .sr-item-title')
         self.page.wait_for_timeout(400)
         self.assertEqual(self._path(), f"/file/{self.files['a'].id}")
         self.page.locator('#mobileBottomNav [data-mobile-view="allCourses"]').click()

@@ -67,10 +67,6 @@ var _qaCurrentDetailId = null;
 // S03：列表/详情请求序号——只有最新一次请求允许提交渲染结果
 var _qaListSeq = 0;
 var _qaDetailSeq = 0;
-// F08：搜索请求序号 + 当前页码（浮层内分页）
-var _qaSearchSeq = 0;
-var _qaSearchQuery = '';
-var _qaSearchPage = 1;
 
 // v183：问答区举报理由（10 项，用户确认；other 必填详细说明）
 var _QA_REPORT_ITEMS = [
@@ -497,10 +493,17 @@ function _updateQaFilterButton() {
 
 // ── 详情 ──
 // F05：问题详情拥有独立地址 /qa/questions/{id}；回答命中带 answerId（锚点 /qa/questions/{id}#answer-{aid}）
+// v=350：opts.returnSearch（来自独立搜索页）写入详情历史状态，供返回按钮识别
 function qaOpenDetail(id, opts) {
   opts = opts || {};
   var state = Object.assign({ qaId: id }, opts.answerId ? { answerId: opts.answerId } : {}, _qaListState());
-  if (typeof pushViewState === 'function') pushViewState('qa', state);
+  if (opts.returnSearch) state.returnSearch = opts.returnSearch;
+  if (typeof pushViewState === 'function') {
+    var seq = pushViewState('qa', state);
+    if (opts.returnSearch) {
+      window._bnuSearchReturn = { detailSeq: seq, stale: false };
+    }
+  }
   renderQaDetail(id, opts);
   window.scrollTo({ top: 0 });
 }
@@ -532,8 +535,7 @@ async function renderQaDetail(id, opts) {
     }
   } catch (err) {
     if (seq !== _qaDetailSeq) return;
-    container.innerHTML = '<div class="qa-detail">' +
-      '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>' +
+    container.innerHTML = '<div class="qa-detail">' + _qaBackLinkHtml() +
       '<div class="qa-empty">' +
         '<div class="qa-empty-title">加载失败</div>' +
         '<div class="qa-empty-desc">网络似乎不太顺畅</div>' +
@@ -543,8 +545,7 @@ async function renderQaDetail(id, opts) {
 }
 
 function _qaDeletedHtml(d) {
-  return '<div class="qa-detail">' +
-    '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>' +
+  return '<div class="qa-detail">' + _qaBackLinkHtml() +
     '<div class="qa-thread"><div class="qa-q-section"><div class="qa-article-body">' +
       '<div class="qa-deleted-hint">' + esc(d.deleted_hint) + '</div>' +
       '<h1 class="qa-q-title">' + esc(d.title) + '</h1>' +
@@ -562,7 +563,7 @@ function _qaDetailHtml(d) {
   var canAnswer = isManager || d.qa_user_open;
 
   var html = '<div class="qa-detail">';
-  html += '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>';
+  html += _qaBackLinkHtml();
 
   // 状态条（作者视角：待审核/已驳回，简短不占屏）
   if (d.status === 'pending') {
@@ -693,7 +694,19 @@ function _qaFocusAnswer(answerId) {
   });
 }
 
+// 返回链接：有搜索来源时文案为「返回搜索结果」，其余入口为「返回问题列表」。
+// 正常详情、删除占位、失败重试三种模板共用。
+function _qaBackLinkHtml() {
+  var st = history.state;
+  if (st && st.returnSearch && st.returnSearch.snapshot) {
+    return '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回搜索结果</button>';
+  }
+  return '<button type="button" class="qa-back-link" onclick="qaBackToList()">← 返回问题列表</button>';
+}
+
 function qaBackToList() {
+  // v=350：有搜索来源时先尝试返回搜索（back 或快照 replace）
+  if (typeof returnToSearchFromDetailState === 'function' && returnToSearchFromDetailState()) return;
   // F05：返回列表写回 /qa 历史条目（恢复筛选/页码），刷新不再重现之前的问题
   if (typeof pushViewState === 'function') pushViewState('qa', _qaListState());
   renderQaView();
@@ -739,103 +752,6 @@ async function qaToggleAnswerLike(id, btn) {
       '<span>赞</span><b class="qa-count">' + r.like_count + '</b>';
   } catch (err) {
     alert('操作失败：' + ((err && (err.message || err.error)) || '请稍后再试'));
-  }
-}
-
-// ── 问答区搜索浮层（顶栏搜索框在问答区视图内切换至此）──
-// F08：覆盖已发布回答（后端 /api/qa/search/），带命中来源、命中片段与分页
-// F01：打开/关闭统一生命周期——滚动锁、弹层 history、焦点恢复走同一对函数
-// F01：点击搜索结果后的关闭路径——结果点击后还要导航，不能走异步 history.back()，
-// 就地把浮层 history 条目替换回打开前的 SPA 状态（与 openNewCourseFromSearch 同模式）
-function _closeQaSearchKeepEntry() {
-  var overlay = document.querySelector('.search-overlay');
-  if (overlay) overlay.remove();
-  unlockScroll();
-  if (typeof deactivateDialog === 'function' && overlay) deactivateDialog(overlay);
-  if (history.state && history.state._modal) {
-    var restored = (overlay && overlay._bnusparksReturnState && overlay._bnusparksReturnState._bnusparks)
-      ? overlay._bnusparksReturnState
-      : { _bnusparks: true, view: 'qa' };
-    var url = typeof routeToPath === 'function' ? routeToPath(restored.view, restored) : null;
-    history.replaceState(restored, '', url || location.pathname);
-  }
-}
-
-function closeQaSearch(overlay) {
-  var el = overlay || document.querySelector('.search-overlay');
-  if (!el) return;
-  el.remove();
-  unlockScroll();
-  _popModalHistory();
-}
-
-async function qaSearch(q, page) {
-  _qaSearchQuery = q;
-  _qaSearchPage = page || 1;
-  var seq = ++_qaSearchSeq;
-  try {
-    var data = await api('/api/qa/search/?q=' + encodeURIComponent(q) +
-      '&page=' + _qaSearchPage + '&pageSize=10');
-    if (seq !== _qaSearchSeq) return; // 已有更新的搜索：丢弃旧结果
-    var overlay = document.createElement('div');
-    overlay.className = 'search-overlay';
-    var html = '<div class="search-overlay-inner sg-inner">';
-    html += '<div class="sg-header">';
-    html += '<button class="sg-close" onclick="closeQaSearch()" aria-label="关闭">✕</button>';
-    html += '<div class="sg-title-row"><span class="sg-title-icon">' + iconSvg('search') + '</span><h3 class="sg-title">' + esc(q) + '</h3></div>';
-    html += '<p class="sg-subtitle">问答区搜索结果</p>';
-    html += '</div>';
-    html += '<div class="sg-body">';
-    if (data.items.length) {
-      html += '<div class="sg-section"><div class="sg-section-header">' +
-        '<span class="sg-section-label">问答</span><span class="sg-section-badge">' + data.total + '</span></div>';
-      html += '<div class="sg-section-body">';
-      data.items.forEach(function(it) {
-        var hitLabel = it.hit === 'answer' ? '命中回答' : '命中问题';
-        var openExpr = it.hit === 'answer' && it.answer_id
-          ? 'qaOpenDetail(' + it.id + ', { answerId: ' + it.answer_id + ' })'
-          : 'qaOpenDetail(' + it.id + ')';
-        html += '<div class="sg-item" onclick="_closeQaSearchKeepEntry();' + openExpr + '">' +
-          '<div class="sg-item-body">' +
-            '<span class="sg-item-name">' + esc(it.title) + '</span>' +
-            (it.snippet ? '<span class="sg-item-snippet">' + esc(it.snippet) + '</span>' : '') +
-            '<span class="sg-item-meta"><span class="sg-item-hit">' + hitLabel + '</span>' +
-              '<span class="sg-item-code">' + esc(it.tag_l2 || it.tag_l1 || '') + (it.tag_l2 || it.tag_l1 ? ' · ' : '') + esc(it.author) + '</span></span>' +
-          '</div>' +
-          '<span class="sg-item-arrow">→</span>' +
-        '</div>';
-      });
-      html += '</div>';
-      // F08：结果分页——不超过一页时不显示
-      if (data.total_pages > 1) {
-        html += '<div class="sg-pagination">';
-        html += '<button class="sg-page-btn"' + (_qaSearchPage <= 1 ? ' disabled' : '') + ' onclick="event.stopPropagation();qaSearch(_qaSearchQuery,' + (_qaSearchPage - 1) + ')">← 上一页</button>';
-        html += '<span class="sg-page-info">第 ' + data.page + ' / ' + data.total_pages + ' 页</span>';
-        html += '<button class="sg-page-btn"' + (_qaSearchPage >= data.total_pages ? ' disabled' : '') + ' onclick="event.stopPropagation();qaSearch(_qaSearchQuery,' + (_qaSearchPage + 1) + ')">下一页 →</button>';
-        html += '</div>';
-      }
-      html += '</div></div>';
-    } else {
-      html += '<div class="sg-empty"><div class="sg-empty-icon">' + iconSvg('search') + '</div>' +
-        '<div class="sg-empty-title">未找到相关问答</div>' +
-        '<div class="sg-empty-desc">试试其他关键词</div></div>';
-    }
-    html += '</div></div>';
-    overlay.innerHTML = html;
-    // 单一活动结果层：展示新结果前移除旧的搜索覆层
-    document.querySelectorAll('.search-overlay').forEach(function(el) {
-      el.remove();
-      unlockScroll();
-    });
-    document.body.appendChild(overlay);
-    lockScroll();
-    // 记录浮层打开前的 SPA 状态：点击结果时就地恢复，避免异步 popstate 竞态
-    overlay._bnusparksReturnState = history.state;
-    _pushModalHistory(overlay);
-    overlay.onclick = function(e) { if (e.target === overlay) closeQaSearch(overlay); };
-  } catch (err) {
-    if (seq !== _qaSearchSeq) return;
-    alert('搜索失败：' + ((err && (err.message || err.error)) || '请稍后再试'));
   }
 }
 

@@ -369,9 +369,17 @@ def api_qa_search(request):
     覆盖已发布问题的标题/描述与已发布回答的正文；只搜公开内容（待审/已删不进结果）。
     每条结果带 hit（question|answer）、answer_id（回答命中时）与 snippet 命中片段，
     支持分页；排序沿用列表默认（置顶优先、新在前）。
+    v=2 分发到独立搜索页实现（materials/views/search.py）；其他显式版本 400。
     """
     if request.method != "GET":
         return _err("仅支持 GET", 405)
+    version = request.GET.get("v")
+    if version not in (None, "", "1"):
+        if version != "2":
+            return _err("不支持的搜索版本", 400)
+        from .search import api_qa_search_v2
+        return api_qa_search_v2(request)
+
     keyword = (request.GET.get("q") or request.GET.get("keyword") or "").strip()
     if not keyword:
         return _ok({"total": 0, "page": 1, "pageSize": 10, "total_pages": 1, "items": []})

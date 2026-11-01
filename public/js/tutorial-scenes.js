@@ -154,48 +154,48 @@
     box.appendChild(go);
     return box;
   }
-  // 搜索/问答搜索结果浮层（utils.js searchQuery / qa.js 的 .search-overlay）
-  function searchOverlay(q, subtitle, sections) {
-    var ov = el('div', 'search-overlay');
-    var inner = el('div', 'search-overlay-inner sg-inner');
-    var head = el('div', 'sg-header');
-    head.appendChild(btnEl('sg-close', '✕')).setAttribute('aria-label', '关闭');
-    var tr = el('div', 'sg-title-row');
-    tr.appendChild(svgEl('sg-title-icon', TICONS.search));
-    tr.appendChild(el('h3', 'sg-title', q));
-    head.appendChild(tr);
-    head.appendChild(el('p', 'sg-subtitle', subtitle));
-    inner.appendChild(head);
-    var body = el('div', 'sg-body');
-    sections.forEach(function (sec) {
-      var s = el('div', 'sg-section');
-      var sh = el('div', 'sg-section-header');
-      sh.appendChild(svgEl('sg-section-svg', sec.icon || TICONS.book));
-      sh.appendChild(el('span', 'sg-section-label', sec.label));
-      sh.appendChild(el('span', 'sg-section-badge', String(sec.items.length)));
-      s.appendChild(sh);
-      var sb = el('div', 'sg-section-body');
+  // 独立搜索结果页演示（v=350）：顶栏搜索结果不再使用浮层，而是成为页面
+  // 内容（/search 独立结果页）。纯 DOM 演示，不发真实搜索 API；分组条目
+  // 结构与业务 .sr-item/.sr-group 同源（search.css 由 tutorial 特性加载）。
+  function searchResultPage(q, groups) {
+    var page = el('div', 'td-search-page');
+    var title = el('h1', 'search-title');
+    title.textContent = '「' + q + '」的搜索结果';
+    page.appendChild(title);
+    var tabs = el('nav', 'sr-tabs');
+    tabs.appendChild(el('a', 'sr-tab sr-tab--active', '全部'));
+    tabs.appendChild(el('a', 'sr-tab', '课程'));
+    tabs.appendChild(el('a', 'sr-tab', '资料'));
+    tabs.appendChild(el('a', 'sr-tab', '问答'));
+    page.appendChild(tabs);
+    var body = el('div', 'search-body');
+    groups.forEach(function (sec) {
+      var card = el('section', 'sr-group');
+      var head = el('div', 'sr-group-head');
+      head.appendChild(el('h2', 'sr-group-title', sec.label));
+      head.appendChild(el('span', 'sr-group-count', String(sec.items.length)));
+      card.appendChild(head);
+      var list = el('div', 'sr-group-body');
       sec.items.forEach(function (it) {
-        var item = el('div', 'sg-item' + (it.cls ? ' ' + it.cls : ''));
+        var item = el('div', 'sr-item' + (it.cls ? ' ' + it.cls : ''));
         if (it.mark) mark(it.mark, item);
-        var ib = el('div', 'sg-item-body');
-        ib.appendChild(el('span', 'sg-item-name', it.name));
-        if (it.snippet) ib.appendChild(el('span', 'sg-item-snippet', it.snippet));
-        var meta = el('span', 'sg-item-meta');
-        if (it.pill) meta.appendChild(el('span', 'sg-pill ' + it.pill.cls, it.pill.text));
-        if (it.hit) meta.appendChild(el('span', 'sg-item-hit', it.hit));
-        if (it.meta) meta.appendChild(el('span', 'sg-item-code', it.meta));
-        ib.appendChild(meta);
-        item.appendChild(ib);
-        item.appendChild(el('span', 'sg-item-arrow', '→'));
-        sb.appendChild(item);
+        var main = el('div', 'sr-item-main');
+        main.appendChild(el('a', 'sr-item-title', it.name));
+        if (it.snippet) main.appendChild(el('div', 'sr-item-snippet', it.snippet));
+        var meta = el('div', 'sr-item-meta');
+        if (it.pill) meta.appendChild(el('span', 'sr-badge ' + it.pill.cls, it.pill.text));
+        if (it.hit) meta.appendChild(el('span', 'sr-badge sr-badge--hit', it.hit));
+        if (it.meta) meta.appendChild(el('span', 'sr-item-dim', it.meta));
+        main.appendChild(meta);
+        item.appendChild(main);
+        item.appendChild(el('span', 'sr-item-arrow', '→'));
+        list.appendChild(item);
       });
-      s.appendChild(sb);
-      body.appendChild(s);
+      card.appendChild(list);
+      body.appendChild(card);
     });
-    inner.appendChild(body);
-    ov.appendChild(inner);
-    return ov;
+    page.appendChild(body);
+    return page;
   }
   // 课程资料页头（explorer-render.js renderFiles 的 .file-area-header）
   function filesHeader(opts) {
@@ -972,30 +972,29 @@
 
   // ═══ 分镜工厂 ═════════════════════════════════════════════
 
-  // find-search · 建立搜索框 → 输入 → 按「→」提交 → 分类结果（单屏，结果浮层）
+  // find-search · 建立搜索框 → 输入 → 按「→」提交 → 分类结果（单屏，结果页内容）
   // 提交是真实动作（回车或「→」按钮），不是输入后自动出结果；
   // 每组只保留一条代表结果，突出「课程 / 资料」两个分组。
   function findSearch() {
     var root = el('div', 'tutorial-demo-frame');
     var strip = topStrip([searchBox('search-input')]);
     root.appendChild(strip);
-    // 页面其余部分弱化为装饰，突出搜索框本体
+    // 提交前的页面内容（装饰行）；结果页出现后由 :has 规则自动隐藏
     var deco = el('div', 'td-deco-rows');
     for (var i = 0; i < 3; i++) deco.appendChild(el('div', 'td-deco-row'));
     root.appendChild(deco);
-    var overlay = searchOverlay('学习方法', '搜索结果', [
+    var page = searchResultPage('学习方法', [
       { label: '课程', items: [
-        { name: '学习方法导论', pill: { cls: 'sg-pill-major', text: '专业' }, meta: 'DEMO101', mark: 'res-course' }
+        { name: '学习方法导论', pill: { cls: 'sr-badge--major', text: '专业课' }, meta: 'DEMO101 · 12 份资料', mark: 'res-course' }
       ] },
       { label: '资料', items: [
-        { name: '期末复习提纲.pdf', meta: '学习方法导论' }
+        { name: '期末复习提纲.pdf', meta: '学习方法导论 · 11-01' }
       ] }
     ]);
-    overlay.classList.add('td-search-result');
-    root.appendChild(overlay);
-    setHidden(overlay, true);
-    var sections = overlay.querySelectorAll('.sg-section');
-    ghost(sections[1]);
+    root.appendChild(page);
+    setHidden(page, true);
+    var groups = page.querySelectorAll('.sr-group');
+    ghost(groups[1]);
     var input = strip.querySelector('[data-mark="search-input"]');
     var sbox = strip.querySelector('[data-mark="search-box"]');
     return {
@@ -1008,8 +1007,8 @@
           sbox.classList.add('td-focus');
           typedInto(input, '学习方法');
         },
-        function () { reveal(overlay, 'td-fade'); },
-        function () { reveal(sections[1]); }
+        function () { reveal(page, 'td-fade'); },
+        function () { reveal(groups[1]); }
       ]
     };
   }
@@ -1847,30 +1846,32 @@
     };
   }
 
-  // qa-search · 问答列表 → 输入 → 搜索 → 结果浮层（命中摘要可辨认）
+  // qa-search · 问答列表 → 输入 → 搜索 → 结果成为页面内容（命中摘要可辨认）
   function qaSearch() {
     var root = el('div', 'tutorial-demo-frame');
     var strip = topStrip([searchBox('qa-input', '搜索问题、回答…')]);
     root.appendChild(strip);
     root.appendChild(qaToolbar({ total: 12 }));
-    root.appendChild(qaItem({
+    var q1 = qaItem({
       title: '如何安排期末复习？', answers: 12,
       preview: '想问问大家考前两周都是怎么安排的……',
       tags: ['课程学习', '期末复习']
-    }));
-    root.appendChild(qaItem({
+    });
+    var q2 = qaItem({
       title: '怎么选通识课？', answers: 8, date: '1 周前',
       preview: '下学期想选一门轻松一点的通识课……',
       tags: ['校园生活', '选课'], author: '另一位同学'
-    }));
-    var overlay = searchOverlay('期末复习', '问答区搜索结果', [
-      { label: '问答', icon: TICONS.doc, items: [
+    });
+    root.appendChild(q1);
+    root.appendChild(q2);
+    var page = searchResultPage('期末复习', [
+      { label: '问答', items: [
         { name: '如何安排期末复习？', snippet: '先按章节整理错题，再按优先级复习…', hit: '命中回答', meta: '期末复习 · 示例同学', mark: 'qa-res' },
-        { name: '期末复习资料哪里找？', snippet: ' 各位学长学姐一般从哪里找复习资料…', hit: '命中问题', meta: '期末复习 · 另一位同学' }
+        { name: '期末复习资料哪里找？', snippet: '各位学长学姐一般从哪里找复习资料…', hit: '命中问题', meta: '期末复习 · 另一位同学' }
       ] }
     ]);
-    root.appendChild(overlay);
-    setHidden(overlay, true);
+    root.appendChild(page);
+    setHidden(page, true);
     var input = strip.querySelector('[data-mark="qa-input"]');
     var go = strip.querySelector('[data-mark="search-go"]');
     return {
@@ -1880,8 +1881,13 @@
       apply: [
         function () {},
         function () { typedInto(input, '期末复习'); },
-        function () {},
-        function () { setHidden(overlay, false); }
+        function () {
+          // 页面内容切换：提交前的列表让位给结果页
+          setHidden(q1, true);
+          setHidden(q2, true);
+          reveal(page, 'td-fade');
+        },
+        function () {}
       ]
     };
   }

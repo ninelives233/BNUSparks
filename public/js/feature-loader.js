@@ -86,7 +86,12 @@
   // v345：我的课程接入教室查询，宽屏三视图、窄屏统一选择器。
   // v346：所选日期的上课教室在楼内置顶，保留本节教室优先。
   // v348：教室查询浮窗居中，手机直接展示未选中的全天时间轴。
-  var VERSION = '349';
+  // v350：顶栏/问答搜索从结果浮层改为独立搜索页 /search（v=350）——
+  //        新增 search 特性（search.js + search.css）、/search 路由与
+  //        /api/search/?v=2、/api/qa/search/?v=2；课程/资料结果经显式路径
+  //        定位与 /file/{id}、/qa/questions/{id} 往返；教程搜索场景同步为
+  //        结果页演示。旧 v1 搜索接口与上传选课浮层保持不变。
+  var VERSION = '350';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -126,6 +131,10 @@
       'classrooms.js',
       'timetable.js'
     ],
+    // v350：独立搜索结果页（/search）——结果渲染、筛选、分页与账号隔离
+    search: [
+      'search.js'
+    ],
     tutorial: [
       'tutorial-data.js',
       'tutorial-scenes.js',
@@ -142,8 +151,10 @@
     'admin-records': ['admin.css'],
     'admin-qa': ['admin.css', 'qa.css'],
     timetable: ['timetable.css', 'classrooms.css'],
+    search: ['search.css'],
     // 演示 DOM 复用站点真实 class：教程需要 Explorer/问答/课表的业务 CSS 同源渲染
-    tutorial: ['tutorial.css', 'course.css', 'qa.css', 'timetable.css']
+    // v350：教程搜索场景改用独立结果页演示（search.css 与业务同源）
+    tutorial: ['tutorial.css', 'course.css', 'qa.css', 'timetable.css', 'search.css']
   };
 
   function loadStyle(name) {

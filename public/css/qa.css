@@ -703,28 +703,4 @@ a.qa-item-title:focus-visible { outline: 2px solid var(--primary); outline-offse
 .qa-review-hint { margin-top: var(--space-sm); font-size: 0.75rem; color: var(--ink-faint); line-height: 1.6; }
 .qa-review-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: var(--space-md); flex-wrap: wrap; }
 
-/* F08：搜索结果命中片段 / 命中来源 / 浮层内分页 */
-.sg-item-snippet {
-  margin-top: 3px;
-  font-size: 0.8rem; line-height: 1.55; color: var(--ink-soft);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.sg-item-hit {
-  flex-shrink: 0; padding: 1px 8px; font-size: 0.68rem; font-weight: 600;
-  color: var(--primary); background: var(--primary-surface);
-  border: 1px solid oklch(from var(--primary) l c h / 0.25); border-radius: 999px;
-}
-.sg-pagination {
-  display: flex; align-items: center; justify-content: center; gap: 14px;
-  padding: 12px 4px 4px;
-}
-.sg-page-btn {
-  padding: 5px 14px; font-size: 0.8rem; color: var(--primary);
-  background: transparent; border: 1px solid var(--border); border-radius: 999px; cursor: pointer;
-  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
-}
-.sg-page-btn:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-surface); }
-.sg-page-btn:disabled { opacity: 0.45; cursor: default; }
-.sg-page-info { font-size: 0.75rem; color: var(--ink-faint); }
-
 /* 详情页问答排版微调：审阅弹窗与回答正文共用 .qa-rich，以上规则已统一 */

@@ -325,7 +325,20 @@
     ++_fdPreviewRequest;
     var previewBody = document.getElementById('fdPreviewBody');
     if (previewBody) previewBody.innerHTML = '';
+    _renderFdReturnSearch();
     scrollToInstant(0);
+  }
+
+  // 搜索来源返回（v=350）：仅当当前详情条目携带有效 returnSearch 时显示
+  // 「← 返回搜索结果」；课程面包屑保留，两者分别承担回搜索与进课程。
+  function _renderFdReturnSearch() {
+    var btn = document.getElementById('fdReturnSearchBtn');
+    if (!btn) return;
+    var st = history.state;
+    var rs = st && st._bnusparks && st.view === 'fileDetail' ? st.returnSearch : null;
+    var valid = !!(rs && rs.snapshot);
+    if (valid && rs.ownerId && currentUser && rs.ownerId !== currentUser.id) valid = false;
+    btn.hidden = !valid;
   }
 
   var _currentDetailFile = null;
@@ -368,14 +381,16 @@
     }).catch(function() {});
   }
 
-  function showFileDetail(file) {
+  function showFileDetail(file, options) {
     // 文件详情可从搜索、通知或管理追溯页直接打开；这些入口可能尚未加载 explorer 核心。
     if (typeof expPath === 'undefined' && typeof ensureFeature === 'function') {
-      ensureFeature('explorer').then(function() { showFileDetail(file); }).catch(function() {
+      ensureFeature('explorer').then(function() { showFileDetail(file, options); }).catch(function() {
         alert('课程模块加载失败，请刷新重试。');
       });
       return;
     }
+    options = options || {};
+    var returnSearch = options.returnSearch || null;
     // 保存当前侧边栏状态，保持高亮不丢失
     var al = document.querySelector('.side-nav a.active');
     _fdPrevSidebar = al ? al.getAttribute('data-view') : null;
@@ -393,7 +408,12 @@
         // 先渲染骨架屏
         _showFileDetailSkeleton();
         updateSidebar(_fdPrevSidebar);
-        pushViewState('fileDetail', { fileId: fid, prevView: _fdPrevSidebar }, false, departY);
+        var asyncExtra = { fileId: fid, prevView: _fdPrevSidebar };
+        if (returnSearch) asyncExtra.returnSearch = returnSearch;
+        var asyncSeq = pushViewState('fileDetail', asyncExtra, false, departY);
+        if (returnSearch) {
+          window._bnuSearchReturn = { detailSeq: asyncSeq, stale: false };
+        }
         api('/api/files/' + fid + '/').then(function(fullFile) {
           if (!_fdLoadIsCurrent(fid)) return; // 已离开详情或切到别的资料：迟到响应不覆盖当前页面
           _currentDetailFile = fullFile;
@@ -403,7 +423,21 @@
           _recordFdView(fid);
         }).catch(function() {
           if (!_fdLoadIsCurrent(fid)) return; // 同上：失败的旧请求也不得把用户推走
-          // API 失败时回退到课程页
+          _renderFdReturnSearch();
+          var retry = document.querySelector('.fd-title-area');
+          // API 失败时回退到课程页；搜索来源优先给出可恢复的返回入口
+          if (returnSearch) {
+            var failTitle = document.getElementById('fdTitle');
+            if (failTitle) failTitle.innerHTML = '<span style="color:var(--ink-faint)">资料加载失败</span>';
+            if (retry && !retry.querySelector('.fd-load-fail-hint')) {
+              var hint = document.createElement('div');
+              hint.className = 'fd-load-fail-hint';
+              hint.innerHTML = '资料可能已被删除或网络异常。' +
+                '<button type="button" class="fd-return-search fd-return-search--inline" onclick="returnToSearchFromDetailState()">← 返回搜索结果</button>';
+              retry.appendChild(hint);
+            }
+            return;
+          }
           if (file.course_code) {
             var t = file.course_code.startsWith('GEN') ? '通识课' : '专业课';
             showExplorer(t);
@@ -429,12 +463,18 @@
     // 返回到详情条目应回顶部而不是继承列表的位置。
     var departY = window.scrollY;
     scrollToInstant(0);
-    pushViewState('fileDetail', { fileId: file.id, prevView: _fdPrevSidebar }, false, departY);
+    var extra = { fileId: file.id, prevView: _fdPrevSidebar };
+    if (returnSearch) extra.returnSearch = returnSearch;
+    var seq = pushViewState('fileDetail', extra, false, departY);
+    if (returnSearch) {
+      window._bnuSearchReturn = { detailSeq: seq, stale: false };
+    }
     _renderFileDetail(file);
     _recordFdView(file.id);
   }
 
   function _renderFileDetail(file) {
+    _renderFdReturnSearch();
     var bc = document.getElementById('fdBreadcrumb');
     if (bc) {
       var treePath = null;

@@ -56,6 +56,33 @@
     }
   }
 
+  // 独立搜索页课程结果入口（v=350）：按服务端有效 segments 显式定位。
+  // 与 navToCourse 的差异：路径由搜索结果携带（多归属时用户已明确选择），
+  // 不再按本人身份重排；先等 explorer 与课程树就绪，再验证路径仍指向
+  // 课程叶子，一次进入资料列表，不产生根渲染覆盖或双历史条目。
+  // 路径失效（目录被删/重命名）返回 false，由调用方给出可恢复错误。
+  function navToCoursePath(segments) {
+    var path = Array.isArray(segments) ? segments.filter(Boolean) : [];
+    if (!path.length) return Promise.resolve(false);
+    var go = function () {
+      var node = null;
+      try { node = getNode(path); } catch (e) { node = null; }
+      if (!node || node.children || node.divider) return false;
+      expPath = path.slice();
+      pushViewState('explorer', { expPath: [...expPath] });
+      switchView('explorer');
+      if (typeof updateSidebar === 'function') updateSidebar('allCourses');
+      renderExplorer();
+      return true;
+    };
+    var ready = typeof ensureFeature === 'function'
+      ? ensureFeature('explorer')
+      : Promise.resolve();
+    return ready.then(function () {
+      return _ensureCourseTreeReady();
+    }).then(go, function () { return false; });
+  }
+
   // 「打开板块 + 定位课程」一步式入口（搜索结果/首页卡片/同名课程侧栏等外部跳转）。
   // 树中能定位到课程时直接进入资料列表，不走 showExplorer 的板块根渲染——
   // 两者的异步渲染会互相覆盖（后注册的根渲染会把已定位的 expPath 冲回根）。
@@ -293,6 +320,9 @@
 
   function pushViewState(view, extra, replace, departY) {
     if (_suppressingPushState) return;
+    // 搜索来源返回标记（v=350）：任何新 push 都会使「详情由搜索直接 push」
+    // 的判定失效；创建该标记的详情 push 会在返回后自行重置 stale。
+    if (window._bnuSearchReturn) window._bnuSearchReturn.stale = true;
     if (!replace && _replaceNextPush) {
       replace = true;
       _replaceNextPush = false;
@@ -314,6 +344,9 @@
       }
     }
     const state = { _bnusparks: true, view, scrollY: window.scrollY, ...extra };
+    // 本标签页条目序号：搜索来源返回按钮用它判定「上一条仍是发起搜索」
+    window._bnuEntrySeq = (window._bnuEntrySeq || 0) + 1;
+    state._seq = window._bnuEntrySeq;
     // 同步写入 URL（v=171 SPA 路由）：每个视图一个可分享/可刷新/可返回的干净路径；
     // drawer 等浮层返回 null → 保持当前 URL
     const url = routeToPath(view, state);
@@ -324,6 +357,7 @@
     }
     // 同时写入 sessionStorage，刷新后可恢复
     try { sessionStorage.setItem('bnusparks_view', JSON.stringify(state)); } catch(e) {}
+    return state._seq;
   }
 
   // ── 从后端加载课程导航树 ──

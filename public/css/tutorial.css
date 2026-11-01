@@ -1201,12 +1201,22 @@
 .tutorial-group-end { position: absolute; inset: 0; z-index: 7; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 12px; padding: 36px; border-radius: var(--radius-lg); background: var(--surface); }
 .tutorial-group-end h3, .tutorial-group-end p { width: 100%; text-align: center; margin: 0; }
 .tutorial-group-end p { color: var(--ink-soft); }
-.tutorial-demo-frame .td-search-result { position: relative; inset: auto; background: none; padding: 0; display: flex; flex: 1; min-height: 0; align-items: flex-start; }
-.tutorial-demo-frame .td-search-result .sg-inner { width: 100%; box-shadow: var(--shadow-sm); max-height: 100%; }
-.tutorial-demo-frame .td-search-result .sg-header { display: none; }
-.tutorial-demo-frame .td-search-result .sg-body { overflow: visible; }
-.tutorial-demo-frame .td-search-result .sg-section-header { padding-top: 8px; }
-.tutorial-demo-frame:has(.td-search-result:not(.is-hidden)) .td-deco-rows { display: none; }
+/* v=350：搜索演示从结果浮层改为独立结果页内容（.td-search-page，结构同业务 .sr-*）。
+   旧 .td-search-result 浮层适配规则随 sg-* 结果浮层一并移除。 */
+.tutorial-demo-frame .td-search-page { position: relative; width: 100%; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.tutorial-demo-frame .td-search-page .search-title { font-size: 15px; margin: 0; }
+.tutorial-demo-frame .td-search-page .sr-tabs { border-bottom: 1px solid var(--border-light); }
+.tutorial-demo-frame .td-search-page .sr-tab { padding: 6px 10px; font-size: 12px; min-height: 0; }
+.tutorial-demo-frame .td-search-page .sr-group { margin-top: 0; }
+.tutorial-demo-frame .td-search-page .sr-group-head { padding: 8px 12px; }
+.tutorial-demo-frame .td-search-page .sr-group-title { font-size: 13px; margin: 0; }
+.tutorial-demo-frame .td-search-page .sr-item { padding: 9px 12px; }
+.tutorial-demo-frame .td-search-page .sr-item-title { font-size: 13px; }
+.tutorial-demo-frame .td-search-page .sr-item-snippet { font-size: 12px; }
+.tutorial-demo-frame .td-search-page .sr-item-meta { margin-top: 4px; }
+.tutorial-demo-frame:has(.td-search-page:not(.is-hidden)) .td-deco-rows,
+.tutorial-demo-frame:has(.td-search-page:not(.is-hidden)) .qa-toolbar,
+.tutorial-demo-frame:has(.td-search-page:not(.is-hidden)) .qa-item { display: none; }
 .tutorial-demo-frame .is-hot { box-shadow: none; outline: none; }
 .tutorial-demo-frame .td-act { animation: tutorial-act 140ms ease both; }
 .tutorial-demo-frame .tt-empty { padding: 8px 4px; }
@@ -1253,15 +1263,14 @@
   .tutorial-stage { height: 240px; min-height: 220px; }
   .tutorial-camera-window { top: 64px; bottom: 18px; }
   .tutorial-narration { font-size: 16px; top: 10px; }
-  .tutorial-demo-frame:has(.td-search-result) { gap: 6px; }
-  .tutorial-demo-frame:has(.td-search-result) .td-topstrip { padding: 2px 6px; }
-  .tutorial-demo-frame:has(.td-search-result) .search-box { padding: 4px 4px 4px 10px; }
-  .tutorial-demo-frame:has(.td-search-result) .search-box button { width: 28px; height: 28px; }
-  .tutorial-demo-frame .td-search-result .sg-section-header { padding: 2px 8px; line-height: 1.25; }
-  .tutorial-demo-frame .td-search-result .sg-section-body { padding: 0 4px 2px; }
-  .tutorial-demo-frame .td-search-result .sg-item { padding: 2px 6px; line-height: 1.4; }
-  .tutorial-demo-frame .td-search-result .sg-item-name { font-size: 13px; }
-  .tutorial-demo-frame .td-search-result .sg-item-meta { display: none; }
+  .tutorial-demo-frame:has(.td-search-page) { gap: 6px; }
+  .tutorial-demo-frame:has(.td-search-page) .td-topstrip { padding: 2px 6px; }
+  .tutorial-demo-frame:has(.td-search-page) .search-box { padding: 4px 4px 4px 10px; }
+  .tutorial-demo-frame:has(.td-search-page) .search-box button { width: 28px; height: 28px; }
+  .tutorial-demo-frame .td-search-page .sr-item { padding: 5px 10px; }
+  .tutorial-demo-frame .td-search-page .sr-item-title { font-size: 12px; }
+  .tutorial-demo-frame .td-search-page .sr-item-snippet { display: none; }
+  .tutorial-demo-frame .td-search-page .sr-item-meta { margin-top: 2px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tutorial-track, .tutorial-camera { will-change: auto; }

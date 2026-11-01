@@ -328,7 +328,18 @@ def api_course_timetable_summary(request):
 # ═══════════════════════════════════════════════════════════════
 
 def api_search(request):
-    """GET /api/search/?q=&type=course|material"""
+    """GET /api/search/?q=&type=course|material
+
+    无 v 或 v=1 保持旧返回结构与调用语义（上传选课/旧测试依赖）；
+    v=2 分发到独立搜索页实现（materials/views/search.py）；其他显式版本 400。
+    """
+    version = request.GET.get("v")
+    if version not in (None, "", "1"):
+        if version != "2":
+            return _err("不支持的搜索版本", 400)
+        from .search import api_search_v2
+        return api_search_v2(request)
+
     query = request.GET.get("q", "").strip()
     search_type = request.GET.get("type", "all")
 
