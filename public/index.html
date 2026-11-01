@@ -54,9 +54,9 @@
   }
 </script>
 <link rel="stylesheet" href="/static/css/tokens.css?v=307">
-<link rel="stylesheet" href="/static/css/base.css?v=327">
+<link rel="stylesheet" href="/static/css/base.css?v=328">
 <link rel="stylesheet" href="/static/css/user.css?v=214">
-<link rel="stylesheet" href="/static/css/files.css?v=342">
+<link rel="stylesheet" href="/static/css/files.css?v=343">
 <link rel="stylesheet" href="/static/css/announcement.css?v=188">
 <link rel="stylesheet" href="/static/css/components.css?v=202">
 </head>
@@ -447,13 +447,15 @@
 
 <!-- ═══ Recommendations View ═══ -->
 <div class="view-section" id="recommendationsView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">为你推荐</span>
+    </div>
+  </nav>
   <div class="recommendations-page">
     <div class="container recommendations-container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">为你推荐</span>
-      </div>
       <header class="recommendations-header">
         <div>
           <span class="recommendations-kicker">资料索引</span>
@@ -489,14 +491,14 @@
 <!-- ═══ Explorer View ═══ -->
 <div class="view-section" id="explorerView">
   <div class="explorer-view">
-      <div class="container">
-      <div class="explorer-top-row">
+      <nav class="page-navigation explorer-top-row" aria-label="当前位置">
         <div class="breadcrumb" id="breadcrumb"></div>
         <div class="explorer-compact-heading" id="explorerCompactHeading" aria-live="polite" hidden></div>
         <div class="explorer-top-actions" id="explorerTopActions">
           <div id="courseNavBar" class="course-nav-bar" aria-label="全部课程导航"></div>
         </div>
-      </div>
+      </nav>
+      <div class="container">
       <div class="explorer-content" id="explorerContent"></div>
       </div>
   </div>
@@ -536,14 +538,16 @@
 
 <!-- ═══ Announcements View (Iter 7 — 动态公告) ═══ -->
 <div class="view-section" id="announcementsView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">公告</span>
+      <button class="announcement-create-btn" id="createAnnouncementBtn" style="display:none" onclick="showAnnouncementEditor()"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ui-icon-edit"></use></svg> 发布公告</button>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current" style="flex:1">公告</span>
-        <button class="announcement-create-btn" id="createAnnouncementBtn" style="display:none" onclick="showAnnouncementEditor()"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ui-icon-edit"></use></svg> 发布公告</button>
-      </div>
       <div class="about-header">
         <h2 class="about-title">公告</h2>
         <p class="about-subtitle">平台最新动态</p>
@@ -555,13 +559,15 @@
 
 <!-- ═══ Broad Enrollment View ═══ -->
 <div class="view-section" id="broadView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">关于大类招生</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">关于大类招生</span>
-      </div>
       <div class="about-header">
         <h2 class="about-title">关于大类招生</h2>
         <p class="about-subtitle">了解北京师范大学大类招生政策</p>
@@ -573,13 +579,15 @@
 
 <!-- ═══ Rankings View ═══ -->
 <div class="view-section" id="rankingsView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current" id="rankingsBreadcrumb">下载排行榜</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current" id="rankingsBreadcrumb">下载排行榜</span>
-      </div>
       <div class="about-header rankings-header">
         <div class="rankings-heading">
           <h2 class="about-title" id="rankingsTitle">下载排行榜</h2>
@@ -597,13 +605,15 @@
 
 <!-- ═══ 问答区（新生指南）View ═══ -->
 <div class="view-section" id="qaView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">问答区</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">问答区</span>
-      </div>
       <div class="about-header qa-header">
         <div class="qa-head-left">
           <h2 class="about-title">问答区</h2>
@@ -621,15 +631,17 @@
 
 <!-- ═══ 问答区 · 独立发布/编辑视图（v175） ═══ -->
 <div class="view-section" id="qaComposeView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <a href="/qa" onclick="event.preventDefault();showQa()">问答区</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current" id="qaComposeTitle">发布问题</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container qa-compose-container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <a href="/qa" onclick="event.preventDefault();showQa()">问答区</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current" id="qaComposeTitle">发布问题</span>
-      </div>
       <div id="qaComposeContent"><div style="text-align:center;padding:40px;color:var(--ink-faint)">加载中...</div></div>
     </div>
   </div>
@@ -637,13 +649,15 @@
 
 <!-- ═══ User Leaderboard View (Iter 7) ═══ -->
 <div class="view-section" id="leaderboardView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">用户排行榜</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">用户排行榜</span>
-      </div>
       <div class="about-header">
         <h2 class="about-title">用户排行榜</h2>
         <p class="about-subtitle">看看谁在为社区做贡献</p>
@@ -671,13 +685,15 @@
 
 <!-- ═══ User Public View (Iter 7) ═══ -->
 <div class="view-section" id="userPublicView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">用户主页</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">用户主页</span>
-      </div>
       <div id="userPublicContent"></div>
     </div>
   </div>
@@ -685,13 +701,15 @@
 
 <!-- ═══ Recent All View ═══ -->
 <div class="view-section" id="recentAllView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">最近上传</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">最近上传</span>
-      </div>
       <div class="about-header">
         <h2 class="about-title">最近上传</h2>
         <p class="about-subtitle">最新添加的资料</p>
@@ -773,13 +791,15 @@
 
 <!-- ═══ Profile View (Iter 7) ═══ -->
 <div class="view-section" id="profileView">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">个人资料</span>
+    </div>
+  </nav>
   <div class="about-page">
     <div class="container">
-      <div class="breadcrumb">
-        <a href="/" onclick="event.preventDefault();showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">个人资料</span>
-      </div>
       <h2 class="profile-section-title">我的资料</h2>
 
       <!-- 用户数据三栏 -->
@@ -936,12 +956,14 @@
 
 <!-- ═══ 通知中心（完整页） ═══ -->
 <div class="view-section" id="notifView">
-  <div class="container" style="padding-top: var(--space-lg)">
-    <div class="breadcrumb" style="margin-bottom: var(--space-sm)">
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
       <a href="/" onclick="event.preventDefault();showHome()">首页</a>
       <span class="bc-sep"> / </span>
       <span class="bc-current">通知中心</span>
     </div>
+  </nav>
+  <div class="container">
     <div class="notif-full-head">
       <div class="section-accent" style="margin:0">通知中心</div>
       <span class="notif-full-count" id="notifFullCount"></span>
@@ -969,12 +991,14 @@
 
 <!-- ═══ 我的上传独立页面（Iter 6） ═══ -->
 <div class="view-section" id="myUploadsView" style="display:none">
-  <div class="container" style="max-width:800px;margin:0 auto;padding:20px 16px">
-    <div class="breadcrumb" id="muBreadcrumb" style="margin-bottom:12px">
-      <a href="#" onclick="showHome()">首页</a>
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb" id="muBreadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
       <span class="bc-sep"> / </span>
       <span class="bc-current">我的上传</span>
     </div>
+  </nav>
+  <div class="container" style="max-width:800px;margin:0 auto;padding:0 16px 20px">
     <div class="mu-tabs">
       <button class="mu-tab active" data-tab="approved" onclick="switchMyUploadsTab('approved')">已发布</button>
       <button class="mu-tab" data-tab="pending" onclick="switchMyUploadsTab('pending')">审核中</button>
@@ -987,23 +1011,27 @@
 
 <!-- ═══ 我的下载独立页面 ═══ -->
 <div class="view-section" id="myDownloadsView" style="display:none">
-  <div class="container" style="max-width:800px;margin:0 auto;padding:20px 16px">
-    <div class="breadcrumb" style="margin-bottom:12px">
-      <a href="#" onclick="showHome()">首页</a>
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
       <span class="bc-sep"> / </span>
       <span class="bc-current">我的下载</span>
     </div>
+  </nav>
+  <div class="container" style="max-width:800px;margin:0 auto;padding:0 16px 20px">
     <div id="myDownloadsPageList" class="pc-list"></div>
   </div>
 </div>
 
 <div class="view-section" id="myFavoritesView" style="display:none">
-  <div class="container" style="max-width:800px;margin:0 auto;padding:20px 16px">
-    <div class="breadcrumb" style="margin-bottom:12px">
-      <a href="#" onclick="showHome()">首页</a>
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
       <span class="bc-sep"> / </span>
       <span class="bc-current">我的收藏</span>
     </div>
+  </nav>
+  <div class="container" style="max-width:800px;margin:0 auto;padding:0 16px 20px">
     <div class="mu-tabs">
       <button class="mu-tab active" data-favtab="course" onclick="switchMyFavTab('course')">课程</button>
       <button class="mu-tab" data-favtab="file" onclick="switchMyFavTab('file')">文件</button>
@@ -1015,14 +1043,14 @@
 
 <!-- ═══ 文件详情页 ═══ -->
 <div class="view-section" id="fileDetailView" style="display:none">
-  <div class="fd-container">
-    <div class="fd-top-row">
-      <div class="breadcrumb" id="fdBreadcrumb">
-        <a href="#" onclick="showHome()">首页</a>
-        <span class="bc-sep"> / </span>
-        <span class="bc-current">文件详情</span>
-      </div>
+  <nav class="page-navigation fd-top-row" aria-label="当前位置">
+    <div class="breadcrumb" id="fdBreadcrumb">
+      <a href="/" onclick="event.preventDefault();showHome()">首页</a>
+      <span class="bc-sep"> / </span>
+      <span class="bc-current">文件详情</span>
     </div>
+  </nav>
+  <div class="fd-container">
     <div class="fd-layout" id="fdLayout">
       <!-- 顶部信息区 -->
       <div class="fd-info-area" id="fdInfoArea">
@@ -1051,8 +1079,10 @@
 
 <!-- ═══ 新建课程（v=147） ═══ -->
 <div class="view-section" id="newCourseView" style="display:none">
-  <div class="container" style="max-width:760px;margin:0 auto;padding:20px 16px">
-    <div class="breadcrumb" id="ncBreadcrumb" style="margin-bottom:12px"></div>
+  <nav class="page-navigation" aria-label="当前位置">
+    <div class="breadcrumb" id="ncBreadcrumb"></div>
+  </nav>
+  <div class="container" style="max-width:760px;margin:0 auto;padding:0 16px 20px">
 
     <div class="nc-card">
       <div class="nc-card-head">
@@ -1608,7 +1638,7 @@
 <script src="/static/js/explorer-file.js?v=344" defer></script>
 <script src="/static/js/explorer-preview.js?v=341" defer></script>
 <script src="/static/js/home.js?v=327" defer></script>
-<script src="/static/js/feature-loader.js?v=348" defer></script>
+<script src="/static/js/feature-loader.js?v=349" defer></script>
 <script src="/static/js/app.js?v=343" defer></script>
 
 </body>

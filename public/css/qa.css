@@ -8,22 +8,23 @@
 
 /* ── 页面宽度与间距（列表 1120 / 详情 920，扣侧栏后居中）── */
 #qaView .container { max-width: 1184px; } /* 1120px 内容 + 两侧 32px 内边距 */
-#qaView .about-page { padding-top: 20px; padding-bottom: 32px; }
-#qaView .breadcrumb { font-size: 13px; margin-bottom: 12px; }
+#qaView .about-page { padding-bottom: 32px; }
+#qaView.qa-detail-mode .about-page { padding-top: 20px; }
 #qaContent { margin-top: 16px; min-width: 0; }
 @media (max-width: 1199px) {
   #qaView .container { padding-left: 24px; padding-right: 24px; }
 }
 @media (max-width: 767px) {
   #qaView .container { padding-left: 16px; padding-right: 16px; }
-  #qaView .about-page { padding-top: 16px; padding-bottom: 24px; }
+  #qaView .about-page { padding-bottom: 24px; }
+  #qaView.qa-detail-mode .about-page { padding-top: 16px; }
 }
 @media (max-width: 390px) {
   #qaView .container { padding-left: 12px; padding-right: 12px; }
 }
 
 /* 详情模式：隐藏列表页头 / 面包屑 / 工具栏，由详情自己的返回入口接管 */
-#qaView.qa-detail-mode .breadcrumb,
+#qaView.qa-detail-mode .page-navigation,
 #qaView.qa-detail-mode .qa-header,
 #qaView.qa-detail-mode #qaToolbar { display: none; }
 

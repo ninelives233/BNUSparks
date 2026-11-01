@@ -373,9 +373,6 @@
 @media (max-width: 768px) {
   .fd-container { padding: 0 16px 40px; }
   .fd-layout { gap: 16px; }
-  .fd-top-row { flex-direction: column; gap: 0; margin-bottom: 0; }
-  /* 面包屑紧贴导航（12px），单行 13px，分隔符/当前页次级色 */
-  .fd-top-row .breadcrumb { padding: 12px 0 0; font-size: 0.8125rem; }
   .fd-top-row .breadcrumb a,
   .fd-top-row .breadcrumb .bc-ellipsis { position: relative; }
   /* 触控区扩展到约 44px 高，不增加视觉行高（叠放进上下留白） */
@@ -392,16 +389,13 @@
   gap: 8px;
 }
 
-/* 顶栏：面包屑 + 上传者卡片并排 */
+/* 页级面包屑使用共享导航区；正文保留独立的宽内容布局。 */
 .fd-top-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
-  margin-bottom: 12px;
+  display: block;
+  margin-bottom: 0;
 }
 
 .fd-top-row .breadcrumb {
-  flex: 1;
   min-width: 0;
 }
 
@@ -994,7 +988,7 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
     display: flex;
     align-items: center;
     gap: 12px;
-    margin: 14px 0 10px;
+    margin: 0 0 10px;
   }
   .mf-head-text { flex: 1 1 auto; min-width: 0; }
   .mf-course-name {
@@ -1387,7 +1381,6 @@ html[data-bnu-theme="dark"] .rd-close:hover { background: var(--primary-surface)
 
 /* 移动端详情：内容、属性、上传者与统计、操作、预览依次排列。 */
 @media (max-width: 768px) {
-  .fd-top-row { margin-bottom: 16px; }
   .fd-info-area { gap: 16px; min-width: 0; }
   .fd-title-area { width: 100%; min-width: 0; }
   .fd-title { font-size: 22px; line-height: 1.4; overflow-wrap: anywhere; }
