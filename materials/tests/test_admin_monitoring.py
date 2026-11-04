@@ -99,6 +99,25 @@ class AdminMonitoringTest(TestCase):
         self.assertEqual(data["tagged_users"], 1)
         self.assertEqual(data["total_users"], 3)
 
+    def test_campus_distribution_follows_identity_college(self):
+        from ..models import College
+        College.objects.create(name="文学院", slug="wenxy-bj", campus=College.Campus.BEIJING)
+        College.objects.create(name="文理学院", slug="fas", campus=College.Campus.ZHUHAI)
+        zhuhai_user = create_user("monitor_zhuhai", role=UserProfile.Role.USER, first_name="珠海同学")
+        zhuhai_user.profile.identity_college = "文理学院"
+        zhuhai_user.profile.save(update_fields=["identity_college"])
+        data = self._get("/api/admin/monitoring/?section=identity").json()["data"]
+        counts = {row["key"]: row["count"] for row in data["campus_distribution"]}
+        # monitor_user 挂文学院（北京）；admin 未填学院，连同「其他」计入未判定
+        self.assertEqual(counts["beijing"], 1)
+        self.assertEqual(counts["zhuhai"], 1)
+        self.assertEqual(counts["unknown"], 1)
+        names = {row["key"]: row["name"] for row in data["campus_distribution"]}
+        self.assertEqual(names["unknown"], "未判定")
+        # 培养层次筛选不影响校区分布的全局口径
+        filtered = self._get("/api/admin/monitoring/?section=identity&education=硕士").json()["data"]
+        self.assertEqual(filtered["campus_distribution"], data["campus_distribution"])
+
     def test_timetable_import_monitoring_reports_users_and_trend(self):
         TimetableImportRecord.objects.create(
             user=self.user, event_id="tti-monitor-1", course_count=12,

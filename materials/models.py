@@ -100,17 +100,12 @@ class UserProfile(models.Model):
     )
     identity_updated_at = models.DateTimeField("身份最近修改时间", null=True, blank=True)
 
-    # 校区（beijing/zhuhai/unknown）——由课表导入时的上课地点关键词自动判定；
-    # unknown 只表示尚未导入课表或地点无特征，不参与猜测。
+    # 校区键值仅作管理后台「校区分布」的展示标签：按身份标签的学院映射
+    # （College.campus），不落库；未判定含未填学院与学院名不在库中的用户。
     class Campus(models.TextChoices):
         UNKNOWN = "unknown", "未判定"
         BEIJING = "beijing", "北京校区"
         ZHUHAI = "zhuhai", "珠海校区"
-
-    campus = models.CharField(
-        "校区", max_length=10, choices=Campus.choices,
-        default=Campus.UNKNOWN, db_index=True,
-    )
 
     # 空值表示历史用户尚未主动设置，接口层回退到紧凑首页＋暖色＋汉堡菜单；
     # 打开入口按培养层次推导，硕士/博士默认进入我的课程。

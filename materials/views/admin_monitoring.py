@@ -19,6 +19,7 @@ from .utils import (
     DownloadRecord, Material, UserProfile,
 )
 from ..models import (
+    College,
     CourseCreationRequest,
     Report,
     TimetableImportRecord,
@@ -258,17 +259,24 @@ def _identity_payload(period="month", education=None):
             "name": row["identity_major"] or "专业未填写",
             "count": row["count"],
         })
-    # 校区分布始终全局统计（口径同培养层次），不受培养层次筛选影响。
-    campus_labels = dict(UserProfile.Campus.choices)
-    campus_rows = (
+    # 校区分布按身份标签的学院判定：学院库 campus 字段是京珠归属的单一事实源
+    # （学院名京珠无重名，按名称精确匹配）；未填学院或学院名不在库中（含「其他」）
+    # 计入未判定。始终全局统计（口径同培养层次），不受培养层次筛选影响。
+    campus_keys = {"北京": "beijing", "珠海": "zhuhai"}
+    college_campus = dict(College.objects.values_list("name", "campus"))
+    campus_counts = {"unknown": 0, "beijing": 0, "zhuhai": 0}
+    tagged_college_rows = (
         UserProfile.objects.filter(user__is_active=True)
-        .values("campus")
+        .values("identity_college")
         .annotate(count=Count("id"))
-        .order_by("-count")
     )
+    for row in tagged_college_rows:
+        key = campus_keys.get(college_campus.get(row["identity_college"]), "unknown")
+        campus_counts[key] += row["count"]
+    campus_labels = dict(UserProfile.Campus.choices)
     campus_distribution = [
-        {"key": row["campus"], "name": campus_labels.get(row["campus"], row["campus"]), "count": row["count"]}
-        for row in campus_rows
+        {"key": key, "name": campus_labels[key], "count": campus_counts[key]}
+        for key in ("unknown", "beijing", "zhuhai")
     ]
     return {
         "total_users": total,

@@ -283,7 +283,7 @@
           _monitorStat(data.total_users, _identityEducation ? _identityEducation + '用户' : '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
           _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
         _identityUserTrendChart(data.user_trend || {}) +
-        '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>校区分布</h4><span>依据课表上课地点自动判定</span></div>' +
+        '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>校区分布</h4><span>依据身份标签学院自动判定</span></div>' +
           _campusDonutChart(data.campus_distribution || []) + '</div>' +
         '<div class="identity-monitor-grid">' +
           '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (data.untagged_users || 0) + ' 人未补全') + '</span></div>' +

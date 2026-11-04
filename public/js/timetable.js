@@ -4243,7 +4243,6 @@ function ttClassroomConfig() {
   var uid = currentUser.id;
   return {
     uid: uid,
-    campus: currentUser.campus,
     isActive: function () {
       var view = document.getElementById('timetableView');
       return !!(currentUser && currentUser.id === uid && ttState.uid === uid &&

@@ -20,7 +20,6 @@ from django.utils.dateparse import parse_datetime
 
 from .utils import _err, _ok, require_login
 from ..monitoring_events import record_timetable_outcome
-from .utils_campus import update_user_campus
 from ..models import TimetableImportRecord, UserTimetable
 
 # 课表 JSON 体积很小（12 门课约 4KB）；上限仅防滥用
@@ -147,8 +146,6 @@ def api_user_timetable(request):
             time.sleep(random.uniform(0.05, 0.15) * (attempt + 1))
         if payload is None:
             return _err("课表保存冲突，请稍后重试", 503)
-        if payload.get("accepted"):
-            update_user_campus(request.user, data)
         return _ok(payload)
 
     if request.method == "DELETE":
