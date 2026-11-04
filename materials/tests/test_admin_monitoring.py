@@ -3,7 +3,6 @@
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.contrib.auth.models import User
 from django.utils import timezone
 
 from .helpers import (
@@ -123,15 +122,12 @@ class AdminMonitoringTest(TestCase):
         """用户分布卡：年级按学号前四位识别并随培养层次筛选；校区保持全局。"""
         from ..models import College
         College.objects.create(name="文学院", slug="wenxy-bj", campus=College.Campus.BEIJING)
-        student = User.objects.create_user(
-            username="202422121001", password="testpass123",
-            email="202422121001@mail.bnu.edu.cn", first_name="24级同学",
-        )
-        UserProfile.objects.create(
-            user=student, role=UserProfile.Role.USER,
-            identity_education="硕士", identity_college="文学院",
-            identity_major="语言学及应用语言学",
-        )
+        # 7 位合成学号：既绕开真实学号检查（8-12 位数字邮箱），又能触发年级识别
+        student = create_user("2024221", role=UserProfile.Role.USER, first_name="24级同学")
+        student.profile.identity_education = "硕士"
+        student.profile.identity_college = "文学院"
+        student.profile.identity_major = "语言学及应用语言学"
+        student.profile.save(update_fields=["identity_education", "identity_college", "identity_major"])
         data = self._get("/api/admin/monitoring/?section=identity").json()["data"]
         grades = {row["name"]: row["count"] for row in data["grade_distribution"]}
         # monitor_user 与 admin 的用户名非学号 → 未识别；202422121001 → 2024级
