@@ -90,14 +90,25 @@ class AdminMonitoringTest(TestCase):
         grad.profile.identity_college = "教育学院"
         grad.profile.identity_major = "教育学"
         grad.profile.save(update_fields=["identity_education", "identity_college", "identity_major"])
-        data = self._get("/api/admin/monitoring/?section=identity&education=硕士").json()["data"]
-        # 层次卡片保持全局口径，学院/专业/覆盖只统计所选层次
-        self.assertEqual([row["name"] for row in data["education_levels"]], ["本科", "硕士"])
-        self.assertEqual(data["education_filter"], "硕士")
-        self.assertEqual([row["name"] for row in data["colleges"]], ["教育学院"])
-        self.assertEqual(data["colleges"][0]["majors"][0]["name"], "教育学")
+        incomplete = create_user("monitor_incomplete", role=UserProfile.Role.USER, first_name="未补全同学")
+        incomplete.profile.identity_education = "本科"
+        incomplete.profile.identity_college = "文学院"
+        # 专业留空：本科筛选下计入未补全，不影响硕士口径
+        incomplete.profile.save(update_fields=["identity_education", "identity_college"])
+        data = self._get("/api/admin/monitoring/?section=identity&education=本科").json()["data"]
+        # 统计卡取筛选内口径：本科总数（含未补全）而非全站总数
+        self.assertEqual(data["total_users"], 2)
         self.assertEqual(data["tagged_users"], 1)
-        self.assertEqual(data["total_users"], 3)
+        self.assertEqual(data["untagged_users"], 1)
+        filtered = self._get("/api/admin/monitoring/?section=identity&education=硕士").json()["data"]
+        # 层次卡片保持全局口径；统计卡/学院/专业/覆盖取筛选内口径（分母一致）
+        self.assertEqual([row["name"] for row in filtered["education_levels"]], ["本科", "硕士"])
+        self.assertEqual(filtered["education_filter"], "硕士")
+        self.assertEqual([row["name"] for row in filtered["colleges"]], ["教育学院"])
+        self.assertEqual(filtered["colleges"][0]["majors"][0]["name"], "教育学")
+        self.assertEqual(filtered["tagged_users"], 1)
+        self.assertEqual(filtered["total_users"], 1)
+        self.assertEqual(filtered["untagged_users"], 0)
 
     def test_campus_distribution_follows_identity_college(self):
         from ..models import College

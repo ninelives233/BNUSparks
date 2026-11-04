@@ -246,10 +246,11 @@ def _user_trend_payload(period):
 
 def _identity_payload(period="month", education=None):
     profiles = UserProfile.objects.filter(user__is_active=True)
-    total = profiles.count()
     if education:
-        # 培养层次筛选：只影响学院/专业/覆盖统计；层次卡片与用户趋势保持全局口径。
+        # 培养层次筛选：统计卡（有效用户/已完整/覆盖率）、学院/专业与未补全数
+        # 都取筛选内口径，三者分母分子一致；层次卡片与用户趋势保持全局口径。
         profiles = profiles.filter(identity_education=education)
+    total = profiles.count()
     complete = profiles.exclude(identity_education="").exclude(identity_college="").exclude(identity_major="")
     tagged = complete.count()
     # 层次分布始终全局统计，保证筛选后仍可切换其他层次。
