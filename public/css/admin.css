@@ -279,35 +279,12 @@
 }
 
 /* ── 分页 ── */
-.admin-pagination {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
-.admin-pagination button {
-  padding: 4px 12px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  background: oklch(1 0 0 / 0.5);
-  color: var(--text);
-  font-size: 0.82rem;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background .15s;
-}
-.admin-pagination button:hover:not(:disabled) {
-  background: oklch(0.95 0.01 250 / 0.5);
-}
-.admin-pagination button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.admin-pagination .page-info {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  margin-left: 8px;
+/* 管理后台统一使用全站 file-pagination 数字翻页（样式在 base.css） */
+.admin-section-count {
+  float: right;
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
 }
 
 /* ── 用户搜索框 ── */
@@ -928,15 +905,10 @@
   .admin-search-box button {
     width: 100%;
   }
-  .admin-pagination {
-    justify-content: center;
-  }
-  .admin-pagination button {
-    padding: 6px 10px;
-    font-size: 0.78rem;
-  }
-  .admin-pagination .page-info {
-    font-size: 0.72rem;
+  .admin-section-count {
+    float: none;
+    display: block;
+    margin-top: 2px;
   }
   .fm-node {
     flex-wrap: wrap;
@@ -1636,14 +1608,10 @@ html[data-bnu-theme="dark"] .download-stream-date {
 }
 html[data-bnu-theme="dark"] .admin-role-select,
 html[data-bnu-theme="dark"] .admin-search-box input,
-html[data-bnu-theme="dark"] .admin-search-box .admin-role-filter,
-html[data-bnu-theme="dark"] .admin-pagination button {
+html[data-bnu-theme="dark"] .admin-search-box .admin-role-filter {
   background: var(--surface);
   color: var(--ink);
   border-color: var(--border);
-}
-html[data-bnu-theme="dark"] .admin-pagination button:hover:not(:disabled) {
-  background: var(--primary-surface);
 }
 
 /* ═══════════════════════════════════════════════════════════════

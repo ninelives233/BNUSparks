@@ -725,7 +725,7 @@
         content.innerHTML = '<div class="admin-empty">暂无审核历史</div>';
         return;
       }
-      var html = '<div class="admin-section-label">' + iconSvg('clipboard') + ' 审核历史</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('clipboard') + ' 审核历史<span class="admin-section-count">共 ' + (data.total || 0) + ' 条</span></div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>资料</th><th>课程</th><th>上传者</th><th>审核人</th><th>结果</th><th>备注</th><th>审核时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(m) {
@@ -752,22 +752,8 @@
         '<tr class="hc-comments-row" id="hc-comments-row-' + m.id + '" style="display:none"><td colspan="8"><div class="pc-comments" id="hc-comments-' + m.id + '"></div></td></tr>';
       });
       html += '</tbody></table></div></div>';
-      // 分页
-      if (data.total_pages > 1) {
-        html += '<div class="admin-pagination">';
-        if (page > 1) {
-          html += '<button onclick="renderAdminHistory(document.getElementById(\'adminContent\'), ' + (page - 1) + ')">← 上一页</button>';
-        } else {
-          html += '<button disabled>← 上一页</button>';
-        }
-        html += '<span class="page-info">第 ' + page + ' / ' + data.total_pages + ' 页（共 ' + data.total + ' 条）</span>';
-        if (page < data.total_pages) {
-          html += '<button onclick="renderAdminHistory(document.getElementById(\'adminContent\'), ' + (page + 1) + ')">下一页 →</button>';
-        } else {
-          html += '<button disabled>下一页 →</button>';
-        }
-        html += '</div>';
-      }
+      html += adminNumericPager(page, data.total_pages,
+        "renderAdminHistory(document.getElementById('adminContent'), ", ")");
       content.innerHTML = html;
       // 自动展开指定的异议高亮
       if (_highlightDisputeMaterialId) {

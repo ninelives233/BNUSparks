@@ -14,7 +14,7 @@
       var _esc = escapeHtml || function(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       };
-      var html = '<div class="admin-section-label">' + iconSvg('trash') + ' 删除记录</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('trash') + ' 删除记录<span class="admin-section-count">共 ' + (data.total || 0) + ' 条</span></div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>资料标题</th><th>课程</th><th>大小</th><th>上传者</th><th>删除人</th><th>删除时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(r) {
@@ -37,21 +37,8 @@
         '</tr>';
       });
       html += '</tbody></table></div></div>';
-      if (data.total_pages > 1) {
-        html += '<div class="admin-pagination">';
-        if (page > 1) {
-          html += '<button onclick="renderAdminDeletions(document.getElementById(\'adminContent\'), ' + (page - 1) + ')">← 上一页</button>';
-        } else {
-          html += '<button disabled>← 上一页</button>';
-        }
-        html += '<span class="page-info">第 ' + page + ' / ' + data.total_pages + ' 页（共 ' + data.total + ' 条）</span>';
-        if (page < data.total_pages) {
-          html += '<button onclick="renderAdminDeletions(document.getElementById(\'adminContent\'), ' + (page + 1) + ')">下一页 →</button>';
-        } else {
-          html += '<button disabled>下一页 →</button>';
-        }
-        html += '</div>';
-      }
+      html += adminNumericPager(page, data.total_pages,
+        "renderAdminDeletions(document.getElementById('adminContent'), ", ")");
       content.innerHTML = html;
     } catch (err) {
       content.innerHTML = '<div class="admin-empty admin-empty--sm">加载失败：' + esc(err.message || '未知错误') + '</div>';
@@ -130,7 +117,7 @@
         content.innerHTML = '<div class="admin-empty">' + iconSvg('clipboard') + ' 暂无操作记录</div>';
         return;
       }
-      var html = '<div class="admin-section-label">' + iconSvg('clipboard') + ' 操作记录</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('clipboard') + ' 操作记录<span class="admin-section-count">共 ' + (data.total || 0) + ' 条</span></div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>操作人</th><th>操作</th><th>文件夹</th><th>路径</th><th>类型</th><th>时间</th><th>操作</th></tr></thead><tbody>';
       data.items.forEach(function(op) {
@@ -154,21 +141,8 @@
         '</tr>';
       });
       html += '</tbody></table></div></div>';
-      if (data.total_pages > 1) {
-        html += '<div class="admin-pagination">';
-        if (_opPage > 1) {
-          html += '<button onclick="renderAdminOperations(document.getElementById(\'adminContent\'), ' + (_opPage - 1) + ')">← 上一页</button>';
-        } else {
-          html += '<button disabled>← 上一页</button>';
-        }
-        html += '<span class="page-info">第 ' + _opPage + ' / ' + data.total_pages + ' 页（共 ' + data.total + ' 条）</span>';
-        if (_opPage < data.total_pages) {
-          html += '<button onclick="renderAdminOperations(document.getElementById(\'adminContent\'), ' + (_opPage + 1) + ')">下一页 →</button>';
-        } else {
-          html += '<button disabled>下一页 →</button>';
-        }
-        html += '</div>';
-      }
+      html += adminNumericPager(_opPage, data.total_pages,
+        "renderAdminOperations(document.getElementById('adminContent'), ", ")");
       content.innerHTML = html;
     } catch (err) {
       content.innerHTML = '<div class="admin-empty admin-empty--sm">加载失败：' + esc(err.message || '未知错误') + '</div>';
@@ -465,7 +439,7 @@
         content.innerHTML = '<div class="admin-empty">暂无举报记录</div>';
         return;
       }
-      var html = '<div class="admin-section-label">' + iconSvg('document') + ' 举报记录</div>' +
+      var html = '<div class="admin-section-label">' + iconSvg('document') + ' 举报记录<span class="admin-section-count">共 ' + (data.total || 0) + ' 条</span></div>' +
         '<div class="admin-table-card"><div class="admin-table-wrap"><table class="admin-table">' +
         '<thead><tr><th>类型</th><th>被举报</th><th>课程</th><th>举报人</th><th>原因</th><th>状态</th><th>处理人</th><th>举报时间</th><th>处理时间</th></tr></thead><tbody>';
       data.items.forEach(function(r) {
@@ -490,15 +464,8 @@
         '</tr>';
       });
       html += '</tbody></table></div></div>';
-      if (data.total_pages > 1) {
-        html += '<div class="admin-pagination">';
-        if (page > 1) html += '<button onclick="renderAdminReportHistory(document.getElementById(\'adminContent\'), ' + (page - 1) + ')">← 上一页</button>';
-        else html += '<button disabled>← 上一页</button>';
-        html += '<span class="page-info">第 ' + page + ' / ' + data.total_pages + ' 页（共 ' + data.total + ' 条）</span>';
-        if (page < data.total_pages) html += '<button onclick="renderAdminReportHistory(document.getElementById(\'adminContent\'), ' + (page + 1) + ')">下一页 →</button>';
-        else html += '<button disabled>下一页 →</button>';
-        html += '</div>';
-      }
+      html += adminNumericPager(page, data.total_pages,
+        "renderAdminReportHistory(document.getElementById('adminContent'), ", ")");
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';

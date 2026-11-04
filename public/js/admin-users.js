@@ -385,12 +385,30 @@
     });
   }
 
-  function _monitorPagination(page, totalPages, callbackName) {
+  // 管理后台统一数字翻页：与资料列表/问答区同款（base.css 的 file-pagination，
+  // getPageNumbers/iconSvg 来自全局 utils.js）。onclick 组装为 callPrefix+页码+callSuffix
+  // （与旧内联写法同源，均为字面量，无用户数据）；total>0 时在区块标题展示总数，
+  // 翻页条本身保持纯数字按钮。
+  function adminNumericPager(page, totalPages, callPrefix, callSuffix, total) {
     if (totalPages <= 1) return '';
-    return '<div class="admin-pagination">' +
-      '<button ' + (page <= 1 ? 'disabled' : 'onclick="' + callbackName + '(' + (page - 1) + ')"') + '>← 上一页</button>' +
-      '<span class="page-info">第 ' + page + ' / ' + totalPages + ' 页</span>' +
-      '<button ' + (page >= totalPages ? 'disabled' : 'onclick="' + callbackName + '(' + (page + 1) + ')"') + '>下一页 →</button></div>';
+    var numbers = getPageNumbers(page, totalPages);
+    var html = '<div class="file-pagination">';
+    html += '<button class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" onclick="' + callPrefix + (page - 1) + callSuffix + '" aria-label="上一页">' + iconSvg('chevron-left') + '</button>';
+    numbers.forEach(function(n) {
+      if (n === '…') {
+        html += '<button class="fp-btn fp-ellipsis">⋯</button>';
+      } else {
+        html += '<button class="fp-btn fp-num' + (n === page ? ' fp-active' : '') + '" onclick="' + callPrefix + n + callSuffix + '">' + n + '</button>';
+      }
+    });
+    html += '<button class="fp-btn fp-next' + (page >= totalPages ? ' fp-disabled' : '') + '" onclick="' + callPrefix + (page + 1) + callSuffix + '" aria-label="下一页">' + iconSvg('chevron-right') + '</button>';
+    html += '</div>';
+    return html;
+  }
+
+  function adminUserListPage(page) {
+    var input = document.getElementById('adminUserSearch');
+    renderAdminUserList(document.getElementById('adminUserSectionContent'), input ? input.value.trim() : '', page);
   }
 
   function monitorDownloadPage(page) {
@@ -445,7 +463,8 @@
           '<span class="download-stream-action activity-' + esc(item.activity_type || 'legacy') + '">' + esc(item.activity_label || '访问了') + '</span><div class="download-stream-target">' + material +
             '<small>' + esc(item.course_name || '课程信息缺失') + (item.course_code ? ' · ' + esc(item.course_code) : '') + '</small></div></div>';
       });
-      html += '</div>' + _monitorPagination(data.page, data.total_pages, 'monitorDownloadPage');
+      html += '</div>' + adminNumericPager(data.page, data.total_pages,
+        "monitorDownloadPage(", ")");
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">访问记录加载失败：' + esc(err.message) + '</div>';
@@ -554,23 +573,9 @@
         '</tr>';
       });
       html += '</tbody></table></div></div>';
-      // 分页控件
-      var totalPages = resp.total_pages || 1;
-      if (totalPages > 1) {
-        html += '<div class="admin-pagination">';
-        if (_userPage > 1) {
-          html += '<button onclick="renderAdminUserList(document.getElementById(\'adminUserSectionContent\'), \'' + escJs(search) + '\', ' + (_userPage - 1) + ')">← 上一页</button>';
-        } else {
-          html += '<button disabled>← 上一页</button>';
-        }
-        html += '<span class="page-info">第 ' + _userPage + ' / ' + totalPages + ' 页（共 ' + resp.total + ' 条）</span>';
-        if (_userPage < totalPages) {
-          html += '<button onclick="renderAdminUserList(document.getElementById(\'adminUserSectionContent\'), \'' + escJs(search) + '\', ' + (_userPage + 1) + ')">下一页 →</button>';
-        } else {
-          html += '<button disabled>下一页 →</button>';
-        }
-        html += '</div>';
-      }
+      // 分页控件：与全站列表一致的数字翻页，总数在区块标题展示
+      html += adminNumericPager(_userPage, resp.total_pages || 1,
+        "adminUserListPage(", ")");
       content.innerHTML = html;
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">加载失败：' + esc(err.message) + '</div>';

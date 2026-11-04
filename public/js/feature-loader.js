@@ -91,9 +91,10 @@
   //        /api/search/?v=2、/api/qa/search/?v=2；课程/资料结果经显式路径
   //        定位与 /file/{id}、/qa/questions/{id} 往返；教程搜索场景同步为
   //        结果页演示。旧 v1 搜索接口与上传选课浮层保持不变。
-  // v351：管理后台校区分布改按身份标签学院判定（后端同步），口径说明文案更新；
+  // v352：管理后台翻页统一为全站数字翻页（admin-users/pending/records 共用
+  //        adminNumericPager，弃用 .admin-pagination），总数挪至区块标题；
   //        缓存键同步推进。
-  var VERSION = '351';
+  var VERSION = '352';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
