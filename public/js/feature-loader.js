@@ -91,10 +91,9 @@
   //        /api/search/?v=2、/api/qa/search/?v=2；课程/资料结果经显式路径
   //        定位与 /file/{id}、/qa/questions/{id} 往返；教程搜索场景同步为
   //        结果页演示。旧 v1 搜索接口与上传选课浮层保持不变。
-  // v353：身份分布卡扩展——校区分布升级为用户分布（校区+按学号前四位识别的
-  //        年级，年级随培养层次筛选联动、校区保持全局）；专业栏可点击，右侧
-  //        展开按身份标签筛选的用户列表（新 identity_users 监测接口）。
-  var VERSION = '353';
+  // v354：身份用户列表面板重排——行改为昵称+学号+年级徽标，未设昵称回退学号
+  //        而非邮箱全串，去裸邮箱；身份网格 align-items:start 消除长列拉伸空白。
+  var VERSION = '354';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

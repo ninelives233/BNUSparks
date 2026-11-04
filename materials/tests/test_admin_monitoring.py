@@ -176,6 +176,8 @@ class AdminMonitoringTest(TestCase):
         self.assertEqual(data["total"], 1)
         self.assertEqual([row["id"] for row in data["users"]], [self.user.id])
         self.assertEqual(data["users"][0]["grade"], "未识别")
+        self.assertEqual(data["users"][0]["student_id"], "monitor_user")
+        self.assertEqual(data["users"][0]["nickname"], "下载同学")
         self.assertFalse(data["truncated"])
         # 限量截断提示
         with patch.object(admin_monitoring, "MONITOR_IDENTITY_USERS_LIMIT", 0):

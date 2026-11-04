@@ -350,8 +350,9 @@ def _identity_users_payload(education, college, major):
     users = [
         {
             "id": row.user_id,
-            "nickname": row.user.first_name or row.user.username,
-            "email": row.user.email,
+            # 未设昵称回退学号而非邮箱全串，避免列表行被长邮箱撑爆
+            "nickname": row.user.first_name or row.user.username.split("@", 1)[0],
+            "student_id": row.user.username.split("@", 1)[0],
             "grade": _grade_label(row.user.username),
         }
         for row in rows

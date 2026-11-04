@@ -221,9 +221,11 @@
       // 请求期间切换学院/专业/层次时丢弃过期结果
       if (_identityMonitorData !== snapshot || _identityMajorIndex !== requestIndex) return;
       var rows = (data.users || []).map(function(u) {
-        return '<button type="button" class="iu-row" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">' +
-          '<span class="iu-name">' + esc(u.nickname) + '</span>' +
-          '<small class="iu-meta">' + esc(u.email) + '</small>' +
+        // 昵称 + 学号 + 年级徽标；未设昵称时后端已回退学号，不再重复展示
+        var sid = u.nickname !== u.student_id
+          ? '<span class="iu-sid">' + esc(u.student_id) + '</span>' : '';
+        return '<button type="button" class="iu-row" onclick="showUserPublic(' + u.id + ')" title="' + esc(u.nickname) + ' · 查看公开主页">' +
+          '<span class="iu-name">' + esc(u.nickname) + '</span>' + sid +
           '<span class="iu-grade">' + esc(u.grade) + '</span></button>';
       }).join('');
       panel.innerHTML = '<div class="monitor-card-head"><h4>' + esc(major.name) + ' · 用户</h4>' +
