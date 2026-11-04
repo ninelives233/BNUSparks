@@ -14,6 +14,7 @@
   var _monitorPeriod = 'week';
   var _identityPeriod = 'month';
   var _identityEducation = ''; // '' = 全部层次；否则按培养层次筛选学院/专业分布
+  var _identityMajorIndex = -1; // 选中专业的下标；-1 = 未展开用户列表
   var _timetableImportPeriod = 'month';
   var _downloadActivity = 'all';
   var _identityMonitorData = null;
@@ -166,16 +167,73 @@
   function selectIdentityCollege(index) {
     if (!_identityMonitorData) return;
     _identityMonitorData.selectedIndex = index;
+    // 切换学院后原专业选中失效，收起用户列表
+    _identityMajorIndex = -1;
     var colleges = _identityMonitorData.colleges || [];
     var collegeList = document.getElementById('identityCollegeBars');
-    var majorPanel = document.getElementById('identityMajorPanel');
     if (collegeList) collegeList.innerHTML = _distributionBars(colleges, index, 'selectIdentityCollege');
-    if (majorPanel) {
-      var selected = colleges[index];
-      majorPanel.innerHTML = selected
-        ? '<div class="monitor-card-head"><h4>' + esc(selected.name) + ' · 专业</h4><span>' + (selected.majors && selected.majors.length ? selected.count + ' 人' : '暂无具体专业标签') + '</span></div>' + _distributionBars(selected.majors || [], -1, '')
-        : '<div class="monitor-sub-empty">选择左侧学院查看专业分布</div>';
+    renderIdentityMajorPanel();
+    renderIdentityUserPanel();
+  }
+
+  function renderIdentityMajorPanel() {
+    var majorPanel = document.getElementById('identityMajorPanel');
+    if (!majorPanel) return;
+    var colleges = (_identityMonitorData && _identityMonitorData.colleges) || [];
+    var selected = colleges[_identityMonitorData.selectedIndex];
+    majorPanel.innerHTML = selected
+      ? '<div class="monitor-card-head"><h4>' + esc(selected.name) + ' · 专业</h4><span>' + (selected.majors && selected.majors.length ? selected.count + ' 人 · 点击专业查看用户' : '暂无具体专业标签') + '</span></div>' + _distributionBars(selected.majors || [], _identityMajorIndex, 'selectIdentityMajor')
+      : '<div class="monitor-sub-empty">选择左侧学院查看专业分布</div>';
+  }
+
+  function selectIdentityMajor(index) {
+    if (!_identityMonitorData) return;
+    // 再次点击同一专业 = 收起用户列表
+    _identityMajorIndex = (_identityMajorIndex === index) ? -1 : index;
+    renderIdentityMajorPanel();
+    renderIdentityUserPanel();
+  }
+
+  function closeIdentityUserPanel() {
+    _identityMajorIndex = -1;
+    renderIdentityMajorPanel();
+    renderIdentityUserPanel();
+  }
+
+  function renderIdentityUserPanel() {
+    var panel = document.getElementById('identityUserPanel');
+    if (!panel) return;
+    var colleges = (_identityMonitorData && _identityMonitorData.colleges) || [];
+    var college = colleges[_identityMonitorData.selectedIndex];
+    var major = (college && college.majors) ? college.majors[_identityMajorIndex] : null;
+    if (!college || _identityMajorIndex < 0 || !major) {
+      panel.innerHTML = '<div class="monitor-sub-empty">点击专业查看该标签下的用户</div>';
+      return;
     }
+    var snapshot = _identityMonitorData;
+    var requestIndex = _identityMajorIndex;
+    var params = [];
+    if (_identityEducation) params.push('education=' + encodeURIComponent(_identityEducation));
+    params.push('college=' + encodeURIComponent(college.name));
+    params.push('major=' + encodeURIComponent(major.name));
+    panel.innerHTML = '<div class="admin-loading">加载用户…</div>';
+    api('/api/admin/monitoring/?section=identity_users&' + params.join('&')).then(function(data) {
+      // 请求期间切换学院/专业/层次时丢弃过期结果
+      if (_identityMonitorData !== snapshot || _identityMajorIndex !== requestIndex) return;
+      var rows = (data.users || []).map(function(u) {
+        return '<button type="button" class="iu-row" onclick="showUserPublic(' + u.id + ')" title="查看公开主页">' +
+          '<span class="iu-name">' + esc(u.nickname) + '</span>' +
+          '<small class="iu-meta">' + esc(u.email) + '</small>' +
+          '<span class="iu-grade">' + esc(u.grade) + '</span></button>';
+      }).join('');
+      panel.innerHTML = '<div class="monitor-card-head"><h4>' + esc(major.name) + ' · 用户</h4>' +
+        '<span class="iu-head-meta">' + (data.total || 0) + ' 人' + (data.truncated ? ' · 仅显示前 ' + data.returned + ' 人' : '') +
+        '<button type="button" class="iu-close" onclick="closeIdentityUserPanel()" aria-label="收起用户列表">×</button></span></div>' +
+        (rows ? '<div class="iu-list">' + rows + '</div>' : '<div class="monitor-sub-empty">该标签下暂无在册用户</div>');
+    }).catch(function(err) {
+      if (_identityMonitorData !== snapshot) return;
+      panel.innerHTML = '<div class="admin-empty">用户列表加载失败：' + esc(err.message) + '</div>';
+    });
   }
 
   function selectIdentityEducation(index) {
@@ -277,20 +335,24 @@
         if (row.name === _identityEducation) eduSelectedIndex = index;
       });
       var filterNote = _identityEducation ? ' · 筛选：' + esc(_identityEducation) : '';
+      _identityMajorIndex = -1;
       content.innerHTML = '<div class="monitor-section-head"><div><h3>入站身份分布</h3>' +
-        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院与专业分布' + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
+        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院、专业与年级分布' + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
         '<div class="monitor-stats-grid monitor-stats-grid--three">' +
           _monitorStat(data.total_users, _identityEducation ? _identityEducation + '用户' : '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
           _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
         _identityUserTrendChart(data.user_trend || {}) +
-        '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>校区分布</h4><span>依据身份标签学院自动判定</span></div>' +
-          _campusDonutChart(data.campus_distribution || []) + '</div>' +
+        '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +
+          _campusDonutChart(data.campus_distribution || []) +
+          '<div class="grade-distribution-block"><div class="monitor-card-head"><h4>年级分布</h4><span>' + (_identityEducation ? esc(_identityEducation) + ' 口径 · 随筛选联动' : '全站口径 · 按学号前四位识别') + '</span></div>' +
+            _distributionBars(data.grade_distribution || [], -1, '') + '</div></div>' +
         '<div class="identity-monitor-grid">' +
           '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (data.untagged_users || 0) + ' 人未补全') + '</span></div>' +
             _distributionBars(data.education_levels || [], eduSelectedIndex, 'selectIdentityEducation') + '</section>' +
           '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4><span>' + (data.untagged_users || 0) + ' 人未填写</span></div><div id="identityCollegeBars">' +
             _distributionBars(data.colleges || [], data.selectedIndex, 'selectIdentityCollege') + '</div></section>' +
-          '<section class="monitor-data-card" id="identityMajorPanel"></section></div>';
+          '<section class="monitor-data-card" id="identityMajorPanel"></section>' +
+          '<section class="monitor-data-card" id="identityUserPanel"></section></div>';
       selectIdentityCollege(data.selectedIndex);
     }).catch(function(err) {
       content.innerHTML = '<div class="admin-empty">身份分布加载失败：' + esc(err.message) + '</div>';

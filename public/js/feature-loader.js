@@ -91,10 +91,10 @@
   //        /api/search/?v=2、/api/qa/search/?v=2；课程/资料结果经显式路径
   //        定位与 /file/{id}、/qa/questions/{id} 往返；教程搜索场景同步为
   //        结果页演示。旧 v1 搜索接口与上传选课浮层保持不变。
-  // v352：管理后台翻页统一为全站数字翻页（admin-users/pending/records 共用
-  //        adminNumericPager，弃用 .admin-pagination），总数挪至区块标题；
-  //        缓存键同步推进。
-  var VERSION = '352';
+  // v353：身份分布卡扩展——校区分布升级为用户分布（校区+按学号前四位识别的
+  //        年级，年级随培养层次筛选联动、校区保持全局）；专业栏可点击，右侧
+  //        展开按身份标签筛选的用户列表（新 identity_users 监测接口）。
+  var VERSION = '353';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

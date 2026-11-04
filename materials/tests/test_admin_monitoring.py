@@ -3,6 +3,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.utils import timezone
 
 from .helpers import (
@@ -117,6 +118,65 @@ class AdminMonitoringTest(TestCase):
         # 培养层次筛选不影响校区分布的全局口径
         filtered = self._get("/api/admin/monitoring/?section=identity&education=硕士").json()["data"]
         self.assertEqual(filtered["campus_distribution"], data["campus_distribution"])
+
+    def test_user_distribution_grade_follows_education_filter(self):
+        """用户分布卡：年级按学号前四位识别并随培养层次筛选；校区保持全局。"""
+        from ..models import College
+        College.objects.create(name="文学院", slug="wenxy-bj", campus=College.Campus.BEIJING)
+        student = User.objects.create_user(
+            username="202422121001", password="testpass123",
+            email="202422121001@mail.bnu.edu.cn", first_name="24级同学",
+        )
+        UserProfile.objects.create(
+            user=student, role=UserProfile.Role.USER,
+            identity_education="硕士", identity_college="文学院",
+            identity_major="语言学及应用语言学",
+        )
+        data = self._get("/api/admin/monitoring/?section=identity").json()["data"]
+        grades = {row["name"]: row["count"] for row in data["grade_distribution"]}
+        # monitor_user 与 admin 的用户名非学号 → 未识别；202422121001 → 2024级
+        self.assertEqual(grades["2024级"], 1)
+        self.assertGreaterEqual(grades["未识别"], 2)
+        names = [row["name"] for row in data["grade_distribution"]]
+        self.assertEqual(names[0], "2024级")
+        self.assertEqual(names[-1], "未识别")
+        # 筛选硕士后年级只统计该层次；校区仍是全站口径
+        filtered = self._get("/api/admin/monitoring/?section=identity&education=硕士").json()["data"]
+        fgrades = {row["name"]: row["count"] for row in filtered["grade_distribution"]}
+        self.assertEqual(fgrades, {"2024级": 1})
+        self.assertEqual(filtered["campus_distribution"], data["campus_distribution"])
+
+    def test_identity_users_filters_by_tags(self):
+        from ..views import admin_monitoring
+        ghost = create_user("monitor_ghost", role=UserProfile.Role.USER, first_name="停用同学")
+        ghost.is_active = False
+        ghost.save(update_fields=["is_active"])
+        ghost.profile.identity_education = "本科"
+        ghost.profile.identity_college = "文学院"
+        ghost.profile.identity_major = "汉语言文学"
+        ghost.profile.save(update_fields=["identity_education", "identity_college", "identity_major"])
+        other = create_user("monitor_othermajor", role=UserProfile.Role.USER, first_name="隔壁专业")
+        other.profile.identity_education = "本科"
+        other.profile.identity_college = "文学院"
+        other.profile.identity_major = "编辑出版学"
+        other.profile.save(update_fields=["identity_education", "identity_college", "identity_major"])
+        path = ("/api/admin/monitoring/?section=identity_users"
+                "&education=本科&college=文学院&major=汉语言文学")
+        # 普通用户不可见
+        denied = self._get(path, self.user)
+        self.assertEqual(denied.status_code, 403)
+        data = self._get(path).json()["data"]
+        self.assertEqual(data["total"], 1)
+        self.assertEqual([row["id"] for row in data["users"]], [self.user.id])
+        self.assertEqual(data["users"][0]["grade"], "未识别")
+        self.assertFalse(data["truncated"])
+        # 限量截断提示
+        with patch.object(admin_monitoring, "MONITOR_IDENTITY_USERS_LIMIT", 0):
+            data = self._get(path).json()["data"]
+            self.assertEqual(data["returned"], 0)
+            self.assertTrue(data["truncated"])
+        # 无任何筛选条件拒绝
+        self.assertEqual(self._get("/api/admin/monitoring/?section=identity_users").status_code, 400)
 
     def test_timetable_import_monitoring_reports_users_and_trend(self):
         TimetableImportRecord.objects.create(

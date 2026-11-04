@@ -1,6 +1,7 @@
 """总管理员用户监测：趋势、身份分布、下载流水、运行状态与用户下载追溯。"""
 
 import os
+import re
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -32,6 +33,30 @@ from ..monitoring_events import monitoring_events_payload
 # 序列化扩张成无界操作。页码上限保留足够的人工追溯空间，同时避免深 OFFSET。
 MONITOR_MAX_PAGE = 100
 MONITOR_TIMETABLE_RECORD_LIMIT = 1000
+# 身份标签用户列表是身份分布的展开面板；一次限量 + 总数提示，不做深分页。
+MONITOR_IDENTITY_USERS_LIMIT = 100
+
+
+# 年级识别：注册用户名是校园邮箱全串（本地部分=学号，如 2024xxxxxx），
+# 取前四位入学年份；非学号邮箱（教工、历史账号）计入「未识别」，不做猜测。
+_GRADE_RE = re.compile(r"^(20\d{2})\d{3,}$")
+
+
+def _grade_label(username):
+    local = (username or "").split("@", 1)[0]
+    match = _GRADE_RE.match(local)
+    if match:
+        year = int(match.group(1))
+        if year <= _local().year:
+            return f"{year}级"
+    return "未识别"
+
+
+def _grade_sort_key(name):
+    # 年级倒序展示，「未识别」固定末尾
+    if name.endswith("级"):
+        return (0, -int(name[:-1]))
+    return (1, 0)
 
 
 def _month_start(value):
@@ -259,9 +284,9 @@ def _identity_payload(period="month", education=None):
             "name": row["identity_major"] or "专业未填写",
             "count": row["count"],
         })
-    # 校区分布按身份标签的学院判定：学院库 campus 字段是京珠归属的单一事实源
-    # （学院名京珠无重名，按名称精确匹配）；未填学院或学院名不在库中（含「其他」）
-    # 计入未判定。始终全局统计（口径同培养层次），不受培养层次筛选影响。
+    # 用户分布卡包含校区与年级两项：校区按身份标签学院判定，始终全局统计
+    # （口径同培养层次卡片），不受培养层次筛选影响；年级按学号前四位识别，
+    # 与学院/专业同口径，跟随培养层次筛选联动。
     campus_keys = {"北京": "beijing", "珠海": "zhuhai"}
     college_campus = dict(College.objects.values_list("name", "campus"))
     campus_counts = {"unknown": 0, "beijing": 0, "zhuhai": 0}
@@ -278,12 +303,21 @@ def _identity_payload(period="month", education=None):
         {"key": key, "name": campus_labels[key], "count": campus_counts[key]}
         for key in ("unknown", "beijing", "zhuhai")
     ]
+    grade_counts = {}
+    for username in profiles.values_list("user__username", flat=True):
+        label = _grade_label(username)
+        grade_counts[label] = grade_counts.get(label, 0) + 1
+    grade_distribution = [
+        {"name": name, "count": grade_counts[name]}
+        for name in sorted(grade_counts, key=_grade_sort_key)
+    ]
     return {
         "total_users": total,
         "education_filter": education or "",
         "tagged_users": tagged,
         "untagged_users": max(0, total - tagged),
         "campus_distribution": campus_distribution,
+        "grade_distribution": grade_distribution,
         "user_trend": _user_trend_payload(period),
         "education_levels": [
             {"name": row["identity_education"], "count": row["count"]}
@@ -293,6 +327,43 @@ def _identity_payload(period="month", education=None):
             {"name": row["identity_college"], "count": row["count"], "majors": majors.get(row["identity_college"], [])}
             for row in college_rows
         ],
+    }
+
+
+def _identity_users_payload(education, college, major):
+    """身份标签展开面板：按培养层次/学院/专业精确匹配在册用户。"""
+    filters = {
+        "identity_education": education,
+        "identity_college": college,
+        "identity_major": major,
+    }
+    selected = {field: value for field, value in filters.items() if value}
+    if not selected:
+        return None
+    qs = UserProfile.objects.filter(user__is_active=True, **selected)
+    total = qs.count()
+    rows = (
+        qs.select_related("user")
+        .order_by("-user__date_joined", "-user_id")[:MONITOR_IDENTITY_USERS_LIMIT]
+    )
+    users = [
+        {
+            "id": row.user_id,
+            "nickname": row.user.first_name or row.user.username,
+            "email": row.user.email,
+            "grade": _grade_label(row.user.username),
+        }
+        for row in rows
+    ]
+    return {
+        "education": education,
+        "college": college,
+        "major": major,
+        "total": total,
+        "returned": len(users),
+        "limit": MONITOR_IDENTITY_USERS_LIMIT,
+        "truncated": total > len(users),
+        "users": users,
     }
 
 
@@ -696,7 +767,7 @@ def _health_payload(period="week"):
 
 @require_role(UserProfile.Role.SUPER_ADMIN)
 def api_admin_monitoring(request):
-    """GET /api/admin/monitoring/?section=trend|identity|timetable|downloads|health|events。"""
+    """GET /api/admin/monitoring/?section=trend|identity|identity_users|timetable|downloads|health|events。"""
     if request.method != "GET":
         return _err("仅支持 GET", 405)
     section = (request.GET.get("section") or "trend").strip()
@@ -712,6 +783,15 @@ def api_admin_monitoring(request):
                 return _err("无效的时间范围")
             education = (request.GET.get("education") or "").strip()
             return _ok(_identity_payload(period, education=education or None))
+        if section == "identity_users":
+            payload = _identity_users_payload(
+                (request.GET.get("education") or "").strip(),
+                (request.GET.get("college") or "").strip(),
+                (request.GET.get("major") or "").strip(),
+            )
+            if payload is None:
+                return _err("请至少提供一个身份标签筛选条件")
+            return _ok(payload)
         if section == "timetable":
             period = (request.GET.get("period") or "month").strip()
             if period not in {"day", "week", "month", "all"}:

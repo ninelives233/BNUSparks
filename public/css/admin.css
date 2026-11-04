@@ -1081,9 +1081,39 @@ html[data-bnu-theme="dark"] .campus-donut-seg { filter: brightness(1.2); }
 .timetable-import-event strong { color: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .identity-monitor-grid {
-  display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.15fr) minmax(0, 1fr);
+  display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .95fr);
   gap: 12px;
 }
+@media (max-width: 1180px) {
+  .identity-monitor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.grade-distribution-block { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-light); }
+.grade-distribution-block .monitor-card-head { padding-bottom: 8px; }
+/* 专业展开的用户列表面板 */
+.iu-head-meta { display: inline-flex; align-items: center; gap: 6px; }
+.iu-list { display: grid; gap: 4px; padding-top: 10px; max-height: 430px; overflow-y: auto; }
+.iu-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 9px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; cursor: pointer; text-align: left; font-family: inherit;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.iu-row:hover { background: var(--primary-surface); }
+.iu-row:focus-visible { border-color: var(--primary); outline: none; }
+.iu-name { flex-shrink: 0; max-width: 40%; font-size: 0.82rem; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iu-meta { flex: 1; min-width: 0; font-size: 0.72rem; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iu-grade {
+  flex-shrink: 0; font-size: 0.7rem; color: var(--primary);
+  background: var(--primary-surface); border-radius: 999px; padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.iu-close {
+  flex-shrink: 0; border: none; background: transparent; color: var(--ink-faint);
+  font-size: 1rem; line-height: 1; cursor: pointer; padding: 2px 5px;
+  border-radius: var(--radius-sm); font-family: inherit;
+}
+.iu-close:hover { color: var(--ink); background: var(--primary-surface); }
+html[data-bnu-theme="dark"] .iu-grade { filter: brightness(1.15); }
 .monitor-data-card { padding: 16px; min-width: 0; }
 .monitor-card-head {
   display: flex; align-items: baseline; justify-content: space-between;
