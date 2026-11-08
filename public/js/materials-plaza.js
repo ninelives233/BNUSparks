@@ -642,6 +642,8 @@
     overlay.innerHTML = '<div class="plaza-dialog" role="dialog" aria-modal="true">' + html + '</div>';
     document.body.appendChild(overlay);
     _overlay = overlay;
+    var initialFocus = overlay.querySelector('[autofocus]') || overlay.querySelector('.plaza-close');
+    if (initialFocus) initialFocus.setAttribute('autofocus', '');
     lockScroll();
     if (options && options.anchor) {
       var rect = options.anchor.getBoundingClientRect();
@@ -684,7 +686,7 @@
       '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>';
     if (siblings.length > 8) {
       body += '<label class="plaza-menu-search">' + iconSvg('search') +
-        '<input type="search" id="plazaSiblingSearch" placeholder="搜索本层目录" aria-label="搜索本层目录"></label>';
+        '<input type="search" id="plazaSiblingSearch" autofocus placeholder="搜索本层目录" aria-label="搜索本层目录"></label>';
     }
     body += '<div class="plaza-menu-list" role="menu">' +
       siblings.map(function (sibling) {
@@ -732,11 +734,11 @@
           var id = _tree && _tree.selectedId;
           if (id) navigateCategory(id, true);
         });
-        renderCourseTree();
+        renderCourseTree(false);
       } });
   }
 
-  function renderCourseTree() {
+  function renderCourseTree(focusFirst) {
     var body = document.getElementById('plazaTreeBody');
     if (!body || !_tree) return;
     var nav = _tree.nav;
@@ -782,6 +784,10 @@
     });
     var apply = document.querySelector('[data-tree-apply]');
     if (apply) apply.textContent = nav.name ? '查看「' + nav.name + '」的资料' : '查看此目录资料';
+    if (focusFirst) {
+      var focusTarget = body.querySelector('.plaza-tree-row') || body.querySelector('.plaza-tree-up');
+      if (focusTarget) focusTarget.focus();
+    }
   }
 
   function selectTreeNode(categoryId) {
@@ -793,7 +799,7 @@
       if (!_tree || seq !== _tree.seq) return;
       _tree.selectedId = nav.category_id;
       _tree.nav = nav;
-      renderCourseTree();
+      renderCourseTree(true);
     }).catch(function () {
       if (!_tree || seq !== _tree.seq) return;
       if (body) body.innerHTML = '<div class="plaza-tree-empty">目录加载失败，请重试。</div>';
@@ -812,7 +818,7 @@
     var body = '<div class="plaza-overlay-head"><h3>筛选与排序</h3>' +
       '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
       '<div class="plaza-sheet-fields">' +
-        '<label><span>资料类型</span><select id="plazaSheetType"><option value="">全部类型</option>' +
+        '<label><span>资料类型</span><select id="plazaSheetType" autofocus><option value="">全部类型</option>' +
           facets.material_types.map(function (type) { return '<option value="' + type.id + '">' + esc(type.name) + '</option>'; }).join('') +
         '</select></label>' +
         '<label><span>文件格式</span><select id="plazaSheetFormat"><option value="">全部格式</option>' +
@@ -862,7 +868,7 @@
         var body = '<div class="plaza-overlay-head"><div><span class="plaza-kicker">分享资料</span><h3>选择课程</h3></div>' +
           '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
           (courses.length
-            ? '<label class="plaza-menu-search">' + iconSvg('search') + '<input type="search" id="plazaCourseSearch" placeholder="搜索课程名称或代码" aria-label="搜索课程"></label>' +
+            ? '<label class="plaza-menu-search">' + iconSvg('search') + '<input type="search" id="plazaCourseSearch" autofocus placeholder="搜索课程名称或代码" aria-label="搜索课程"></label>' +
               '<div class="plaza-course-list" id="plazaCourseList">' + courses.map(function (course) {
                 return '<button type="button" class="plaza-course-row" data-course-code="' + esc(course.code) + '" data-course-name="' + esc(course.name) + '" data-course-cat="' + (course.category_id || '') + '">' +
                   '<span class="plaza-course-row-name">' + esc(course.name) + '</span><span class="plaza-course-row-code">' + esc(course.code) + '</span></button>';
@@ -878,7 +884,9 @@
                 row.hidden = !!value && haystack.indexOf(value) === -1;
               });
             });
-            setTimeout(function () { search.focus(); }, 0);
+          } else {
+            var firstCourse = overlay.querySelector('[data-course-code]');
+            if (firstCourse) setTimeout(function () { firstCourse.focus(); }, 0);
           }
           overlay.querySelectorAll('[data-course-code]').forEach(function (row) {
             row.addEventListener('click', function () {
