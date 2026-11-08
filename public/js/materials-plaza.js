@@ -185,16 +185,16 @@
           '<input id="plazaSearchInput" type="search" autocomplete="off" placeholder="搜索资料或课程…" aria-label="搜索当前范围的资料">' +
           '<button type="button" class="plaza-search-filter" id="plazaMobileFilter" aria-label="筛选">' + iconSvg('filter') + '</button>' +
         '</label>' +
+        '<div class="plaza-selects" id="plazaSelects">' +
+          '<label class="plaza-select"><span>资料类型</span><span class="plaza-select-control"><select id="plazaTypeSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+          '<label class="plaza-select"><span>文件格式</span><span class="plaza-select-control"><select id="plazaFormatSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+          '<label class="plaza-select"><span>排序</span><span class="plaza-select-control"><select id="plazaSortSelect">' +
+            '<option value="latest">最新上传</option>' +
+            '<option value="downloads">下载最多</option>' +
+            '<option value="favorites">收藏最多</option>' +
+          '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+        '</div>' +
         '<button type="button" class="plaza-upload" id="plazaUploadBtn" aria-label="上传文件">' + iconSvg('upload') + '<span>上传文件</span></button>' +
-      '</div>' +
-      '<div class="plaza-selects" id="plazaSelects">' +
-        '<label class="plaza-select"><span>资料类型</span><span class="plaza-select-control"><select id="plazaTypeSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
-        '<label class="plaza-select"><span>文件格式</span><span class="plaza-select-control"><select id="plazaFormatSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
-        '<label class="plaza-select"><span>排序</span><span class="plaza-select-control"><select id="plazaSortSelect">' +
-          '<option value="latest">最新上传</option>' +
-          '<option value="downloads">下载最多</option>' +
-          '<option value="favorites">收藏最多</option>' +
-        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
       '</div>' +
       '<div class="plaza-summary"><span id="plazaScopeLabel">当前范围加载中…</span><span id="plazaCount"></span></div>' +
       '<div class="plaza-filter-chips" id="plazaFilterChips"></div>' +
@@ -485,20 +485,19 @@
 
   function cardHtml(item) {
     var favorite = item.is_favorited;
+    var teacher = item.teacher ? ' · ' + esc(item.teacher) : '';
     var courseName = item.course_name || '未关联课程';
     var course = item.course_category_id
       ? '<button type="button" class="pc-course-btn" data-plaza-course="' + item.course_category_id + '">' + esc(courseName) + '</button>'
       : '<span class="pc-course-name">' + esc(courseName) + '</span>';
     return '<article class="plaza-card" data-id="' + item.id + '" tabindex="0" role="link" aria-label="查看资料：' + esc(item.title) + '">' +
-      '<div class="pc-heading"><div class="pc-course">' + course + '</div>' +
+      '<div class="pc-tags"><span class="pc-type">' + esc(item.material_type || '其他') + '</span>' +
         (item.format ? '<span class="pc-format">' + esc(item.format.toUpperCase()) + '</span>' : '') +
+        (item.is_pinned ? '<span class="pc-pin">' + iconSvg('pin') + '置顶</span>' : '') +
       '</div>' +
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
-      '<div class="pc-tags"><span class="pc-type">' + esc(item.material_type || '其他') + '</span>' +
-        (item.is_pinned ? '<span class="pc-pin">' + iconSvg('pin') + '置顶</span>' : '') +
-        (item.teacher ? '<span class="pc-teacher">' + esc(item.teacher) + '</span>' : '') +
-      '</div>' +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
+      '<div class="pc-course">' + course + (item.teacher ? '<span class="pc-teacher">' + teacher + '</span>' : '') + '</div>' +
       '<div class="pc-meta">' + contributorHtml(item) +
         '<span class="pc-date">' + esc(item.created_at) + '</span>' +
         '<div class="pc-actions">' +
