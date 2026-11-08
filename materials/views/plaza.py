@@ -328,9 +328,10 @@ def api_plaza_materials(request):
     type_counts = dict(
         materials.values_list("material_type_id").annotate(count=Count("id"))
     )
-    format_counts = dict(
-        materials.exclude(file_type="").values_list("file_type").annotate(count=Count("id"))
-    )
+    format_counts = {}
+    for value, count in materials.exclude(file_type="").values_list("file_type").annotate(count=Count("id")):
+        normalized = value.lower()
+        format_counts[normalized] = format_counts.get(normalized, 0) + count
     type_names = {row["id"]: row["name"] for row in MaterialType.objects.values("id", "name")}
     shapes = []
     for type_id, count in type_counts.items():
@@ -338,7 +339,7 @@ def api_plaza_materials(request):
             shapes.append({"id": type_id, "name": type_names.get(type_id, "其他"), "count": count})
     shapes.sort(key=lambda row: row["id"])
     formats = [
-        {"value": value.lower(), "name": value.upper(), "count": count}
+        {"value": value, "name": value.upper(), "count": count}
         for value, count in sorted(format_counts.items())
         if value
     ]

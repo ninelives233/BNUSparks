@@ -115,10 +115,15 @@ class PlazaApiTest(BnuTestCase):
         )
 
     def test_filters_and_facets(self):
+        upper = self._material(self.course_a, "大写扩展名资料")
+        upper.file_type = "PDF"
+        upper.save(update_fields=["file_type"])
         data = self._materials(material_type=self.type_pdf.id)
-        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["total"], 3)
         self.assertTrue(data["facets"]["material_types"])
-        self.assertEqual(data["facets"]["formats"][0]["value"], "pdf")
+        pdf_facets = [row for row in data["facets"]["formats"] if row["value"] == "pdf"]
+        self.assertEqual(len(pdf_facets), 1)
+        self.assertEqual(pdf_facets[0]["count"], 3)
 
     def test_sort_and_pagination(self):
         for index in range(25):
