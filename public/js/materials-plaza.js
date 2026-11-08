@@ -98,7 +98,7 @@
       q: saved && saved.q ? saved.q : '',
       materialType: saved && saved.materialType ? saved.materialType : null,
       format: saved && saved.format ? saved.format : '',
-      favorites: !!(saved && saved.favorites),
+      favorites: false,
       sort: saved && saved.sort ? saved.sort : DEFAULTS.sort,
       page: saved && saved.page ? saved.page : 1,
     };
@@ -146,8 +146,6 @@
     ensureShell();
     var breadcrumb = document.getElementById('plazaBreadcrumb');
     if (breadcrumb) breadcrumb.innerHTML = '';
-    var treeHost = document.getElementById('plazaTreeHost');
-    if (treeHost) treeHost.innerHTML = '';
     renderBrowseBar(requestedRange);
     renderChrome();
     renderLoading();
@@ -186,23 +184,17 @@
         '<label class="plaza-search">' + iconSvg('search') +
           '<input id="plazaSearchInput" type="search" autocomplete="off" placeholder="搜索当前范围的资料、课程、教师…" aria-label="搜索当前范围的资料">' +
         '</label>' +
-        '<button type="button" class="plaza-share" id="plazaShareBtn" aria-label="分享资料">' + iconSvg('upload') + '<span>分享资料</span></button>' +
-      '</div>' +
-      '<div class="plaza-filter-row">' +
-        '<div class="plaza-seg" role="tablist" aria-label="资料范围">' +
-          '<button type="button" role="tab" data-plaza-favorites="0" aria-selected="true">全部资料</button>' +
-          '<button type="button" role="tab" data-plaza-favorites="1" aria-selected="false">我的收藏</button>' +
-        '</div>' +
         '<div class="plaza-selects" id="plazaSelects">' +
-          '<label class="plaza-select"><span>资料类型</span><select id="plazaTypeSelect"></select></label>' +
-          '<label class="plaza-select"><span>文件格式</span><select id="plazaFormatSelect"></select></label>' +
-          '<label class="plaza-select"><span>排序</span><select id="plazaSortSelect">' +
+          '<label class="plaza-select"><span>资料类型</span><span class="plaza-select-control"><select id="plazaTypeSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+          '<label class="plaza-select"><span>文件格式</span><span class="plaza-select-control"><select id="plazaFormatSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+          '<label class="plaza-select"><span>排序</span><span class="plaza-select-control"><select id="plazaSortSelect">' +
             '<option value="latest">最新上传</option>' +
             '<option value="downloads">下载最多</option>' +
             '<option value="favorites">收藏最多</option>' +
-          '</select></label>' +
+          '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
         '</div>' +
         '<button type="button" class="plaza-mobile-filter" id="plazaMobileFilter">' + iconSvg('filter') + '<span>筛选</span></button>' +
+        '<button type="button" class="plaza-upload" id="plazaUploadBtn" aria-label="上传文件">' + iconSvg('upload') + '<span>上传文件</span></button>' +
       '</div>' +
       '<div class="plaza-summary"><span id="plazaScopeLabel">当前范围加载中…</span><span id="plazaCount"></span></div>' +
       '<div class="plaza-filter-chips" id="plazaFilterChips"></div>' +
@@ -225,7 +217,7 @@
       loadMaterials();
     });
 
-    document.getElementById('plazaShareBtn').addEventListener('click', openShare);
+    document.getElementById('plazaUploadBtn').addEventListener('click', openUploadEntry);
     document.getElementById('plazaMobileFilter').addEventListener('click', openFilterSheet);
     document.getElementById('plazaTypeSelect').addEventListener('change', function (event) {
       _state.materialType = event.target.value ? parseInt(event.target.value, 10) : null;
@@ -242,16 +234,6 @@
       _state.page = 1;
       loadMaterials();
     });
-    host.querySelectorAll('[data-plaza-favorites]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        var want = button.getAttribute('data-plaza-favorites') === '1';
-        if (want && !currentUser) { showLoginModal(); return; }
-        _state.favorites = want;
-        _state.page = 1;
-        loadMaterials();
-      });
-    });
-
     var grid = document.getElementById('plazaGrid');
     grid.addEventListener('click', function (event) {
       var courseButton = event.target.closest('[data-plaza-course]');
@@ -334,11 +316,6 @@
         ? '当前范围：' + _nav.name + (_nav.can_expand_tree ? '及其下属课程' : ' · 本课程')
         : '当前范围加载中…';
     }
-    document.querySelectorAll('[data-plaza-favorites]').forEach(function (button) {
-      var active = (button.getAttribute('data-plaza-favorites') === '1') === !!_state.favorites;
-      button.classList.toggle('is-active', active);
-      button.setAttribute('aria-selected', active ? 'true' : 'false');
-    });
     var typeSelect = document.getElementById('plazaTypeSelect');
     var formatSelect = document.getElementById('plazaFormatSelect');
     var sortSelect = document.getElementById('plazaSortSelect');
@@ -587,7 +564,6 @@
         var arrow = document.createElement('span');
         arrow.className = 'plaza-crumb-toggle';
         arrow.setAttribute('aria-hidden', 'true');
-        arrow.textContent = '▾';
         var select = document.createElement('select');
         select.className = 'plaza-crumb-select';
         select.setAttribute('aria-label', index === 0 ? '切换课程范围' : '切换' + level.name + '同级目录');
@@ -613,9 +589,10 @@
   }
 
   function renderTreeHost() {
-    var host = document.getElementById('plazaTreeHost');
+    var host = document.getElementById('plazaBreadcrumb');
     if (!host) return;
-    host.innerHTML = '';
+    var old = host.querySelector('.plaza-tree-btn');
+    if (old) old.remove();
     if (!_nav || !_nav.can_expand_tree) return;
     var button = document.createElement('button');
     button.type = 'button';
@@ -794,15 +771,15 @@
     var body = '<div class="plaza-overlay-head"><h3>筛选与排序</h3>' +
       '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
       '<div class="plaza-sheet-fields">' +
-        '<label><span>资料类型</span><select id="plazaSheetType" autofocus><option value="">全部类型</option>' +
+        '<label><span>资料类型</span><span class="plaza-select-control"><select id="plazaSheetType" autofocus><option value="">全部类型</option>' +
           facets.material_types.map(function (type) { return '<option value="' + type.id + '">' + esc(type.name) + '</option>'; }).join('') +
-        '</select></label>' +
-        '<label><span>文件格式</span><select id="plazaSheetFormat"><option value="">全部格式</option>' +
+        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+        '<label><span>文件格式</span><span class="plaza-select-control"><select id="plazaSheetFormat"><option value="">全部格式</option>' +
           facets.formats.map(function (format) { return '<option value="' + format.value + '">' + esc(format.name) + '</option>'; }).join('') +
-        '</select></label>' +
-        '<label><span>排序</span><select id="plazaSheetSort">' +
+        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+        '<label><span>排序</span><span class="plaza-select-control"><select id="plazaSheetSort">' +
           '<option value="latest">最新上传</option><option value="downloads">下载最多</option><option value="favorites">收藏最多</option>' +
-        '</select></label>' +
+        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
       '</div>' +
       '<div class="plaza-overlay-foot"><button type="button" class="plaza-secondary" data-sheet-reset>重置</button>' +
       '<button type="button" class="plaza-primary" data-sheet-apply>应用筛选</button></div>';
@@ -828,7 +805,7 @@
     } });
   }
 
-  function openShare() {
+  function openUploadEntry() {
     if (!currentUser) { showLoginModal(); return; }
     var ensureUpload = typeof showUploadModal === 'function'
       ? Promise.resolve()
