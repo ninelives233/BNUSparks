@@ -475,7 +475,7 @@ def api_course_navigation(request):
     data = {
         "category_id": category_id,
         "name": cat["name"],
-        "course_type": "major" if _root_type(cat, catalog) == "专业课" else "general",
+        "course_type": "major" if _root_type(cat, catalog["cats"]) == "专业课" else "general",
         "path": _path_levels(category_id, catalog),
         "children": children,
         "can_expand_tree": not _is_course_node(cat, catalog),

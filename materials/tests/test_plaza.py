@@ -213,12 +213,19 @@ class CourseNavigationTest(BnuTestCase):
 
     def test_explicit_category_auto_skips_single_folder(self):
         data = self._nav(category_id=self.major_cat.id)
+        self.assertEqual(data["course_type"], "major")
         self.assertEqual(data["category_id"], self.single_child.id)
         self.assertEqual(
             [level["name"] for level in data["path"]],
             ["专业课", "经济与工商管理学院", "金融学", "公司金融", "专业核心课"],
         )
         self.assertTrue(data["can_expand_tree"])
+
+    def test_deep_general_category_keeps_general_type(self):
+        gen_folder = create_category(name="语言类", parent=self.root_gen)
+        gen_leaf = create_category(name="大学英语", parent=gen_folder)
+        data = self._nav(category_id=gen_leaf.id)
+        self.assertEqual(data["course_type"], "general")
 
     def test_undergraduate_default_uses_major(self):
         user = create_user("ug_identity", role="user")
