@@ -281,11 +281,10 @@
 .pc-course-btn:hover { text-decoration: underline; text-underline-offset: 2px; }
 .pc-teacher { color: var(--ink-faint); }
 .pc-meta {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px 10px;
+  gap: 8px 10px;
   margin-top: auto;
   color: var(--ink-faint);
   font-size: var(--fs-2xs);
@@ -310,8 +309,9 @@
   line-height: 1;
 }
 .pc-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.pc-date { flex: 0 0 auto; }
-.pc-foot {
+.pc-date { grid-column: 2; justify-self: end; white-space: nowrap; }
+.pc-actions {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -606,10 +606,28 @@ html[data-bnu-theme="dark"] .plaza-sheet-fields select { background-color: var(-
   .plaza-search-filter .ui-icon { width: 16px; height: 16px; }
   .plaza-selects { display: none; }
   .plaza-upload { margin-left: 0; }
-  .plaza-card { min-height: 0; padding: 14px; gap: 7px; }
+  .plaza-card { min-height: 0; padding: 12px; gap: 6px; }
   .pc-title { font-size: 1rem; }
   .pc-desc { font-size: 0.78rem; }
-  .pc-meta { font-size: 0.7rem; }
+  .pc-meta {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    font-size: 0.68rem;
+  }
+  .pc-date { grid-column: 2; }
+  .pc-actions {
+    grid-column: 3;
+    justify-content: flex-end;
+    gap: 1px;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .pc-action { min-height: 32px; padding: 2px 5px; gap: 4px; font-size: 0.72rem; }
+  .pc-action svg { width: 15px; height: 15px; }
+  .pc-course { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+  .pc-course-btn,
+  .pc-course-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-teacher { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .plaza-overlay { align-items: flex-end; padding: 0; }
   .plaza-dialog {
     width: 100%;

@@ -494,12 +494,14 @@
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
       '<div class="pc-course">' + course + (item.teacher ? '<span class="pc-teacher">' + teacher + '</span>' : '') + '</div>' +
-      '<div class="pc-meta">' + contributorHtml(item) + '<span class="pc-date">' + esc(item.created_at) + '</span></div>' +
-      '<div class="pc-foot">' +
-        '<button type="button" class="pc-action" data-plaza-download="' + item.id + '" aria-label="下载 ' + esc(item.title) + '">' +
-          FD_ICONS.download + '<span>' + item.download_count + '</span></button>' +
-        '<button type="button" class="pc-action pc-fav' + (favorite ? ' is-on' : '') + '" data-plaza-fav="' + item.id + '" aria-pressed="' + favorite + '" aria-label="' + (favorite ? '取消收藏' : '收藏') + ' ' + esc(item.title) + '">' +
-          (favorite ? FD_ICONS.starFilled : FD_ICONS.star) + '<span>' + item.favorite_count + '</span></button>' +
+      '<div class="pc-meta">' + contributorHtml(item) +
+        '<span class="pc-date">' + esc(item.created_at) + '</span>' +
+        '<div class="pc-actions">' +
+          '<button type="button" class="pc-action" data-plaza-download="' + item.id + '" aria-label="下载 ' + esc(item.title) + '">' +
+            FD_ICONS.download + '<span>' + item.download_count + '</span></button>' +
+          '<button type="button" class="pc-action pc-fav' + (favorite ? ' is-on' : '') + '" data-plaza-fav="' + item.id + '" aria-pressed="' + favorite + '" aria-label="' + (favorite ? '取消收藏' : '收藏') + ' ' + esc(item.title) + '">' +
+            (favorite ? FD_ICONS.starFilled : FD_ICONS.star) + '<span>' + item.favorite_count + '</span></button>' +
+        '</div>' +
       '</div>' +
     '</article>';
   }
