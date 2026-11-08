@@ -23,7 +23,7 @@
 | 教室查询（我的课程） | `materials/views/classrooms.py`、`materials/services/classrooms.py`、`public/js/classrooms.js`、`public/css/classrooms.css` |
 | 我的课程/课表 | `user_timetable.py`、`public/js/timetable.js`、`public/css/timetable.css` |
 | 监测与管理员状态 | `monitoring_events.py`、`admin_monitoring.py`、`public/js/admin-*.js` |
-| 前端启动与路由 | `public/index.html`、`public/js/app.js`、`views.js`、`feature-loader.js` |
+| 前端启动与路由 | `public/index.html`、`public/js/app.js`、`views.js`、`feature-loader.js`；站点 favicon 为 `public/bnusparks-favicon*.png` |
 | 动画使用教程（浮窗、五组目录、首次登录核心导览） | `public/js/tutorial-entry.js`（静态入口）、`tutorial-data/scenes/player.js`（懒加载）、`public/css/tutorial.css`、`materials/views/tutorial.py` |
 | 前端 API、认证与共用工具 | `public/js/utils.js`、`auth.js`、`profile.js`、`notifications.js` |
 | 课程浏览和资料详情 | `public/js/explorer-*.js`、`public/css/course.css`、`files.css` |
@@ -38,7 +38,7 @@
 - `materials/urls.py` 是 API 地址的唯一事实源。
 - 资料广场的范围由 `materials/views/plaza.py` 按课程目录解析；前端不按身份或 `course.college` 自行拼范围，分类 ID 仅作筛选。
 - 教程分镜白名单以后端 `materials/views/tutorial.py` 的 `LESSON_REVISIONS` 与前端 `public/js/tutorial-data.js` 双向一致为准（`materials/tests/test_tutorial.py` 守门）；改分镜 ID/revision 必须两侧同步。分镜状态以 `tutorial-scenes.js` 的持久场景为准；解说、对象动作、镜头与结果停留由 `tutorial-data.js` 的绝对时间线声明，`tutorial-player.js` 的同一虚拟时钟管理队列、暂停与手势。`tools/check_tutorial_scenes.js` 验证状态、时间线和队列行为。
-- `public/index.html` 决定静态脚本基础加载顺序；按视图模块由 `feature-loader.js` 加载。
+- `public/index.html` 决定静态脚本基础加载顺序，并声明标签页与 Apple touch 图标；按视图模块由 `feature-loader.js` 加载。
 - 前端使用跨文件全局函数和内联事件；改名或删除前必须全仓搜索。
 - SPA 导航必须通过现有 history/state 封装，不能只切换 DOM。
 - 文件下载、预览、配额和令牌逻辑必须共用既有认证与路径边界。
