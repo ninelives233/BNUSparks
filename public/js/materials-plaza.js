@@ -182,7 +182,8 @@
     host.innerHTML =
       '<div class="plaza-toolbar">' +
         '<label class="plaza-search">' + iconSvg('search') +
-          '<input id="plazaSearchInput" type="search" autocomplete="off" placeholder="搜索当前范围的资料、课程、教师…" aria-label="搜索当前范围的资料">' +
+          '<input id="plazaSearchInput" type="search" autocomplete="off" placeholder="搜索资料或课程…" aria-label="搜索当前范围的资料">' +
+          '<button type="button" class="plaza-search-filter" id="plazaMobileFilter" aria-label="筛选">' + iconSvg('filter') + '</button>' +
         '</label>' +
         '<div class="plaza-selects" id="plazaSelects">' +
           '<label class="plaza-select"><span>资料类型</span><span class="plaza-select-control"><select id="plazaTypeSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
@@ -193,7 +194,6 @@
             '<option value="favorites">收藏最多</option>' +
           '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
         '</div>' +
-        '<button type="button" class="plaza-mobile-filter" id="plazaMobileFilter">' + iconSvg('filter') + '<span>筛选</span></button>' +
         '<button type="button" class="plaza-upload" id="plazaUploadBtn" aria-label="上传文件">' + iconSvg('upload') + '<span>上传文件</span></button>' +
       '</div>' +
       '<div class="plaza-summary"><span id="plazaScopeLabel">当前范围加载中…</span><span id="plazaCount"></span></div>' +
@@ -218,7 +218,11 @@
     });
 
     document.getElementById('plazaUploadBtn').addEventListener('click', openUploadEntry);
-    document.getElementById('plazaMobileFilter').addEventListener('click', openFilterSheet);
+    document.getElementById('plazaMobileFilter').addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      openFilterSheet();
+    });
     document.getElementById('plazaTypeSelect').addEventListener('change', function (event) {
       _state.materialType = event.target.value ? parseInt(event.target.value, 10) : null;
       _state.page = 1;
@@ -284,13 +288,39 @@
   function renderBrowseBar(range) {
     var host = document.getElementById('plazaBrowseBar');
     if (!host) return;
-    host.innerHTML = browseSwitcherHtml('plaza', range || rangeOfNav());
+    var activeRange = range || rangeOfNav() || '通识课';
+    var rangeOption = function (value) {
+      return '<option value="' + value + '"' + (activeRange === value ? ' selected' : '') + '>' + value + '</option>';
+    };
+    host.innerHTML =
+      '<div class="plaza-desktop-switches">' + browseSwitcherHtml('plaza', activeRange) + '</div>' +
+      '<div class="plaza-mobile-switches">' +
+        '<span class="plaza-mobile-switch"><span class="plaza-select-control"><select id="plazaMobileRangeSelect" aria-label="课程范围">' +
+          rangeOption('通识课') + rangeOption('专业课') +
+        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></span>' +
+        '<span class="plaza-mobile-switch"><span class="plaza-select-control"><select id="plazaMobileModeSelect" aria-label="浏览方式">' +
+          '<option value="directory">课程目录</option>' +
+          '<option value="plaza" selected>资料广场</option>' +
+        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></span>' +
+      '</div>';
     bindBrowseSwitcher(host, {
       range: switchPlazaRange,
       mode: function (mode) {
         if (mode === 'directory') switchToDirectory();
       }
     });
+    var rangeSelect = host.querySelector('#plazaMobileRangeSelect');
+    if (rangeSelect) {
+      rangeSelect.addEventListener('change', function () {
+        switchPlazaRange(rangeSelect.value);
+      });
+    }
+    var modeSelect = host.querySelector('#plazaMobileModeSelect');
+    if (modeSelect) {
+      modeSelect.addEventListener('change', function () {
+        if (modeSelect.value === 'directory') switchToDirectory();
+      });
+    }
   }
 
   function switchPlazaRange(range) {
@@ -597,6 +627,7 @@
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'plaza-tree-btn';
+    button.setAttribute('aria-label', '展开课程树');
     button.innerHTML = iconSvg('layers') + '<span>展开课程树</span>';
     button.addEventListener('click', openCourseTree);
     host.appendChild(button);
