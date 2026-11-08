@@ -572,8 +572,21 @@ html[data-bnu-theme="dark"] .plaza-sheet-fields select { background-color: var(-
 @media (max-width: 768px) {
   .plaza-top-row { padding: 20px var(--space-md) 12px; }
   .plaza-top-actions { width: 100%; margin-left: 0; }
+  .plaza-switch-bar { gap: 6px; }
+  .plaza-switch-bar .browse-switcher { flex: 1 1 0; min-width: 0; }
+  .plaza-switch-bar .browse-switch-btn {
+    min-height: 34px;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+  .plaza-tree-btn {
+    min-height: 30px;
+    padding: 4px 9px;
+    font-size: 0.7rem;
+  }
+  .plaza-tree-btn .ui-icon { width: 13px; height: 13px; }
   .plaza-toolbar { gap: 8px 8px; }
-  .plaza-search { flex: 1 1 160px; max-width: none; min-width: 0; }
+  .plaza-search { flex: 1 1 100%; max-width: none; min-width: 0; }
   .plaza-selects { display: none; }
   .plaza-mobile-filter {
     display: inline-flex;
@@ -591,6 +604,10 @@ html[data-bnu-theme="dark"] .plaza-sheet-fields select { background-color: var(-
     cursor: pointer;
   }
   .plaza-mobile-filter .ui-icon { width: 15px; height: 15px; }
+  .plaza-card { min-height: 0; padding: 14px; gap: 7px; }
+  .pc-title { font-size: 1rem; }
+  .pc-desc { font-size: 0.78rem; }
+  .pc-meta { font-size: 0.7rem; }
   .plaza-overlay { align-items: flex-end; padding: 0; }
   .plaza-dialog {
     width: 100%;
