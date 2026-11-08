@@ -570,6 +570,7 @@
   text-align: left;
   cursor: pointer;
 }
+.plaza-course-row[hidden] { display: none; }
 .plaza-course-row:hover { background: var(--primary-surface); color: var(--primary-dark); }
 .plaza-course-row-name { flex: 1; }
 .plaza-course-row-code { color: var(--ink-faint); font-size: var(--fs-2xs); }

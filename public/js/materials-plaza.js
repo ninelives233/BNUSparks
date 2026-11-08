@@ -859,7 +859,7 @@
       if (!_nav) return;
       api('/api/courses/navigation/?category_id=' + _nav.category_id + '&courses=1').then(function (nav) {
         var courses = nav.courses || [];
-        var body = '<div class="plaza-overlay-head"><div><span class="plaza-kicker">分享资料</span><h3>选择课程</h3></div>' +
+        var body = '<div class="plaza-overlay-head"><div><span class="plaza-kicker">上传文件</span><h3>选择课程</h3></div>' +
           '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
           (courses.length
             ? '<label class="plaza-menu-search">' + iconSvg('search') + '<input type="search" id="plazaCourseSearch" autofocus placeholder="搜索课程名称或代码" aria-label="搜索课程"></label>' +
@@ -867,7 +867,7 @@
                 return '<button type="button" class="plaza-course-row" data-course-code="' + esc(course.code) + '" data-course-name="' + esc(course.name) + '" data-course-cat="' + (course.category_id || '') + '">' +
                   '<span class="plaza-course-row-name">' + esc(course.name) + '</span><span class="plaza-course-row-code">' + esc(course.code) + '</span></button>';
               }).join('') + '</div>'
-            : '<div class="plaza-state"><p>当前范围还没有可挂载的正式课程。</p><p class="plaza-state-hint">请先在课程目录中建立课程，再分享资料。</p></div>');
+            : '<div class="plaza-state"><p>当前范围还没有可挂载的正式课程。</p><p class="plaza-state-hint">请先在课程目录中建立课程，再上传文件。</p></div>');
         openOverlay('picker', body, { onMount: function (overlay) {
           var search = overlay.querySelector('#plazaCourseSearch');
           if (search) {
