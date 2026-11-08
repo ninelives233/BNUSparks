@@ -289,38 +289,13 @@
     var host = document.getElementById('plazaBrowseBar');
     if (!host) return;
     var activeRange = range || rangeOfNav() || '通识课';
-    var rangeOption = function (value) {
-      return '<option value="' + value + '"' + (activeRange === value ? ' selected' : '') + '>' + value + '</option>';
-    };
-    host.innerHTML =
-      '<div class="plaza-desktop-switches">' + browseSwitcherHtml('plaza', activeRange) + '</div>' +
-      '<div class="plaza-mobile-switches">' +
-        '<span class="plaza-mobile-switch"><span class="plaza-select-control"><select id="plazaMobileRangeSelect" aria-label="课程范围">' +
-          rangeOption('通识课') + rangeOption('专业课') +
-        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></span>' +
-        '<span class="plaza-mobile-switch"><span class="plaza-select-control"><select id="plazaMobileModeSelect" aria-label="浏览方式">' +
-          '<option value="directory">课程目录</option>' +
-          '<option value="plaza" selected>资料广场</option>' +
-        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></span>' +
-      '</div>';
+    host.innerHTML = '<div class="plaza-desktop-switches">' + browseSwitcherHtml('plaza', activeRange) + '</div>';
     bindBrowseSwitcher(host, {
       range: switchPlazaRange,
       mode: function (mode) {
         if (mode === 'directory') switchToDirectory();
       }
     });
-    var rangeSelect = host.querySelector('#plazaMobileRangeSelect');
-    if (rangeSelect) {
-      rangeSelect.addEventListener('change', function () {
-        switchPlazaRange(rangeSelect.value);
-      });
-    }
-    var modeSelect = host.querySelector('#plazaMobileModeSelect');
-    if (modeSelect) {
-      modeSelect.addEventListener('change', function () {
-        if (modeSelect.value === 'directory') switchToDirectory();
-      });
-    }
   }
 
   function switchPlazaRange(range) {

@@ -78,22 +78,6 @@
   flex-wrap: wrap;
 }
 .plaza-desktop-switches { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.plaza-mobile-switches { display: none; }
-.plaza-mobile-switch { flex: 1 1 0; min-width: 0; }
-.plaza-mobile-switch .plaza-select-control { width: 100%; }
-.plaza-mobile-switch select {
-  width: 100%;
-  min-height: 36px;
-  padding: 4px 26px 4px 10px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: var(--fs-xs);
-  appearance: none;
-  -webkit-appearance: none;
-}
 .plaza-tree-btn {
   margin-left: 8px;
   display: inline-flex;
@@ -589,17 +573,18 @@ html[data-bnu-theme="dark"] .plaza-sheet-fields select { background-color: var(-
 /* ── 中等宽度 / 手机 ───────────────────────────────────── */
 @media (max-width: 768px) {
   .plaza-top-row { padding: 16px var(--space-md) 8px; gap: 8px; }
-  .plaza-top-actions { width: 100%; margin-left: 0; }
-  .plaza-switch-bar { width: 100%; }
-  .plaza-desktop-switches { display: none; }
-  .plaza-mobile-switches { display: flex; gap: 8px; width: 100%; }
+  .plaza-top-actions { display: none; }
   .plaza-tree-btn {
-    width: 32px;
-    min-width: 32px;
-    min-height: 32px;
+    width: 28px;
+    min-width: 28px;
+    min-height: 28px;
     padding: 0;
-    border-radius: 50%;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink-faint);
   }
+  .plaza-tree-btn:hover { color: var(--primary); background: var(--primary-surface); }
   .plaza-tree-btn span { display: none; }
   .plaza-tree-btn .ui-icon { width: 14px; height: 14px; }
   .plaza-toolbar { gap: 8px 8px; padding: 10px 0 8px; }
