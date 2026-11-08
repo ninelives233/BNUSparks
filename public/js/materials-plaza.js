@@ -290,6 +290,10 @@
     if (!host) return;
     var activeRange = range || rangeOfNav() || '通识课';
     host.innerHTML = '<div class="plaza-desktop-switches">' + browseSwitcherHtml('plaza', activeRange) + '</div>';
+    if (_nav && _nav.path && _nav.path.length > 1) {
+      var rangeGroup = host.querySelector('.browse-switcher[aria-label="课程范围"]');
+      if (rangeGroup) rangeGroup.remove();
+    }
     bindBrowseSwitcher(host, {
       range: switchPlazaRange,
       mode: function (mode) {
