@@ -9,7 +9,7 @@ document.addEventListener('click', function(e) {
   var t = e.target;
   if (t.closest('.side-nav a, .login-btn, '
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
-      + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
+      + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #plazaView, .plaza-overlay, .explorer-browse-bar, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
       + '.guest-appearance-trigger, .compact-campus-link, .compact-campus-more, .compact-announcement-link, '
       + '.compact-recommend-more, .recommendations-page, .h8-carousel, .h8-carousel-ticks button, '
       + '.tutorial-overlay, .tutorial-dialog')) return; // v324：教程浮窗内部交互（暂停/翻页/关闭）不触发登录；去试试的权限由动作路由处理
@@ -195,6 +195,12 @@ window.addEventListener('popstate', async function(e) {
     closeUploadModal();
     return;
   }
+  // 资料广场浮层：同级菜单 / 课程树 / 筛选 / 分享选课
+  var plazaOverlay = document.querySelector('.plaza-overlay');
+  if (plazaOverlay) {
+    if (typeof closePlazaOverlay === 'function') closePlazaOverlay(true);
+    return;
+  }
   // 搜索覆层 / 驳回覆层 / 公告编辑器 / 移动端底部面板
   var dynOverlay = document.querySelector('.search-overlay, .admin-reject-overlay, .announcement-editor-overlay, .course-switch-overlay, .campus-manager-overlay, .campus-more-overlay, .mf-sheet-overlay');
   if (dynOverlay) {
@@ -378,6 +384,15 @@ window.addEventListener('popstate', async function(e) {
         try { showQa(state.qaId, state); } finally { _suppressingPushState = false; }
       }
     }
+    // 资料广场：历史条目自带目录/筛选/页码，恢复时只渲染不 push
+    if (state.view === 'plaza') {
+      if (window.BnuPlaza && typeof window.BnuPlaza.show === 'function') {
+        _suppressingPushState = true;
+        try { window.BnuPlaza.show({ fromHistory: true }); } finally { _suppressingPushState = false; }
+      }
+      if (typeof updateSidebar === 'function') updateSidebar('plaza');
+      return;
+    }
     // 独立搜索结果页：历史恢复只渲染，绝不额外 push（showSearch fromHistory）
     if (state.view === 'search') {
       _suppressingPushState = true;
@@ -464,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 动态路由的参数不能被旧 session 覆盖（尤其 qaCompose 的 type/action/qid/aid
     // 与 search 的 q/type/page/筛选——搜索的完整缺省状态由 parseRoute 给出）。
     saved = Object.assign({ _bnusparks: true }, route);
-    var dynamicRouteViews = ['explorer', 'userPublic', 'fileDetail', 'timetable', 'qaCompose', 'search'];
+    var dynamicRouteViews = ['explorer', 'plaza', 'userPublic', 'fileDetail', 'timetable', 'qaCompose', 'search'];
     if (stored && stored._bnusparks && stored.view === route.view && dynamicRouteViews.indexOf(route.view) === -1) {
       saved = Object.assign({}, stored, route);
     }
@@ -481,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
   var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose', 'timetable'];
   var needsAuth = authViews.indexOf(initialView) !== -1;
   // 搜索页不是受保护视图，但渲染需等认证完成（访客深链显示需登录态，不误判）
-  var needsAuthWait = needsAuth || initialView === 'search';
+  var needsAuthWait = needsAuth || initialView === 'search' || initialView === 'plaza';
   var isRootLanding = location.pathname === '/';
   var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
   // 根路径是“打开网站”的默认入口；有会话时等认证完成，才能按账号偏好决定首页或我的课程。
@@ -490,6 +505,8 @@ document.addEventListener('DOMContentLoaded', () => {
   var viewFeaturePromise = Promise.resolve();
   if (initialView === 'explorer' || initialView === 'newCourse' || initialView === 'fileDetail') {
     viewFeaturePromise = ensureFeature('explorer');
+  } else if (initialView === 'plaza') {
+    viewFeaturePromise = ensureFeature('plaza');
   } else if (initialView === 'qa' || initialView === 'qaCompose') {
     viewFeaturePromise = ensureFeature('qa');
   } else if (initialView === 'admin') {
@@ -620,6 +637,10 @@ document.addEventListener('DOMContentLoaded', () => {
           switchView('explorer', true);
           updateSidebar('allCourses');
           if (saved.scrollY) requestAnimationFrame(function(){ scrollToInstant(saved.scrollY); });
+          break;
+        case 'plaza':
+          if (window.BnuPlaza) window.BnuPlaza.show({ fromHistory: true });
+          else showHome();
           break;
         // rankings/recentAll 不恢复 scrollY：刷新时停在顶部，
         // 避免恢复成首页点击「更多」时的滚动位置导致自动下滑

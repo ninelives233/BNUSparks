@@ -382,3 +382,55 @@ html[data-bnu-theme="dark"] .pc-seg { background: var(--surface); }
 html[data-bnu-theme="dark"] .pc-seg-btn:hover { background: var(--primary-surface); }
 html[data-bnu-theme="dark"] .pc-seg-count { background: var(--raised); }
 html[data-bnu-theme="dark"] .pc-seg-btn.active .pc-seg-count { background: var(--primary-surface); }
+
+/* ── 资料区切换条（课程目录 / 资料广场共用）──────────────────── */
+.explorer-browse-bar {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 18px var(--space-lg) 0;
+  display: flex;
+  align-items: center;
+  gap: 10px 12px;
+  flex-wrap: wrap;
+}
+.browse-title {
+  margin-right: auto;
+  font-family: var(--serif);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.browse-switcher {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.browse-switch-btn {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.browse-switch-btn:hover { color: var(--primary); background: var(--primary-surface); }
+.browse-switch-btn.is-active {
+  color: var(--primary-dark);
+  background: var(--primary-surface);
+  font-weight: 700;
+}
+.browse-switch-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (max-width: 640px) {
+  .explorer-browse-bar { padding-top: 14px; gap: 8px; }
+  .browse-title { width: 100%; margin-right: 0; }
+  .browse-switcher { flex: 1 1 auto; justify-content: center; }
+  .browse-switch-btn { min-height: 36px; }
+}

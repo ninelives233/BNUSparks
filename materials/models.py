@@ -38,6 +38,10 @@ class UserProfile(models.Model):
         HOME = "home", "首页"
         TIMETABLE = "timetable", "我的课程"
 
+    class MaterialBrowseMode(models.TextChoices):
+        DIRECTORY = "directory", "课程目录"
+        PLAZA = "plaza", "资料广场"
+
     class TimetableTextAlign(models.TextChoices):
         LEFT = "left", "靠左"
         CENTER = "center", "居中"
@@ -124,6 +128,11 @@ class UserProfile(models.Model):
     default_view = models.CharField(
         "打开时进入", max_length=10, choices=DefaultView.choices,
         blank=True, default="",
+    )
+    material_browse_mode = models.CharField(
+        "资料浏览方式", max_length=10, choices=MaterialBrowseMode.choices,
+        blank=True, default="",
+        help_text="空值表示历史用户按课程目录浏览",
     )
     timetable_text_align = models.CharField(
         "课程卡片文字对齐", max_length=6, choices=TimetableTextAlign.choices,
@@ -901,6 +910,7 @@ class Report(models.Model):
 
 COURSE_TREE_CACHE_KEY = "api_course_tree_data"
 STATS_CACHE_VERSION_KEY = "api_stats_data_version"
+PLAZA_INDEX_VERSION_KEY = "api_plaza_index_version"
 
 
 def get_stats_cache_key(limit):
@@ -933,6 +943,7 @@ from django.dispatch import receiver
 @receiver(post_delete, sender=Course)
 def _invalidate_course_and_stats_caches(sender, **kwargs):
     cache.delete(COURSE_TREE_CACHE_KEY)
+    cache.set(PLAZA_INDEX_VERSION_KEY, uuid.uuid4().hex, timeout=None)
     invalidate_stats_cache()
 
 

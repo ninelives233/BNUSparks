@@ -29,6 +29,9 @@
     if (expPath.length !== origLen) {
       pushViewState('explorer', { expPath: [...expPath] }, true);
     }
+    var range = expPath[0] === '专业课' ? '专业课' : '通识课';
+    setLastCourseRange(range);
+    saveScopePosition('directory', range, { path: expPath.slice() });
 
     renderBC();
     const node = getNode(expPath);
@@ -63,7 +66,7 @@
   }
 
   function updateSidebar(viewName) {
-    var activeView = (viewName === 'general' || viewName === 'major' || viewName === 'explorer') ? 'allCourses' : viewName;
+    var activeView = (viewName === 'general' || viewName === 'major' || viewName === 'explorer' || viewName === 'plaza') ? 'allCourses' : viewName;
     // 资源排行榜没有独立桌面入口，沿用“首页”侧栏；移动端则归入“其他”。
     if (viewName === 'rankings' || viewName === 'recentAll' || viewName === 'recommendations') activeView = 'home';
     document.querySelectorAll('.side-nav a').forEach(a => a.classList.remove('active'));
@@ -73,7 +76,7 @@
   }
 
   function updateMobileBottomNav(viewName) {
-    var activeView = viewName === 'general' || viewName === 'major' || viewName === 'explorer' ? 'allCourses' : viewName;
+    var activeView = viewName === 'general' || viewName === 'major' || viewName === 'explorer' || viewName === 'plaza' ? 'allCourses' : viewName;
     // 底栏的“我的课程”只承担个人课程/课表；其他个人页、排行、关于和管理入口从“其他”进入。
     if (viewName === 'admin') activeView = 'other';
     if (['profile', 'myuploads', 'mydownloads', 'myfavorites', 'notif', 'notifications',
@@ -1314,6 +1317,10 @@
     updateSidebar('allCourses');
     var render = function() {
       expPath = nextPath.slice();
+      if (typeof getNode === 'function' && !getNode(expPath)) {
+        expPath = [expPath[0] === '专业课' ? '专业课' : '通识课'];
+        if (typeof pushViewState === 'function') pushViewState('explorer', { expPath: [...expPath] }, true);
+      }
       renderExplorer();
       if (currentUser && typeof loadCourseFavorites === 'function') {
         loadCourseFavorites().then(function() {
@@ -1346,11 +1353,119 @@
     return showExplorerPath([type || '通识课']);
   }
 
+  // ── 资料区入口与两种浏览方式 ──────────────────────────────
+  var SCOPE_POSITIONS_KEY = 'bnusparks_course_positions';
+
+  function getMaterialBrowseMode() {
+    var appearance = typeof getBnuAppearance === 'function' ? getBnuAppearance() : null;
+    return appearance && appearance.material_browse_mode === 'plaza' ? 'plaza' : 'directory';
+  }
+
+  function readScopePositions() {
+    var empty = { lastRange: '通识课', directory: {}, plaza: {} };
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(SCOPE_POSITIONS_KEY) || '');
+      if (!stored || typeof stored !== 'object') return empty;
+      stored.lastRange = stored.lastRange === '专业课' ? '专业课' : '通识课';
+      stored.directory = stored.directory || {};
+      stored.plaza = stored.plaza || {};
+      return stored;
+    } catch (e) {
+      return empty;
+    }
+  }
+
+  function writeScopePositions(state) {
+    try { sessionStorage.setItem(SCOPE_POSITIONS_KEY, JSON.stringify(state)); } catch (e) { /* 会话存储不可用时只保留当前页面 */ }
+  }
+
+  function saveScopePosition(mode, range, payload) {
+    var state = readScopePositions();
+    state.lastRange = range === '专业课' ? '专业课' : '通识课';
+    state[mode][state.lastRange] = payload;
+    writeScopePositions(state);
+  }
+
+  function getScopePosition(mode, range) {
+    return readScopePositions()[mode][range] || null;
+  }
+
+  function setLastCourseRange(range) {
+    var state = readScopePositions();
+    state.lastRange = range === '专业课' ? '专业课' : '通识课';
+    writeScopePositions(state);
+  }
+
+  function getLastCourseRange() {
+    return readScopePositions().lastRange;
+  }
+
+  function browseSwitcherHtml(mode, range) {
+    var rangeButton = function (value) {
+      var active = range === value;
+      return '<button type="button" class="browse-switch-btn' + (active ? ' is-active' : '') +
+        '" data-browse-range="' + value + '" aria-pressed="' + active + '">' + value + '</button>';
+    };
+    var modeButton = function (value, label) {
+      var active = mode === value;
+      return '<button type="button" class="browse-switch-btn' + (active ? ' is-active' : '') +
+        '" data-browse-mode="' + value + '" aria-pressed="' + active + '">' + label + '</button>';
+    };
+    return '<span class="browse-title">全部课程</span>' +
+      '<div class="browse-switcher" role="group" aria-label="课程范围">' +
+        rangeButton('通识课') + rangeButton('专业课') +
+      '</div>' +
+      '<div class="browse-switcher" role="group" aria-label="资料浏览方式">' +
+        modeButton('directory', '课程目录') + modeButton('plaza', '资料广场') +
+      '</div>';
+  }
+
+  function bindBrowseSwitcher(host, handlers) {
+    host.querySelectorAll('[data-browse-range]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (handlers && handlers.range) handlers.range(button.getAttribute('data-browse-range'));
+      });
+    });
+    host.querySelectorAll('[data-browse-mode]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (handlers && handlers.mode) handlers.mode(button.getAttribute('data-browse-mode'));
+      });
+    });
+  }
+
+  function fetchDefaultNavigationPath(courseType) {
+    return api('/api/courses/navigation/?course_type=' + encodeURIComponent(courseType))
+      .then(function (data) {
+        return (data.path || []).map(function (level) { return level.name; });
+      });
+  }
+
+  function navigateDirectoryToRange(range) {
+    setLastCourseRange(range);
+    var saved = getScopePosition('directory', range);
+    var usable = saved && Array.isArray(saved.path) && saved.path.length;
+    if (usable && (typeof courseTree === 'undefined' || !courseTree || getNode(saved.path))) {
+      return showExplorerPath(saved.path);
+    }
+    if (range === '通识课') return showExplorerPath(['通识课']);
+    return fetchDefaultNavigationPath('major')
+      .then(function (path) { return showExplorerPath(path.length ? path : ['专业课']); })
+      .catch(function () { return showExplorerPath(['专业课']); });
+  }
+
   function showAllCourses(type) {
-    var root = type === '通识课' || type === '专业课' ? type : null;
-    if (root) return showExplorerPath([root]);
-    if (typeof expPath !== 'undefined' && Array.isArray(expPath) && expPath.length) return showExplorerPath(expPath);
-    return showExplorerPath(['通识课']);
+    if (type === '通识课' || type === '专业课') {
+      setLastCourseRange(type);
+      return showExplorerPath([type]);
+    }
+    if (getMaterialBrowseMode() === 'plaza' && typeof ensureFeature === 'function') {
+      return ensureFeature('plaza').then(function () {
+        return window.BnuPlaza.show({});
+      }).catch(function () {
+        return showExplorerPath([getLastCourseRange()]);
+      });
+    }
+    return navigateDirectoryToRange(getLastCourseRange());
   }
 
   // 我的课程：timetable.js 为懒加载模块，这里统一做「认证 → 激活视图 → 确保加载」

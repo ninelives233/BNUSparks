@@ -413,7 +413,7 @@
   // 写操作与下载仍由真实业务 UI 确认；教程只负责合法的业务入口导航。
   var ACTION_RUNNERS = {
     'browse-courses': function () {
-      showAllCourses();
+      showAllCourses('通识课');
       // 待页面就绪再聚焦站点搜索框：不填入示例关键词、不执行搜索
       window.setTimeout(function () {
         var input = document.querySelector('.search-box input');

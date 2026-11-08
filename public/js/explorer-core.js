@@ -641,8 +641,38 @@
     }
   }
 
+  // ── 资料区切换条：课程范围 + 浏览方式 ──
+  function openPlazaFromExplorer() {
+    var range = expPath[0] === '专业课' ? '专业课' : '通识课';
+    saveScopePosition('directory', range, { path: expPath.slice() });
+    if (typeof setAppearance === 'function') setAppearance('material_browse_mode', 'plaza');
+    var node = getNode(expPath);
+    var options = node && node.id ? { categoryId: node.id, courseType: range } : { courseType: range };
+    var enter = function () {
+      if (window.BnuPlaza && typeof window.BnuPlaza.show === 'function') {
+        window.BnuPlaza.show(options);
+      }
+    };
+    if (typeof ensureFeature === 'function') ensureFeature('plaza').then(enter, enter);
+    else enter();
+  }
+
+  function renderExplorerBrowseBar() {
+    var host = document.getElementById('explorerBrowseBar');
+    if (!host) return;
+    var range = expPath[0] === '专业课' ? '专业课' : '通识课';
+    host.innerHTML = browseSwitcherHtml('directory', range);
+    bindBrowseSwitcher(host, {
+      range: navigateDirectoryToRange,
+      mode: function (mode) {
+        if (mode === 'plaza') openPlazaFromExplorer();
+      }
+    });
+  }
+
   // ── Breadcrumb ──
   function renderBC() {
+    renderExplorerBrowseBar();
     renderCourseNav();
     const el = document.getElementById('breadcrumb');
     _renderBreadcrumb(el, expPath, {
@@ -702,23 +732,10 @@
   }
 
   function renderCourseNav() {
+    // 课程类型切换已由顶部「全部课程」切换条统一承担；这里只保留原容器，
+    // 让新建课程/管理入口仍能使用 explorerTopActions。
     var host = document.getElementById('courseNavBar');
-    if (!host) return;
-    var root = expPath[0] === '专业课' ? '专业课' : '通识课';
-    if (expPath.length > 1) {
-      host.innerHTML = '';
-      return;
-    }
-    host.innerHTML = '<div class="course-root-tabs" role="tablist" aria-label="课程类型">' +
-      '<button type="button" role="tab" data-course-root="通识课" aria-selected="' + (root === '通识课') + '" class="course-root-tab' + (root === '通识课' ? ' is-active' : '') + '">通识课</button>' +
-      '<button type="button" role="tab" data-course-root="专业课" aria-selected="' + (root === '专业课') + '" class="course-root-tab' + (root === '专业课' ? ' is-active' : '') + '">专业课</button>' +
-    '</div>';
-    host.querySelectorAll('[data-course-root]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        if (typeof showAllCourses === 'function') showAllCourses(button.getAttribute('data-course-root'));
-        else showExplorer(button.getAttribute('data-course-root'));
-      });
-    });
+    if (host) host.innerHTML = '';
   }
 
   function openCourseSwitchPanel() {

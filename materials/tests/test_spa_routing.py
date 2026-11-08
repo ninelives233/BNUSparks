@@ -34,6 +34,11 @@ class SpaRoutingTestCase(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(self._is_index(r.content))
 
+    def test_plaza_deep_link_returns_index(self):
+        r = self.client.get("/plaza?category_id=1")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(self._is_index(r.content))
+
     def test_random_deep_path_returns_index(self):
         r = self.client.get("/some/random/deep/path")
         self.assertEqual(r.status_code, 200)

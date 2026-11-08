@@ -14,6 +14,7 @@
 | 认证、令牌、个人资料 | `materials/views/auth.py`、`utils_auth.py`、`profile.py` |
 | 权限、审核、举报 | `utils_moderation.py`、`moderation.py`、`reports.py` |
 | 课程树、课程申请、推荐 | `courses.py`、`utils_course_tree.py`、`course_requests.py`、`recommendations.py` |
+| 资料广场（目录范围卡片/课程导航） | `materials/views/plaza.py`、`public/js/materials-plaza.js`、`public/css/plaza.css` |
 | 搜索（v2 独立结果页） | `materials/views/search.py`（`/api/search/?v=2`、`/api/qa/search/?v=2` 版本分发在 `courses.py`/`qa_public.py` 入口内）、`public/js/search.js`、`public/css/search.css`；入口 `views.js showSearch` |
 | 上传、下载、预览、删除 | `files_*.py`、`utils_upload.py`、`utils_security.py`、`utils_trash.py` |
 | 文件与目录管理 | `operations_*.py` |
@@ -26,6 +27,7 @@
 | 动画使用教程（浮窗、五组目录、首次登录核心导览） | `public/js/tutorial-entry.js`（静态入口）、`tutorial-data/scenes/player.js`（懒加载）、`public/css/tutorial.css`、`materials/views/tutorial.py` |
 | 前端 API、认证与共用工具 | `public/js/utils.js`、`auth.js`、`profile.js`、`notifications.js` |
 | 课程浏览和资料详情 | `public/js/explorer-*.js`、`public/css/course.css`、`files.css` |
+| 资料广场与浏览方式 | `public/js/materials-plaza.js`、`plaza.css`、`appearance.js` |
 | 首页、外观和推荐 | `public/js/home.js`、`appearance.js`、`public/css/base.css`、`tokens.css` |
 | 测试 | `materials/tests/`、`materials/tests/run_tests.sh` |
 | 部署、备份和回滚 | `docs/OPERATIONS.md`、`deploy.sh.template`、`deploy/nginx/`、`scripts/deploy_verify.sh` |
@@ -34,6 +36,7 @@
 
 - `materials/views/__init__.py` 是后端 facade；拆分模块时保持既有导入路径兼容。
 - `materials/urls.py` 是 API 地址的唯一事实源。
+- 资料广场的范围由 `materials/views/plaza.py` 按课程目录解析；前端不按身份或 `course.college` 自行拼范围，分类 ID 仅作筛选。
 - 教程分镜白名单以后端 `materials/views/tutorial.py` 的 `LESSON_REVISIONS` 与前端 `public/js/tutorial-data.js` 双向一致为准（`materials/tests/test_tutorial.py` 守门）；改分镜 ID/revision 必须两侧同步。分镜状态以 `tutorial-scenes.js` 的持久场景为准；解说、对象动作、镜头与结果停留由 `tutorial-data.js` 的绝对时间线声明，`tutorial-player.js` 的同一虚拟时钟管理队列、暂停与手势。`tools/check_tutorial_scenes.js` 验证状态、时间线和队列行为。
 - `public/index.html` 决定静态脚本基础加载顺序；按视图模块由 `feature-loader.js` 加载。
 - 前端使用跨文件全局函数和内联事件；改名或删除前必须全仓搜索。

@@ -68,7 +68,7 @@ Browser
 |---|---|
 | `auth.py`、`utils_auth.py` | 注册、登录、验证、JWT、账号有效性、下载令牌 |
 | `profile.py`、`majors.py` | 个人资料、身份选项、专业目录 |
-| `courses.py`、`utils_course_tree.py` | 课程树、课程资料、别名解析和缓存 |
+| `courses.py`、`utils_course_tree.py`、`plaza.py` | 课程树/资料、别名解析缓存、广场范围与导航 |
 | `search.py` | 搜索 v2（独立结果页）：课程/资料聚合与问答 v2；旧入口在 `courses.py`/`qa_public.py` 内按 `v` 参数分发，无 `v` 或 `v=1` 保持旧结构 |
 | `course_requests.py` | 新课程申请、状态和合并 |
 | `recommendations.py` | 首页及独立页的个性化推荐 |
@@ -98,7 +98,7 @@ Browser
 | 模块 | 主要文件 |
 |---|---|
 | 首页与推荐 | `home.js`、`appearance.js`、`base.css` |
-| 课程与资料 | `explorer-*.js`、`course.css`、`files.css` |
+| 课程与资料 | `explorer-*.js`、`materials-plaza.js`、`course.css`、`files.css`、`plaza.css` |
 | 个人中心 | `profile.js`、`user.css` |
 | 后台管理 | `admin-*.js`、`admin.css` |
 | 问答 | `qa*.js`、`qa.css` |
@@ -145,8 +145,9 @@ qa 或资料页面  → reports.py    → 统一可见作用域 → 候选处理
 explorer-core.js → /api/courses/tree/ → courses.py → utils_course_tree.py
 ```
 
-课程别名和合并最终跟随主课程。前端从搜索、榜单、收藏或课表进入课程时，应复用既有统一
-导航入口，避免异步渲染互相覆盖。
+课程别名和合并最终跟随主课程；外部入口应复用统一导航，避免异步渲染覆盖。
+
+资料广场复用同一范围语义：导航接口处理身份默认与跳层，资料接口按目录筛选分页；前端 `materials-plaza.js` 路由 `/plaza`。
 
 ### 独立搜索结果页
 

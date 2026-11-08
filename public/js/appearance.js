@@ -5,11 +5,12 @@
 (function () {
   'use strict';
 
-  var DEFAULTS = { home_layout: 'compact', color_theme: 'warm', mobile_nav: 'burger', default_view: 'home', timetable_text_align: 'left' };
+  var DEFAULTS = { home_layout: 'compact', color_theme: 'warm', mobile_nav: 'burger', default_view: 'home', material_browse_mode: 'directory', timetable_text_align: 'left' };
   var LAYOUTS = { loose: true, compact: true };
   var THEMES = { warm: true, cool: true, dark: true, system: true };
   var NAVS = { bottom: true, burger: true };
   var DEFAULT_VIEWS = { home: true, timetable: true };
+  var BROWSE_MODES = { directory: true, plaza: true };
   var TEXT_ALIGNS = { left: true, center: true, right: true };
   var GUEST_KEY = 'bnusparks_appearance_guest';
   var SYSTEM_THEME_QUERY = '(prefers-color-scheme: dark)';
@@ -23,6 +24,7 @@
       color_theme: THEMES[raw.color_theme] ? raw.color_theme : DEFAULTS.color_theme,
       mobile_nav: NAVS[raw.mobile_nav] ? raw.mobile_nav : DEFAULTS.mobile_nav,
       default_view: DEFAULT_VIEWS[raw.default_view] ? raw.default_view : DEFAULTS.default_view,
+      material_browse_mode: BROWSE_MODES[raw.material_browse_mode] ? raw.material_browse_mode : DEFAULTS.material_browse_mode,
       timetable_text_align: TEXT_ALIGNS[raw.timetable_text_align] ? raw.timetable_text_align : DEFAULTS.timetable_text_align
     };
   }
@@ -31,6 +33,7 @@
     return !!left && !!right && left.home_layout === right.home_layout &&
       left.color_theme === right.color_theme && left.mobile_nav === right.mobile_nav &&
       left.default_view === right.default_view &&
+      left.material_browse_mode === right.material_browse_mode &&
       left.timetable_text_align === right.timetable_text_align;
   }
 
@@ -117,6 +120,7 @@
         effective_theme: effectiveTheme,
         mobile_nav: next.mobile_nav,
         default_view: next.default_view,
+        material_browse_mode: next.material_browse_mode,
         timetable_text_align: next.timetable_text_align,
         previous: previous,
       }
@@ -190,6 +194,11 @@
       button.classList.toggle('is-selected', selected);
       button.setAttribute('aria-pressed', selected ? 'true' : 'false');
     });
+    panel.querySelectorAll('[data-appearance-browse-mode]').forEach(function (button) {
+      var selected = value.material_browse_mode === button.getAttribute('data-appearance-browse-mode');
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
     panel.querySelectorAll('[data-appearance-text-align]').forEach(function (button) {
       var selected = value.timetable_text_align === button.getAttribute('data-appearance-text-align');
       button.classList.toggle('is-selected', selected);
@@ -223,6 +232,13 @@
         '<span class="appearance-entry-preview"><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#' + icon + '"></use></svg></span>' +
         '<span><strong>' + title + '</strong><small>' + description + '</small></span></button>';
     };
+    var browseModeButton = function (id, title, description, icon) {
+      return '<button type="button" class="appearance-choice appearance-entry-choice' +
+        (value.material_browse_mode === id ? ' is-selected' : '') + '" data-appearance-browse-mode="' + id + '" aria-pressed="' +
+        (value.material_browse_mode === id ? 'true' : 'false') + '">' +
+        '<span class="appearance-entry-preview"><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#' + icon + '"></use></svg></span>' +
+        '<span><strong>' + title + '</strong><small>' + description + '</small></span></button>';
+    };
     var themeButton = function (id, title, colors) {
       return '<button type="button" class="appearance-choice appearance-theme-choice' +
         (value.color_theme === id ? ' is-selected' : '') + '" data-appearance-theme="' + id + '" aria-pressed="' +
@@ -248,6 +264,10 @@
         textAlignButton('left', '靠左', '保持现有课表阅读方式') +
         textAlignButton('center', '居中', '标题与教室信息居中') +
         textAlignButton('right', '靠右', '标题与教室信息靠右') +
+      '</div></fieldset>' +
+      '<fieldset class="appearance-fieldset"><legend>资料浏览方式</legend><div class="appearance-choice-grid appearance-entry-grid">' +
+        browseModeButton('directory', '课程目录', '按学院、专业、课程层层进入', 'ui-icon-folder') +
+        browseModeButton('plaza', '资料广场', '在当前范围直接浏览资料卡片', 'ui-icon-layers') +
       '</div></fieldset>' +
       '<fieldset class="appearance-fieldset"><legend>打开时进入</legend><div class="appearance-choice-grid appearance-entry-grid">' +
         defaultViewButton('home', '首页', '先看公告、入口和资料推荐', 'ni-home') +
@@ -286,6 +306,16 @@
         setAppearance('default_view', button.getAttribute('data-appearance-default-view'));
       });
     });
+    panel.querySelectorAll('[data-appearance-browse-mode]').forEach(function (button) {
+      var selected = value.material_browse_mode === button.getAttribute('data-appearance-browse-mode');
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+    panel.querySelectorAll('[data-appearance-browse-mode]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setAppearance('material_browse_mode', button.getAttribute('data-appearance-browse-mode'));
+      });
+    });
     panel.querySelectorAll('[data-appearance-text-align]').forEach(function (button) {
       button.addEventListener('click', function () {
         setAppearance('timetable_text_align', button.getAttribute('data-appearance-text-align'));
@@ -321,11 +351,12 @@
 
   function setAppearance(field, value) {
     if (field !== 'home_layout' && field !== 'color_theme' && field !== 'mobile_nav' &&
-        field !== 'default_view' && field !== 'timetable_text_align') return;
+        field !== 'default_view' && field !== 'material_browse_mode' && field !== 'timetable_text_align') return;
     if (field === 'home_layout' && !LAYOUTS[value]) return;
     if (field === 'color_theme' && !THEMES[value]) return;
     if (field === 'mobile_nav' && !NAVS[value]) return;
     if (field === 'default_view' && !DEFAULT_VIEWS[value]) return;
+    if (field === 'material_browse_mode' && !BROWSE_MODES[value]) return;
     if (field === 'timetable_text_align' && !TEXT_ALIGNS[value]) return;
     var next = current();
     next[field] = value;

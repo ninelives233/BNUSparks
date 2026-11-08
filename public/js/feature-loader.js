@@ -93,7 +93,7 @@
   //        结果页演示。旧 v1 搜索接口与上传选课浮层保持不变。
   // v354：身份用户列表面板重排——行改为昵称+学号+年级徽标，未设昵称回退学号
   //        而非邮箱全串，去裸邮箱；身份网格 align-items:start 消除长列拉伸空白。
-  var VERSION = '354';
+  var VERSION = '355';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -133,6 +133,11 @@
       'classrooms.js',
       'timetable.js'
     ],
+    // v355：资料广场（/plaza）——当前目录范围的卡片、面包屑、课程树与筛选
+    plaza: [
+      'explorer-upload.js',
+      'materials-plaza.js'
+    ],
     // v350：独立搜索结果页（/search）——结果渲染、筛选、分页与账号隔离
     search: [
       'search.js'
@@ -153,6 +158,7 @@
     'admin-records': ['admin.css'],
     'admin-qa': ['admin.css', 'qa.css'],
     timetable: ['timetable.css', 'classrooms.css'],
+    plaza: ['plaza.css'],
     search: ['search.css'],
     // 演示 DOM 复用站点真实 class：教程需要 Explorer/问答/课表的业务 CSS 同源渲染
     // v350：教程搜索场景改用独立结果页演示（search.css 与业务同源）

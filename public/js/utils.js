@@ -328,8 +328,8 @@
     var dialog = _activeDialog;
     if (!dialog || !dialog.isConnected || getComputedStyle(dialog).display === 'none') return;
     if (event.key === 'Escape') {
-      // .tutorial-close：教程浮窗复用同一套 Escape 关闭链（v324）
-      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close,.mf-sheet-close');
+      // .tutorial-close,.plaza-close：教程浮窗复用同一套 Escape 关闭链（v324）
+      var close = dialog.querySelector('.modal-close,.rd-close,.search-overlay-close,.campus-manager-close,.course-switch-close,.campus-more-close,.notif-drawer-close,.tutorial-close,.plaza-close,.mf-sheet-close');
       if (close) { event.preventDefault(); close.click(); }
       return;
     }
@@ -452,6 +452,19 @@
       var p = (state && state.expPath) || [];
       return p.length ? '/explorer/' + p.map(encodeURIComponent).join('/') : '/explorer';
     }
+    // 资料广场：目录范围与筛选/分页全部进 URL，刷新、分享和返回可恢复。
+    if (view === 'plaza') {
+      var pp = '/plaza';
+      var pq = [];
+      if (state && state.categoryId) pq.push('category_id=' + parseInt(state.categoryId, 10));
+      if (state && state.q) pq.push('q=' + encodeURIComponent(String(state.q).slice(0, 200)));
+      if (state && state.materialType) pq.push('material_type=' + parseInt(state.materialType, 10));
+      if (state && state.format) pq.push('format=' + encodeURIComponent(state.format));
+      if (state && state.favorites) pq.push('favorites=1');
+      if (state && state.sort && state.sort !== 'latest') pq.push('sort=' + encodeURIComponent(state.sort));
+      if (state && state.page && state.page > 1) pq.push('page=' + parseInt(state.page, 10));
+      return pq.length ? pp + '?' + pq.join('&') : pp;
+    }
     if (view === 'userPublic') return state && state.userId ? '/user/' + state.userId : null;
     if (view === 'timetable' && state && state.userId) return '/timetable/user/' + state.userId;
     if (view === 'fileDetail') return state && state.fileId ? '/file/' + state.fileId : null;
@@ -537,6 +550,30 @@
     var segs = path.split('/').filter(Boolean).map(decodeURIComponent);
     var head = segs[0];
     if (head === 'explorer') return { view: 'explorer', expPath: segs.slice(1) };
+    if (head === 'plaza') {
+      var plazaRoute = {
+        view: 'plaza', categoryId: null, q: '',
+        materialType: null, format: '', favorites: false,
+        sort: 'latest', page: 1,
+      };
+      try {
+        var psp = new URLSearchParams(location.search);
+        var pcid = parseInt(psp.get('category_id'), 10);
+        if (pcid >= 1) plazaRoute.categoryId = pcid;
+        var pqRaw = (psp.get('q') || '').trim();
+        if (pqRaw) plazaRoute.q = pqRaw.slice(0, 200);
+        var pmt = parseInt(psp.get('material_type'), 10);
+        if (pmt >= 1) plazaRoute.materialType = pmt;
+        var pfmt = (psp.get('format') || '').toLowerCase().replace(/^\./, '').trim().slice(0, 20);
+        if (pfmt) plazaRoute.format = pfmt;
+        plazaRoute.favorites = psp.get('favorites') === '1' || psp.get('favorites') === 'true';
+        var pSort = psp.get('sort') || '';
+        if (pSort === 'downloads' || pSort === 'favorites' || pSort === 'latest') plazaRoute.sort = pSort;
+        var pPage = parseInt(psp.get('page'), 10);
+        if (pPage >= 1) plazaRoute.page = pPage;
+      } catch (e) { /* URLSearchParams 不可用时保持缺省 */ }
+      return plazaRoute;
+    }
     if (head === 'user') {
       var uid = parseInt(segs[1], 10);
       return uid ? { view: 'userPublic', userId: uid } : null;

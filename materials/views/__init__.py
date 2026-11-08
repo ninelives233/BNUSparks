@@ -32,6 +32,9 @@ from .courses import (
     api_search, api_stats, api_colleges,
 )
 
+# 资料广场（目录范围资料列表 + 课程导航）
+from .plaza import api_plaza_materials, api_course_navigation
+
 # 文件操作
 from .files import (
     api_file_upload, api_file_upload_text,

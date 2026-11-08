@@ -23,6 +23,7 @@ urlpatterns = [
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
     path("courses/tree/", views.api_course_tree, name="api_course_tree"),
+    path("courses/navigation/", views.api_course_navigation, name="api_course_navigation"),
     path("courses/timetable-summary/", views.api_course_timetable_summary, name="api_course_timetable_summary"),
     path("courses/request/", views.api_course_request_create, name="api_course_request_create"),
     path("courses/request/check/", views.api_course_request_check, name="api_course_request_check"),
@@ -33,6 +34,7 @@ urlpatterns = [
     path("courses/<str:course_code>/favorite/", views.api_course_favorite_toggle, name="api_course_favorite_toggle"),
 
     # 文件
+    path("materials/", views.api_plaza_materials, name="api_plaza_materials"),
     path("files/upload/", views.api_file_upload, name="api_file_upload"),
     path("files/upload-text/", views.api_file_upload_text, name="api_file_upload_text"),
     path("files/<int:file_id>/download/", views.api_file_download, name="api_file_download"),
