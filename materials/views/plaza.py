@@ -182,6 +182,7 @@ def _scoped_course_ids(cat_id, catalog):
     courses = catalog["courses"]
     selected = set()
     prefixes = []
+    exact_patterns = []
     stack = [cat_id]
     while stack:
         node_id = stack.pop()
@@ -190,15 +191,18 @@ def _scoped_course_ids(cat_id, catalog):
             continue
         if cat["course_id"]:
             selected.add(cat["course_id"])
-        pattern = (cat["course_text"] or "").replace("*", "").replace("-", "")
+        raw_pattern = (cat["course_text"] or "").strip()
+        pattern = raw_pattern.replace("*", "").replace("-", "")
         if pattern:
             prefixes.append(pattern)
+        if raw_pattern:
+            exact_patterns.append(raw_pattern)
         stack.extend(children.get(node_id, []))
 
-    if prefixes:
+    if prefixes or exact_patterns:
         for course_id, course in courses.items():
             code = course["code"] or ""
-            if any(code.startswith(pattern) for pattern in prefixes):
+            if any(code.startswith(pattern) for pattern in prefixes) or code in exact_patterns:
                 selected.add(course_id)
 
     normalized = {
@@ -301,8 +305,10 @@ def api_plaza_materials(request):
 
     materials = Material.objects.filter(
         course_id__in=course_ids,
-        review_status="approved",
-    ).select_related("course", "material_type", "uploader", "uploader__profile")
+        is_approved=True,
+    ).exclude(review_status="rejected").select_related(
+        "course", "material_type", "uploader", "uploader__profile"
+    )
 
     query = request.GET.get("q", "").strip()[:200]
     if query:

@@ -76,6 +76,34 @@ class PlazaApiTest(BnuTestCase):
         self.assertEqual(data["total"], 2)
         self.assertIn("uploader_avatar", data["items"][0])
 
+    def test_parent_scope_includes_all_descendant_courses(self):
+        data = self._materials(category_id=self.root_major.id)
+        ids = {item["id"] for item in data["items"]}
+        self.assertEqual(ids, {self.mat_a.id, self.mat_b.id, self.mat_other.id})
+        self.assertNotIn(self.mat_gen.id, ids)
+
+    def test_course_text_exact_course_code_in_scope(self):
+        range_cat = create_category(
+            name="形势与政策", parent=self.other_cat, course_text="GEN09001-GEN09008",
+        )
+        range_course = create_course("GEN09001-GEN09008", "形势与政策")
+        material = self._material(range_course, "形势与政策资料")
+        ids = {item["id"] for item in self._materials(category_id=range_cat.id)["items"]}
+        self.assertEqual(ids, {material.id})
+
+    def test_legacy_approved_flag_matches_public_course_visibility(self):
+        legacy = self._material(self.course_a, "旧版已公开资料")
+        legacy.review_status = "pending"
+        legacy.is_approved = True
+        legacy.save(update_fields=["review_status", "is_approved"])
+        rejected = self._material(self.course_a, "已驳回资料")
+        rejected.review_status = "rejected"
+        rejected.is_approved = True
+        rejected.save(update_fields=["review_status", "is_approved"])
+        ids = {item["id"] for item in self._materials()["items"]}
+        self.assertIn(legacy.id, ids)
+        self.assertNotIn(rejected.id, ids)
+
     def test_wildcard_scope_and_empty_scope(self):
         data = self._materials(category_id=self.root_gen.id)
         self.assertEqual({item["id"] for item in data["items"]}, {self.mat_gen.id})
