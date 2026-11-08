@@ -391,6 +391,7 @@
     }
     options = options || {};
     var returnSearch = options.returnSearch || null;
+    var returnPlaza = options.returnPlaza || null;
     // 保存当前侧边栏状态，保持高亮不丢失
     var al = document.querySelector('.side-nav a.active');
     _fdPrevSidebar = al ? al.getAttribute('data-view') : null;
@@ -410,12 +411,14 @@
         updateSidebar(_fdPrevSidebar);
         var asyncExtra = { fileId: fid, prevView: _fdPrevSidebar };
         if (returnSearch) asyncExtra.returnSearch = returnSearch;
+        if (returnPlaza) asyncExtra.returnPlaza = returnPlaza;
         var asyncSeq = pushViewState('fileDetail', asyncExtra, false, departY);
         if (returnSearch) {
           window._bnuSearchReturn = { detailSeq: asyncSeq, stale: false };
         }
         api('/api/files/' + fid + '/').then(function(fullFile) {
           if (!_fdLoadIsCurrent(fid)) return; // 已离开详情或切到别的资料：迟到响应不覆盖当前页面
+          fullFile._returnPlaza = returnPlaza || null;
           _currentDetailFile = fullFile;
           var v = document.getElementById('fileDetailView');
           if (v) { v.style.display = 'block'; v.classList.add('active'); }
@@ -438,6 +441,10 @@
             }
             return;
           }
+          if (returnPlaza && returnPlaza.categoryId && window.BnuPlaza) {
+            window.BnuPlaza.show({ categoryId: returnPlaza.categoryId, keepFilters: true, page: 1 });
+            return;
+          }
           if (file.course_code) {
             var t = file.course_code.startsWith('GEN') ? '通识课' : '专业课';
             showExplorer(t);
@@ -449,6 +456,7 @@
         return;
       }
     }
+    file._returnPlaza = returnPlaza || null;
     _currentDetailFile = file;
     document.querySelectorAll('.view-section').forEach(function(v) {
       v.style.display = 'none';
@@ -465,6 +473,7 @@
     scrollToInstant(0);
     var extra = { fileId: file.id, prevView: _fdPrevSidebar };
     if (returnSearch) extra.returnSearch = returnSearch;
+    if (returnPlaza) extra.returnPlaza = returnPlaza;
     var seq = pushViewState('fileDetail', extra, false, departY);
     if (returnSearch) {
       window._bnuSearchReturn = { detailSeq: seq, stale: false };
@@ -477,31 +486,54 @@
     _renderFdReturnSearch();
     var bc = document.getElementById('fdBreadcrumb');
     if (bc) {
-      var treePath = null;
-      // 优先用当前导航上下文（expPath），验证最后一个节点是否匹配课程
-      if (expPath && expPath.length > 0) {
-        var lastNode = getNode(expPath);
-        if (lastNode && lastNode.courseId === file.course_code) {
-          treePath = expPath.slice();
-        }
-      }
-      // 回退到全局树搜索
-      if (!treePath) {
-        treePath = findPathByCourseId(file.course_code || '');
-      }
-      if (treePath && treePath.length > 0) {
-        _fdBreadcrumbPath = treePath;
-        _renderBreadcrumb(bc, treePath, {
-          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
+      var plazaReturn = file._returnPlaza;
+      if (plazaReturn && plazaReturn.path && plazaReturn.path.length) {
+        var plazaPath = plazaReturn.path.map(function (level) { return level.name; });
+        _fdBreadcrumbPath = plazaPath;
+        _renderBreadcrumb(bc, plazaPath, {
+          onNavigate: function (depth) {
+            var level = plazaReturn.path[depth - 1];
+            if (!level) return;
+            var enter = function () {
+              if (window.BnuPlaza) {
+                window.BnuPlaza.show({ categoryId: level.id, keepFilters: true, page: 1 });
+              } else {
+                navToFdBreadcrumbDepth(depth);
+              }
+            };
+            if (window.BnuPlaza) enter();
+            else if (typeof ensureFeature === 'function') ensureFeature('plaza').then(enter, function () { navToFdBreadcrumbDepth(depth); });
+            else navToFdBreadcrumbDepth(depth);
+          },
           tailStatic: '文件详情'
         });
       } else {
-        var type = file.course_code && file.course_code.startsWith('GEN') ? '通识课' : '专业课';
-        _fdBreadcrumbPath = [type, file.course_name || ''];
-        _renderBreadcrumb(bc, _fdBreadcrumbPath, {
-          onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
-          tailStatic: '文件详情'
-        });
+        var treePath = null;
+        // 优先用当前导航上下文（expPath），验证最后一个节点是否匹配课程
+        if (expPath && expPath.length > 0) {
+          var lastNode = getNode(expPath);
+          if (lastNode && lastNode.courseId === file.course_code) {
+            treePath = expPath.slice();
+          }
+        }
+        // 回退到全局树搜索
+        if (!treePath) {
+          treePath = findPathByCourseId(file.course_code || '');
+        }
+        if (treePath && treePath.length > 0) {
+          _fdBreadcrumbPath = treePath;
+          _renderBreadcrumb(bc, treePath, {
+            onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
+            tailStatic: '文件详情'
+          });
+        } else {
+          var type = file.course_code && file.course_code.startsWith('GEN') ? '通识课' : '专业课';
+          _fdBreadcrumbPath = [type, file.course_name || ''];
+          _renderBreadcrumb(bc, _fdBreadcrumbPath, {
+            onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
+            tailStatic: '文件详情'
+          });
+        }
       }
     }
     var canEdit = currentUser && !_civilianMode && (file.is_uploader || (file.can_delete && currentUser.role !== 'user'));

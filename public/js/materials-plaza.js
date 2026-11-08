@@ -302,9 +302,9 @@
     show(options);
   }
 
-  function switchToDirectory() {
+  function switchToDirectory(skipPreference) {
     saveSession();
-    if (typeof setAppearance === 'function') setAppearance('material_browse_mode', 'directory');
+    if (!skipPreference && typeof setAppearance === 'function') setAppearance('material_browse_mode', 'directory');
     var path = _nav && _nav.path.length ? _nav.path.map(function (level) { return level.name; }) : [rangeOfNav()];
     if (typeof showExplorerPath === 'function') showExplorerPath(path);
   }
@@ -608,6 +608,16 @@
     show({ categoryId: categoryId, keepFilters: true, page: 1, replace: !!replace });
   }
 
+  function returnToPlazaState() {
+    var path = (_nav && _nav.path ? _nav.path : []).map(function (level) {
+      return { id: level.id, name: level.name };
+    });
+    if (!path.length && _state.categoryId) {
+      path = [{ id: _state.categoryId, name: _nav ? _nav.name : '资料广场' }];
+    }
+    return { categoryId: _state.categoryId, path: path };
+  }
+
   function openDetail(fileId) {
     if (!currentUser) { showLoginModal(); return; }
     var item = _items.filter(function (row) { return row.id === fileId; })[0];
@@ -617,7 +627,7 @@
       title: item ? item.title : '',
       course_code: item ? item.course_code : '',
       course_name: item ? item.course_name : '',
-    });
+    }, { returnPlaza: returnToPlazaState() });
   }
 
   function toggleFavorite(fileId, button) {
@@ -873,6 +883,7 @@
     getState: function () { return Object.assign({}, _state); },
     getCategoryId: function () { return _state.categoryId; },
     getRange: function () { return rangeOfNav(); },
+    switchToDirectory: switchToDirectory,
     reload: loadMaterials,
   };
   window.closePlazaOverlay = closeOverlay;

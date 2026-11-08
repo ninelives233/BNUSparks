@@ -642,10 +642,10 @@
   }
 
   // ── 资料区切换条：课程范围 + 浏览方式 ──
-  function openPlazaFromExplorer() {
+  function openPlazaFromExplorer(skipPreference) {
     var range = expPath[0] === '专业课' ? '专业课' : '通识课';
     saveScopePosition('directory', range, { path: expPath.slice() });
-    if (typeof setAppearance === 'function') setAppearance('material_browse_mode', 'plaza');
+    if (!skipPreference && typeof setAppearance === 'function') setAppearance('material_browse_mode', 'plaza');
     var node = getNode(expPath);
     var options = node && node.id ? { categoryId: node.id, courseType: range } : { courseType: range };
     var enter = function () {

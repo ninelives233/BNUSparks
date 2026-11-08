@@ -346,7 +346,9 @@ window.addEventListener('popstate', async function(e) {
       // 列表）。与下方 D5 静态视图重入同款压栈处理。
       _suppressingPushState = true;
       try {
-        var _fdOptions = state.returnSearch ? { returnSearch: state.returnSearch } : {};
+        var _fdOptions = {};
+        if (state.returnSearch) _fdOptions.returnSearch = state.returnSearch;
+        if (state.returnPlaza) _fdOptions.returnPlaza = state.returnPlaza;
         // 尝试从文件缓存恢复
         if (window._fileLookup && window._fileLookup[state.fileId]) {
           showFileDetail(window._fileLookup[state.fileId], _fdOptions);
@@ -486,8 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 资料详情刷新：仅从路由目标一致的 session 快照恢复 returnSearch
     //（owner 一致性由按钮渲染与 BnuSearch 校验，URL 的 fileId 永远优先）
     if (route.view === 'fileDetail' && stored && stored._bnusparks &&
-        stored.view === 'fileDetail' && stored.fileId === route.fileId && stored.returnSearch) {
-      saved.returnSearch = stored.returnSearch;
+        stored.view === 'fileDetail' && stored.fileId === route.fileId) {
+      if (stored.returnSearch) saved.returnSearch = stored.returnSearch;
+      if (stored.returnPlaza) saved.returnPlaza = stored.returnPlaza;
     }
   } else {
     saved = stored;
@@ -675,7 +678,9 @@ document.addEventListener('DOMContentLoaded', () => {
         case 'myfavorites': showMyFavoritesPage(saved.myFavoriteTab); break;
         case 'fileDetail':
           // 尝试从文件缓存恢复，否则从 API 获取；搜索来源随条目透传
-          var _fdRestoreOptions = saved.returnSearch ? { returnSearch: saved.returnSearch } : {};
+          var _fdRestoreOptions = {};
+          if (saved.returnSearch) _fdRestoreOptions.returnSearch = saved.returnSearch;
+          if (saved.returnPlaza) _fdRestoreOptions.returnPlaza = saved.returnPlaza;
           if (window._fileLookup && saved.fileId && window._fileLookup[saved.fileId]) {
             showFileDetail(window._fileLookup[saved.fileId], _fdRestoreOptions);
           } else if (saved.fileId) {

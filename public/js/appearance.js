@@ -313,7 +313,10 @@
     });
     panel.querySelectorAll('[data-appearance-browse-mode]').forEach(function (button) {
       button.addEventListener('click', function () {
-        setAppearance('material_browse_mode', button.getAttribute('data-appearance-browse-mode'));
+        var value = button.getAttribute('data-appearance-browse-mode');
+        var previous = current().material_browse_mode;
+        setAppearance('material_browse_mode', value);
+        if (previous !== value) applyBrowseModeView(value);
       });
     });
     panel.querySelectorAll('[data-appearance-text-align]').forEach(function (button) {
@@ -325,6 +328,27 @@
     if (reset) reset.addEventListener('click', function () { setAppearanceValue(DEFAULTS); });
     updateChoiceStates();
     if (_appearanceContext && _appearanceContext.error) setStatus('保存失败：' + _appearanceContext.error, 'error');
+  }
+
+  function leaveAppearanceSurface() {
+    var drawer = document.getElementById('notifDrawer');
+    if (!drawer || drawer.style.display !== 'flex') return;
+    if (typeof closeNotifDrawerAndGo === 'function') closeNotifDrawerAndGo();
+    else if (typeof closeNotifDrawer === 'function') closeNotifDrawer();
+  }
+
+  function applyBrowseModeView(mode) {
+    var explorer = document.getElementById('explorerView');
+    var plaza = document.getElementById('plazaView');
+    if (mode === 'plaza' && explorer && explorer.classList.contains('active') &&
+        typeof openPlazaFromExplorer === 'function') {
+      leaveAppearanceSurface();
+      openPlazaFromExplorer(true);
+    } else if (mode === 'directory' && plaza && plaza.classList.contains('active') &&
+        window.BnuPlaza && typeof window.BnuPlaza.switchToDirectory === 'function') {
+      leaveAppearanceSurface();
+      window.BnuPlaza.switchToDirectory(true);
+    }
   }
 
   function setAppearanceValue(value) {
