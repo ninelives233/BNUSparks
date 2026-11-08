@@ -529,6 +529,7 @@
   .course-root-tab {
     border: 0; border-radius: 8px; padding: 6px 14px;
     color: var(--ink-faint); background: transparent; font: inherit; font-size: var(--fs-sm); cursor: pointer;
+    white-space: nowrap;
   }
   .course-root-tab:hover { color: var(--primary); background: var(--primary-surface); }
   .course-root-tab.is-active { color: var(--primary-dark); background: var(--primary-surface); font-weight: 700; }

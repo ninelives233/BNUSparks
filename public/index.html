@@ -56,11 +56,11 @@
   }
 </script>
 <link rel="stylesheet" href="/static/css/tokens.css?v=307">
-<link rel="stylesheet" href="/static/css/base.css?v=329">
+<link rel="stylesheet" href="/static/css/base.css?v=357">
 <link rel="stylesheet" href="/static/css/user.css?v=214">
-<link rel="stylesheet" href="/static/css/files.css?v=343">
+<link rel="stylesheet" href="/static/css/files.css?v=357">
 <link rel="stylesheet" href="/static/css/announcement.css?v=188">
-<link rel="stylesheet" href="/static/css/components.css?v=355">
+<link rel="stylesheet" href="/static/css/components.css?v=357">
 </head>
 <body>
 
@@ -493,7 +493,6 @@
 <!-- ═══ Explorer View ═══ -->
 <div class="view-section" id="explorerView">
   <div class="explorer-view">
-      <div class="explorer-browse-bar" id="explorerBrowseBar" aria-label="资料区切换"></div>
       <nav class="page-navigation explorer-top-row" aria-label="当前位置">
         <div class="breadcrumb" id="breadcrumb"></div>
         <div class="explorer-compact-heading" id="explorerCompactHeading" aria-live="polite" hidden></div>
@@ -510,10 +509,12 @@
 <!-- ═══ 资料广场 View ═══ -->
 <div class="view-section" id="plazaView">
   <div class="plaza-view">
-      <div class="explorer-browse-bar" id="plazaBrowseBar" aria-label="资料区切换"></div>
       <nav class="page-navigation plaza-top-row" aria-label="资料广场位置">
         <div class="breadcrumb plaza-breadcrumb" id="plazaBreadcrumb"></div>
-        <div class="plaza-tree-host" id="plazaTreeHost"></div>
+        <div class="plaza-top-actions">
+          <div class="plaza-switch-bar" id="plazaBrowseBar" aria-label="资料区切换"></div>
+          <div class="plaza-tree-host" id="plazaTreeHost"></div>
+        </div>
       </nav>
       <div class="container">
         <div class="plaza-content" id="plazaContent"></div>
@@ -1672,19 +1673,19 @@
 <!-- ═══ Scripts ═══ -->
 <script src="/static/js/utils.js?v=355" defer></script>
 <script src="/static/js/monitoring-events.js?v=300" defer></script>
-<script src="/static/js/appearance.js?v=12" defer></script>
+<script src="/static/js/appearance.js?v=13" defer></script>
 <script src="/static/js/auth.js?v=345" defer></script>
 <script src="/static/js/profile.js?v=222" defer></script>
 <script src="/static/js/notifications.js?v=307" defer></script>
 <script src="/static/js/admin-core.js?v=301" defer></script>
-<script src="/static/js/views.js?v=355" defer></script>
+<script src="/static/js/views.js?v=357" defer></script>
 <script src="/static/js/tutorial-entry.js?v=355" defer></script>
-<script src="/static/js/explorer-core.js?v=355" defer></script>
+<script src="/static/js/explorer-core.js?v=357" defer></script>
 <script src="/static/js/explorer-file.js?v=354" defer></script>
 <script src="/static/js/explorer-preview.js?v=341" defer></script>
 <script src="/static/js/home.js?v=327" defer></script>
-<script src="/static/js/feature-loader.js?v=356" defer></script>
-<script src="/static/js/app.js?v=355" defer></script>
+<script src="/static/js/feature-loader.js?v=357" defer></script>
+<script src="/static/js/app.js?v=357" defer></script>
 
 </body>
 </html>

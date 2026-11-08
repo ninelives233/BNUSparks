@@ -1411,8 +1411,7 @@
       return '<button type="button" class="browse-switch-btn' + (active ? ' is-active' : '') +
         '" data-browse-mode="' + value + '" aria-pressed="' + active + '">' + label + '</button>';
     };
-    return '<span class="browse-title">全部课程</span>' +
-      '<div class="browse-switcher" role="group" aria-label="课程范围">' +
+    return '<div class="browse-switcher" role="group" aria-label="课程范围">' +
         rangeButton('通识课') + rangeButton('专业课') +
       '</div>' +
       '<div class="browse-switcher" role="group" aria-label="资料浏览方式">' +

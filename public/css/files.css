@@ -189,6 +189,38 @@
   outline: 2px solid oklch(from var(--primary) l c h / 0.45);
   outline-offset: 2px;
 }
+/* 目录页到资料广场的轻量入口：保留原顶部操作组的视觉重量 */
+.explorer-view .explorer-top-actions .explorer-plaza-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.explorer-view .explorer-top-actions .explorer-plaza-link:hover {
+  color: var(--primary);
+  background: var(--primary-surface);
+}
+.explorer-view .explorer-top-actions .explorer-plaza-link:focus-visible {
+  outline: 2px solid oklch(from var(--primary) l c h / 0.45);
+  outline-offset: 2px;
+}
+.explorer-view .explorer-top-actions .explorer-plaza-link .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+@media (max-width: 640px) {
+  /* 窄屏保持原「根页签 + 新建课程」操作组宽度；模式入口回到外观设置。 */
+  .explorer-view .explorer-top-actions .explorer-plaza-link { display: none; }
+}
 /* 管理按钮同槽位同造型（保留琥珀管理组语义色）；补 1px 同色描边对齐相邻按钮的盒高 */
 .explorer-view .explorer-top-actions .mgmt-new-btn {
   padding: 6px 13px;

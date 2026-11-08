@@ -35,7 +35,14 @@
   cursor: pointer;
 }
 .plaza-crumb-toggle:hover { color: var(--primary); background: var(--primary-surface); }
-.plaza-tree-host { margin-left: auto; }
+.plaza-top-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.plaza-tree-host { margin-left: 0; }
 .plaza-tree-btn {
   display: inline-flex;
   align-items: center;
@@ -549,7 +556,8 @@ html[data-bnu-theme="dark"] .plaza-sheet-fields select { background-color: var(-
 }
 @media (max-width: 768px) {
   .plaza-top-row { padding-top: 10px; }
-  .plaza-tree-host { margin-left: 0; width: 100%; }
+  .plaza-top-actions { width: 100%; margin-left: 0; }
+  .plaza-tree-host { width: auto; }
   .plaza-toolbar { gap: 8px; }
   .plaza-share { padding: 8px 12px; }
   .plaza-selects { display: none; }

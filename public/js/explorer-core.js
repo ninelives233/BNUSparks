@@ -657,22 +657,24 @@
     else enter();
   }
 
-  function renderExplorerBrowseBar() {
-    var host = document.getElementById('explorerBrowseBar');
-    if (!host) return;
-    var range = expPath[0] === '专业课' ? '专业课' : '通识课';
-    host.innerHTML = browseSwitcherHtml('directory', range);
-    bindBrowseSwitcher(host, {
-      range: navigateDirectoryToRange,
-      mode: function (mode) {
-        if (mode === 'plaza') openPlazaFromExplorer();
-      }
-    });
+  function renderPlazaModeLink(actionGroup, before) {
+    var link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'explorer-plaza-link';
+    link.innerHTML = iconSvg('layers') + '<span>资料广场</span>';
+    link.setAttribute('aria-label', '切换到资料广场');
+    link.onclick = function (event) {
+      event.stopPropagation();
+      openPlazaFromExplorer();
+    };
+    if (before && before.parentNode === actionGroup) actionGroup.insertBefore(link, before);
+    else actionGroup.appendChild(link);
+    actionGroup.hidden = false;
+    return link;
   }
 
   // ── Breadcrumb ──
   function renderBC() {
-    renderExplorerBrowseBar();
     renderCourseNav();
     const el = document.getElementById('breadcrumb');
     _renderBreadcrumb(el, expPath, {
@@ -694,6 +696,8 @@
     if (oldBtn) oldBtn.remove();
     const oldNewCourseBtn = actionGroup.querySelector(':scope > .explorer-newcourse-btn');
     if (oldNewCourseBtn) oldNewCourseBtn.remove();
+    const oldPlazaLink = actionGroup.querySelector(':scope > .explorer-plaza-link');
+    if (oldPlazaLink) oldPlazaLink.remove();
     topRow.classList.remove('has-mgmt-new');
     if (isMgmtActive()) {
       const node = getNode(expPath);
@@ -713,6 +717,9 @@
         actionGroup.appendChild(newBtn);
         actionGroup.hidden = false;
         topRow.classList.add('has-mgmt-new');
+        renderPlazaModeLink(actionGroup, newBtn);
+      } else {
+        renderPlazaModeLink(actionGroup);
       }
     } else {
       // 普通浏览模式：目录工具栏提供「新建课程」申请入口（申请页内自选归属位置）；
@@ -727,15 +734,32 @@
         newCourseBtn.onclick = function(e) { e.stopPropagation(); openNewCourseEntry(); };
         actionGroup.appendChild(newCourseBtn);
         actionGroup.hidden = false;
+        renderPlazaModeLink(actionGroup, newCourseBtn);
+      } else {
+        renderPlazaModeLink(actionGroup);
       }
     }
   }
 
   function renderCourseNav() {
-    // 课程类型切换已由顶部「全部课程」切换条统一承担；这里只保留原容器，
-    // 让新建课程/管理入口仍能使用 explorerTopActions。
     var host = document.getElementById('courseNavBar');
-    if (host) host.innerHTML = '';
+    if (!host) return;
+    var root = expPath[0] === '专业课' ? '专业课' : '通识课';
+    if (expPath.length > 1) {
+      host.innerHTML = '';
+      return;
+    }
+    host.innerHTML = '<div class="course-root-tabs" role="tablist" aria-label="课程类型">' +
+      '<button type="button" role="tab" data-course-root="通识课" aria-selected="' + (root === '通识课') + '" class="course-root-tab' + (root === '通识课' ? ' is-active' : '') + '">通识课</button>' +
+      '<button type="button" role="tab" data-course-root="专业课" aria-selected="' + (root === '专业课') + '" class="course-root-tab' + (root === '专业课' ? ' is-active' : '') + '">专业课</button>' +
+    '</div>';
+    host.querySelectorAll('[data-course-root]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var root = button.getAttribute('data-course-root');
+        if (typeof navigateDirectoryToRange === 'function') navigateDirectoryToRange(root);
+        else if (typeof showExplorer === 'function') showExplorer(root);
+      });
+    });
   }
 
   function openCourseSwitchPanel() {

@@ -236,7 +236,7 @@
       return '<button type="button" class="appearance-choice appearance-entry-choice' +
         (value.material_browse_mode === id ? ' is-selected' : '') + '" data-appearance-browse-mode="' + id + '" aria-pressed="' +
         (value.material_browse_mode === id ? 'true' : 'false') + '">' +
-        '<span class="appearance-entry-preview"><svg aria-hidden="true" viewBox="0 0 24 24"><use href="#' + icon + '"></use></svg></span>' +
+        '<span class="appearance-entry-preview">' + iconSvg(icon) + '</span>' +
         '<span><strong>' + title + '</strong><small>' + description + '</small></span></button>';
     };
     var themeButton = function (id, title, colors) {
@@ -266,8 +266,8 @@
         textAlignButton('right', '靠右', '标题与教室信息靠右') +
       '</div></fieldset>' +
       '<fieldset class="appearance-fieldset"><legend>资料浏览方式</legend><div class="appearance-choice-grid appearance-entry-grid">' +
-        browseModeButton('directory', '课程目录', '按学院、专业、课程层层进入', 'ui-icon-folder') +
-        browseModeButton('plaza', '资料广场', '在当前范围直接浏览资料卡片', 'ui-icon-layers') +
+        browseModeButton('directory', '课程目录', '按学院、专业、课程层层进入', 'folder') +
+        browseModeButton('plaza', '资料广场', '在当前范围直接浏览资料卡片', 'layers') +
       '</div></fieldset>' +
       '<fieldset class="appearance-fieldset"><legend>打开时进入</legend><div class="appearance-choice-grid appearance-entry-grid">' +
         defaultViewButton('home', '首页', '先看公告、入口和资料推荐', 'ni-home') +

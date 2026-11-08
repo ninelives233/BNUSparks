@@ -9,7 +9,7 @@ document.addEventListener('click', function(e) {
   var t = e.target;
   if (t.closest('.side-nav a, .login-btn, '
       + '#loginModal, #registerModal, #forgotPwdModal, #resetPwdModal, .site-footer a, '
-      + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #plazaView, .plaza-overlay, .explorer-browse-bar, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
+      + '.header-logo-area, .hl-burger, #navDrawer, .home-nav-card, .hc-more, #qaView, #plazaView, .plaza-overlay, .plaza-switch-bar, .explorer-plaza-link, #courseNavBar, #mobileBottomNav, #otherView, #notifDrawer, .appearance-panel, '
       + '.guest-appearance-trigger, .compact-campus-link, .compact-campus-more, .compact-announcement-link, '
       + '.compact-recommend-more, .recommendations-page, .h8-carousel, .h8-carousel-ticks button, '
       + '.tutorial-overlay, .tutorial-dialog')) return; // v324：教程浮窗内部交互（暂停/翻页/关闭）不触发登录；去试试的权限由动作路由处理
