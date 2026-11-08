@@ -40,11 +40,12 @@
     text-decoration: none; line-height: 1;
   }
   .header-logo-area .hl-mark {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-    border-radius: var(--radius-sm); color: white; font-size: 0.75rem; font-weight: 700; font-family: var(--sans);
+    display: block; width: 30px; height: 30px; object-fit: cover;
+    border-radius: var(--radius-sm); background: #f8f5f0;
     flex-shrink: 0; margin-right: var(--space-sm); transition: border-radius 0.2s, transform 0.2s;
   }
+  html[data-bnu-theme="dark"] .hl-mark,
+  html[data-bnu-theme="dark"] .mobile-logo-mark { box-shadow: 0 0 0 1px oklch(1 0 0 / 0.16); }
   /* 汉堡导航按钮：外观调整选「汉堡菜单」时取代移动端星火图标的位置 */
   .hl-burger {
     display: none; align-items: center; justify-content: center;
@@ -420,10 +421,8 @@
       width: 44px; height: var(--header-height); flex-shrink: 0;
     }
     .mobile-logo-mark {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 26px; height: 26px; border-radius: var(--radius-sm);
-      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-      color: #fff; font-family: var(--sans); font-size: 0.7rem; font-weight: 700;
+      display: block; width: 26px; height: 26px; object-fit: cover;
+      border-radius: var(--radius-sm); background: #f8f5f0;
     }
     /* 汉堡菜单模式：顶部左上入口取代星火图标，底部导航退场 */
     html[data-bnu-nav="burger"] .hl-burger { display: inline-flex; }
