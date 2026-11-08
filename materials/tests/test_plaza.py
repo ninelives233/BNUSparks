@@ -74,6 +74,7 @@ class PlazaApiTest(BnuTestCase):
         self.assertNotIn(self.mat_gen.id, ids)
         self.assertNotIn(self.mat_other.id, ids)
         self.assertEqual(data["total"], 2)
+        self.assertIn("uploader_avatar", data["items"][0])
 
     def test_wildcard_scope_and_empty_scope(self):
         data = self._materials(category_id=self.root_gen.id)

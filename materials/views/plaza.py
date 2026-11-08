@@ -249,6 +249,7 @@ def _display_course(material, catalog):
 def _serialize_item(material, catalog, favorite_ids):
     course = _display_course(material, catalog)
     file_format = (material.file_type or Path(material.file_name or "").suffix.lstrip(".")).lower()
+    uploader_profile = getattr(material.uploader, "profile", None) if material.uploader else None
     return {
         "id": material.id,
         "title": material.title,
@@ -262,6 +263,7 @@ def _serialize_item(material, catalog, favorite_ids):
         "course_category_id": course["course_category_id"],
         "uploader": (material.uploader.first_name if material.uploader else material.uploader_name) or "匿名",
         "uploader_id": material.uploader_id or 0,
+        "uploader_avatar": uploader_profile.avatar.url if uploader_profile and uploader_profile.avatar else "",
         "created_at": material.created_at.strftime("%Y-%m-%d") if material.created_at else "",
         "download_count": material.download_count or 0,
         "favorite_count": material.favorite_count or 0,
@@ -300,7 +302,7 @@ def api_plaza_materials(request):
     materials = Material.objects.filter(
         course_id__in=course_ids,
         review_status="approved",
-    ).select_related("course", "material_type", "uploader")
+    ).select_related("course", "material_type", "uploader", "uploader__profile")
 
     query = request.GET.get("q", "").strip()[:200]
     if query:

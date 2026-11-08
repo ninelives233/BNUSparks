@@ -487,6 +487,16 @@
     renderPager(data.page, data.total_pages);
   }
 
+  function contributorHtml(item) {
+    var name = item.uploader || '匿名';
+    var initial = name.trim().charAt(0) || '匿';
+    var image = item.uploader_avatar
+      ? '<img src="' + esc(item.uploader_avatar) + '" alt="" loading="lazy" onerror="this.hidden=true">'
+      : '';
+    return '<span class="pc-contributor"><span class="pc-avatar" aria-hidden="true">' +
+      esc(initial) + image + '</span><span class="pc-uploader">' + esc(name) + '</span></span>';
+  }
+
   function cardHtml(item) {
     var favorite = item.is_favorited;
     var teacher = item.teacher ? ' · ' + esc(item.teacher) : '';
@@ -502,7 +512,7 @@
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
       '<div class="pc-course">' + course + (item.teacher ? '<span class="pc-teacher">' + teacher + '</span>' : '') + '</div>' +
-      '<div class="pc-meta"><span>' + esc(item.uploader) + '</span><span>' + esc(item.created_at) + '</span></div>' +
+      '<div class="pc-meta">' + contributorHtml(item) + '<span class="pc-date">' + esc(item.created_at) + '</span></div>' +
       '<div class="pc-foot">' +
         '<button type="button" class="pc-action" data-plaza-download="' + item.id + '" aria-label="下载 ' + esc(item.title) + '">' +
           FD_ICONS.download + '<span>' + item.download_count + '</span></button>' +
@@ -572,14 +582,31 @@
       }
 
       if (level.siblings && level.siblings.length > 1) {
-        var toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'plaza-crumb-toggle' + (isLast ? '' : ' bc-mid');
-        toggle.setAttribute('aria-label', '切换' + (index === 0 ? '课程范围' : level.name + '同级目录'));
-        toggle.setAttribute('aria-haspopup', 'menu');
-        toggle.innerHTML = '<span aria-hidden="true">▾</span>';
-        toggle.addEventListener('click', function () { openSiblingMenu(index, toggle); });
-        host.appendChild(toggle);
+        var switchWrap = document.createElement('span');
+        switchWrap.className = 'plaza-crumb-switch' + (isLast ? '' : ' bc-mid');
+        var arrow = document.createElement('span');
+        arrow.className = 'plaza-crumb-toggle';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '▾';
+        var select = document.createElement('select');
+        select.className = 'plaza-crumb-select';
+        select.setAttribute('aria-label', index === 0 ? '切换课程范围' : '切换' + level.name + '同级目录');
+        (level.siblings || []).forEach(function (sibling) {
+          var option = document.createElement('option');
+          option.value = sibling.id;
+          option.textContent = sibling.name || '未命名目录';
+          if (sibling.is_current) option.selected = true;
+          select.appendChild(option);
+        });
+        select.addEventListener('change', function () {
+          var id = parseInt(select.value, 10);
+          if (!id || id === level.id) return;
+          if (index === 0) switchPlazaRange(select.options[select.selectedIndex].textContent);
+          else navigateCategory(id);
+        });
+        switchWrap.appendChild(arrow);
+        switchWrap.appendChild(select);
+        host.appendChild(switchWrap);
       }
       if (index === lastMid && ellipsis) host.appendChild(ellipsis);
     });
@@ -645,13 +672,6 @@
     var initialFocus = overlay.querySelector('[autofocus]') || overlay.querySelector('.plaza-close');
     if (initialFocus) initialFocus.setAttribute('autofocus', '');
     lockScroll();
-    if (options && options.anchor) {
-      var rect = options.anchor.getBoundingClientRect();
-      var top = Math.min(rect.bottom + 6, window.innerHeight - 300);
-      var left = Math.min(rect.left, window.innerWidth - 352);
-      overlay.style.setProperty('--plaza-anchor-top', Math.max(8, Math.round(top)) + 'px');
-      overlay.style.setProperty('--plaza-anchor-left', Math.max(8, Math.round(left)) + 'px');
-    }
     overlay.addEventListener('click', function (event) {
       if (event.target === overlay) closeOverlay();
     });
@@ -676,50 +696,6 @@
     } else if (typeof _popModalHistory === 'function') {
       _popModalHistory(overlay);
     }
-  }
-
-  function openSiblingMenu(levelIndex, anchor) {
-    var level = _nav.path[levelIndex];
-    var siblings = level.siblings || [];
-    if (siblings.length <= 1) return;
-    var body = '<div class="plaza-overlay-head"><h3>' + (levelIndex === 0 ? '切换课程范围' : '切换同级目录') + '</h3>' +
-      '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>';
-    if (siblings.length > 8) {
-      body += '<label class="plaza-menu-search">' + iconSvg('search') +
-        '<input type="search" id="plazaSiblingSearch" autofocus placeholder="搜索本层目录" aria-label="搜索本层目录"></label>';
-    }
-    body += '<div class="plaza-menu-list" role="menu">' +
-      siblings.map(function (sibling) {
-        return '<button type="button" role="menuitem" class="plaza-menu-item' + (sibling.is_current ? ' is-current' : '') +
-          '" data-plaza-sibling="' + sibling.id + '">' +
-          '<span class="plaza-menu-name">' + esc(sibling.name || '未命名目录') + '</span>' +
-          (sibling.is_course ? '<span class="plaza-menu-kind">课程</span>' : '') +
-          (sibling.is_current ? '<span class="plaza-menu-check">✓</span>' : '') +
-        '</button>';
-      }).join('') + '</div>';
-
-    openOverlay('menu', body, { anchor: anchor, onMount: function (overlay) {
-      var search = overlay.querySelector('#plazaSiblingSearch');
-      if (search) {
-        search.addEventListener('input', function () {
-          var value = search.value.trim().toLowerCase();
-          overlay.querySelectorAll('[data-plaza-sibling]').forEach(function (button) {
-            var name = button.querySelector('.plaza-menu-name').textContent.toLowerCase();
-            button.hidden = !!value && name.indexOf(value) === -1;
-          });
-        });
-        setTimeout(function () { search.focus(); }, 0);
-      }
-      overlay.querySelectorAll('[data-plaza-sibling]').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var id = parseInt(button.getAttribute('data-plaza-sibling'), 10);
-          var current = button.classList.contains('is-current');
-          if (current) { closeOverlay(); return; }
-          if (levelIndex === 0) switchPlazaRange(button.querySelector('.plaza-menu-name').textContent);
-          else navigateCategory(id, true);
-        });
-      });
-    } });
   }
 
   function openCourseTree() {
