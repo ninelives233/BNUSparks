@@ -197,6 +197,17 @@
     page.appendChild(body);
     return page;
   }
+  // 筛选胶囊（utils.js filterPillHtml + components.css .filter-pill 的演示副本）
+  function filterPillMock(label, value, markName) {
+    var p = el('span', 'filter-pill');
+    p.appendChild(el('span', 'filter-pill-label', label));
+    p.appendChild(el('span', 'filter-pill-value', value));
+    var caret = el('span', 'filter-pill-caret');
+    caret.setAttribute('aria-hidden', 'true');
+    p.appendChild(caret);
+    if (markName) mark(markName, p);
+    return p;
+  }
   // 课程资料页头（explorer-render.js renderFiles 的 .file-area-header）
   function filesHeader(opts) {
     opts = opts || {};
@@ -206,8 +217,8 @@
     h.appendChild(el('span', 'fa-count', (opts.count || 2) + ' 个文件'));
     if (opts.filter) {
       var bar = el('span', 'fa-filter-bar');
-      bar.appendChild(btnEl('fa-filter-btn', '类型：全部 ▽', opts.typeMark || null));
-      bar.appendChild(btnEl('fa-filter-btn', '排序：上传时间 ▽', opts.sortMark || null));
+      bar.appendChild(filterPillMock('类型', '全部', opts.typeMark || null));
+      bar.appendChild(filterPillMock('排序', '最新上传', opts.sortMark || null));
       h.appendChild(bar);
     }
     if (opts.upload || opts.batch) {
@@ -317,7 +328,7 @@
   // 类型/排序下拉（explorer-file.js 的 .filter-dropdown；演示内锚定在页头下）
   function filterDropdown(title, items, activeIdx) {
     var dd = el('div', 'filter-dropdown');
-    dd.appendChild(el('div', 'filter-dd-header', title));
+    if (title) dd.appendChild(el('div', 'filter-dd-header', title));
     items.forEach(function (it, i) {
       var n = el('div', 'filter-dd-item' + (i === (activeIdx || 0) ? ' filter-dd-active' : ''), it.label);
       if (it.mark) mark(it.mark, n);
@@ -1028,12 +1039,12 @@
     var tbody = tableWrap._tbody;
     var header = root.querySelector('.file-area-header');
     header.style.position = 'relative';
-    var typeMenu = filterDropdown('类型：', [
+    var typeMenu = filterDropdown('', [
       { label: '全部' }, { label: '笔记', mark: 'opt-note' }, { label: '试卷', mark: 'opt-paper' }, { label: '课件' }
     ], 0);
     typeMenu.style.left = '0';
-    var sortMenu = filterDropdown('排序：', [
-      { label: '上传时间' }, { label: '下载量' }, { label: '收藏量', mark: 'opt-fav' }
+    var sortMenu = filterDropdown('', [
+      { label: '最新上传' }, { label: '下载最多' }, { label: '收藏最多', mark: 'opt-fav' }
     ], 0);
     sortMenu.style.right = '0';
     header.appendChild(typeMenu);

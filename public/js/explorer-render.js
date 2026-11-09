@@ -436,6 +436,35 @@
     if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
   }
 
+  // 类型/排序筛选胶囊：与资料广场共用 utils.js filterPillHtml + components.css .filter-pill
+  function _typeFilterPillHtml() {
+    var options = '<option value="">全部</option>' + MATERIAL_TYPES.map(function (type) {
+      return '<option value="' + esc(type.name) + '">' + esc(type.name) + '</option>';
+    }).join('');
+    return filterPillHtml({
+      label: '类型',
+      id: 'typeFilterSelect',
+      aria: '资料类型筛选',
+      value: _typeFilter || '全部',
+      options: options,
+      attrs: 'onchange="applyTypeFilter(this.value)"'
+    });
+  }
+
+  function _sortFilterPillHtml() {
+    var options = Object.keys(_MF_SORT_LABELS).map(function (key) {
+      return '<option value="' + key + '">' + esc(_MF_SORT_LABELS[key]) + '</option>';
+    }).join('');
+    return filterPillHtml({
+      label: '排序',
+      id: 'sortFilterSelect',
+      aria: '排序方式',
+      value: _MF_SORT_LABELS[_sortBy] || '最新上传',
+      options: options,
+      attrs: 'onchange="applySortBy(this.value)"'
+    });
+  }
+
   // ── 移动端列表外壳：标题行 + 工具栏 + 列表容器 + 底部分页 ──
   function _mfHeaderHtml(course, code, mergeCodes) {
     var mgmt = isMgmtActive();
@@ -533,7 +562,7 @@
     const isMobileLayout = _fileListIsMobile();
     var headerHtml = isMobileLayout
       ? _mfHeaderHtml(course, code, mergeCodes)
-      : '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3>' + mergeCodes + '<span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar"><button class="fa-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterDropdown(event)">类型：全部 ▽</button><button class="fa-filter-btn" id="sortFilterBtn" onclick="toggleSortDropdown(event)">排序：上传时间 ▽</button></span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + iconSvg(isMgmtActive() ? 'clipboard' : 'arrow-down') + (isMgmtActive() ? ' 批量操作' : ' 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>';
+      : '<div class="file-area-header"><h3 class="section-accent">' + esc(course.name) + ' — 资料列表</h3>' + mergeCodes + '<span class="fa-count" id="fileCount">加载中...</span><span class="fa-per-page" id="perPageControl"></span><span class="fa-filter-bar" id="filterBar">' + _typeFilterPillHtml() + _sortFilterPillHtml() + '</span>' + (code ? '<div class="fa-upload-header-btn">' + (currentUser ? '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button><button class="fa-upload-btn fa-batch-dl-btn" id="multiSelectToggle" onclick="toggleMultiSelect()">' + iconSvg(isMgmtActive() ? 'clipboard' : 'arrow-down') + (isMgmtActive() ? ' 批量操作' : ' 批量下载') + '</button>' : '<button class="fa-upload-btn" onclick="showUploadModal(\'' + escJs(code) + '\',\'' + escJs(course.name) + '\',' + (course.id ? course.id : 'null') + ')">+ 上传资料</button>') + '</div>' : '') + '</div>';
     var bodyHtml = isMobileLayout ? _mfBodyHtml() :
           '<div class="file-table-wrap"><div class="batch-dl-bar" id="batchDlBar"><span id="selectedCount">已选 0 个</span>' +
             '<button class="admin-btn admin-btn-sm" onclick="batchDeleteSelected()" id="batchDeleteBtn" style="display:none">' + iconSvg('trash') + ' 删除选中</button>' +

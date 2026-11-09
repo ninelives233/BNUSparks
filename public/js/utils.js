@@ -233,6 +233,29 @@
     return pages;
   }
 
+  // 筛选胶囊工厂：课程目录与资料广场共用同一结构（外观见 components.css .filter-pill）
+  function filterPillHtml(cfg) {
+    cfg = cfg || {};
+    return '<label class="filter-pill' + (cfg.block ? ' filter-pill--block' : '') + '">' +
+      '<span class="filter-pill-label">' + esc(cfg.label || '') + '</span>' +
+      '<span class="filter-pill-value">' + esc(cfg.value || '全部') + '</span>' +
+      '<select' + (cfg.id ? ' id="' + esc(cfg.id) + '"' : '') +
+        ' aria-label="' + esc(cfg.aria || cfg.label || '筛选') + '"' +
+        (cfg.attrs ? ' ' + cfg.attrs : '') + '>' + (cfg.options || '') + '</select>' +
+      '<span class="filter-pill-caret" aria-hidden="true"></span></label>';
+  }
+
+  // 筛选胶囊：把原生 select 的当前选项文本同步到胶囊显示层。
+  // 选项可带 data-pill（不含计数的短标签），没有则用选项自身文本。
+  function syncSelectPill(select) {
+    if (!select || !select.closest) return;
+    const pill = select.closest('.filter-pill');
+    if (!pill) return;
+    const value = pill.querySelector('.filter-pill-value');
+    const option = select.options[select.selectedIndex];
+    if (value) value.textContent = option ? (option.getAttribute('data-pill') || option.textContent) : '';
+  }
+
   // ── 弹窗滚动锁定 ──
   let _scrollPos = 0;
   let _scrollLockCount = 0;

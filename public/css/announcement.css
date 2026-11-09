@@ -247,29 +247,10 @@
 
 .fa-filter-bar {
   display: inline-flex;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   margin-left: 10px;
   vertical-align: middle;
-}
-
-.fa-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 0.78rem;
-  background: var(--raised);
-  border: 1px solid var(--border-light, #ddd);
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--ink, #333);
-  white-space: nowrap;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.fa-filter-btn:hover {
-  border-color: var(--primary);
-  background: oklch(0.95 0.02 250);
 }
 
 .filter-dropdown {
@@ -307,7 +288,6 @@
   color: var(--primary-dark);
 }
 
-html[data-bnu-theme="dark"] .fa-filter-btn:hover,
 html[data-bnu-theme="dark"] .filter-dd-item:hover {
   background: var(--primary-surface);
 }

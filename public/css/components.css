@@ -223,7 +223,7 @@
     .fd-btn-secondary, .fd-btn-danger, .nc-btn-primary, .nc-btn-secondary,
     .mf-btn, .ms-copy-btn, .notif-mark-all-btn, .notif-mark-btn,
     .reupload-btn, .fi-preview-btn, .fi-download-btn, .pc-btn-detail,
-    .pv-dl-btn, .announcement-create-btn, .fa-filter-btn,
+    .pv-dl-btn, .announcement-create-btn,
     .profile-edit-btn, .profile-action-btn, .so-new-btn, .nc-level-btn,
     .ppc-save-btn, .fm-action-btn, .mgmt-new-btn, .explorer-newcourse-btn) {
   display: inline-flex;
@@ -239,7 +239,7 @@
 }
 /* 图标+文字按钮：内隙统一 */
 :is(.fd-btn, .fd-btn-primary, .fd-btn-secondary, .fd-btn-danger,
-    .fi-preview-btn, .fi-download-btn, .fa-filter-btn, .announcement-create-btn,
+    .fi-preview-btn, .fi-download-btn, .announcement-create-btn,
     .reupload-btn, .ms-copy-btn, .notif-mark-all-btn, .notif-mark-btn) {
   gap: 6px;
 }
@@ -422,3 +422,68 @@ html[data-bnu-theme="dark"] .pc-seg-btn.active .pc-seg-count { background: var(-
   .plaza-switch-bar .browse-switcher { flex: 1 1 auto; justify-content: center; }
   .browse-switch-btn { min-height: 36px; }
 }
+
+/* ── 列表筛选胶囊（课程目录 / 资料广场共用）────────────────────
+   结构：
+   <label class="filter-pill">
+     <span class="filter-pill-label">类型</span>
+     <span class="filter-pill-value">全部</span>
+     <select aria-label="资料类型筛选">…</select>
+     <span class="filter-pill-caret" aria-hidden="true"></span>
+   </label>
+   胶囊负责外观，原生 select 透明覆盖整体：点按任意位置由系统弹出选项，
+   不再自绘下拉面板；两侧页面因此共用同一套尺寸、圆角、字号与交互。 */
+.filter-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 26px 0 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--t-fast), background-color var(--t-fast),
+              color var(--t-fast), box-shadow var(--t-fast);
+}
+.filter-pill:hover { border-color: var(--primary-light); }
+.filter-pill:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.filter-pill-label { color: var(--ink-faint); }
+.filter-pill-label::after { content: "："; }
+.filter-pill-value { max-width: 168px; overflow: hidden; text-overflow: ellipsis; }
+.filter-pill select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.filter-pill-caret {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-top: -2px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--ink-faint);
+  pointer-events: none;
+  transition: border-top-color var(--t-fast);
+}
+.filter-pill:hover .filter-pill-caret { border-top-color: var(--primary); }
+/* 垂直排列的浮层/面板内：占满宽度的大型胶囊 */
+.filter-pill--block { display: flex; width: 100%; height: 42px; font-size: var(--fs-sm); }
+.filter-pill--block .filter-pill-value { flex: 1 1 auto; }
+html[data-bnu-theme="dark"] .filter-pill { background: var(--surface); }

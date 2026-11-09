@@ -201,21 +201,19 @@
           '<button type="button" class="plaza-search-filter" id="plazaMobileFilter" aria-label="筛选">' + iconSvg('filter') + '</button>' +
         '</label>' +
         '<div class="plaza-selects" id="plazaSelects">' +
-          '<label class="plaza-select"><span>资料类型</span><span class="plaza-select-control"><select id="plazaTypeSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
-          '<label class="plaza-select"><span>文件格式</span><span class="plaza-select-control"><select id="plazaFormatSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
-          '<label class="plaza-select"><span>排序</span><span class="plaza-select-control"><select id="plazaSortSelect">' +
-            '<option value="smart">智能推荐</option>' +
-            '<option value="latest">最新上传</option>' +
-            '<option value="downloads">下载最多</option>' +
-            '<option value="favorites">收藏最多</option>' +
-          '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+          filterPillHtml({ label: '类型', id: 'plazaTypeSelect', aria: '资料类型筛选', value: '全部' }) +
+          filterPillHtml({ label: '格式', id: 'plazaFormatSelect', aria: '文件格式筛选', value: '全部' }) +
+          filterPillHtml({
+            label: '排序', id: 'plazaSortSelect', aria: '排序方式', value: '智能推荐',
+            options: '<option value="smart">智能推荐</option><option value="latest">最新上传</option><option value="downloads">下载最多</option><option value="favorites">收藏最多</option>'
+          }) +
         '</div>' +
         '<button type="button" class="plaza-upload" id="plazaUploadBtn" aria-label="上传文件">' + iconSvg('upload') + '<span>上传文件</span></button>' +
       '</div>' +
       '<div class="plaza-summary"><span id="plazaScopeLabel">当前范围加载中…</span><span id="plazaCount"></span></div>' +
       '<div class="plaza-filter-chips" id="plazaFilterChips"></div>' +
       '<div class="plaza-grid" id="plazaGrid" aria-live="polite"></div>' +
-      '<div class="plaza-pager" id="plazaPager"></div>';
+      '<div class="file-pagination" id="plazaPager" aria-label="资料分页"></div>';
 
     var search = document.getElementById('plazaSearchInput');
     search.addEventListener('input', function () {
@@ -242,16 +240,19 @@
     document.getElementById('plazaTypeSelect').addEventListener('change', function (event) {
       _state.materialType = event.target.value ? parseInt(event.target.value, 10) : null;
       _state.page = 1;
+      syncSelectPill(event.target);
       loadMaterials();
     });
     document.getElementById('plazaFormatSelect').addEventListener('change', function (event) {
       _state.format = event.target.value || '';
       _state.page = 1;
+      syncSelectPill(event.target);
       loadMaterials();
     });
     document.getElementById('plazaSortSelect').addEventListener('change', function (event) {
       _state.sort = event.target.value;
       _state.page = 1;
+      syncSelectPill(event.target);
       loadMaterials();
     });
     var grid = document.getElementById('plazaGrid');
@@ -359,7 +360,7 @@
     if (_state.q) chips.push({ key: 'q', label: '关键词：' + _state.q });
     if (_state.materialType) {
       var option = document.querySelector('#plazaTypeSelect option[value="' + _state.materialType + '"]');
-      chips.push({ key: 'materialType', label: '类型：' + (option ? option.textContent : _state.materialType) });
+      chips.push({ key: 'materialType', label: '类型：' + (option ? (option.getAttribute('data-pill') || option.textContent) : _state.materialType) });
     }
     if (_state.format) chips.push({ key: 'format', label: '格式：' + _state.format.toUpperCase() });
     if (_state.favorites) chips.push({ key: 'favorites', label: '我的收藏' });
@@ -395,19 +396,24 @@
     var formatSelect = document.getElementById('plazaFormatSelect');
     if (typeSelect) {
       var typeValue = _state.materialType ? String(_state.materialType) : '';
-      typeSelect.innerHTML = '<option value="">全部类型</option>' + (facets.material_types || []).map(function (type) {
-        return '<option value="' + type.id + '">' + esc(type.name) + '（' + type.count + '）</option>';
+      typeSelect.innerHTML = '<option value="">全部</option>' + (facets.material_types || []).map(function (type) {
+        return '<option value="' + type.id + '" data-pill="' + esc(type.name) + '">' + esc(type.name) + '（' + type.count + '）</option>';
       }).join('');
       typeSelect.value = typeValue;
+      syncSelectPill(typeSelect);
     }
     if (formatSelect) {
-      formatSelect.innerHTML = '<option value="">全部格式</option>' + (facets.formats || []).map(function (format) {
-        return '<option value="' + esc(format.value) + '">' + esc(format.name) + '（' + format.count + '）</option>';
+      formatSelect.innerHTML = '<option value="">全部</option>' + (facets.formats || []).map(function (format) {
+        return '<option value="' + esc(format.value) + '" data-pill="' + esc(format.name) + '">' + esc(format.name) + '（' + format.count + '）</option>';
       }).join('');
       formatSelect.value = _state.format || '';
+      syncSelectPill(formatSelect);
     }
     var sortSelect = document.getElementById('plazaSortSelect');
-    if (sortSelect) sortSelect.value = _state.sort;
+    if (sortSelect) {
+      sortSelect.value = _state.sort;
+      syncSelectPill(sortSelect);
+    }
   }
 
   function loadMaterials() {
@@ -534,12 +540,12 @@
     if (!totalPages || totalPages <= 1) { host.innerHTML = ''; return; }
     var pages = typeof getPageNumbers === 'function' ? getPageNumbers(page, totalPages) : [1, totalPages];
     host.innerHTML =
-      '<button type="button" class="plaza-page-nav" data-plaza-page="' + (page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+      '<button type="button" class="fp-btn fp-prev' + (page <= 1 ? ' fp-disabled' : '') + '" data-plaza-page="' + (page - 1) + '" aria-label="上一页"' + (page <= 1 ? ' disabled' : '') + '>' + iconSvg('chevron-left') + '</button>' +
       pages.map(function (value) {
-        if (value === '…') return '<span class="plaza-page-gap">…</span>';
-        return '<button type="button" class="plaza-page-btn' + (value === page ? ' is-active' : '') + '" data-plaza-page="' + value + '" aria-current="' + (value === page ? 'page' : 'false') + '">' + value + '</button>';
+        if (value === '…') return '<span class="fp-btn fp-ellipsis" aria-hidden="true">…</span>';
+        return '<button type="button" class="fp-btn fp-num' + (value === page ? ' fp-active' : '') + '" data-plaza-page="' + value + '" aria-current="' + (value === page ? 'page' : 'false') + '">' + value + '</button>';
       }).join('') +
-      '<button type="button" class="plaza-page-nav" data-plaza-page="' + (page + 1) + '"' + (page >= totalPages ? ' disabled' : '') + '>下一页</button>';
+      '<button type="button" class="fp-btn fp-next' + (page >= totalPages ? ' fp-disabled' : '') + '" data-plaza-page="' + (page + 1) + '" aria-label="下一页"' + (page >= totalPages ? ' disabled' : '') + '>' + iconSvg('chevron-right') + '</button>';
   }
 
   function renderBreadcrumb() {
@@ -811,15 +817,20 @@
     var body = '<div class="plaza-overlay-head"><h3>筛选与排序</h3>' +
       '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
       '<div class="plaza-sheet-fields">' +
-        '<label><span>资料类型</span><span class="plaza-select-control"><select id="plazaSheetType" autofocus><option value="">全部类型</option>' +
-          facets.material_types.map(function (type) { return '<option value="' + type.id + '">' + esc(type.name) + '</option>'; }).join('') +
-        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
-        '<label><span>文件格式</span><span class="plaza-select-control"><select id="plazaSheetFormat"><option value="">全部格式</option>' +
-          facets.formats.map(function (format) { return '<option value="' + format.value + '">' + esc(format.name) + '</option>'; }).join('') +
-        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
-        '<label><span>排序</span><span class="plaza-select-control"><select id="plazaSheetSort">' +
-          '<option value="smart">智能推荐</option><option value="latest">最新上传</option><option value="downloads">下载最多</option><option value="favorites">收藏最多</option>' +
-        '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
+        filterPillHtml({
+          block: true, label: '类型', id: 'plazaSheetType', aria: '资料类型筛选',
+          options: '<option value="">全部</option>' +
+            facets.material_types.map(function (type) { return '<option value="' + type.id + '">' + esc(type.name) + '</option>'; }).join('')
+        }) +
+        filterPillHtml({
+          block: true, label: '格式', id: 'plazaSheetFormat', aria: '文件格式筛选',
+          options: '<option value="">全部</option>' +
+            facets.formats.map(function (format) { return '<option value="' + format.value + '">' + esc(format.name) + '</option>'; }).join('')
+        }) +
+        filterPillHtml({
+          block: true, label: '排序', id: 'plazaSheetSort', aria: '排序方式', value: '智能推荐',
+          options: '<option value="smart">智能推荐</option><option value="latest">最新上传</option><option value="downloads">下载最多</option><option value="favorites">收藏最多</option>'
+        }) +
       '</div>' +
       '<div class="plaza-overlay-foot"><button type="button" class="plaza-secondary" data-sheet-reset>重置</button>' +
       '<button type="button" class="plaza-primary" data-sheet-apply>应用筛选</button></div>';
@@ -830,8 +841,10 @@
       type.value = _state.materialType || '';
       format.value = _state.format || '';
       sort.value = _state.sort;
+      [type, format, sort].forEach(syncSelectPill);
       overlay.querySelector('[data-sheet-reset]').addEventListener('click', function () {
         type.value = ''; format.value = ''; sort.value = 'smart';
+        [type, format, sort].forEach(syncSelectPill);
       });
       overlay.querySelector('[data-sheet-apply]').addEventListener('click', function () {
         _state.materialType = type.value ? parseInt(type.value, 10) : null;

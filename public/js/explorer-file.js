@@ -2,7 +2,7 @@
   var _fileInfoOverlay = null;
 
   // 排序方式标签（筛选按钮/底部面板共用）；键与 _getFilteredSortedFiles 的分支一致
-  var _MF_SORT_LABELS = { 'date': '上传时间', 'download': '下载量', 'favorite': '收藏量', 'teacher': '任课教师' };
+  var _MF_SORT_LABELS = { 'date': '最新上传', 'download': '下载最多', 'favorite': '收藏最多', 'teacher': '任课教师' };
 
   // 详情页移动布局（≤768px）：信息区结构/操作行与桌面不同，渲染时按断点分支
   function _fdIsMobile() {
@@ -211,95 +211,38 @@
   }
 
   function _renderFilterSortLabels() {
-    var typeBtn = document.getElementById('typeFilterBtn');
-    if (typeBtn) {
-      typeBtn.textContent = '类型：' + (_typeFilter || '全部') + ' ▾';
+    var typeSelect = document.getElementById('typeFilterSelect');
+    if (typeSelect) {
+      typeSelect.value = _typeFilter || '';
+      syncSelectPill(typeSelect);
     }
-    var sortBtn = document.getElementById('sortFilterBtn');
-    if (sortBtn) {
-      sortBtn.textContent = '排序：' + (_MF_SORT_LABELS[_sortBy] || '上传时间') + ' ▾';
+    var sortSelect = document.getElementById('sortFilterSelect');
+    if (sortSelect) {
+      sortSelect.value = _sortBy;
+      syncSelectPill(sortSelect);
     }
     // 移动端合并筛选按钮：显示当前「类型 · 排序」条件
     var mfBtn = document.getElementById('mobileFilterBtn');
     if (mfBtn) {
       var lbl = mfBtn.querySelector('.mf-filter-label');
-      if (lbl) lbl.textContent = (_typeFilter || '全部类型') + ' · ' + (_MF_SORT_LABELS[_sortBy] || '上传时间');
+      if (lbl) lbl.textContent = (_typeFilter || '全部类型') + ' · ' + (_MF_SORT_LABELS[_sortBy] || '最新上传');
     }
   }
 
-  function _closeFilterSortDropdowns() {
-    document.querySelectorAll('.filter-dropdown').forEach(function(el) { el.remove(); });
+  // 筛选胶囊的 select 变更入口（inline onchange）
+  function applyTypeFilter(value) {
+    _typeFilter = value || '';
+    _filterSortPage = 1;
+    _renderFilterSortLabels();
+    if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
   }
 
-  function toggleTypeFilterDropdown(event) {
-    event.stopPropagation();
-    _closeFilterSortDropdowns();
-    var btn = document.getElementById('typeFilterBtn');
-    var rect = btn.getBoundingClientRect();
-    var dropdown = document.createElement('div');
-    dropdown.className = 'filter-dropdown';
-    var html = '<div class="filter-dd-header">类型：</div>';
-    html += '<div class="filter-dd-item' + (!_typeFilter ? ' filter-dd-active' : '') + '" data-value="">全部</div>';
-    MATERIAL_TYPES.forEach(function(t) {
-      html += '<div class="filter-dd-item' + (_typeFilter === t.name ? ' filter-dd-active' : '') + '" data-value="' + esc(t.name) + '">' + esc(t.name) + '</div>';
-    });
-    dropdown.innerHTML = html;
-    dropdown.style.position = 'fixed';
-    dropdown.style.top = (rect.bottom + 4) + 'px';
-    dropdown.style.left = Math.max(8, rect.left) + 'px';
-    dropdown.style.zIndex = '1000';
-    dropdown.addEventListener('click', function(e) {
-      var item = e.target.closest('.filter-dd-item');
-      if (item) {
-        var val = item.dataset.value;
-        _typeFilter = val;
-        _filterSortPage = 1;
-        _renderFilterSortLabels();
-        _closeFilterSortDropdowns();
-        // 重新渲染页面
-        if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
-      }
-    });
-    document.body.appendChild(dropdown);
+  function applySortBy(value) {
+    _sortBy = value || 'date';
+    _filterSortPage = 1;
+    _renderFilterSortLabels();
+    if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
   }
-
-  function toggleSortDropdown(event) {
-    event.stopPropagation();
-    _closeFilterSortDropdowns();
-    var btn = document.getElementById('sortFilterBtn');
-    var rect = btn.getBoundingClientRect();
-    var dropdown = document.createElement('div');
-    dropdown.className = 'filter-dropdown';
-    var labels = { 'date': '上传时间', 'download': '下载量', 'favorite': '收藏量', 'teacher': '任课教师' };
-    var html = '';
-    ['date', 'download', 'favorite', 'teacher'].forEach(function(key) {
-      html += '<div class="filter-dd-item' + (_sortBy === key ? ' filter-dd-active' : '') + '" data-value="' + key + '">' + labels[key] + '</div>';
-    });
-    dropdown.innerHTML = html;
-    dropdown.style.position = 'fixed';
-    dropdown.style.top = (rect.bottom + 4) + 'px';
-    dropdown.style.left = Math.max(8, rect.left) + 'px';
-    dropdown.style.zIndex = '1000';
-    dropdown.addEventListener('click', function(e) {
-      var item = e.target.closest('.filter-dd-item');
-      if (item) {
-        var val = item.dataset.value;
-        _sortBy = val;
-        _filterSortPage = 1;
-        _renderFilterSortLabels();
-        _closeFilterSortDropdowns();
-        if (typeof _renderCurrentPage === 'function') _renderCurrentPage();
-      }
-    });
-    document.body.appendChild(dropdown);
-  }
-
-  // 点击页面其他地方关闭筛选排序下拉
-  document.addEventListener('click', function(e) {
-    if (!e.target.closest('.filter-dropdown') && !e.target.closest('.fa-filter-btn')) {
-      _closeFilterSortDropdowns();
-    }
-  });
 
 
   // ============================================================

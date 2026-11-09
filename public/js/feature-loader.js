@@ -91,9 +91,13 @@
   //        /api/search/?v=2、/api/qa/search/?v=2；课程/资料结果经显式路径
   //        定位与 /file/{id}、/qa/questions/{id} 往返；教程搜索场景同步为
   //        结果页演示。旧 v1 搜索接口与上传选课浮层保持不变。
+  // v374：课程目录与资料广场统一列表控件——两处筛选都用 utils.filterPillHtml
+  //        生成的 .filter-pill 胶囊（原生 select 透明覆盖），两处分页都用
+  //        base.css .file-pagination；删除 .fa-filter-btn 自绘下拉与 plaza 私有
+  //        分页样式，排序文案统一为「最新上传 / 下载最多 / 收藏最多」。
   // v354：身份用户列表面板重排——行改为昵称+学号+年级徽标，未设昵称回退学号
   //        而非邮箱全串，去裸邮箱；身份网格 align-items:start 消除长列拉伸空白。
-  var VERSION = '373';
+  var VERSION = '374';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
