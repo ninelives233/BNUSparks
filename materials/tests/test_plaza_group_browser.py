@@ -80,7 +80,7 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         }""")
         page.wait_for_timeout(500)
         trigger.hover()
-        page.wait_for_timeout(600)
+        page.wait_for_timeout(800)
         if os.environ.get('BNU_BROWSER_SCREENSHOTS'):
             page.screenshot(path=os.path.join(os.environ['BNU_BROWSER_SCREENSHOTS'], 'plaza-fan-debug.png'))
         page.locator('.plaza-stack.is-open').wait_for(timeout=3000)
@@ -99,4 +99,48 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         if os.environ.get('BNU_BROWSER_SCREENSHOTS'):
             page.screenshot(path=os.path.join(os.environ['BNU_BROWSER_SCREENSHOTS'], 'plaza-fan.png'))
         page.mouse.move(1400, 850)
-        page.locator('.plaza-stack.is-open').wait_for(state='hidden', timeout=3000)
+        page.locator('.plaza-stack.is-open').wait_for(state='hidden', timeout=700)
+
+    def test_hover_requires_stationary_pointer(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900})
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        trigger = page.locator('[data-plaza-group-open]')
+        trigger.wait_for()
+        page.wait_for_timeout(500)
+        box = trigger.bounding_box()
+        page.mouse.move(box['x'] + 40, box['y'] + 60)
+        page.wait_for_timeout(350)
+        page.mouse.move(box['x'] + 65, box['y'] + 60)
+        page.wait_for_timeout(400)
+        self.assertEqual(page.locator('.plaza-stack.is-open').count(), 0)
+        page.locator('.plaza-stack.is-open').wait_for(timeout=1000)
+        page.mouse.move(1400, 850)
+        page.locator('.plaza-stack.is-open').wait_for(state='hidden', timeout=700)
+
+    def test_fan_fits_middle_and_edges(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        trigger = page.locator('[data-plaza-group-open]')
+        trigger.wait_for()
+        page.wait_for_timeout(500)
+        for x, y in ((30, 80), (570, 80), (1100, 80), (30, 340), (570, 340),
+                     (1100, 340), (30, 650), (570, 650), (1100, 650)):
+            with self.subTest(x=x, y=y):
+                page.evaluate("""([x, y]) => {
+                  const el = document.querySelector('.plaza-stack');
+                  Object.assign(el.style, {position:'fixed', left:x+'px', top:y+'px', width:'300px', height:'208px'});
+                }""", [x, y])
+                page.wait_for_timeout(80)
+                self.assertAlmostEqual(trigger.bounding_box()['x'], x, delta=2)
+                trigger.evaluate("el => el.click()")
+                page.locator('.plaza-stack.is-open').wait_for(timeout=2000)
+                positions = page.locator('.plaza-stack-cards .plaza-card').evaluate_all(
+                    "els => els.map(el => {const r=el.getBoundingClientRect(); return [r.left,r.top,r.right,r.bottom]})")
+                self.assertTrue(all(left >= -1 and top >= -1 and right <= 1441 and bottom <= 901
+                                    for left, top, right, bottom in positions), positions)
+                center = (positions[0][0] + positions[0][2]) / 2
+                if x == 570:
+                    self.assertLess(min(p[0] for p in positions[1:]), center - 150)
+                    self.assertGreater(max(p[2] for p in positions[1:]), center + 150)
+                page.locator('.plaza-stack-backdrop').evaluate('el => el.click()')
+                page.locator('.plaza-stack.is-open').wait_for(state='hidden', timeout=1000)

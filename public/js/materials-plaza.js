@@ -11,8 +11,10 @@
   var _items = [];
   var _groups = [];
   var _groupTimer = null;
+  var _groupCloseTimer = null;
+  var _groupIntent = null;
+  var _groupByHover = false;
   var _openGroup = null;
-  var _groupOpenedAt = 0;
   var _suppressGroupFocus = false;
   var _requestSeq = 0;
   var _navRequestSeq = 0;
@@ -321,32 +323,43 @@
       event.preventDefault();
       openDetail(parseInt(card.getAttribute('data-id'), 10));
     });
+    function scheduleIntent(trigger, x, y) {
+      clearTimeout(_groupTimer);
+      _groupIntent = { trigger: trigger, x: x, y: y };
+      _groupTimer = setTimeout(function () {
+        if (_groupIntent && _groupIntent.trigger === trigger && trigger.isConnected) openGroup(trigger.closest('.plaza-stack'), true);
+        _groupIntent = null;
+      }, 650);
+    }
+    function scheduleGroupClose() {
+      if (!_openGroup || !_groupByHover) return;
+      clearTimeout(_groupCloseTimer);
+      _groupCloseTimer = setTimeout(function () {
+        _groupCloseTimer = null;
+        if (_openGroup && _groupByHover) closeGroup();
+      }, 120);
+    }
     grid.addEventListener('pointerover', function (event) {
       if (event.pointerType !== 'mouse') return;
-      if (event.target.closest('.plaza-stack-backdrop')) {
-        clearTimeout(_groupTimer);
-        return;
-      }
-      if (event.target.closest('.plaza-stack-cards, .plaza-stack-anchor')) clearTimeout(_groupTimer);
-      var stack = event.target.closest('.plaza-stack');
-      if (stack && !stack.contains(event.relatedTarget)) {
-        clearTimeout(_groupTimer);
-        _groupTimer = setTimeout(function () { openGroup(stack); }, 350);
-      }
+      var trigger = event.target.closest('[data-plaza-group-open]');
+      if (!_openGroup && trigger && !trigger.contains(event.relatedTarget)) scheduleIntent(trigger, event.clientX, event.clientY);
+      if (event.target.closest('.plaza-stack-backdrop')) scheduleGroupClose();
+      if (event.target.closest('.plaza-stack-cards .plaza-card, .plaza-stack-anchor')) clearTimeout(_groupCloseTimer);
     });
     grid.addEventListener('pointermove', function (event) {
-      if (event.pointerType !== 'mouse' || !_openGroup || Date.now() - _groupOpenedAt < 900 || !event.target.closest('.plaza-stack-backdrop')) return;
-      clearTimeout(_groupTimer);
-      _groupTimer = setTimeout(function () {
-        _groupTimer = null;
-        if (_openGroup && !_openGroup.contains(document.activeElement)) closeGroup();
-      }, 650);
+      if (event.pointerType !== 'mouse') return;
+      if (_groupIntent && event.target.closest('[data-plaza-group-open]') === _groupIntent.trigger &&
+          Math.hypot(event.clientX - _groupIntent.x, event.clientY - _groupIntent.y) > 8) {
+        scheduleIntent(_groupIntent.trigger, event.clientX, event.clientY);
+      }
+      if (_openGroup && event.target.closest('.plaza-stack-backdrop') && !_groupCloseTimer) scheduleGroupClose();
     });
     grid.addEventListener('pointerout', function (event) {
       var stack = event.target.closest('.plaza-stack');
       if (stack && !stack.contains(event.relatedTarget)) {
         clearTimeout(_groupTimer);
-        if (!stack.contains(document.activeElement)) closeGroup();
+        _groupIntent = null;
+        if (_groupByHover) scheduleGroupClose();
       }
     });
     grid.addEventListener('focusin', function (event) {
@@ -580,6 +593,9 @@
 
   function closeGroup(restoreFocus) {
     clearTimeout(_groupTimer);
+    clearTimeout(_groupCloseTimer);
+    _groupCloseTimer = null;
+    _groupIntent = null;
     _groupTimer = null;
     if (!_openGroup) return;
     var trigger = _openGroup.querySelector('[data-plaza-group-open]');
@@ -587,14 +603,15 @@
     _openGroup.querySelector('.plaza-stack-preview').inert = true;
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
     _openGroup = null;
+    _groupByHover = false;
     if (restoreFocus && trigger) { _suppressGroupFocus = true; trigger.focus(); _suppressGroupFocus = false; }
   }
 
-  function openGroup(stack) {
+  function openGroup(stack, byHover) {
     if (!stack || _openGroup === stack) return;
     closeGroup();
     _openGroup = stack;
-    _groupOpenedAt = Date.now();
+    _groupByHover = !!byHover;
     var rect = stack.querySelector('[data-plaza-group-open]').getBoundingClientRect();
     var cards = stack.querySelectorAll('.plaza-stack-cards .plaza-card');
     var narrow = window.innerWidth <= 640;
@@ -603,8 +620,8 @@
     var startX = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + (rect.width - width) / 2));
     var startY = Math.max(12, Math.min(window.innerHeight - height - 12, rect.top + (rect.height - height) / 2));
     var direction = startY >= window.innerHeight - startY - height ? -1 : 1;
-    var leftSpace = startX - 12;
-    var rightSpace = window.innerWidth - width - 12 - startX;
+    var leftSpace = Math.max(0, startX - 24);
+    var rightSpace = Math.max(0, window.innerWidth - width - 24 - startX);
     var leftCount = 0;
     var rightCount = 0;
     cards.forEach(function (card, index) {
@@ -614,16 +631,16 @@
       if (index > 0) {
         horizontal = rightSpace / (rightCount + 1) >= leftSpace / (leftCount + 1) ? 1 : -1;
         rank = horizontal > 0 ? ++rightCount : ++leftCount;
-        distance = Math.min(rank * 230, horizontal > 0 ? rightSpace : leftSpace);
+        distance = Math.min(rank * (narrow ? 150 : 210), horizontal > 0 ? rightSpace : leftSpace);
       }
       var targetX = startX + horizontal * distance;
-      var targetY = Math.max(12, Math.min(window.innerHeight - height - 12, startY + direction * Math.min(narrow ? 180 : 110, rank * (narrow ? 90 : 38))));
+      var targetY = index === 0 ? startY : Math.max(24, Math.min(window.innerHeight - height - 24, startY + direction * Math.min(narrow ? 180 : 128, rank * rank * (narrow ? 58 : 32))));
       card.style.setProperty('--fan-left', startX + 'px');
       card.style.setProperty('--fan-top', startY + 'px');
       card.style.setProperty('--fan-width', width + 'px');
       card.style.setProperty('--fan-dx', (targetX - startX) + 'px');
       card.style.setProperty('--fan-dy', (targetY - startY) + 'px');
-      card.style.setProperty('--fan-angle', (horizontal * rank * 3) + 'deg');
+      card.style.setProperty('--fan-angle', (horizontal * rank * 4) + 'deg');
       card.style.setProperty('--fan-delay', (index * 35) + 'ms');
       card.style.setProperty('--fan-layer', 1004 - rank);
     });
