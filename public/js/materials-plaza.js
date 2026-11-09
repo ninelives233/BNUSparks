@@ -506,13 +506,15 @@
       ? '<button type="button" class="pc-course-btn" data-plaza-course="' + item.course_category_id + '">' + esc(courseName) + '</button>'
       : '<span class="pc-course-name">' + esc(courseName) + '</span>';
     return '<article class="plaza-card" data-id="' + item.id + '" tabindex="0" role="link" aria-label="查看资料：' + esc(item.title) + '">' +
-      '<div class="pc-tags"><span class="pc-type">' + esc(item.material_type || '其他') + '</span>' +
-        (item.format ? '<span class="pc-format">' + esc(item.format.toUpperCase()) + '</span>' : '') +
-        (item.is_pinned ? '<span class="pc-pin">' + iconSvg('pin') + '置顶</span>' : '') +
+      '<div class="pc-head">' +
+        '<div class="pc-course">' + course + (item.teacher ? '<span class="pc-teacher">' + teacher + '</span>' : '') + '</div>' +
+        '<div class="pc-tags"><span class="pc-type">' + esc(item.material_type || '其他') + '</span>' +
+          (item.format ? '<span class="pc-format">' + esc(item.format.toUpperCase()) + '</span>' : '') +
+          (item.is_pinned ? '<span class="pc-pin">' + iconSvg('pin') + '置顶</span>' : '') +
+        '</div>' +
       '</div>' +
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
-      '<div class="pc-course">' + course + (item.teacher ? '<span class="pc-teacher">' + teacher + '</span>' : '') + '</div>' +
       '<div class="pc-meta">' + contributorHtml(item) +
         '<span class="pc-date">' + esc(item.created_at) + '</span>' +
         '<div class="pc-actions">' +
