@@ -189,7 +189,7 @@ class PlazaApiTest(BnuTestCase):
             self.assertEqual(data["total"], 32)
             self.assertEqual(data["total_pages"], 1)
             self.assertEqual(groups[0]["count"], 30)
-            self.assertEqual(len(groups[0]["items"]), 4)
+            self.assertEqual(len(groups[0]["items"]), 5)
 
     def test_sort_and_pagination(self):
         for index in range(25):

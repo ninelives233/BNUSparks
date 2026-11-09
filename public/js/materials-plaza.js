@@ -344,7 +344,7 @@
       var trigger = event.target.closest('[data-plaza-group-open]');
       if (!_openGroup && trigger && !trigger.contains(event.relatedTarget)) scheduleIntent(trigger, event.clientX, event.clientY);
       if (event.target.closest('.plaza-stack-backdrop')) scheduleGroupClose();
-      if (event.target.closest('.plaza-stack-cards .plaza-card, .plaza-stack-anchor')) clearTimeout(_groupCloseTimer);
+      if (event.target.closest('.plaza-stack-cards .plaza-card')) clearTimeout(_groupCloseTimer);
     });
     grid.addEventListener('pointermove', function (event) {
       if (event.pointerType !== 'mouse') return;
@@ -619,28 +619,40 @@
     var height = 166;
     var startX = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + (rect.width - width) / 2));
     var startY = Math.max(12, Math.min(window.innerHeight - height - 12, rect.top + (rect.height - height) / 2));
-    var direction = startY >= window.innerHeight - startY - height ? -1 : 1;
     var leftSpace = Math.max(0, startX - 24);
     var rightSpace = Math.max(0, window.innerWidth - width - 24 - startX);
-    var leftCount = 0;
-    var rightCount = 0;
+    var topSpace = Math.max(0, startY - 24);
+    var bottomSpace = Math.max(0, window.innerHeight - height - 24 - startY);
+    var horizontal = rightSpace >= leftSpace ? 1 : -1;
+    var sideSpace = horizontal > 0 ? rightSpace : leftSpace;
+    var upCount = 0;
+    var downCount = 0;
+    var slots = [{ vertical: 0, rank: 0 }];
+    for (var slot = 1; slot < cards.length; slot++) {
+      var nextUp = topSpace / (upCount + 1);
+      var nextDown = bottomSpace / (downCount + 1);
+      var vertical = downCount > upCount && nextUp >= 75 ? -1
+        : upCount > downCount && nextDown >= 75 ? 1
+        : nextDown >= nextUp ? 1 : -1;
+      slots.push({ vertical: vertical, rank: vertical > 0 ? ++downCount : ++upCount });
+    }
+    var upStep = upCount ? Math.min(narrow ? 125 : 140, topSpace / upCount) : 0;
+    var downStep = downCount ? Math.min(narrow ? 125 : 140, bottomSpace / downCount) : 0;
+    var maxDistance = Math.max(upCount * upStep, downCount * downStep);
+    var radius = Math.max(180, maxDistance * 1.15);
     cards.forEach(function (card, index) {
-      var horizontal = 0;
-      var rank = 0;
-      var distance = 0;
-      if (index > 0) {
-        horizontal = rightSpace / (rightCount + 1) >= leftSpace / (leftCount + 1) ? 1 : -1;
-        rank = horizontal > 0 ? ++rightCount : ++leftCount;
-        distance = Math.min(rank * (narrow ? 150 : 210), horizontal > 0 ? rightSpace : leftSpace);
-      }
-      var targetX = startX + horizontal * distance;
-      var targetY = index === 0 ? startY : Math.max(24, Math.min(window.innerHeight - height - 24, startY + direction * Math.min(narrow ? 180 : 128, rank * rank * (narrow ? 58 : 32))));
+      var vertical = slots[index].vertical;
+      var rank = slots[index].rank;
+      var distance = rank * (vertical > 0 ? downStep : upStep);
+      var curveOffset = radius - Math.sqrt(Math.max(0, radius * radius - distance * distance));
+      var targetX = startX + horizontal * Math.min(sideSpace, curveOffset);
+      var targetY = startY + vertical * distance;
       card.style.setProperty('--fan-left', startX + 'px');
       card.style.setProperty('--fan-top', startY + 'px');
       card.style.setProperty('--fan-width', width + 'px');
       card.style.setProperty('--fan-dx', (targetX - startX) + 'px');
       card.style.setProperty('--fan-dy', (targetY - startY) + 'px');
-      card.style.setProperty('--fan-angle', (horizontal * rank * 4) + 'deg');
+      card.style.setProperty('--fan-angle', (horizontal * vertical * rank * 4) + 'deg');
       card.style.setProperty('--fan-delay', (index * 35) + 'ms');
       card.style.setProperty('--fan-layer', 1004 - rank);
     });
@@ -657,12 +669,11 @@
         '<span class="plaza-stack-front"><span class="pc-course-name">' + esc(first.course_name) + ' · ' + esc(first.teacher.trim()) + '</span>' +
         '<span class="pc-type">' + esc(first.material_type) + '</span><strong>' + esc(first.material_type) + '资料</strong><span>共 ' + group.count + ' 份</span>' +
         '<span class="plaza-stack-titles">' + group.items.slice(0, 2).map(function (item) { return esc(item.title); }).join('<br>') + '</span><span class="plaza-stack-hint">展开预览 ›</span></span></button>' +
-      '<button type="button" class="plaza-stack-anchor" data-plaza-group-more="' + index + '">查看全部 ' + group.count + ' 份 ›</button>' +
       '<div class="plaza-stack-preview" inert><div class="plaza-stack-backdrop" data-plaza-group-close></div>' +
-        '<div class="plaza-stack-cards" aria-label="资料预览">' + group.items.map(cardHtml).join('') + '</div></div></div>';
+        '<div class="plaza-stack-cards" aria-label="资料预览">' + group.items.map(function (item, i) { return cardHtml(item, i === 0 ? { index: index, count: group.count } : null); }).join('') + '</div></div></div>';
   }
 
-  function cardHtml(item) {
+  function cardHtml(item, group) {
     var favorite = item.is_favorited;
     var teacher = item.teacher ? ' · ' + esc(item.teacher) : '';
     var courseName = item.course_name || '未关联课程';
@@ -678,6 +689,7 @@
         '</div>' +
       '</div>' +
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
+      (group ? '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + group.index + '">全部 ' + group.count + ' 份 <span aria-hidden="true">→</span></button>' : '') +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
       '<div class="pc-meta">' + contributorHtml(item) +
         '<span class="pc-date">' + esc(item.created_at) + '</span>' +

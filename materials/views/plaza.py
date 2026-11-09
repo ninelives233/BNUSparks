@@ -22,6 +22,7 @@ from ..services.plaza_ranking import interaction_signals, material_score
 
 
 PAGE_SIZE = 24
+GROUP_PREVIEW_SIZE = 5
 SORTS = {"smart", "latest", "downloads", "favorites"}
 
 _catalog_cache = {"token": None, "data": None}
@@ -446,7 +447,7 @@ def api_plaza_materials(request):
     total_pages = max(1, (len(units) + PAGE_SIZE - 1) // PAGE_SIZE)
     page = min(_parse_page(request.GET.get("page")), total_pages)
     page_units = units[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
-    preview_ids = [mid for unit in page_units for mid in unit[:4]]
+    preview_ids = [mid for unit in page_units for mid in unit[:GROUP_PREVIEW_SIZE]]
     by_id = {item.id: item for item in materials.filter(id__in=preview_ids)}
     items = [by_id[mid] for mid in preview_ids if mid in by_id]
 
@@ -459,7 +460,7 @@ def api_plaza_materials(request):
     serialized = {item.id: _serialize_item(item, catalog, favorite_ids) for item in items}
     result_items = []
     for unit in page_units:
-        preview = [serialized[mid] for mid in unit[:4] if mid in serialized]
+        preview = [serialized[mid] for mid in unit[:GROUP_PREVIEW_SIZE] if mid in serialized]
         if not preview:
             continue
         if len(unit) == 1:

@@ -20,8 +20,15 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         self.leaf = CourseCategory.objects.create(name='测试课程', parent=self.folder, course=course)
         CourseCategory.objects.create(name='其他课程', parent=self.folder)
         kind = MaterialType.objects.create(name='笔记', slug='browser-notes')
-        for title in ('第一份笔记', '第二份笔记', '第三份笔记', '第四份笔记'):
+        for title in ('第一份笔记', '第二份笔记', '第三份笔记', '第四份笔记', '第五份笔记'):
             Material.objects.create(course=course, teacher='张老师', title=title, material_type=kind, file_type='pdf')
+        if self._testMethodName == 'test_grid_cards_keep_equal_height_across_rows':
+            exam = MaterialType.objects.create(name='真题', slug='browser-exams')
+            for index in range(7):
+                Material.objects.create(course=course, teacher='张老师',
+                                        title=('很长的资料标题' * 15 if index == 0 else f'试卷 {index}'),
+                                        description=('很长的资料简介' * 30 if index == 0 else ''),
+                                        material_type=exam, file_type='pdf')
         self.pw = sync_playwright().start()
         self.addCleanup(self.pw.stop)
         self.browser = self.pw.chromium.launch()
@@ -34,7 +41,11 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         trigger.wait_for()
         trigger.hover()
         page.locator('.plaza-stack-cards .plaza-card').first.wait_for(state='visible')
-        self.assertEqual(page.locator('.plaza-stack-cards .plaza-card').count(), 4)
+        self.assertEqual(page.locator('.plaza-stack-cards .plaza-card').count(), 5)
+        title = page.locator('.plaza-stack-cards .plaza-card').first.locator('.pc-title').bounding_box()
+        more = page.locator('.plaza-stack-more').bounding_box()
+        self.assertGreater(title['height'], 15)
+        self.assertLessEqual(title['y'] + title['height'], more['y'] + 1)
         bounds = page.locator('.plaza-stack-cards .plaza-card').evaluate_all(
             "els => els.map(el => {const r = el.getBoundingClientRect(); return [r.left, r.right]})")
         self.assertTrue(all(left >= -2 and right <= 1442 for left, right in bounds))
@@ -42,10 +53,10 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         page.locator('.plaza-stack-cards .plaza-card').first.wait_for(state='hidden')
         trigger.focus()
         page.locator('.plaza-stack-cards .plaza-card').first.wait_for(state='visible')
-        page.locator('.plaza-stack-anchor').click()
+        page.locator('.plaza-stack-more').click()
         page.wait_for_function("location.search.includes('teacher=')")
         page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
-        self.assertEqual(page.locator('#plazaGrid .plaza-card[data-id]').count(), 4)
+        self.assertEqual(page.locator('#plazaGrid .plaza-card[data-id]').count(), 5)
         self.assertEqual(page.locator('.plaza-stack').count(), 0)
         self.assertIn('教师：张老师', page.locator('#plazaFilterChips').inner_text())
 
@@ -61,12 +72,30 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         self.assertFalse(page.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
         if os.environ.get('BNU_BROWSER_SCREENSHOTS'):
             page.screenshot(path=os.path.join(os.environ['BNU_BROWSER_SCREENSHOTS'], 'plaza-fan-mobile.png'))
-        page.locator('.plaza-stack-anchor').tap()
+        page.locator('.plaza-stack-more').tap()
         page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
-        self.assertEqual(page.locator('#plazaGrid .plaza-card[data-id]').count(), 4)
+        self.assertEqual(page.locator('#plazaGrid .plaza-card[data-id]').count(), 5)
         page.reload()
         page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
         self.assertIn('教师：张老师', page.locator('#plazaFilterChips').inner_text())
+
+    def test_grid_cards_keep_equal_height_across_rows(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        items = page.locator('#plazaGrid > .plaza-card[data-id], #plazaGrid > .plaza-stack')
+        items.first.wait_for()
+        self.assertEqual(items.count(), 8)
+        for width in (1440, 768, 390):
+            with self.subTest(width=width):
+                page.set_viewport_size({'width': width, 'height': 900})
+                sizes = items.evaluate_all("els => els.map(el => {const r=el.getBoundingClientRect(); return [r.width,r.height]})")
+                self.assertLess(max(s[1] for s in sizes) - min(s[1] for s in sizes), 1)
+                self.assertLess(max(s[0] for s in sizes) - min(s[0] for s in sizes), 1)
+                self.assertTrue(page.locator('#plazaGrid > .plaza-card .pc-actions').first.is_visible())
+                self.assertTrue(page.locator('#plazaGrid > .plaza-card[data-id]').evaluate_all(
+                    "els => els.every(el => el.querySelector('.pc-actions').getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + 1)"))
+                if os.environ.get('BNU_BROWSER_SCREENSHOTS') and width in (1440, 390):
+                    page.screenshot(path=os.path.join(os.environ['BNU_BROWSER_SCREENSHOTS'], f'plaza-grid-{width}.png'))
 
     def test_fan_animates_from_stack_without_centered_panel(self):
         page = self.browser.new_page(viewport={'width': 1440, 'height': 900})
@@ -92,9 +121,16 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         first_center = (positions[0]['x'] + positions[0]['right']) / 2
         self.assertAlmostEqual(first_center, original['x'] + original['width'] / 2, delta=2)
         self.assertAlmostEqual((positions[0]['y'] + positions[0]['bottom']) / 2, original['y'] + original['height'] / 2, delta=2)
-        self.assertLess(min((p['x'] + p['right']) / 2 for p in positions), first_center - 40)
+        first_y = (positions[0]['y'] + positions[0]['bottom']) / 2
+        self.assertLess(min((p['y'] + p['bottom']) / 2 for p in positions), first_y - 40)
+        self.assertGreater(max((p['y'] + p['bottom']) / 2 for p in positions), first_y + 40)
+        self.assertEqual(sum((p['y'] + p['bottom']) / 2 < first_y - 40 for p in positions), 2)
+        self.assertEqual(sum((p['y'] + p['bottom']) / 2 > first_y + 40 for p in positions), 2)
         self.assertGreater(max((p['x'] + p['right']) / 2 for p in positions), first_center + 40)
         self.assertGreater(max(p['y'] for p in positions) - min(p['y'] for p in positions), 40)
+        offsets = sorted((abs((p['y'] + p['bottom']) / 2 - first_y),
+                          (p['x'] + p['right']) / 2 - first_center) for p in positions[1:])
+        self.assertGreater(offsets[-1][1], offsets[0][1] + 35)
         self.assertEqual(page.locator('.plaza-stack-panel').count(), 0)
         if os.environ.get('BNU_BROWSER_SCREENSHOTS'):
             page.screenshot(path=os.path.join(os.environ['BNU_BROWSER_SCREENSHOTS'], 'plaza-fan.png'))
@@ -138,9 +174,9 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
                     "els => els.map(el => {const r=el.getBoundingClientRect(); return [r.left,r.top,r.right,r.bottom]})")
                 self.assertTrue(all(left >= -1 and top >= -1 and right <= 1441 and bottom <= 901
                                     for left, top, right, bottom in positions), positions)
-                center = (positions[0][0] + positions[0][2]) / 2
-                if x == 570:
-                    self.assertLess(min(p[0] for p in positions[1:]), center - 150)
-                    self.assertGreater(max(p[2] for p in positions[1:]), center + 150)
+                center = (positions[0][1] + positions[0][3]) / 2
+                if y == 340:
+                    self.assertLess(min((p[1] + p[3]) / 2 for p in positions[1:]), center - 50)
+                    self.assertGreater(max((p[1] + p[3]) / 2 for p in positions[1:]), center + 50)
                 page.locator('.plaza-stack-backdrop').evaluate('el => el.click()')
                 page.locator('.plaza-stack.is-open').wait_for(state='hidden', timeout=1000)
