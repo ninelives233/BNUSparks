@@ -482,6 +482,7 @@
       if (state && state.categoryId) pq.push('category_id=' + parseInt(state.categoryId, 10));
       if (state && state.q) pq.push('q=' + encodeURIComponent(String(state.q).slice(0, 200)));
       if (state && state.materialType) pq.push('material_type=' + parseInt(state.materialType, 10));
+      if (state && state.teacher) pq.push('teacher=' + encodeURIComponent(state.teacher));
       if (state && state.format) pq.push('format=' + encodeURIComponent(state.format));
       if (state && state.favorites) pq.push('favorites=1');
       if (state && state.sort && state.sort !== 'smart') pq.push('sort=' + encodeURIComponent(state.sort));
@@ -576,7 +577,7 @@
     if (head === 'plaza') {
       var plazaRoute = {
         view: 'plaza', categoryId: null, q: '',
-        materialType: null, format: '', favorites: false,
+        materialType: null, teacher: '', format: '', favorites: false,
         sort: 'smart', page: 1,
       };
       try {
@@ -587,6 +588,7 @@
         if (pqRaw) plazaRoute.q = pqRaw.slice(0, 200);
         var pmt = parseInt(psp.get('material_type'), 10);
         if (pmt >= 1) plazaRoute.materialType = pmt;
+        plazaRoute.teacher = (psp.get('teacher') || '').trim().slice(0, 100);
         var pfmt = (psp.get('format') || '').toLowerCase().replace(/^\./, '').trim().slice(0, 20);
         if (pfmt) plazaRoute.format = pfmt;
         plazaRoute.favorites = psp.get('favorites') === '1' || psp.get('favorites') === 'true';

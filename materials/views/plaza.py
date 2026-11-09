@@ -10,6 +10,7 @@ from pathlib import Path
 
 from django.core.cache import cache
 from django.db.models import Count, Q
+from django.db.models.functions import Trim
 from django.utils import timezone
 
 from ..models import (
@@ -262,8 +263,7 @@ def _smart_material_ids(materials, catalog, page, single_course_scope):
         material_score(row, signals.get(row["id"], {}), row["course_id"] in practical, now),
         row["created_at"], row["id"],
     ), reverse=True)
-    offset = (page - 1) * PAGE_SIZE
-    return [row["id"] for row in rows[offset:offset + PAGE_SIZE]]
+    return [row["id"] for row in rows]
 
 
 def _parse_page(value):
@@ -367,6 +367,10 @@ def api_plaza_materials(request):
     if favorites_only:
         materials = materials.filter(favorited_by__user=user)
 
+    teacher = request.GET.get("teacher", "").strip()[:100]
+    if teacher:
+        materials = materials.annotate(plaza_teacher=Trim("teacher")).filter(plaza_teacher=teacher)
+
     type_counts = dict(
         materials.values_list("material_type_id").annotate(count=Count("id"))
     )
@@ -414,15 +418,37 @@ def api_plaza_materials(request):
         materials = materials.order_by("-created_at", "-id")
 
     total = materials.count()
-    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
-    page = min(_parse_page(request.GET.get("page")), total_pages)
-    offset = (page - 1) * PAGE_SIZE
     if sort == "smart":
-        ids = _smart_material_ids(materials, catalog, page, single_course_scope)
-        by_id = {item.id: item for item in materials.filter(id__in=ids)}
-        items = [by_id[mid] for mid in ids if mid in by_id]
+        ids = _smart_material_ids(materials, catalog, 1, single_course_scope)
     else:
-        items = list(materials[offset:offset + PAGE_SIZE])
+        ids = list(materials.values_list("id", flat=True))
+
+    # Only group when an unambiguous FK course leaf is available for navigation.
+    rows = {row["id"]: row for row in materials.order_by().values(
+        "id", "course_id", "teacher", "material_type_id", "material_type__name",
+    )}
+    units, groups = [], {}
+    for mid in ids:
+        row = rows[mid]
+        primary = _follow_merge(row["course_id"], catalog["courses"])
+        leaf = catalog["leaf_map"].get(primary) or catalog["leaf_map"].get(row["course_id"])
+        name = (row["teacher"] or "").strip()
+        key = (primary, leaf["category_id"], name, row["material_type_id"]) if (
+            not single_course_scope and leaf and name and row["material_type__name"] in ("课件", "笔记")
+        ) else None
+        if key and key in groups:
+            groups[key].append(mid)
+        else:
+            unit = [mid]
+            units.append(unit)
+            if key:
+                groups[key] = unit
+    total_pages = max(1, (len(units) + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(_parse_page(request.GET.get("page")), total_pages)
+    page_units = units[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
+    preview_ids = [mid for unit in page_units for mid in unit[:4]]
+    by_id = {item.id: item for item in materials.filter(id__in=preview_ids)}
+    items = [by_id[mid] for mid in preview_ids if mid in by_id]
 
     favorite_ids = set()
     if user is not None and items:
@@ -430,12 +456,23 @@ def api_plaza_materials(request):
             user=user, material_id__in=[item.id for item in items],
         ).values_list("material_id", flat=True))
 
+    serialized = {item.id: _serialize_item(item, catalog, favorite_ids) for item in items}
+    result_items = []
+    for unit in page_units:
+        preview = [serialized[mid] for mid in unit[:4] if mid in serialized]
+        if not preview:
+            continue
+        if len(unit) == 1:
+            result_items.append(preview[0])
+        else:
+            result_items.append({"kind": "group", "count": len(unit), "items": preview})
+
     return _ok({
         "total": total,
         "page": page,
         "total_pages": total_pages,
         "page_size": PAGE_SIZE,
-        "items": [_serialize_item(item, catalog, favorite_ids) for item in items],
+        "items": result_items,
         "facets": {"material_types": shapes, "formats": formats},
     })
 

@@ -5,10 +5,14 @@
 (function () {
   'use strict';
 
-  var DEFAULTS = { q: '', materialType: null, format: '', favorites: false, sort: 'smart', page: 1 };
-  var _state = { categoryId: null, q: '', materialType: null, format: '', favorites: false, sort: 'smart', page: 1 };
+  var DEFAULTS = { q: '', materialType: null, teacher: '', format: '', favorites: false, sort: 'smart', page: 1 };
+  var _state = { categoryId: null, q: '', materialType: null, teacher: '', format: '', favorites: false, sort: 'smart', page: 1 };
   var _nav = null;
   var _items = [];
+  var _groups = [];
+  var _groupTimer = null;
+  var _openGroup = null;
+  var _suppressGroupFocus = false;
   var _requestSeq = 0;
   var _navRequestSeq = 0;
   var _active = false;
@@ -22,7 +26,7 @@
   }
 
   function signatureOf(state) {
-    return [state.categoryId || '', state.q || '', state.materialType || '', state.format || '',
+    return [state.categoryId || '', state.q || '', state.materialType || '', state.teacher || '', state.format || '',
       state.favorites ? 1 : 0, state.sort || 'smart', state.page || 1].join('|');
   }
 
@@ -33,6 +37,7 @@
       categoryId: state.categoryId || null,
       q: state.q || '',
       materialType: state.materialType || null,
+      teacher: state.teacher || '',
       format: state.format || '',
       favorites: !!state.favorites,
       sort: state.sort || 'smart',
@@ -46,6 +51,7 @@
       categoryId: _state.categoryId,
       q: _state.q,
       materialType: _state.materialType,
+      teacher: _state.teacher,
       format: _state.format,
       favorites: _state.favorites,
       sort: _state.sort,
@@ -58,6 +64,7 @@
       categoryId: _state.categoryId,
       q: _state.q,
       materialType: _state.materialType,
+      teacher: _state.teacher,
       format: _state.format,
       favorites: _state.favorites,
       sort: _state.sort,
@@ -84,6 +91,7 @@
     params.set('category_id', _state.categoryId);
     if (_state.q) params.set('q', _state.q);
     if (_state.materialType) params.set('material_type', _state.materialType);
+    if (_state.teacher) params.set('teacher', _state.teacher);
     if (_state.format) params.set('format', _state.format);
     if (_state.favorites) params.set('favorites', '1');
     params.set('sort', _state.sort);
@@ -97,6 +105,7 @@
       categoryId: saved && saved.categoryId ? saved.categoryId : null,
       q: saved && saved.q ? saved.q : '',
       materialType: saved && saved.materialType ? saved.materialType : null,
+      teacher: saved && saved.teacher ? saved.teacher : '',
       format: saved && saved.format ? saved.format : '',
       favorites: false,
       sort: saved && saved.sort ? saved.sort : DEFAULTS.sort,
@@ -127,12 +136,17 @@
         categoryId: options.categoryId || shared.categoryId,
         q: options.keepFilters ? _state.q : shared.q,
         materialType: options.keepFilters ? _state.materialType : shared.materialType,
+        teacher: options.keepFilters ? _state.teacher : shared.teacher,
         format: options.keepFilters ? _state.format : shared.format,
         favorites: options.keepFilters ? _state.favorites : shared.favorites,
         sort: options.keepFilters ? _state.sort : shared.sort,
         page: options.page || (options.keepFilters ? 1 : shared.page),
       };
       setLastCourseRange(range);
+      if (options.group) {
+        _state.teacher = options.group.teacher.trim();
+        _state.materialType = options.group.material_type_id;
+      }
     }
     if (!currentUser && _state.favorites) {
       _state.favorites = false;
@@ -256,7 +270,22 @@
       loadMaterials();
     });
     var grid = document.getElementById('plazaGrid');
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && _openGroup) {
+        event.preventDefault();
+        closeGroup(_openGroup.contains(document.activeElement));
+      }
+    });
     grid.addEventListener('click', function (event) {
+      var more = event.target.closest('[data-plaza-group-more]');
+      if (more) {
+        var group = _groups[parseInt(more.getAttribute('data-plaza-group-more'), 10)];
+        if (group) show({ categoryId: group.items[0].course_category_id, keepFilters: true, group: group.items[0] });
+        return;
+      }
+      var trigger = event.target.closest('[data-plaza-group-open]');
+      if (trigger) { openGroup(trigger.closest('.plaza-stack')); return; }
+      if (event.target.closest('[data-plaza-group-close]')) { closeGroup(_openGroup && _openGroup.contains(document.activeElement)); return; }
       var courseButton = event.target.closest('[data-plaza-course]');
       if (courseButton) {
         event.preventDefault();
@@ -282,11 +311,43 @@
       if (card) openDetail(parseInt(card.getAttribute('data-id'), 10));
     });
     grid.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { closeGroup(true); return; }
       if (event.key !== 'Enter' && event.key !== ' ') return;
       var card = event.target.closest('.plaza-card');
       if (!card || event.target.closest('button, a, select, input')) return;
       event.preventDefault();
       openDetail(parseInt(card.getAttribute('data-id'), 10));
+    });
+    grid.addEventListener('pointerover', function (event) {
+      if (event.pointerType !== 'mouse') return;
+      if (event.target.closest('.plaza-stack-backdrop')) {
+        clearTimeout(_groupTimer);
+        _groupTimer = setTimeout(function () {
+          if (_openGroup && !_openGroup.contains(document.activeElement)) closeGroup();
+        }, 650);
+        return;
+      }
+      if (event.target.closest('.plaza-stack-panel, .plaza-stack-anchor')) clearTimeout(_groupTimer);
+      var stack = event.target.closest('.plaza-stack');
+      if (stack && !stack.contains(event.relatedTarget)) {
+        clearTimeout(_groupTimer);
+        _groupTimer = setTimeout(function () { openGroup(stack); }, 350);
+      }
+    });
+    grid.addEventListener('pointerout', function (event) {
+      var stack = event.target.closest('.plaza-stack');
+      if (stack && !stack.contains(event.relatedTarget)) {
+        clearTimeout(_groupTimer);
+        if (!stack.contains(document.activeElement)) closeGroup();
+      }
+    });
+    grid.addEventListener('focusin', function (event) {
+      var trigger = event.target.closest('[data-plaza-group-open]');
+      if (trigger && !_suppressGroupFocus) openGroup(trigger.closest('.plaza-stack'));
+    });
+    grid.addEventListener('focusout', function (event) {
+      var stack = event.target.closest('.plaza-stack');
+      if (stack && !stack.contains(event.relatedTarget)) closeGroup();
     });
 
     document.getElementById('plazaPager').addEventListener('click', function (event) {
@@ -363,6 +424,7 @@
       chips.push({ key: 'materialType', label: '类型：' + (option ? (option.getAttribute('data-pill') || option.textContent) : _state.materialType) });
     }
     if (_state.format) chips.push({ key: 'format', label: '格式：' + _state.format.toUpperCase() });
+    if (_state.teacher) chips.push({ key: 'teacher', label: '教师：' + _state.teacher });
     if (_state.favorites) chips.push({ key: 'favorites', label: '我的收藏' });
     if (!chips.length) { host.hidden = true; host.innerHTML = ''; return; }
     host.hidden = false;
@@ -374,13 +436,15 @@
       button.addEventListener('click', function () {
         var key = button.getAttribute('data-plaza-clear');
         if (key === 'all') {
-          _state.q = ''; _state.materialType = null; _state.format = ''; _state.favorites = false;
+          _state.q = ''; _state.materialType = null; _state.teacher = ''; _state.format = ''; _state.favorites = false;
         } else if (key === 'q') {
           _state.q = '';
         } else if (key === 'materialType') {
           _state.materialType = null;
         } else if (key === 'format') {
           _state.format = '';
+        } else if (key === 'teacher') {
+          _state.teacher = '';
         } else if (key === 'favorites') {
           _state.favorites = false;
         }
@@ -423,7 +487,8 @@
     return api('/api/materials/?' + materialsQuery())
       .then(function (data) {
         if (seq !== _requestSeq || !_active) return;
-        _items = data.items || [];
+        _groups = (data.items || []).filter(function (item) { return item.kind === 'group'; });
+        _items = (data.items || []).reduce(function (all, item) { return all.concat(item.kind === 'group' ? item.items : [item]); }, []);
         _state.page = data.page || 1;
         _lastSignature = signatureOf(_state);
         updateFacets(data.facets || { material_types: [], formats: [] });
@@ -468,7 +533,7 @@
   }
 
   function emptyStateHtml() {
-    var filtered = !!(_state.q || _state.materialType || _state.format || _state.favorites);
+    var filtered = !!(_state.q || _state.materialType || _state.teacher || _state.format || _state.favorites);
     if (filtered) {
       return '<div class="plaza-state"><p>当前筛选条件下没有资料。</p>' +
         '<button type="button" class="plaza-state-btn" data-plaza-clear="all">清除筛选</button></div>';
@@ -486,11 +551,11 @@
       grid.innerHTML = emptyStateHtml();
       var clear = grid.querySelector('[data-plaza-clear="all"]');
       if (clear) clear.addEventListener('click', function () {
-        _state.q = ''; _state.materialType = null; _state.format = ''; _state.favorites = false;
+        _state.q = ''; _state.materialType = null; _state.teacher = ''; _state.format = ''; _state.favorites = false;
         _state.page = 1; renderChrome(); loadMaterials();
       });
     } else {
-      grid.innerHTML = data.items.map(cardHtml).join('');
+      grid.innerHTML = data.items.map(function (item) { return item.kind === 'group' ? groupHtml(item, _groups.indexOf(item)) : cardHtml(item); }).join('');
     }
     renderPager(data.page, data.total_pages);
   }
@@ -503,6 +568,40 @@
       : '';
     return '<span class="pc-contributor"><span class="pc-avatar" aria-hidden="true">' +
       esc(initial) + image + '</span><span class="pc-uploader">' + esc(name) + '</span></span>';
+  }
+
+  function closeGroup(restoreFocus) {
+    clearTimeout(_groupTimer);
+    if (!_openGroup) return;
+    var trigger = _openGroup.querySelector('[data-plaza-group-open]');
+    _openGroup.classList.remove('is-open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    _openGroup = null;
+    if (restoreFocus && trigger) { _suppressGroupFocus = true; trigger.focus(); _suppressGroupFocus = false; }
+  }
+
+  function openGroup(stack) {
+    if (!stack || _openGroup === stack) return;
+    closeGroup();
+    _openGroup = stack;
+    stack.classList.add('is-open');
+    stack.querySelector('[data-plaza-group-open]').setAttribute('aria-expanded', 'true');
+  }
+
+  function groupHtml(group, index) {
+    var first = group.items[0];
+    return '<div class="plaza-stack">' +
+      '<button type="button" class="plaza-stack-trigger" data-plaza-group-open aria-expanded="false" aria-label="展开 ' + esc(first.course_name + ' ' + first.teacher + ' ' + first.material_type) + '，共 ' + group.count + ' 份">' +
+        '<span class="plaza-stack-sheet plaza-stack-sheet-back" aria-hidden="true"></span><span class="plaza-stack-sheet plaza-stack-sheet-mid" aria-hidden="true"></span>' +
+        '<span class="plaza-stack-front"><span class="pc-course-name">' + esc(first.course_name) + ' · ' + esc(first.teacher.trim()) + '</span>' +
+        '<span class="pc-type">' + esc(first.material_type) + '</span><strong>' + esc(first.material_type) + '资料</strong><span>共 ' + group.count + ' 份</span>' +
+        '<span class="plaza-stack-titles">' + group.items.slice(0, 2).map(function (item) { return esc(item.title); }).join('<br>') + '</span><span class="plaza-stack-hint">展开预览 ›</span></span></button>' +
+      '<button type="button" class="plaza-stack-anchor" data-plaza-group-more="' + index + '">查看全部 ' + group.count + ' 份 ›</button>' +
+      '<div class="plaza-stack-preview"><div class="plaza-stack-backdrop" data-plaza-group-close></div>' +
+        '<div class="plaza-stack-panel" aria-label="资料预览"><div class="plaza-stack-panel-head"><strong>' + esc(first.course_name) + ' · ' + esc(first.teacher.trim()) + ' · ' + esc(first.material_type) + '</strong>' +
+        '<button type="button" data-plaza-group-close aria-label="关闭预览">×</button></div>' +
+        '<div class="plaza-stack-cards">' + group.items.map(cardHtml).join('') + '</div>' +
+        '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + index + '">查看全部 ' + group.count + ' 份 ›</button></div></div></div>';
   }
 
   function cardHtml(item) {

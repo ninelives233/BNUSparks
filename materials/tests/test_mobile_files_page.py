@@ -73,7 +73,7 @@ class MobileFileListContractTest(SimpleTestCase):
         self.assertIn("_allFilesCache.length > 10", self.render)
         # 按钮显示当前条件
         self.assertIn("mf-filter-label", self.render)
-        self.assertIn("_MF_SORT_LABELS[_sortBy] || '上传时间'", self.file)
+        self.assertIn("_MF_SORT_LABELS[_sortBy] || '最新上传'", self.file)
 
     def test_batch_mode_shared_state(self):
         """移动批量模式复用 _selectedIds/batchDownloadSelected，计数与全选同步"""

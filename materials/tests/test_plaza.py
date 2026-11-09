@@ -8,7 +8,7 @@ from django.utils import timezone
 from .helpers import (
     BnuTestCase, create_category, create_college, create_course, create_user,
 )
-from ..models import CourseCategory, DownloadRecord, Favorite, Material, UserProfile
+from ..models import CourseCategory, DownloadRecord, Favorite, Material, MaterialType, UserProfile
 from ..services.plaza_ranking import interaction_signals
 
 
@@ -156,6 +156,40 @@ class PlazaApiTest(BnuTestCase):
         pdf_facets = [row for row in data["facets"]["formats"] if row["value"] == "pdf"]
         self.assertEqual(len(pdf_facets), 1)
         self.assertEqual(pdf_facets[0]["count"], 3)
+
+    def test_group_courseware_and_notes_only_above_course_leaf(self):
+        notes = MaterialType.objects.create(name="笔记", slug="notes")
+        a = self._material(self.course_a, "笔记一")
+        b = self._material(self.course_a, "笔记二")
+        Material.objects.filter(id__in=[a.id, b.id]).update(material_type=notes)
+        Material.objects.filter(id=b.id).update(teacher=" 张老师 ")
+        unknown = self._material(self.course_a, "无教师")
+        Material.objects.filter(id=unknown.id).update(material_type=notes, teacher="")
+        other = self._material(self.course_a, "另一教师")
+        Material.objects.filter(id=other.id).update(material_type=notes, teacher="李老师")
+        data = self._materials(material_type=notes.id)
+        groups = [item for item in data["items"] if item.get("kind") == "group"]
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["count"], 2)
+        self.assertEqual({i["id"] for i in groups[0]["items"]}, {a.id, b.id})
+        self.assertEqual(data["total"], 4)
+        leaf = self._materials(category_id=self.cat_a.id, material_type=notes.id, teacher="张老师")
+        self.assertEqual({item["id"] for item in leaf["items"]}, {a.id, b.id})
+        self.assertFalse(any(item.get("kind") == "group" for item in leaf["items"]))
+        self.assertEqual(self._materials(material_type=notes.id, q="笔记一")["items"][0]["id"], a.id)
+
+    def test_groups_paginate_as_units_and_limit_preview(self):
+        courseware = MaterialType.objects.create(name="课件", slug="slides")
+        for index in range(30):
+            mat = self._material(self.course_a, f"课件 {index}")
+            Material.objects.filter(id=mat.id).update(material_type=courseware)
+        for sort in ("latest", "smart", "downloads", "favorites"):
+            data = self._materials(sort=sort)
+            groups = [item for item in data["items"] if item.get("kind") == "group"]
+            self.assertEqual(data["total"], 32)
+            self.assertEqual(data["total_pages"], 1)
+            self.assertEqual(groups[0]["count"], 30)
+            self.assertEqual(len(groups[0]["items"]), 4)
 
     def test_sort_and_pagination(self):
         for index in range(25):
