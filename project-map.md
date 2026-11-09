@@ -23,7 +23,7 @@
 | 教室查询（我的课程） | `materials/views/classrooms.py`、`materials/services/classrooms.py`、`public/js/classrooms.js`、`public/css/classrooms.css` |
 | 我的课程/课表 | `user_timetable.py`、`public/js/timetable.js`、`public/css/timetable.css` |
 | 监测与管理员状态 | `monitoring_events.py`、`admin_monitoring.py`、`public/js/admin-*.js` |
-| 前端启动与路由 | `public/index.html`、`public/js/app.js`、`views.js`、`feature-loader.js`；站点 favicon 为 `public/bnusparks-favicon*.png`，顶部品牌横版 logo 为 `public/bnusparks-wordmark.png` |
+| 前端启动与路由 | `public/index.html`、`public/js/app.js`、`views.js`、`feature-loader.js`；站点 favicon 为 `public/bnusparks-favicon*.png`，顶栏透明小图标复用 favicon，横版 logo 轮廓由 `public/bnusparks-wordmark.png` 着主题红色 |
 | 动画使用教程（浮窗、五组目录、首次登录核心导览） | `public/js/tutorial-entry.js`（静态入口）、`tutorial-data/scenes/player.js`（懒加载）、`public/css/tutorial.css`、`materials/views/tutorial.py` |
 | 前端 API、认证与共用工具 | `public/js/utils.js`、`auth.js`、`profile.js`、`notifications.js` |
 | 课程浏览和资料详情 | `public/js/explorer-*.js`、`public/css/course.css`、`files.css` |

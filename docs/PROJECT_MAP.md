@@ -39,7 +39,7 @@ Browser
 | [`../bnusparks/settings_prod.py`](../bnusparks/settings_prod.py) | 无密钥生产配置模板 |
 | [`../bnusparks/urls.py`](../bnusparks/urls.py) | 顶层 URL 和 SPA fallback |
 | [`../materials/urls.py`](../materials/urls.py) | API 路由唯一事实源 |
-| [`../public/index.html`](../public/index.html) | SPA 骨架、基础资源入口、站点图标声明和顶栏宋体中文品牌名/横版英文标记入口 |
+| [`../public/index.html`](../public/index.html) | SPA 骨架、基础资源入口、站点图标声明和顶栏品牌标记；横版英文标记由 `base.css` 用 PNG 透明轮廓着主题红色 |
 | [`OPERATIONS.md`](OPERATIONS.md) | 部署、备份、恢复事实源 |
 
 ## 3. 数据域

@@ -42,7 +42,7 @@
   }
   .header-logo-area .hl-mark {
     display: block; width: 30px; height: 30px; object-fit: cover;
-    mix-blend-mode: multiply; filter: contrast(1.35) brightness(1.04);
+    mix-blend-mode: multiply; filter: contrast(1.2) brightness(1.12);
     flex-shrink: 0; transform-origin: 50% 50%;
     transition: opacity 0.24s ease, transform 0.42s var(--ease-spring), filter 0.24s ease;
   }
@@ -59,7 +59,7 @@
   }
   html[data-bnu-theme="dark"] .hl-mark,
   html[data-bnu-theme="dark"] .mobile-logo-mark {
-    mix-blend-mode: screen; filter: grayscale(1) invert(1) brightness(1.3) contrast(1.2);
+    mix-blend-mode: normal; filter: brightness(1.75) saturate(1.1);
   }
   /* 汉堡导航按钮：外观调整选「汉堡菜单」时取代移动端星火图标的位置 */
   .hl-burger {
@@ -73,16 +73,17 @@
   .hl-burger:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary); }
   .header-logo-area .hl-wordmark {
     position: absolute; left: var(--space-md); top: 50%;
-    display: block; width: 176px; height: auto; pointer-events: none;
+    display: block; width: 176px; height: 16px; pointer-events: none;
     opacity: 0; transform: translate(-10px, -50%) scale(0.96); transform-origin: left center;
     clip-path: inset(0 100% 0 0);
-    filter: brightness(0) saturate(100%);
+    background: #a61f29;
+    -webkit-mask: url("/static/bnusparks-wordmark.png") center / 100% 100% no-repeat;
+    mask: url("/static/bnusparks-wordmark.png") center / 100% 100% no-repeat;
     transition: opacity 0.18s ease, transform 0.48s var(--ease-out-strong),
-      clip-path 0.52s var(--ease-out-strong), filter 0.24s ease;
+      clip-path 0.52s var(--ease-out-strong), background-color 0.24s ease;
   }
-  .header-logo-area .hl-wordmark img { display: block; width: 100%; height: auto; }
   html[data-bnu-theme="dark"] .header-logo-area .hl-wordmark {
-    filter: none; filter: drop-shadow(0 0 1px oklch(1 0 0 / 0.16));
+    background-color: #ed555d;
   }
   .header-logo-area:hover .hl-mark,
   .header-logo-area:focus-visible .hl-mark { opacity: 0; transform: scale(0.7) rotate(-8deg); }
