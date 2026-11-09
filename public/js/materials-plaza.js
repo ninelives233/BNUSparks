@@ -12,6 +12,7 @@
   var _groups = [];
   var _groupTimer = null;
   var _openGroup = null;
+  var _groupOpenedAt = 0;
   var _suppressGroupFocus = false;
   var _requestSeq = 0;
   var _navRequestSeq = 0;
@@ -276,6 +277,8 @@
         closeGroup(_openGroup.contains(document.activeElement));
       }
     });
+    window.addEventListener('resize', function () { if (_openGroup) closeGroup(); });
+    window.addEventListener('scroll', function () { if (_openGroup) closeGroup(); }, { passive: true });
     grid.addEventListener('click', function (event) {
       var more = event.target.closest('[data-plaza-group-more]');
       if (more) {
@@ -322,17 +325,22 @@
       if (event.pointerType !== 'mouse') return;
       if (event.target.closest('.plaza-stack-backdrop')) {
         clearTimeout(_groupTimer);
-        _groupTimer = setTimeout(function () {
-          if (_openGroup && !_openGroup.contains(document.activeElement)) closeGroup();
-        }, 650);
         return;
       }
-      if (event.target.closest('.plaza-stack-panel, .plaza-stack-anchor')) clearTimeout(_groupTimer);
+      if (event.target.closest('.plaza-stack-cards, .plaza-stack-anchor')) clearTimeout(_groupTimer);
       var stack = event.target.closest('.plaza-stack');
       if (stack && !stack.contains(event.relatedTarget)) {
         clearTimeout(_groupTimer);
         _groupTimer = setTimeout(function () { openGroup(stack); }, 350);
       }
+    });
+    grid.addEventListener('pointermove', function (event) {
+      if (event.pointerType !== 'mouse' || !_openGroup || Date.now() - _groupOpenedAt < 900 || !event.target.closest('.plaza-stack-backdrop')) return;
+      clearTimeout(_groupTimer);
+      _groupTimer = setTimeout(function () {
+        _groupTimer = null;
+        if (_openGroup && !_openGroup.contains(document.activeElement)) closeGroup();
+      }, 650);
     });
     grid.addEventListener('pointerout', function (event) {
       var stack = event.target.closest('.plaza-stack');
@@ -572,9 +580,11 @@
 
   function closeGroup(restoreFocus) {
     clearTimeout(_groupTimer);
+    _groupTimer = null;
     if (!_openGroup) return;
     var trigger = _openGroup.querySelector('[data-plaza-group-open]');
     _openGroup.classList.remove('is-open');
+    _openGroup.querySelector('.plaza-stack-preview').inert = true;
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
     _openGroup = null;
     if (restoreFocus && trigger) { _suppressGroupFocus = true; trigger.focus(); _suppressGroupFocus = false; }
@@ -584,6 +594,40 @@
     if (!stack || _openGroup === stack) return;
     closeGroup();
     _openGroup = stack;
+    _groupOpenedAt = Date.now();
+    var rect = stack.querySelector('[data-plaza-group-open]').getBoundingClientRect();
+    var cards = stack.querySelectorAll('.plaza-stack-cards .plaza-card');
+    var narrow = window.innerWidth <= 640;
+    var width = Math.min(narrow ? Math.max(150, window.innerWidth * .46) : 260, window.innerWidth - 24);
+    var height = 166;
+    var startX = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + (rect.width - width) / 2));
+    var startY = Math.max(12, Math.min(window.innerHeight - height - 12, rect.top + (rect.height - height) / 2));
+    var direction = startY >= window.innerHeight - startY - height ? -1 : 1;
+    var leftSpace = startX - 12;
+    var rightSpace = window.innerWidth - width - 12 - startX;
+    var leftCount = 0;
+    var rightCount = 0;
+    cards.forEach(function (card, index) {
+      var horizontal = 0;
+      var rank = 0;
+      var distance = 0;
+      if (index > 0) {
+        horizontal = rightSpace / (rightCount + 1) >= leftSpace / (leftCount + 1) ? 1 : -1;
+        rank = horizontal > 0 ? ++rightCount : ++leftCount;
+        distance = Math.min(rank * 230, horizontal > 0 ? rightSpace : leftSpace);
+      }
+      var targetX = startX + horizontal * distance;
+      var targetY = Math.max(12, Math.min(window.innerHeight - height - 12, startY + direction * Math.min(narrow ? 180 : 110, rank * (narrow ? 90 : 38))));
+      card.style.setProperty('--fan-left', startX + 'px');
+      card.style.setProperty('--fan-top', startY + 'px');
+      card.style.setProperty('--fan-width', width + 'px');
+      card.style.setProperty('--fan-dx', (targetX - startX) + 'px');
+      card.style.setProperty('--fan-dy', (targetY - startY) + 'px');
+      card.style.setProperty('--fan-angle', (horizontal * rank * 3) + 'deg');
+      card.style.setProperty('--fan-delay', (index * 35) + 'ms');
+      card.style.setProperty('--fan-layer', 1004 - rank);
+    });
+    stack.querySelector('.plaza-stack-preview').inert = false;
     stack.classList.add('is-open');
     stack.querySelector('[data-plaza-group-open]').setAttribute('aria-expanded', 'true');
   }
@@ -597,11 +641,8 @@
         '<span class="pc-type">' + esc(first.material_type) + '</span><strong>' + esc(first.material_type) + '资料</strong><span>共 ' + group.count + ' 份</span>' +
         '<span class="plaza-stack-titles">' + group.items.slice(0, 2).map(function (item) { return esc(item.title); }).join('<br>') + '</span><span class="plaza-stack-hint">展开预览 ›</span></span></button>' +
       '<button type="button" class="plaza-stack-anchor" data-plaza-group-more="' + index + '">查看全部 ' + group.count + ' 份 ›</button>' +
-      '<div class="plaza-stack-preview"><div class="plaza-stack-backdrop" data-plaza-group-close></div>' +
-        '<div class="plaza-stack-panel" aria-label="资料预览"><div class="plaza-stack-panel-head"><strong>' + esc(first.course_name) + ' · ' + esc(first.teacher.trim()) + ' · ' + esc(first.material_type) + '</strong>' +
-        '<button type="button" data-plaza-group-close aria-label="关闭预览">×</button></div>' +
-        '<div class="plaza-stack-cards">' + group.items.map(cardHtml).join('') + '</div>' +
-        '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + index + '">查看全部 ' + group.count + ' 份 ›</button></div></div></div>';
+      '<div class="plaza-stack-preview" inert><div class="plaza-stack-backdrop" data-plaza-group-close></div>' +
+        '<div class="plaza-stack-cards" aria-label="资料预览">' + group.items.map(cardHtml).join('') + '</div></div></div>';
   }
 
   function cardHtml(item) {
