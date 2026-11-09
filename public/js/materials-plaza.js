@@ -108,6 +108,8 @@
     options = options || {};
     var requestedRange = options.courseType === '专业课' || options.courseType === '通识课'
       ? options.courseType : getLastCourseRange();
+    var requestedType = options.courseType === '专业课' ? 'major'
+      : options.courseType === '通识课' ? 'general' : null;
     if (options.fromHistory) {
       var restored = stateFromHistory();
       if (!restored) return;
@@ -158,21 +160,34 @@
     return fetchNavigation(_state.categoryId, requestedRange)
       .then(function (nav) {
         if (navSeq !== _navRequestSeq || !_active) return null;
-        _nav = nav;
-        _state.categoryId = nav.category_id;
-        setLastCourseRange(rangeOfNav());
-        saveSession();
-        renderBrowseBar(rangeOfNav());
-        renderChrome();
-        renderBreadcrumb();
-        renderTreeHost();
-        if (!options.fromHistory && typeof patchViewState === 'function') patchViewState(historyState());
-        return loadMaterials();
+        // 会话中保存的目录可能来自旧数据：课程类型字段修复前，专业课目录会被
+        // 记在通识课名下。此时若继续加载该目录，切换课程类型看起来毫无反应；
+        // 类型对不上就回到目标范围的根目录，并覆盖这份失效的会话位置。
+        if (requestedType && nav.course_type !== requestedType) {
+          return fetchNavigation(null, requestedRange).then(function (rootNav) {
+            if (navSeq !== _navRequestSeq || !_active) return null;
+            return applyNavigation(rootNav, !options.fromHistory);
+          });
+        }
+        return applyNavigation(nav, !options.fromHistory);
       })
       .catch(function (error) {
         if (navSeq !== _navRequestSeq || !_active) return;
         renderError(error);
       });
+  }
+
+  function applyNavigation(nav, patchHistory) {
+    _nav = nav;
+    _state.categoryId = nav.category_id;
+    setLastCourseRange(rangeOfNav());
+    saveSession();
+    renderBrowseBar(rangeOfNav());
+    renderChrome();
+    renderBreadcrumb();
+    renderTreeHost();
+    if (patchHistory && typeof patchViewState === 'function') patchViewState(historyState());
+    return loadMaterials();
   }
 
   function ensureShell() {
