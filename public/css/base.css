@@ -38,13 +38,19 @@
     display: flex; align-items: center; gap: 0;
     padding-left: var(--space-md);
     position: relative; isolation: isolate;
+    --header-brand-color: #a61f29;
     text-decoration: none; line-height: 1;
   }
+  .mobile-logo-placeholder { --header-brand-color: #a61f29; }
+  html[data-bnu-theme="dark"] .header-logo-area,
+  html[data-bnu-theme="dark"] .mobile-logo-placeholder { --header-brand-color: #fff; }
   .header-logo-area .hl-mark {
-    display: block; width: 30px; height: 30px; object-fit: cover;
-    mix-blend-mode: multiply; filter: contrast(1.2) brightness(1.12);
+    display: block; width: 30px; height: 30px;
+    background-color: var(--header-brand-color);
+    -webkit-mask: url("/static/bnusparks-favicon.png") center / 100% 100% no-repeat;
+    mask: url("/static/bnusparks-favicon.png") center / 100% 100% no-repeat;
     flex-shrink: 0; transform-origin: 50% 50%;
-    transition: opacity 0.24s ease, transform 0.42s var(--ease-spring), filter 0.24s ease;
+    transition: opacity 0.24s ease, transform 0.42s var(--ease-spring), background-color 0.24s ease;
   }
   .header-logo-area .hl-texts {
     display: flex; flex-direction: column;
@@ -56,10 +62,6 @@
     font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
     font-size: 1rem; font-weight: 700; color: var(--ink);
     letter-spacing: -0.01em; line-height: 1.2;
-  }
-  html[data-bnu-theme="dark"] .hl-mark,
-  html[data-bnu-theme="dark"] .mobile-logo-mark {
-    mix-blend-mode: normal; filter: brightness(1.75) saturate(1.1);
   }
   /* 汉堡导航按钮：外观调整选「汉堡菜单」时取代移动端星火图标的位置 */
   .hl-burger {
@@ -76,14 +78,11 @@
     display: block; width: 176px; height: 16px; pointer-events: none;
     opacity: 0; transform: translate(-10px, -50%) scale(0.96); transform-origin: left center;
     clip-path: inset(0 100% 0 0);
-    background: #a61f29;
+    background-color: var(--header-brand-color);
     -webkit-mask: url("/static/bnusparks-wordmark.png") center / 100% 100% no-repeat;
     mask: url("/static/bnusparks-wordmark.png") center / 100% 100% no-repeat;
     transition: opacity 0.18s ease, transform 0.48s var(--ease-out-strong),
       clip-path 0.52s var(--ease-out-strong), background-color 0.24s ease;
-  }
-  html[data-bnu-theme="dark"] .header-logo-area .hl-wordmark {
-    background-color: #ed555d;
   }
   .header-logo-area:hover .hl-mark,
   .header-logo-area:focus-visible .hl-mark { opacity: 0; transform: scale(0.7) rotate(-8deg); }
@@ -448,8 +447,10 @@
       width: 44px; height: var(--header-height); flex-shrink: 0;
     }
     .mobile-logo-mark {
-      display: block; width: 26px; height: 26px; object-fit: cover;
-      mix-blend-mode: multiply; filter: contrast(1.35) brightness(1.04);
+      display: block; width: 26px; height: 26px;
+      background-color: var(--header-brand-color);
+      -webkit-mask: url("/static/bnusparks-favicon.png") center / 100% 100% no-repeat;
+      mask: url("/static/bnusparks-favicon.png") center / 100% 100% no-repeat;
     }
     /* 汉堡菜单模式：顶部左上入口取代星火图标，底部导航退场 */
     html[data-bnu-nav="burger"] .hl-burger { display: inline-flex; }
