@@ -1,11 +1,15 @@
 """资料广场：目录范围解析、分页筛选与课程导航回归。"""
 
+from datetime import timedelta
+
 from django.core.cache import cache
+from django.utils import timezone
 
 from .helpers import (
     BnuTestCase, create_category, create_college, create_course, create_user,
 )
-from ..models import CourseCategory, Favorite, Material, UserProfile
+from ..models import CourseCategory, DownloadRecord, Favorite, Material, UserProfile
+from ..services.plaza_ranking import interaction_signals
 
 
 class PlazaApiTest(BnuTestCase):
@@ -191,6 +195,67 @@ class PlazaApiTest(BnuTestCase):
         )
         invalid = self.client.patch_json("/api/auth/profile/", {"material_browse_mode": "other"})
         self.assertEqual(invalid.status_code, 400)
+
+
+    def test_smart_sort_keeps_original_flat_pagination_without_group_limit(self):
+        for index in range(27):
+            self._material(self.course_a, f"同类型资料 {index}")
+        Material.objects.filter(id=self.mat_a.id).update(download_count=500)
+        first = self._materials(sort="smart")
+        second = self._materials(sort="smart", page=2)
+        self.assertEqual(first["items"][0]["id"], self.mat_a.id)
+        self.assertEqual(first["page_size"], 24)
+        self.assertEqual(len(first["items"]), 24)
+        self.assertEqual(len(second["items"]), 5)
+        self.assertEqual(len({m["id"] for m in first["items"] + second["items"]}), 29)
+        self.assertNotIn("groups", first)
+        self.assertNotIn(self.pending.id, {m["id"] for m in first["items"] + second["items"]})
+
+    def test_recent_heat_counts_distinct_readers_not_repeated_or_self_activity(self):
+        reader = create_user("smart_reader")
+        script = create_user("smart_script")
+        script.email = "automation@test.com"
+        script.save(update_fields=["email"])
+        for user in (reader, reader, reader, self.user, script):
+            DownloadRecord.objects.create(user=user, material=self.mat_a, activity_type="download")
+        DownloadRecord.objects.create(user=reader, material=self.mat_a, activity_type="preview")
+        Favorite.objects.create(user=self.user, material=self.mat_a)
+        signal = interaction_signals(Material.objects.filter(id=self.mat_a.id).values("id"), timezone.now())[self.mat_a.id]
+        self.assertEqual(signal["heat"], 3.25)
+        self.assertEqual(signal["favorites"], 0)
+
+    def test_smart_sort_prefers_recent_use_over_expired_equal_popularity(self):
+        reader = create_user("smart_recent")
+        Material.objects.filter(id__in=[self.mat_a.id, self.mat_b.id]).update(download_count=10, created_at=timezone.now() - timedelta(days=90))
+        old = DownloadRecord.objects.create(user=reader, material=self.mat_b, activity_type="download")
+        DownloadRecord.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(days=40))
+        DownloadRecord.objects.create(user=reader, material=self.mat_a, activity_type="download")
+        self.assertEqual(self._materials(sort="smart")["items"][0]["id"], self.mat_a.id)
+
+    def test_smart_sort_uses_valid_favorites_without_changing_public_count(self):
+        Material.objects.filter(id__in=[self.mat_a.id, self.mat_b.id]).update(download_count=0)
+        Favorite.objects.create(user=create_user("smart_favorite"), material=self.mat_a)
+        Favorite.objects.create(user=self.user, material=self.mat_a)
+        data = self._materials(sort="smart")
+        self.assertEqual(data["items"][0]["id"], self.mat_a.id)
+        self.assertEqual(data["items"][0]["favorite_count"], 2)
+
+    def test_smart_practical_bonus_comes_from_directory_not_material_title(self):
+        course = create_course("UNB001", "学院资料", college=self.college)
+        folder = create_category(name="实用资料", parent=self.major_cat)
+        create_category(name="选课经验", parent=folder, course=course)
+        practical = self._material(course, "选课经验")
+        Material.objects.all().update(download_count=0, created_at=timezone.now() - timedelta(days=90))
+        Material.objects.filter(id=self.mat_b.id).update(title="实用资料：只是标题")
+        self.assertEqual(self._materials(sort="smart")["items"][0]["id"], practical.id)
+
+    def test_smart_sort_preserves_course_pin_without_global_pin_priority(self):
+        pinned = self._material(self.course_a, "置顶资料")
+        pinned.is_pinned = True
+        pinned.save(update_fields=["is_pinned"])
+        Material.objects.filter(id=self.mat_a.id).update(download_count=5000)
+        self.assertEqual(self._materials(category_id=self.cat_a.id, sort="smart")["items"][0]["id"], pinned.id)
+        self.assertEqual(self._materials(sort="smart")["items"][0]["id"], self.mat_a.id)
 
 
 class CourseNavigationTest(BnuTestCase):

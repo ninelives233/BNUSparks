@@ -37,12 +37,14 @@
     width: 200px; flex-shrink: 0;
     display: flex; align-items: center; gap: 0;
     padding-left: var(--space-md);
+    position: relative; isolation: isolate;
     text-decoration: none; line-height: 1;
   }
   .header-logo-area .hl-mark {
     display: block; width: 30px; height: 30px; object-fit: cover;
     mix-blend-mode: multiply; filter: contrast(1.35) brightness(1.04);
-    flex-shrink: 0; margin-right: var(--space-sm); transition: border-radius 0.2s, transform 0.2s;
+    flex-shrink: 0; transform-origin: 50% 50%;
+    transition: opacity 0.24s ease, transform 0.42s var(--ease-spring), filter 0.24s ease;
   }
   html[data-bnu-theme="dark"] .hl-mark,
   html[data-bnu-theme="dark"] .mobile-logo-mark {
@@ -58,15 +60,24 @@
   .hl-burger svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
   .hl-burger:hover { color: var(--primary); }
   .hl-burger:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary); }
-  .header-logo-area:hover .hl-mark { border-radius: var(--radius-md); transform: scale(1.05); }
-  .header-logo-area .hl-texts { display: flex; flex-direction: column; }
-  .header-logo-area .hl-chinese {
-    font-family: var(--serif); font-size: 1rem; font-weight: 700; color: var(--ink);
-    letter-spacing: -0.01em; line-height: 1.2;
+  .header-logo-area .hl-wordmark {
+    position: absolute; left: var(--space-md); top: 50%;
+    display: block; width: 176px; height: auto; pointer-events: none;
+    opacity: 0; transform: translateX(-10px) scale(0.96); transform-origin: left center;
+    clip-path: inset(0 100% 0 0);
+    filter: brightness(0) saturate(100%);
+    transition: opacity 0.18s ease, transform 0.48s var(--ease-out-strong),
+      clip-path 0.52s var(--ease-out-strong), filter 0.24s ease;
   }
-  .header-logo-area .hl-english {
-    font-family: var(--sans); font-size: 0.6rem; font-weight: 600; color: var(--ink-faint);
-    letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2;
+  .header-logo-area .hl-wordmark img { display: block; width: 100%; height: auto; }
+  html[data-bnu-theme="dark"] .header-logo-area .hl-wordmark {
+    filter: none; filter: drop-shadow(0 0 1px oklch(1 0 0 / 0.16));
+  }
+  .header-logo-area:hover .hl-mark,
+  .header-logo-area:focus-visible .hl-mark { opacity: 0; transform: scale(0.7) rotate(-8deg); }
+  .header-logo-area:hover .hl-wordmark,
+  .header-logo-area:focus-visible .hl-wordmark {
+    opacity: 0.92; transform: translateX(0) scale(1); clip-path: inset(0 0 0 0);
   }
 
   /* ── 搜索靠右，紧挨 login 按钮 ────────────────── */

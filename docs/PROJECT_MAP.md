@@ -39,7 +39,7 @@ Browser
 | [`../bnusparks/settings_prod.py`](../bnusparks/settings_prod.py) | 无密钥生产配置模板 |
 | [`../bnusparks/urls.py`](../bnusparks/urls.py) | 顶层 URL 和 SPA fallback |
 | [`../materials/urls.py`](../materials/urls.py) | API 路由唯一事实源 |
-| [`../public/index.html`](../public/index.html) | SPA 骨架、基础资源入口和 `public/bnusparks-favicon*.png` 站点图标声明 |
+| [`../public/index.html`](../public/index.html) | SPA 骨架、基础资源入口、站点图标声明和顶栏品牌标记入口 |
 | [`OPERATIONS.md`](OPERATIONS.md) | 部署、备份、恢复事实源 |
 
 ## 3. 数据域
@@ -147,7 +147,7 @@ explorer-core.js → /api/courses/tree/ → courses.py → utils_course_tree.py
 
 课程别名和合并最终跟随主课程；外部入口应复用统一导航，避免异步渲染覆盖。
 
-资料广场复用同一范围语义：导航接口处理身份默认与跳层，资料接口按目录筛选分页；前端 `materials-plaza.js` 路由 `/plaza`。
+资料广场复用目录范围，前端路由 `/plaza`；`plaza_ranking.py` 按累计下载、有效收藏、近期去重热度和新资料/实用目录加权提供公共智能排序（`sort=smart`），不读取个人课表。资料仍按原卡片网格与资料条数分页，原最新/下载/收藏排序及资料操作不变。
 
 ### 独立搜索结果页
 

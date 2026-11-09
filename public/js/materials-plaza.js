@@ -5,8 +5,8 @@
 (function () {
   'use strict';
 
-  var DEFAULTS = { q: '', materialType: null, format: '', favorites: false, sort: 'latest', page: 1 };
-  var _state = { categoryId: null, q: '', materialType: null, format: '', favorites: false, sort: 'latest', page: 1 };
+  var DEFAULTS = { q: '', materialType: null, format: '', favorites: false, sort: 'smart', page: 1 };
+  var _state = { categoryId: null, q: '', materialType: null, format: '', favorites: false, sort: 'smart', page: 1 };
   var _nav = null;
   var _items = [];
   var _requestSeq = 0;
@@ -23,7 +23,7 @@
 
   function signatureOf(state) {
     return [state.categoryId || '', state.q || '', state.materialType || '', state.format || '',
-      state.favorites ? 1 : 0, state.sort || 'latest', state.page || 1].join('|');
+      state.favorites ? 1 : 0, state.sort || 'smart', state.page || 1].join('|');
   }
 
   function stateFromHistory() {
@@ -35,7 +35,7 @@
       materialType: state.materialType || null,
       format: state.format || '',
       favorites: !!state.favorites,
-      sort: state.sort || 'latest',
+      sort: state.sort || 'smart',
       page: state.page || 1,
       scrollY: state.scrollY || 0,
     };
@@ -204,6 +204,7 @@
           '<label class="plaza-select"><span>资料类型</span><span class="plaza-select-control"><select id="plazaTypeSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
           '<label class="plaza-select"><span>文件格式</span><span class="plaza-select-control"><select id="plazaFormatSelect"></select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
           '<label class="plaza-select"><span>排序</span><span class="plaza-select-control"><select id="plazaSortSelect">' +
+            '<option value="smart">智能推荐</option>' +
             '<option value="latest">最新上传</option>' +
             '<option value="downloads">下载最多</option>' +
             '<option value="favorites">收藏最多</option>' +
@@ -817,7 +818,7 @@
           facets.formats.map(function (format) { return '<option value="' + format.value + '">' + esc(format.name) + '</option>'; }).join('') +
         '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
         '<label><span>排序</span><span class="plaza-select-control"><select id="plazaSheetSort">' +
-          '<option value="latest">最新上传</option><option value="downloads">下载最多</option><option value="favorites">收藏最多</option>' +
+          '<option value="smart">智能推荐</option><option value="latest">最新上传</option><option value="downloads">下载最多</option><option value="favorites">收藏最多</option>' +
         '</select><span class="plaza-select-arrow" aria-hidden="true"></span></span></label>' +
       '</div>' +
       '<div class="plaza-overlay-foot"><button type="button" class="plaza-secondary" data-sheet-reset>重置</button>' +
@@ -830,7 +831,7 @@
       format.value = _state.format || '';
       sort.value = _state.sort;
       overlay.querySelector('[data-sheet-reset]').addEventListener('click', function () {
-        type.value = ''; format.value = ''; sort.value = 'latest';
+        type.value = ''; format.value = ''; sort.value = 'smart';
       });
       overlay.querySelector('[data-sheet-apply]').addEventListener('click', function () {
         _state.materialType = type.value ? parseInt(type.value, 10) : null;

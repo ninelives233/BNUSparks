@@ -461,7 +461,7 @@
       if (state && state.materialType) pq.push('material_type=' + parseInt(state.materialType, 10));
       if (state && state.format) pq.push('format=' + encodeURIComponent(state.format));
       if (state && state.favorites) pq.push('favorites=1');
-      if (state && state.sort && state.sort !== 'latest') pq.push('sort=' + encodeURIComponent(state.sort));
+      if (state && state.sort && state.sort !== 'smart') pq.push('sort=' + encodeURIComponent(state.sort));
       if (state && state.page && state.page > 1) pq.push('page=' + parseInt(state.page, 10));
       return pq.length ? pp + '?' + pq.join('&') : pp;
     }
@@ -554,7 +554,7 @@
       var plazaRoute = {
         view: 'plaza', categoryId: null, q: '',
         materialType: null, format: '', favorites: false,
-        sort: 'latest', page: 1,
+        sort: 'smart', page: 1,
       };
       try {
         var psp = new URLSearchParams(location.search);
@@ -568,7 +568,7 @@
         if (pfmt) plazaRoute.format = pfmt;
         plazaRoute.favorites = psp.get('favorites') === '1' || psp.get('favorites') === 'true';
         var pSort = psp.get('sort') || '';
-        if (pSort === 'downloads' || pSort === 'favorites' || pSort === 'latest') plazaRoute.sort = pSort;
+        if (pSort === 'smart' || pSort === 'downloads' || pSort === 'favorites' || pSort === 'latest') plazaRoute.sort = pSort;
         var pPage = parseInt(psp.get('page'), 10);
         if (pPage >= 1) plazaRoute.page = pPage;
       } catch (e) { /* URLSearchParams 不可用时保持缺省 */ }

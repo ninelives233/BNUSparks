@@ -10,16 +10,18 @@ from pathlib import Path
 
 from django.core.cache import cache
 from django.db.models import Count, Q
+from django.utils import timezone
 
 from ..models import (
     PLAZA_INDEX_VERSION_KEY, Course, CourseCategory, Favorite, Material,
     MaterialType, UserProfile,
 )
 from .utils import _err, _get_or_create_profile, _get_user, _ok
+from ..services.plaza_ranking import interaction_signals, material_score
 
 
 PAGE_SIZE = 24
-SORTS = {"latest", "downloads", "favorites"}
+SORTS = {"smart", "latest", "downloads", "favorites"}
 
 _catalog_cache = {"token": None, "data": None}
 
@@ -230,6 +232,40 @@ def _scoped_course_ids(cat_id, catalog):
     return {cid for cid in selected if cid in courses}
 
 
+def _practical_course_ids(catalog):
+    """复用现有目录含义，不根据资料标题把内容猜成“实用”。"""
+    if "practical_courses" not in catalog:
+        practical = set()
+        for cid, cat in catalog["cats"].items():
+            if cat["is_divider"]:
+                continue
+            parent = catalog["cats"].get(cat["parent_id"], {})
+            grandparent = catalog["cats"].get(parent.get("parent_id"), {})
+            course = catalog["courses"].get(cat["course_id"], {})
+            custom = grandparent.get("name") == "专业课" and (course.get("code") or "").upper().startswith("UNB")
+            if custom or any(marker in (cat["name"] or "") for marker in ("实用", "使用材料")):
+                practical.update(_scoped_course_ids(cid, catalog))
+        catalog["practical_courses"] = practical
+    return catalog["practical_courses"]
+
+
+def _smart_material_ids(materials, catalog, page, single_course_scope):
+    """对完整筛选范围评分后分页，只加载轻量字段，资料详情仍按页读取。"""
+    now = timezone.now()
+    signals = interaction_signals(materials.order_by().values("id"), now)
+    practical = _practical_course_ids(catalog)
+    rows = list(materials.order_by().values(
+        "id", "course_id", "download_count", "created_at", "is_pinned",
+    ))
+    rows.sort(key=lambda row: (
+        bool(single_course_scope and row["is_pinned"]),
+        material_score(row, signals.get(row["id"], {}), row["course_id"] in practical, now),
+        row["created_at"], row["id"],
+    ), reverse=True)
+    offset = (page - 1) * PAGE_SIZE
+    return [row["id"] for row in rows[offset:offset + PAGE_SIZE]]
+
+
 def _parse_page(value):
     try:
         page = int(value)
@@ -381,7 +417,12 @@ def api_plaza_materials(request):
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = min(_parse_page(request.GET.get("page")), total_pages)
     offset = (page - 1) * PAGE_SIZE
-    items = list(materials[offset:offset + PAGE_SIZE])
+    if sort == "smart":
+        ids = _smart_material_ids(materials, catalog, page, single_course_scope)
+        by_id = {item.id: item for item in materials.filter(id__in=ids)}
+        items = [by_id[mid] for mid in ids if mid in by_id]
+    else:
+        items = list(materials[offset:offset + PAGE_SIZE])
 
     favorite_ids = set()
     if user is not None and items:
