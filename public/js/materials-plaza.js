@@ -341,6 +341,11 @@
     }
     grid.addEventListener('pointerover', function (event) {
       if (event.pointerType !== 'mouse') return;
+      if (event.target.closest('.plaza-stack-hint')) {
+        clearTimeout(_groupTimer);
+        _groupIntent = null;
+        return;
+      }
       var trigger = event.target.closest('[data-plaza-group-open]');
       if (!_openGroup && trigger && !trigger.contains(event.relatedTarget)) scheduleIntent(trigger, event.clientX, event.clientY);
       if (event.target.closest('.plaza-stack-backdrop')) scheduleGroupClose();
@@ -389,6 +394,11 @@
     if (!host) return;
     var activeRange = range || rangeOfNav() || '通识课';
     host.innerHTML = '<div class="plaza-desktop-switches">' + browseSwitcherHtml('plaza', activeRange) + '</div>';
+    var modeGroup = host.querySelector('.browse-switcher[aria-label="资料浏览方式"]');
+    if (modeGroup) {
+      modeGroup.outerHTML = '<button type="button" class="browse-mode-link" data-browse-mode="directory" aria-label="切换到课程目录">' +
+        iconSvg('folder') + '<span>课程目录</span></button>';
+    }
     if (_nav && _nav.path && _nav.path.length > 1) {
       var rangeGroup = host.querySelector('.browse-switcher[aria-label="课程范围"]');
       if (rangeGroup) rangeGroup.remove();
@@ -666,9 +676,10 @@
     return '<div class="plaza-stack">' +
       '<button type="button" class="plaza-stack-trigger" data-plaza-group-open aria-expanded="false" aria-label="展开 ' + esc(first.course_name + ' ' + first.teacher + ' ' + first.material_type) + '，共 ' + group.count + ' 份">' +
         '<span class="plaza-stack-sheet plaza-stack-sheet-back" aria-hidden="true"></span><span class="plaza-stack-sheet plaza-stack-sheet-mid" aria-hidden="true"></span>' +
-        '<span class="plaza-stack-front"><span class="pc-course-name">' + esc(first.course_name) + ' · ' + esc(first.teacher.trim()) + '</span>' +
+        '<span class="plaza-stack-front"><span class="pc-course"><span class="pc-course-name">' + esc(first.course_name) + '</span><span class="pc-teacher"> · ' + esc(first.teacher.trim()) + '</span></span>' +
         '<span class="pc-type">' + esc(first.material_type) + '</span><strong>' + esc(first.material_type) + '资料</strong><span>共 ' + group.count + ' 份</span>' +
-        '<span class="plaza-stack-titles">' + group.items.slice(0, 2).map(function (item) { return esc(item.title); }).join('<br>') + '</span><span class="plaza-stack-hint">展开预览 ›</span></span></button>' +
+        '<span class="plaza-stack-titles">' + group.items.slice(0, 2).map(function (item) { return esc(item.title); }).join('<br>') + '</span></span></button>' +
+      '<button type="button" class="plaza-stack-hint" data-plaza-group-more="' + index + '" aria-label="查看 ' + esc(first.course_name + ' ' + first.teacher.trim() + ' ' + first.material_type) + '的全部资料">查看全部 ›</button>' +
       '<div class="plaza-stack-preview" inert><div class="plaza-stack-backdrop" data-plaza-group-close></div>' +
         '<div class="plaza-stack-cards" aria-label="资料预览">' + group.items.map(function (item, i) { return cardHtml(item, i === 0 ? { index: index, count: group.count } : null); }).join('') + '</div></div></div>';
   }
@@ -689,7 +700,7 @@
         '</div>' +
       '</div>' +
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
-      (group ? '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + group.index + '">全部 ' + group.count + ' 份 <span aria-hidden="true">→</span></button>' : '') +
+      (group ? '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + group.index + '">查看全部 ' + group.count + ' 份 <span aria-hidden="true">→</span></button>' : '') +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
       '<div class="pc-meta">' + contributorHtml(item) +
         '<span class="pc-date">' + esc(item.created_at) + '</span>' +

@@ -390,6 +390,25 @@ html[data-bnu-theme="dark"] .pc-seg-btn.active .pc-seg-count { background: var(-
   gap: 10px 12px;
   flex-wrap: wrap;
 }
+.browse-mode-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.browse-mode-link:hover { color: var(--primary); background: var(--primary-surface); }
+.browse-mode-link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.browse-mode-link .ui-icon { width: 14px; height: 14px; }
 .browse-switcher {
   display: inline-flex;
   gap: 2px;

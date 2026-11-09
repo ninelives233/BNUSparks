@@ -60,6 +60,27 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         self.assertEqual(page.locator('.plaza-stack').count(), 0)
         self.assertIn('教师：张老师', page.locator('#plazaFilterChips').inner_text())
 
+    def test_collapsed_view_all_navigates_without_opening_preview(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        button = page.locator('.plaza-stack-hint')
+        button.wait_for()
+        self.assertEqual(button.inner_text(), '查看全部 ›')
+        button.hover()
+        page.wait_for_timeout(800)
+        self.assertEqual(page.locator('.plaza-stack.is-open').count(), 0)
+        button.focus()
+        page.keyboard.press('Enter')
+        page.wait_for_function("location.search.includes('teacher=')")
+        page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertEqual(page.locator('#plazaGrid .plaza-card[data-id]').count(), 5)
+        self.assertIn('教师：张老师', page.locator('#plazaFilterChips').inner_text())
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        page.locator('.plaza-stack-hint').click()
+        page.wait_for_function("location.search.includes('teacher=')")
+        page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertEqual(page.locator('#plazaGrid .plaza-card[data-id]').count(), 5)
+
     def test_touch_preview_in_dark_mode(self):
         context = self.browser.new_context(viewport={'width': 390, 'height': 844}, has_touch=True, reduced_motion='reduce')
         self.addCleanup(context.close)
@@ -85,6 +106,14 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         items = page.locator('#plazaGrid > .plaza-card[data-id], #plazaGrid > .plaza-stack')
         items.first.wait_for()
         self.assertEqual(items.count(), 8)
+        colors = page.evaluate("""() => {
+          const color = selector => getComputedStyle(document.querySelector(selector)).color;
+          return [color('#plazaGrid > .plaza-card .pc-course-btn'), color('.plaza-stack-front .pc-course-name'),
+                  color('#plazaGrid > .plaza-card .pc-teacher'), color('.plaza-stack-front .pc-teacher')];
+        }""")
+        self.assertEqual(colors[0], colors[1])
+        self.assertEqual(colors[2], colors[3])
+        self.assertNotEqual(colors[0], colors[2])
         for width in (1440, 768, 390):
             with self.subTest(width=width):
                 page.set_viewport_size({'width': width, 'height': 900})
@@ -96,6 +125,25 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
                     "els => els.every(el => el.querySelector('.pc-actions').getBoundingClientRect().bottom <= el.getBoundingClientRect().bottom + 1)"))
                 if os.environ.get('BNU_BROWSER_SCREENSHOTS') and width in (1440, 390):
                     page.screenshot(path=os.path.join(os.environ['BNU_BROWSER_SCREENSHOTS'], f'plaza-grid-{width}.png'))
+
+    def test_lightweight_switch_works_in_both_views(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        to_directory = page.locator('#plazaBrowseBar .browse-mode-link')
+        to_directory.wait_for()
+        for width in (1440, 390):
+            page.set_viewport_size({'width': width, 'height': 900})
+            self.assertTrue(to_directory.is_visible())
+        page.evaluate("document.documentElement.dataset.bnuTheme = 'dark'")
+        to_directory.focus()
+        page.keyboard.press('Enter')
+        page.wait_for_selector('#explorerView.active')
+        to_plaza = page.locator('#explorerTopActions .browse-mode-link')
+        to_plaza.wait_for(state='visible')
+        self.assertEqual(to_plaza.inner_text().strip(), '资料广场')
+        to_plaza.click()
+        page.wait_for_selector('#plazaView.active')
+        self.assertTrue(page.locator('#plazaBrowseBar .browse-mode-link').is_visible())
 
     def test_fan_animates_from_stack_without_centered_panel(self):
         page = self.browser.new_page(viewport={'width': 1440, 'height': 900})

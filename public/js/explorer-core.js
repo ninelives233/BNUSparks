@@ -660,7 +660,7 @@
   function renderPlazaModeLink(actionGroup, before) {
     var link = document.createElement('button');
     link.type = 'button';
-    link.className = 'explorer-plaza-link';
+    link.className = 'explorer-plaza-link browse-mode-link';
     link.innerHTML = iconSvg('layers') + '<span>资料广场</span>';
     link.setAttribute('aria-label', '切换到资料广场');
     link.onclick = function (event) {
