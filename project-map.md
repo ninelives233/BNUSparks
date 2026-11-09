@@ -38,7 +38,7 @@
 - `materials/urls.py` 是 API 地址的唯一事实源。
 - 资料广场的范围由 `materials/views/plaza.py` 按课程目录解析；前端不按身份或 `course.college` 自行拼范围，分类 ID 仅作筛选。
 - 教程分镜白名单以后端 `materials/views/tutorial.py` 的 `LESSON_REVISIONS` 与前端 `public/js/tutorial-data.js` 双向一致为准（`materials/tests/test_tutorial.py` 守门）；改分镜 ID/revision 必须两侧同步。分镜状态以 `tutorial-scenes.js` 的持久场景为准；解说、对象动作、镜头与结果停留由 `tutorial-data.js` 的绝对时间线声明，`tutorial-player.js` 的同一虚拟时钟管理队列、暂停与手势。`tools/check_tutorial_scenes.js` 验证状态、时间线和队列行为。
-- `public/index.html` 决定静态脚本基础加载顺序，并声明标签页、Apple touch 图标和含中文品牌名/横版英文标记的顶栏入口；按视图模块由 `feature-loader.js` 加载。
+- `public/index.html` 决定静态脚本基础加载顺序，并声明标签页、Apple touch 图标和含宋体中文品牌名/横版英文标记的顶栏入口；按视图模块由 `feature-loader.js` 加载。
 - 前端使用跨文件全局函数和内联事件；改名或删除前必须全仓搜索。
 - SPA 导航必须通过现有 history/state 封装，不能只切换 DOM。
 - 文件下载、预览、配额和令牌逻辑必须共用既有认证与路径边界。
