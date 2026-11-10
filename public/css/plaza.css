@@ -197,8 +197,6 @@
 .plaza-stack-front { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; overflow: hidden; }
 .plaza-stack-front .pc-type { position: absolute; top: 12px; right: 12px; }
 .plaza-stack-front .pc-course { max-width: 70%; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
-.plaza-stack-front .pc-course-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plaza-stack-front .pc-teacher { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plaza-stack-front strong { font-size: 1.05rem; }
 .plaza-stack-titles { color: var(--ink-faint); font-size: var(--fs-xs); line-height: 1.6; overflow: hidden; }
 .plaza-stack-hint { position: absolute; z-index: 1; left: 26px; bottom: 22px; padding: 3px 0; border: 0; background: transparent; color: var(--primary-dark); font: inherit; font-size: var(--fs-xs); cursor: pointer; }
@@ -244,10 +242,12 @@
 .plaza-card:hover { transform: translateY(-2px); border-color: var(--primary-light); box-shadow: var(--shadow-sm); }
 .plaza-card:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--primary-light); }
 .plaza-card .pc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 12px; }
-.plaza-card .pc-head .pc-course { flex: 1 1 0; min-width: 0; flex-wrap: wrap; gap: 2px 6px; }
+.plaza-card .pc-head .pc-course { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; gap: 2px 6px; }
 .plaza-card .pc-head .pc-course-btn,
 .plaza-card .pc-head .pc-course-name,
-.plaza-card .pc-head .pc-teacher { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plaza-stack-front .pc-course-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plaza-card .pc-head .pc-teacher,
+.plaza-stack-front .pc-teacher { flex: 0 0 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plaza-card .pc-head .pc-tags { flex: 0 1 auto; max-width: 50%; justify-content: flex-end; }
 .pc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .pc-type,

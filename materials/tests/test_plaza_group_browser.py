@@ -16,12 +16,18 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         root = CourseCategory.objects.create(name='通识课')
         self.folder = CourseCategory.objects.create(name='测试目录', parent=root)
         CourseCategory.objects.create(name='另一目录', parent=root)
-        course = create_course('PLAZA001', '测试课程')
-        self.leaf = CourseCategory.objects.create(name='测试课程', parent=self.folder, course=course)
+        course_name = ('微观经济学原理与金融市场分析' * 3
+                       if self._testMethodName == 'test_long_course_names_stay_on_one_line' else '测试课程')
+        course = create_course('PLAZA001', course_name)
+        self.leaf = CourseCategory.objects.create(name=course_name, parent=self.folder, course=course)
         CourseCategory.objects.create(name='其他课程', parent=self.folder)
         kind = MaterialType.objects.create(name='笔记', slug='browser-notes')
         for title in ('第一份笔记', '第二份笔记', '第三份笔记', '第四份笔记', '第五份笔记'):
             Material.objects.create(course=course, teacher='张老师', title=title, material_type=kind, file_type='pdf')
+        if self._testMethodName == 'test_long_course_names_stay_on_one_line':
+            exam = MaterialType.objects.create(name='真题', slug='browser-long-course-exam')
+            Material.objects.create(course=course, teacher='张老师', title='置顶试卷',
+                                    material_type=exam, file_type='pdf', is_pinned=True)
         if self._testMethodName == 'test_grid_cards_keep_equal_height_across_rows':
             exam = MaterialType.objects.create(name='真题', slug='browser-exams')
             for index in range(7):
@@ -33,6 +39,33 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         self.addCleanup(self.pw.stop)
         self.browser = self.pw.chromium.launch()
         self.addCleanup(self.browser.close)
+
+    def test_long_course_names_stay_on_one_line(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        page.locator('#plazaGrid > .plaza-card .pc-pin').wait_for()
+        for width in (1440, 768, 390):
+            with self.subTest(width=width):
+                page.set_viewport_size({'width': width, 'height': 900})
+                page.evaluate("document.documentElement.dataset.bnuTheme = 'dark'")
+                for selector in ('#plazaGrid > .plaza-card .pc-course', '.plaza-stack-front .pc-course'):
+                    info = page.locator(selector).evaluate("""el => {
+                      const course = el.querySelector('.pc-course-btn, .pc-course-name');
+                      const teacher = el.querySelector('.pc-teacher');
+                      const c = course.getBoundingClientRect(), t = teacher.getBoundingClientRect();
+                      return {wrap: getComputedStyle(el).flexWrap, ellipsis: getComputedStyle(course).textOverflow,
+                              overflow: course.scrollWidth > course.clientWidth,
+                              courseTop: c.top, teacherTop: t.top, courseRight: c.right,
+                              teacherLeft: t.left, teacherWidth: t.width, teacherScroll: teacher.scrollWidth};
+                    }""")
+                    self.assertEqual(info['wrap'], 'nowrap')
+                    self.assertEqual(info['ellipsis'], 'ellipsis')
+                    self.assertTrue(info['overflow'])
+                    self.assertAlmostEqual(info['courseTop'], info['teacherTop'], delta=2)
+                    self.assertLessEqual(info['courseRight'], info['teacherLeft'])
+                    self.assertGreaterEqual(info['teacherWidth'] + 1, info['teacherScroll'])
+        page.locator('#plazaGrid > .plaza-card .pc-course-btn').focus()
+        self.assertTrue(page.locator('#plazaGrid > .plaza-card .pc-course-btn').evaluate('el => el === document.activeElement'))
 
     def test_preview_and_filtered_leaf(self):
         page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
