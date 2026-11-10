@@ -265,19 +265,36 @@
     }).join('') + '</div>';
   }
 
+  // 双轴整数刻度：存量（累计）与增量（新增）量级常差一个数量级，共轴会把
+  // 新增压成贴地直线；左轴按 1/2/5 步长取整上限，右轴对齐左轴网格分段数，
+  // 保证两条线各自贴着可读刻度，且左右标签共享同一组网格线。
+  function _userTrendLeftAxis(values) {
+    var raw = Math.max(1, Math.ceil(Math.max.apply(null, values.concat([0]))));
+    if (raw <= 4) return { max: raw, step: 1 };
+    var approx = raw / 4;
+    var mag = Math.pow(10, Math.floor(Math.log(approx) / Math.LN10));
+    var norm = approx / mag;
+    var step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+    return { max: Math.ceil(raw / step) * step, step: step };
+  }
+
   function _identityUserTrendChart(trend) {
     var labels = trend.labels || [];
     var newUsers = trend.new_users || [];
     var totalUsers = trend.total_users || [];
-    var width = 960, height = 270, left = 48, right = 18, top = 22, bottom = 42;
-    var maxValue = Math.max(1, Math.max.apply(null, newUsers.concat(totalUsers)));
+    var width = 960, height = 270, left = 48, right = 52, top = 22, bottom = 42;
+    var totalAxis = _userTrendLeftAxis(totalUsers);
+    var segments = Math.round(totalAxis.max / totalAxis.step);
+    var newMax = Math.max(1, Math.ceil(Math.max.apply(null, newUsers.concat([0]))));
+    var newAxisMax = Math.ceil(newMax / segments) * segments;
     var grid = '', yLabels = '';
-    var tickCount = Math.min(4, Math.max(1, Math.ceil(maxValue)));
-    for (var t = 0; t <= tickCount; t++) {
-      var y = top + (height - top - bottom) * t / tickCount;
-      var tickValue = Math.round(maxValue * (tickCount - t) / tickCount);
+    for (var t = 0; t <= segments; t++) {
+      var y = top + (height - top - bottom) * t / segments;
       grid += '<line x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" />';
-      yLabels += '<text x="' + (left - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + tickValue + '</text>';
+      var leftValue = totalAxis.step * (segments - t);
+      var rightValue = Math.round(newAxisMax * (segments - t) / segments);
+      yLabels += '<text class="axis-total-users" x="' + (left - 10) + '" y="' + (y + 4) + '" text-anchor="end">' + leftValue + '</text>';
+      yLabels += '<text class="axis-new-users" x="' + (width - right + 10) + '" y="' + (y + 4) + '" text-anchor="start">' + rightValue + '</text>';
     }
     var xLabels = '';
     var labelStep = Math.max(1, Math.ceil(labels.length / 7));
@@ -286,13 +303,22 @@
       var x = left + (labels.length <= 1 ? (width - left - right) / 2 : index * (width - left - right) / (labels.length - 1));
       xLabels += '<text x="' + x + '" y="' + (height - 13) + '" text-anchor="middle">' + esc(label) + '</text>';
     });
+    var totalLine = _monitorLinePath(totalUsers, width, height, left, top, right, bottom, totalAxis.max);
+    var areaPath = '';
+    if (totalUsers.length) {
+      var baseY = height - bottom;
+      var firstX = left + (totalUsers.length <= 1 ? (width - left - right) / 2 : 0);
+      var lastX = left + (totalUsers.length <= 1 ? (width - left - right) / 2 : width - left - right);
+      areaPath = totalLine + ' L ' + lastX.toFixed(1) + ' ' + baseY + ' L ' + firstX.toFixed(1) + ' ' + baseY + ' Z';
+    }
     return '<div class="monitor-chart-card identity-user-trend-card">' +
       '<div class="identity-trend-head"><div><h4>用户数量趋势</h4><p>新增用户与当前有效用户的累计变化 · ' + esc(trend.period_label || '') + '</p></div>' +
-        '<div class="monitor-chart-legend"><span class="legend-new-users"><i></i>新增用户</span><span class="legend-total-users"><i></i>累计用户</span></div></div>' +
-      '<div class="monitor-chart-wrap"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="用户数量趋势">' +
+        '<div class="monitor-chart-legend"><span class="legend-total-users"><i></i>累计用户 · 左轴</span><span class="legend-new-users"><i></i>新增用户 · 右轴</span></div></div>' +
+      '<div class="monitor-chart-wrap"><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="用户数量趋势：左轴为累计用户，右轴为新增用户">' +
         '<g class="monitor-grid">' + grid + '</g><g class="monitor-axis-labels">' + yLabels + xLabels + '</g>' +
-        '<path class="monitor-line monitor-line-new-users" d="' + _monitorLinePath(newUsers, width, height, left, top, right, bottom, maxValue) + '" />' +
-        '<path class="monitor-line monitor-line-total-users" d="' + _monitorLinePath(totalUsers, width, height, left, top, right, bottom, maxValue) + '" />' +
+        (areaPath ? '<path class="monitor-area monitor-area-total-users" d="' + areaPath + '" />' : '') +
+        '<path class="monitor-line monitor-line-total-users" d="' + totalLine + '" />' +
+        '<path class="monitor-line monitor-line-new-users" d="' + _monitorLinePath(newUsers, width, height, left, top, right, bottom, newAxisMax) + '" />' +
       '</svg></div></div>';
   }
 

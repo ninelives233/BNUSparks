@@ -1000,13 +1000,16 @@
 .monitor-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .monitor-chart-legend i { width: 18px; height: 2px; background: var(--primary); }
 .monitor-chart-legend .legend-download i { background: var(--accent); }
-.monitor-chart-legend .legend-new-users i { background: var(--accent); }
+.monitor-chart-legend .legend-new-users i { background: repeating-linear-gradient(90deg, var(--accent) 0 5px, transparent 5px 9px); }
 .monitor-chart-legend .legend-total-users i { background: var(--primary); }
 .monitor-chart-legend .legend-timetable-import i { background: var(--accent); }
 .monitor-chart-wrap { width: 100%; overflow: hidden; }
 .monitor-chart-wrap svg { display: block; width: 100%; height: auto; min-height: 220px; }
 .monitor-grid line { stroke: var(--border-light); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .monitor-axis-labels text { fill: var(--ink-faint); font: 11px var(--sans); }
+.monitor-axis-labels .axis-total-users { fill: var(--primary); font-weight: 600; }
+.monitor-axis-labels .axis-new-users { fill: var(--accent); font-weight: 600; }
+.monitor-area-total-users { fill: var(--primary); fill-opacity: .06; }
 .monitor-line {
   fill: none; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -1522,14 +1525,17 @@ html[data-bnu-theme="dark"] .admin-table-card .admin-table tr:hover td {
 .behavior-console-section-head h3 { margin-top: 4px; font-family: var(--serif); font-size: 1rem; font-weight: 600; }
 .behavior-console-section-head small { color: var(--ink-faint); font-size: .65rem; }
 .behavior-console-daily-layout { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(300px, .88fr); gap: 18px; }
-.behavior-console-daily-bars { position: relative; min-height: 210px; display: flex; align-items: stretch; gap: 4px; padding: 25px 2px 0; border-top: 1px solid var(--behavior-line); border-bottom: 1px solid var(--behavior-line); }
-.behavior-console-axis-note { position: absolute; margin-top: -21px; color: var(--ink-faint); font-size: .63rem; }
-.behavior-day-bar { position: relative; display: flex; flex: 1 1 0; min-width: 10px; align-items: flex-end; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--ink-faint); cursor: pointer; }
+.behavior-console-daily-bars { position: relative; min-height: 210px; display: flex; align-items: stretch; gap: 4px; padding: 25px 14px 0; border-top: 1px solid var(--behavior-line); border-bottom: 1px solid var(--behavior-line); }
+.behavior-console-axis-note { display: flex; justify-content: space-between; gap: 8px; margin: 0 2px 5px; color: var(--ink-faint); font-size: .63rem; }
+.behavior-console-axis-peak { font-variant-numeric: tabular-nums; }
+.behavior-day-bar { position: relative; display: flex; flex: 1 1 0; min-width: 0; align-items: flex-end; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--ink-faint); cursor: pointer; }
 .behavior-day-bar-fill { width: min(22px, 72%); min-height: 2px; border-radius: 2px 2px 0 0; background: var(--primary); opacity: .52; }
 .behavior-day-bar:hover .behavior-day-bar-fill, .behavior-day-bar.is-active .behavior-day-bar-fill { opacity: 1; background: var(--accent); }
 .behavior-day-bar-value { position: absolute; bottom: calc(100% + 3px); color: var(--ink-faint); font-size: .58rem; font-variant-numeric: tabular-nums; opacity: 0; }
 .behavior-day-bar:hover .behavior-day-bar-value, .behavior-day-bar.is-active .behavior-day-bar-value { opacity: 1; color: var(--ink); }
-.behavior-day-bar-label { position: absolute; top: calc(100% + 6px); font-size: .58rem; white-space: nowrap; transform: rotate(-28deg); transform-origin: top center; }
+.behavior-day-bar-label { position: absolute; top: calc(100% + 5px); color: var(--ink-faint); font-size: .58rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.behavior-console-daily-table { max-height: 348px; overflow-y: auto; }
+.behavior-console-daily-table .behavior-table-head { position: sticky; top: 0; z-index: 1; background: var(--raised); }
 .behavior-console-daily-table, .behavior-console-hourly, .behavior-console-composition { border-top: 1px solid var(--behavior-line-strong); }
 .behavior-table-head, .behavior-table-row { display: grid; grid-template-columns: minmax(82px, 1.3fr) repeat(4, minmax(45px, .7fr)); align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; font-size: .68rem; font-variant-numeric: tabular-nums; }
 .behavior-table-head { color: var(--ink-faint); border-bottom: 1px solid var(--behavior-line); font-size: .62rem; }

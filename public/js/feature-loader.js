@@ -97,7 +97,10 @@
   //        分页样式，排序文案统一为「最新上传 / 下载最多 / 收藏最多」。
   // v354：身份用户列表面板重排——行改为昵称+学号+年级徽标，未设昵称回退学号
   //        而非邮箱全串，去裸邮箱；身份网格 align-items:start 消除长列拉伸空白。
-  var VERSION = '380';
+  // v381：管理后台两图可读性——用户活动日柱图日期标签抽稀去旋转、柱距自适应、
+  //        顶部标最高人数，日表限高滚动＋吸顶表头；身份分布用户数量趋势改双轴
+  //        整数刻度（左轴累计/右轴新增共享网格）＋累计线淡面积；缓存键同步推进。
+  var VERSION = '381';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

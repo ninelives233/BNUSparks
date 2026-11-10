@@ -72,13 +72,19 @@
 
   function dailyChart(rows, selected) {
     if (!rows || !rows.length) return '<div class="behavior-console-empty">这段时间还没有可展示的操作记录。</div>';
-    var max = Math.max(1, Math.max.apply(null, rows.map(function(row) { return num(row.all); })));
-    return '<div class="behavior-console-daily-bars" role="list" aria-label="每天有多少人来过"><div class="behavior-console-axis-note">人数 · 点日期查看当天每小时</div>' + rows.map(function(row) {
+    var peak = Math.max.apply(null, rows.map(function(row) { return num(row.all); }));
+    var max = Math.max(1, peak);
+    // 日期标签抽稀：只留首尾＋等距少数几个，天数再多也不叠字；柱距随天数收紧。
+    var labelStep = Math.max(1, Math.ceil(rows.length / 8));
+    var barGap = rows.length > 48 ? 1 : 4;
+    return '<div class="behavior-console-daily"><div class="behavior-console-axis-note"><span>人数 · 点日期看当天每小时</span><span class="behavior-console-axis-peak">最高 ' + format(peak) + ' 人</span></div>' +
+      '<div class="behavior-console-daily-bars" role="list" aria-label="每天有多少人来过" style="gap:' + barGap + 'px">' + rows.map(function(row, index) {
       var active = row.date === selected;
       var height = Math.max(row.all ? 7 : 2, num(row.all) / max * 100);
-      return '<button type="button" role="listitem" class="behavior-day-bar' + (active ? ' is-active' : '') + '" onclick="selectBehaviorDate(\'' + escValue(row.date) + '\')" aria-label="' + escValue(row.date + '，' + row.all + ' 人') + '">' +
-        '<span class="behavior-day-bar-value">' + format(row.all) + '</span><span class="behavior-day-bar-fill" style="height:' + height.toFixed(1) + '%"></span><span class="behavior-day-bar-label">' + escValue(row.label) + '</span></button>';
-    }).join('') + '</div>';
+      return '<button type="button" role="listitem" class="behavior-day-bar' + (active ? ' is-active' : '') + '" onclick="selectBehaviorDate(\'' + escValue(row.date) + '\')" aria-label="' + escValue(row.date + '，' + row.all + ' 人') + '" title="' + escValue(row.date) + '">' +
+        '<span class="behavior-day-bar-value">' + format(row.all) + '</span><span class="behavior-day-bar-fill" style="height:' + height.toFixed(1) + '%"></span>' +
+        (index % labelStep === 0 || index === rows.length - 1 ? '<span class="behavior-day-bar-label">' + escValue(row.label) + '</span>' : '') + '</button>';
+    }).join('') + '</div></div>';
   }
 
   function dailyTable(rows, selected) {
@@ -120,7 +126,7 @@
     content.innerHTML = '<section class="behavior-console"><header class="behavior-console-head"><div><span class="behavior-console-eyebrow">用户活动 · 看得懂的统计</span><h2>用户最近做了什么</h2><p>当天做过至少一次操作的人数；登录用户和匿名访客分开显示。</p></div><div class="behavior-console-head-tools">' + periodControls() + '<small>选中 ' + escValue(dateLabel) + '</small></div></header>' +
       '<div class="behavior-console-rule"></div><div class="behavior-console-metrics">' +
       metric(selected.all, '当天活跃人数', '登录用户 + 匿名访客', 'primary') + metric(selected.logged_in, '登录用户', '同一个人只算一次', 'user') + metric(selected.anonymous, '匿名访客', '同一天同一访客只算一次', 'anon') + metric(selected.event_count, '操作次数', '同一人多次操作会分别计数', 'count') + '</div>' +
-      '<section class="behavior-console-section"><div class="behavior-console-section-head"><div><span class="behavior-console-kicker">每天有多少人</span><h3>' + escValue(payload.period_label || '日分布') + '</h3></div><small>人数和操作次数分开显示</small></div><div class="behavior-console-daily-layout">' + dailyChart(daily, selectedDate) + dailyTable(daily, selectedDate) + '</div></section>' +
+      '<section class="behavior-console-section"><div class="behavior-console-section-head"><div><span class="behavior-console-kicker">每天有多少人</span><h3>' + escValue(payload.period_label || '日分布') + '</h3></div><small>柱高为当天活跃人数；操作次数见右表</small></div><div class="behavior-console-daily-layout">' + dailyChart(daily, selectedDate) + dailyTable(daily, selectedDate) + '</div></section>' +
       '<section class="behavior-console-section"><div class="behavior-console-section-head"><div><span class="behavior-console-kicker">选中日期的每小时</span><h3>' + escValue(dateLabel) + ' · 每小时有多少人</h3></div><small>点上面的日期切换</small></div>' + hourlyTable(payload.hourly) + '</section>' +
       '<section class="behavior-console-section"><div class="behavior-console-section-head"><div><span class="behavior-console-kicker">做了哪些事</span><h3>大家主要做了什么</h3></div><small>人数按人去重，次数是实际操作总数</small></div>' + composition(payload.composition) + '</section>' +
       '<footer class="behavior-console-footer">详细操作记录保留 ' + format(payload.raw_retention_days || 30) + ' 天，之后只保留每天/每小时的汇总；开始记录：' + escValue(payload.launched_at || '尚未采集') + '。不保存搜索词、文件名、完整网址、原始 IP 或登录令牌。</footer></section>';
