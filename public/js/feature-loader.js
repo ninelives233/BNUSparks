@@ -102,7 +102,9 @@
   //        整数刻度（左轴累计/右轴新增共享网格）＋累计线淡面积；缓存键同步推进。
   // v383：用户分布卡改双栏（左校区环形图/右年级条形吃满卡宽，窄屏堆叠），
   //        未补全/未填写口径文案统一；v382 已被 plaza 长课程名截断占用；缓存键同步推进。
-  var VERSION = '383';
+  // v384：身份四列网格修复培养层次卡被挤扁——数字列改 auto 永不截断、
+  //        各列设内容下限、2 列断点 1180→1340；缓存键同步推进。
+  var VERSION = '384';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
