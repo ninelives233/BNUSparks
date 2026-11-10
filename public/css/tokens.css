@@ -1,7 +1,11 @@
-/* 字体策略（P3.4）：移除 Google Fonts 渲染阻塞 @import。
-   中文字体全量自托管在 4Mbps 下反而更糟；改用平台 CJK 系统字体栈
-   （macOS: PingFang/Songti · Windows: 微软雅黑/宋体 · Linux: Noto CJK），
-   零外部请求、国内稳定、视觉与 Noto 系高度接近。 */
+/* 精简宋体覆盖站内固定文案；其他字交给系统字体回退。 */
+@font-face {
+  font-family: "BNU Serif";
+  src: url("/static/fonts/bnu-serif.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
 
   /* ═════════════════════════════════════════════════════════════
      心理学驱动设计 (Psychology-Driven Design)
@@ -79,7 +83,7 @@
     --pill-hover: oklch(0.965 0.006 80);
     --file-row-bg: oklch(0.99 0.003 80);
 
-    --serif: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
+    --serif: "BNU Serif", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
     --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
 
     /* 圆角：--radius-xs 新增；--radius 兼容别名（历史 8 处误引用，已改 --radius-md） */
