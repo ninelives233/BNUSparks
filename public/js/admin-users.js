@@ -157,7 +157,9 @@
     return '<div class="identity-bars">' + rows.map(function(row, index) {
       var selected = index === selectedIndex;
       var attrs = onclickName ? ' onclick="' + onclickName + '(' + index + ')"' : '';
-      return '<button type="button" class="identity-bar-row' + (selected ? ' active' : '') + '"' + attrs + '>' +
+      // 「未识别」是兜底桶而非真实归属，条形降灰与校区图「未判定」口径一致
+      var muted = /未识别/.test(row.name || '');
+      return '<button type="button" class="identity-bar-row' + (selected ? ' active' : '') + (muted ? ' is-muted' : '') + '"' + attrs + '>' +
         '<span class="identity-bar-label">' + esc(row.name) + '</span>' +
         '<span class="identity-bar-track"><span style="width:' + Math.max(2, (row.count || 0) / max * 100) + '%"></span></span>' +
         '<strong>' + (row.count || 0) + '</strong></button>';
@@ -371,13 +373,16 @@
           _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
         _identityUserTrendChart(data.user_trend || {}) +
         '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +
-          _campusDonutChart(data.campus_distribution || []) +
-          '<div class="grade-distribution-block"><div class="monitor-card-head"><h4>年级分布</h4><span>' + (_identityEducation ? esc(_identityEducation) + ' 口径 · 随筛选联动' : '全站口径 · 按学号前四位识别') + '</span></div>' +
-            _distributionBars(data.grade_distribution || [], -1, '') + '</div></div>' +
+          '<div class="campus-distribution-body">' +
+            '<div class="campus-zone"><div class="monitor-card-head"><h4>校区分布</h4></div>' +
+              _campusDonutChart(data.campus_distribution || []) + '</div>' +
+            '<div class="grade-distribution-block"><div class="monitor-card-head"><h4>年级分布</h4><span>' + (_identityEducation ? esc(_identityEducation) + ' 口径 · 随筛选联动' : '全站口径 · 按学号前四位识别') + '</span></div>' +
+              _distributionBars(data.grade_distribution || [], -1, '') + '</div>' +
+          '</div></div>' +
         '<div class="identity-monitor-grid">' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (data.untagged_users || 0) + ' 人未补全') + '</span></div>' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (data.untagged_users || 0) + ' 人身份未补全') + '</span></div>' +
             _distributionBars(data.education_levels || [], eduSelectedIndex, 'selectIdentityEducation') + '</section>' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4><span>' + (data.untagged_users || 0) + ' 人未填写</span></div><div id="identityCollegeBars">' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4><span>' + (data.untagged_users || 0) + ' 人身份未补全</span></div><div id="identityCollegeBars">' +
             _distributionBars(data.colleges || [], data.selectedIndex, 'selectIdentityCollege') + '</div></section>' +
           '<section class="monitor-data-card" id="identityMajorPanel"></section>' +
           '<section class="monitor-data-card" id="identityUserPanel"></section></div>';

@@ -1023,6 +1023,9 @@
 .identity-user-trend-card { margin-bottom: 12px; }
 /* 校区分布环形图：与 monitor-data-card 同语言，色板取自 tokens */
 .campus-distribution-card { margin-bottom: 12px; }
+/* 用户分布卡：左校区环形图 + 右年级条形，双栏吃满卡宽，窄屏上下堆叠 */
+.campus-distribution-body { display: grid; grid-template-columns: minmax(280px, 2.2fr) minmax(0, 3fr); gap: 20px; padding-top: 13px; }
+.campus-zone .monitor-card-head, .grade-distribution-block .monitor-card-head { border-bottom: 0; padding-bottom: 2px; }
 .campus-donut-wrap { display: flex; align-items: center; gap: 26px; padding-top: 14px; flex-wrap: wrap; }
 .campus-donut-wrap svg { width: 132px; height: 132px; flex-shrink: 0; transform: rotate(-90deg); }
 .campus-donut-track { fill: none; stroke: var(--border-light); stroke-width: 15; }
@@ -1090,8 +1093,12 @@ html[data-bnu-theme="dark"] .campus-donut-seg { filter: brightness(1.2); }
 @media (max-width: 1180px) {
   .identity-monitor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.grade-distribution-block { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-light); }
-.grade-distribution-block .monitor-card-head { padding-bottom: 8px; }
+.grade-distribution-block { margin-top: 0; padding-top: 0; border-top: 0; }
+.grade-distribution-block .monitor-card-head { padding-bottom: 2px; }
+@media (max-width: 1080px) {
+  .campus-distribution-body { grid-template-columns: 1fr; }
+  .grade-distribution-block { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-light); }
+}
 /* 专业展开的用户列表面板 */
 .iu-head-meta { display: inline-flex; align-items: center; gap: 6px; }
 .iu-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding-top: 10px; max-height: 430px; overflow-y: auto; }
@@ -1148,6 +1155,8 @@ html[data-bnu-theme="dark"] .iu-grade { filter: brightness(1.15); }
 .identity-bar-track { height: 7px; border-radius: var(--radius-full); background: oklch(0.93 0.005 60); overflow: hidden; }
 .identity-bar-track span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
 .identity-bar-row strong { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.identity-bar-row.is-muted .identity-bar-track span { background: var(--ink-faint); opacity: .45; }
+.identity-bar-row.is-muted .identity-bar-label { color: var(--ink-faint); }
 .monitor-sub-empty { color: var(--ink-faint); font-size: 0.8rem; text-align: center; padding: 34px 12px; }
 
 .download-stream {

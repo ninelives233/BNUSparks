@@ -100,7 +100,9 @@
   // v381：管理后台两图可读性——用户活动日柱图日期标签抽稀去旋转、柱距自适应、
   //        顶部标最高人数，日表限高滚动＋吸顶表头；身份分布用户数量趋势改双轴
   //        整数刻度（左轴累计/右轴新增共享网格）＋累计线淡面积；缓存键同步推进。
-  var VERSION = '382';
+  // v383：用户分布卡改双栏（左校区环形图/右年级条形吃满卡宽，窄屏堆叠），
+  //        未补全/未填写口径文案统一；v382 已被 plaza 长课程名截断占用；缓存键同步推进。
+  var VERSION = '383';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
