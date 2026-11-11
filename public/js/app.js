@@ -293,6 +293,7 @@ window.addEventListener('popstate', async function(e) {
 
   // ── 正常视图切换 + 恢复内部状态 ──
   if (state && state.view && typeof switchView === 'function') {
+    var _previousActiveView = document.querySelector('.view-section.active');
     // v335：教程条目自身没有前景页面——背景保持当前真实页面（来源页），
     // 不 switchView('tutorial') 显示空教程页；浮窗由下方 v324 分支重开
     if (state.view !== 'tutorial') {
@@ -328,7 +329,7 @@ window.addEventListener('popstate', async function(e) {
       var _samePath = expPath.length === state.expPath.length &&
         expPath.every(function(p, i) { return p === state.expPath[i]; });
       var _expEl = document.getElementById('explorerView');
-      var _expActive = _expEl && _expEl.classList.contains('active');
+      var _expActive = _expEl && _previousActiveView === _expEl;
       if (!(_samePath && _expActive)) {
         expPath = state.expPath.slice();
         renderExplorer();
@@ -388,10 +389,14 @@ window.addEventListener('popstate', async function(e) {
     }
     // 资料广场：历史条目自带目录/筛选/页码，恢复时只渲染不 push
     if (state.view === 'plaza') {
-      if (window.BnuPlaza && typeof window.BnuPlaza.show === 'function') {
-        _suppressingPushState = true;
-        try { window.BnuPlaza.show({ fromHistory: true }); } finally { _suppressingPushState = false; }
-      }
+      var restorePlaza = function () {
+        if (!history.state || history.state.view !== 'plaza') return;
+        if (window.BnuPlaza && typeof window.BnuPlaza.show === 'function') {
+          window.BnuPlaza.show({ fromHistory: true });
+        }
+      };
+      if (window.BnuPlaza) restorePlaza();
+      else if (typeof ensureFeature === 'function') ensureFeature('plaza').then(restorePlaza).catch(function () {});
       if (typeof updateSidebar === 'function') updateSidebar('plaza');
       return;
     }
@@ -421,7 +426,7 @@ window.addEventListener('popstate', async function(e) {
       if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
     }
     if (state.view === 'timetable' && typeof ttNavTimetable === 'function') {
-      ttNavTimetable(state.userId || null);
+      ttNavTimetable(state.userId || null, true);
     }
     // D5：跨刷新边界兜底——about/announcements/broad/leaderboard/other/
     // profile/notif/userPublic 没有专属恢复分支，只 switchView 会留下空壳

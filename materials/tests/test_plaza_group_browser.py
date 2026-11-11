@@ -1,12 +1,13 @@
 """资料组在真实 SPA 中的预览、导航和键盘交互。"""
 import importlib.util
+import json
 import os
 import unittest
 
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 
-from materials.models import CourseCategory, Material, MaterialType
-from .helpers import create_course
+from materials.models import CourseCategory, Material, MaterialType, UserTimetable
+from .helpers import AuthClient, _make_jwt, create_course, create_user
 
 
 @unittest.skipUnless(os.environ.get('BNU_BROWSER_TESTS') == '1' and importlib.util.find_spec('playwright'), '需要 Playwright')
@@ -18,7 +19,8 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         CourseCategory.objects.create(name='另一目录', parent=root)
         course_name = ('微观经济学原理与金融市场分析' * 3
                        if self._testMethodName == 'test_long_course_names_stay_on_one_line' else '测试课程')
-        course = create_course('PLAZA001', course_name)
+        code = 'GEN00001' if self._testMethodName == 'test_timetable_course_respects_browse_mode' else 'PLAZA001'
+        course = create_course(code, course_name)
         self.leaf = CourseCategory.objects.create(name=course_name, parent=self.folder, course=course)
         CourseCategory.objects.create(name='其他课程', parent=self.folder)
         kind = MaterialType.objects.create(name='笔记', slug='browser-notes')
@@ -28,6 +30,18 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
             exam = MaterialType.objects.create(name='真题', slug='browser-long-course-exam')
             Material.objects.create(course=course, teacher='张老师', title='置顶试卷',
                                     material_type=exam, file_type='pdf', is_pinned=True)
+        if self._testMethodName == 'test_timetable_course_respects_browse_mode':
+            self.user = create_user('209911900094')
+            self.user.profile.identity_education = '本科'
+            self.user.profile.save(update_fields=['identity_education'])
+            UserTimetable.objects.create(user=self.user, data={
+                'meta': {'semester': '2026-2027学年秋季学期'}, 'start': '2026-09-07',
+                'importedAt': 1793160000000, 'courses': [
+                    {'id': 'course', 'code': code, 'name': course_name, 'meetings': [
+                        {'ws': 1, 'we': 16, 'parity': 0, 'day': 3, 'ps': 5, 'pe': 6, 'room': '七206'}]}]})
+            client = AuthClient()
+            client.set_token(self.user)
+            client.post_json('/api/auth/tutorial/', {'action': 'dismiss_offer'})
         if self._testMethodName == 'test_grid_cards_keep_equal_height_across_rows':
             exam = MaterialType.objects.create(name='真题', slug='browser-exams')
             for index in range(7):
@@ -39,6 +53,65 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         self.addCleanup(self.pw.stop)
         self.browser = self.pw.chromium.launch()
         self.addCleanup(self.browser.close)
+
+    def test_timetable_course_respects_browse_mode(self):
+        context = self.browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion='reduce')
+        self.addCleanup(context.close)
+        page = context.new_page()
+        page.add_init_script("""(() => {
+          const s = %s;
+          sessionStorage.setItem('token', s.token);
+          localStorage.setItem('bnusparks_user_id', String(s.uid));
+          localStorage.setItem('bnusparks_timetable_view_u' + s.uid, 'list');
+        })();""" % json.dumps({'uid': self.user.id, 'token': _make_jwt(self.user.id)}))
+        page.goto(self.live_server_url + '/timetable')
+        page.wait_for_function('typeof ttSetView === "function" && ttState.data && currentUser')
+        row = page.locator('.tt-lrow[data-code="GEN00001"]')
+        row.wait_for()
+        page.wait_for_function("ttState.links['GEN00001'] && ttState.links['GEN00001'].state === 'linked'")
+        row.click()
+        page.wait_for_selector('#explorerView.active')
+        page.wait_for_selector('#explorerTopActions .explorer-plaza-link:visible')
+        self.assertEqual(page.evaluate('expPath[expPath.length - 1]'), '测试课程')
+        page.locator('#explorerTopActions .explorer-plaza-link').click()
+        page.wait_for_selector('#plazaView.active')
+        page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertIn('category_id=' + str(self.leaf.id), page.url)
+        page.set_viewport_size({'width': 1440, 'height': 900})
+        page.evaluate("saveScopePosition('plaza', '通识课', {categoryId: %d, q: '不匹配的旧筛选', page: 3})" % self.folder.id)
+        page.evaluate('ttNavTimetable()')
+        row.wait_for()
+        row.click()
+        page.wait_for_selector('#plazaView.active')
+        page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertIn('category_id=' + str(self.leaf.id), page.url)
+        self.assertNotIn('q=', page.url)
+        self.assertTrue(page.locator('#plazaBrowseBar .browse-mode-link').is_visible())
+        page.go_back()
+        page.wait_for_selector('#timetableView.active')
+        page.go_forward()
+        page.wait_for_selector('#plazaView.active')
+        page.locator('#plazaBrowseBar .browse-mode-link').click()
+        page.wait_for_selector('#explorerView.active')
+        self.assertEqual(page.evaluate('expPath[expPath.length - 1]'), '测试课程')
+        page.reload()
+        page.wait_for_selector('#explorerView.active')
+        page.go_back()
+        page.wait_for_selector('#plazaView.active')
+        page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertTrue(page.locator('#plazaBrowseBar .browse-mode-link').is_visible())
+
+    def test_course_code_entry_respects_selected_mode(self):
+        page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        page.locator('#plazaBrowseBar .browse-mode-link').click()
+        page.wait_for_selector('#explorerTopActions .explorer-plaza-link:visible')
+        page.locator('#explorerTopActions .explorer-plaza-link').click()
+        page.wait_for_selector('#plazaGrid')
+        page.evaluate("showHome(); navToCourse('通识课', 'PLAZA001')")
+        page.wait_for_function("history.state.view === 'plaza' && history.state.categoryId === %d" % self.leaf.id)
+        page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertTrue(page.locator('#plazaBrowseBar .browse-mode-link').is_visible())
 
     def test_long_course_names_stay_on_one_line(self):
         page = self.browser.new_page(viewport={'width': 1440, 'height': 900}, reduced_motion='reduce')

@@ -22,6 +22,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.core.cache import cache
 from django.db import connections
 
 from materials.models import (
@@ -37,6 +38,7 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
 
     def setUp(self):
         from playwright.sync_api import sync_playwright
+        cache.clear()  # 每个浏览器场景独立登录，不共享前一场景的认证限流计数。
         self.user = User.objects.create_user('2099search_u@mail.bnu.edu.cn', password='browser-test-only', first_name='搜索同学')
         UserProfile.objects.update_or_create(user=self.user, defaults={
             'identity_education': '本科', 'identity_college': '搜索学院', 'identity_major': '搜索专业'})
@@ -265,6 +267,19 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_function('history.state.view === "search"')
         self.assertEqual(self.page.evaluate('history.state.searchQuery'), '搜索学导论')
         self.assertEqual(self.page.evaluate('history.state.searchType'), 'all')
+
+    def test_course_result_respects_plaza_preference(self):
+        self._login()
+        self.page.evaluate("setAppearance('material_browse_mode', 'plaza')")
+        self._search_from_top('搜索学导论')
+        self.page.wait_for_selector('[data-sr-group="course"] .sr-item-title')
+        self.page.click('[data-sr-group="course"] .sr-item-title')
+        self.page.wait_for_selector('#plazaView.active')
+        self.page.wait_for_selector('#plazaGrid .plaza-card[data-id]')
+        self.assertIn('搜索学导论', self.page.locator('#plazaBreadcrumb').inner_text())
+        self.assertTrue(self.page.locator('#plazaBrowseBar .browse-mode-link').is_visible())
+        self.page.go_back()
+        self.page.wait_for_selector('#searchView.active')
 
     # ── 场景 3：刷新与深链 ──
     def test_search_refresh_and_deep_link(self):

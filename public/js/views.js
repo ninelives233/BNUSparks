@@ -1455,6 +1455,11 @@
   function showAllCourses(type) {
     if (type === '通识课' || type === '专业课') {
       setLastCourseRange(type);
+      if (getMaterialBrowseMode() === 'plaza' && typeof ensureFeature === 'function') {
+        return ensureFeature('plaza').then(function () {
+          return window.BnuPlaza.show({ courseType: type });
+        }).catch(function () { return showExplorerPath([type]); });
+      }
       return showExplorerPath([type]);
     }
     if (getMaterialBrowseMode() === 'plaza' && typeof ensureFeature === 'function') {
@@ -1486,12 +1491,12 @@
     if (shell) shell.innerHTML = '<div class="empty-state compact">课表模块加载失败，请刷新重试。</div>';
   }
 
-  function ttEnterTimetableModule(targetUserId) {
+  function ttEnterTimetableModule(targetUserId, skipHistory) {
     if (typeof showTimetable === 'function') {
-      showTimetable(false, targetUserId || null);
+      showTimetable(!!skipHistory, targetUserId || null);
       return Promise.resolve(true);
     }
-    ttActivateRoute(true, targetUserId);
+    ttActivateRoute(!skipHistory, targetUserId);
     if (typeof ensureFeature !== 'function') {
       ttShowModuleError(targetUserId);
       return Promise.resolve(false);
@@ -1510,19 +1515,19 @@
     });
   }
 
-  function ttNavTimetable(targetUserId) {
+  function ttNavTimetable(targetUserId, skipHistory) {
     var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
     var authReady = window._bnusparksAuthReady;
     if (!currentUser && hasToken && authReady) {
       if (!_ttNavPromise) {
         _ttNavPromise = Promise.resolve(authReady).then(function () {
-          return ttEnterTimetableModule(targetUserId);
+          return ttEnterTimetableModule(targetUserId, skipHistory);
         });
         _ttNavPromise.then(function () { _ttNavPromise = null; }, function () { _ttNavPromise = null; });
       }
       return _ttNavPromise;
     }
-    return ttEnterTimetableModule(targetUserId);
+    return ttEnterTimetableModule(targetUserId, skipHistory);
   }
 
   // ── Sidebar ──
