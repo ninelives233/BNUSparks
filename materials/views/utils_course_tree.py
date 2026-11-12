@@ -187,6 +187,8 @@ def _build_tree_node(qs, *, preload=None, parent_path=()):
         node["id"] = cat.id
         if cat.name:
             node["name"] = cat.name
+        if cat.education_level:
+            node["educationLevel"] = cat.education_level
         if cat.icon_class:
             node["iconClass"] = cat.icon_class
         if cat.is_math_card:

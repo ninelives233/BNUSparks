@@ -80,7 +80,10 @@
     uploadCourseCode = code;
     uploadCategoryId = catId || null; // v170：从哪个专业节点上传
     _uploadMode = 'file';
-    document.getElementById('uploadCourse').value = name + ' (' + code + ')';
+    var isPlaceholder = /^BNUX[0-9A-F]{32}$/i.test(code || '');
+    document.getElementById('uploadCourse').value = isPlaceholder ? name : name + ' (' + code + ')';
+    document.getElementById('uploadTeachingCodeGroup').style.display = isPlaceholder ? '' : 'none';
+    document.getElementById('uploadTeachingCode').value = '';
     populateMaterialTypeDropdown();
     var ri = document.getElementById('reuploadInfo');
     if (ri) ri.style.display = 'none';
@@ -117,6 +120,7 @@
     var description = document.getElementById('uploadDesc').value;
     var teacher = document.getElementById('uploadTeacher').value;
     var materialTypeId = document.getElementById('uploadMaterialType')?.value || '';
+    var teachingCode = document.getElementById('uploadTeachingCode').value.trim();
     if (!materialTypeId) {
       el.textContent = '请选择资料类型';
       el.style.display = 'block';
@@ -149,6 +153,7 @@
           headers: token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             course_code: uploadCourseCode,
+            teaching_code: teachingCode,
             category_id: uploadCategoryId, // v170 路由上下文
             title: title,
             content: content,
@@ -209,6 +214,7 @@
       try {
         const formData = new FormData();
         formData.append('course_code', uploadCourseCode);
+        if (teachingCode) formData.append('teaching_code', teachingCode);
         if (uploadCategoryId) formData.append('category_id', uploadCategoryId); // v170 路由上下文
         formData.append('title', fileTitle);
         formData.append('file', file);

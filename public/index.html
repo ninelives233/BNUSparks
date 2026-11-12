@@ -1259,7 +1259,7 @@
             <input type="text" id="ncMName" class="mf-input" placeholder="如：理论力学">
           </div>
           <div class="mf-group">
-            <label for="ncMCode">课程代码</label>
+            <label for="ncMCode">课程代码（研究生可留空）</label>
             <input type="text" id="ncMCode" class="mf-input" placeholder="如：PHY11451" oninput="scheduleCourseCheck('M')">
             <div class="mf-hint">请确保课程代码无误，可在教务管理网站查询</div>
             <div id="ncMCodeHint" class="nc-code-hint" style="display:none"></div>
@@ -1624,6 +1624,11 @@
         <label for="uploadCourse">课程</label>
         <input type="text" id="uploadCourse" class="mf-input" readonly placeholder="选择课程后自动填充">
       </div>
+      <div class="mf-group" id="uploadTeachingCodeGroup" style="display:none">
+        <label for="uploadTeachingCode">教务课程代码（选填）</label>
+        <input type="text" id="uploadTeachingCode" class="mf-input" autocomplete="off" placeholder="可从教务课表中查看">
+        <div class="mf-hint">不知道可留空；同一学院的同名待补代码课程共用资料目录。</div>
+      </div>
       <!-- 文件上传模式 -->
       <div id="uploadModeFile" class="upload-mode-pane">
         <div class="mf-group">
@@ -1676,13 +1681,13 @@
 <script src="/static/js/profile.js?v=222" defer></script>
 <script src="/static/js/notifications.js?v=307" defer></script>
 <script src="/static/js/admin-core.js?v=301" defer></script>
-<script src="/static/js/views.js?v=358" defer></script>
+<script src="/static/js/views.js?v=359" defer></script>
 <script src="/static/js/tutorial-entry.js?v=355" defer></script>
 <script src="/static/js/explorer-core.js?v=380" defer></script>
 <script src="/static/js/explorer-file.js?v=374" defer></script>
 <script src="/static/js/explorer-preview.js?v=341" defer></script>
 <script src="/static/js/home.js?v=328" defer></script>
-<script src="/static/js/feature-loader.js?v=384" defer></script>
+<script src="/static/js/feature-loader.js?v=385" defer></script>
 <script src="/static/js/app.js?v=361" defer></script>
 
 </body>

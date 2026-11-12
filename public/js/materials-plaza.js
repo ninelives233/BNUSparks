@@ -190,6 +190,14 @@
       })
       .catch(function (error) {
         if (navSeq !== _navRequestSeq || !_active) return;
+        if (error && error.status === 404 && _state.categoryId) {
+          return fetchNavigation(null, requestedRange).then(function (nav) {
+            if (navSeq !== _navRequestSeq || !_active) return null;
+            return applyNavigation(nav, true);
+          }).catch(function (fallbackError) {
+            if (navSeq === _navRequestSeq && _active) renderError(fallbackError);
+          });
+        }
         renderError(error);
       });
   }
@@ -569,6 +577,11 @@
       return '<div class="plaza-state"><p>当前筛选条件下没有资料。</p>' +
         '<button type="button" class="plaza-state-btn" data-plaza-clear="all">清除筛选</button></div>';
     }
+    if (_nav && _nav.course_type === 'major' && _nav.can_expand_tree &&
+        !_nav.children.length && currentUser && currentUser.identity_education === '硕士') {
+      return '<div class="plaza-state"><p>这里还没有课程。</p>' +
+        '<button type="button" class="plaza-state-btn" data-plaza-create>创建课程</button></div>';
+    }
     return '<div class="plaza-state"><p>这个范围还没有资料。</p>' +
       '<p class="plaza-state-hint">可以展开课程树换一个目录，或分享第一份资料。</p></div>';
   }
@@ -585,6 +598,8 @@
         _state.q = ''; _state.materialType = null; _state.teacher = ''; _state.format = ''; _state.favorites = false;
         _state.page = 1; renderChrome(); loadMaterials();
       });
+      var create = grid.querySelector('[data-plaza-create]');
+      if (create) create.addEventListener('click', openCreateCourse);
     } else {
       grid.innerHTML = data.items.map(function (item) { return item.kind === 'group' ? groupHtml(item, _groups.indexOf(item)) : cardHtml(item); }).join('');
     }
@@ -1038,6 +1053,15 @@
     } });
   }
 
+  function openCreateCourse() {
+    var context = _nav && _nav.course_type === 'major' ? _nav.path : null;
+    closeOverlay(true);
+    if (history.state && history.state._modal) {
+      history.replaceState(Object.assign({ _bnusparks: true, view: 'plaza' }, historyState()), '', location.href);
+    }
+    if (typeof openNewCourseEntry === 'function') openNewCourseEntry({ path: context });
+  }
+
   function openUploadEntry() {
     if (!currentUser) { showLoginModal(); return; }
     var ensureUpload = typeof showUploadModal === 'function'
@@ -1045,7 +1069,10 @@
       : (typeof ensureFeature === 'function' ? ensureFeature('plaza') : Promise.resolve());
     ensureUpload.then(function () {
       if (_nav && !_nav.can_expand_tree && _nav.course_code) {
-        showUploadModal(_nav.course_code, _nav.name, _nav.category_id);
+        fetchNavigation(_nav.category_id, _nav.course_type).then(function (nav) {
+          _nav = nav;
+          showUploadModal(nav.course_code, nav.name, nav.category_id);
+        }).catch(function () { showUploadModal(_nav.course_code, _nav.name, _nav.category_id); });
         return;
       }
       if (!_nav) return;
@@ -1057,10 +1084,12 @@
             ? '<label class="plaza-menu-search">' + iconSvg('search') + '<input type="search" id="plazaCourseSearch" autofocus placeholder="搜索课程名称或代码" aria-label="搜索课程"></label>' +
               '<div class="plaza-course-list" id="plazaCourseList">' + courses.map(function (course) {
                 return '<button type="button" class="plaza-course-row" data-course-code="' + esc(course.code) + '" data-course-name="' + esc(course.name) + '" data-course-cat="' + (course.category_id || '') + '">' +
-                  '<span class="plaza-course-row-name">' + esc(course.name) + '</span><span class="plaza-course-row-code">' + esc(course.code) + '</span></button>';
+                  '<span class="plaza-course-row-name">' + esc(course.name) + '</span><span class="plaza-course-row-code">' + (/^BNUX[0-9A-F]{32}$/i.test(course.code || '') ? '代码待补充' : esc(course.code)) + '</span></button>';
               }).join('') + '</div>'
-            : '<div class="plaza-state"><p>当前范围还没有可挂载的正式课程。</p><p class="plaza-state-hint">请先在课程目录中建立课程，再上传文件。</p></div>');
+            : '<div class="plaza-state"><p>当前范围还没有课程。</p><button type="button" class="plaza-upload" id="plazaCreateCourse">创建课程</button></div>');
         openOverlay('picker', body, { onMount: function (overlay) {
+          var createCourse = overlay.querySelector('#plazaCreateCourse');
+          if (createCourse) createCourse.addEventListener('click', openCreateCourse);
           var search = overlay.querySelector('#plazaCourseSearch');
           if (search) {
             search.addEventListener('input', function () {

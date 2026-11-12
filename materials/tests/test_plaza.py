@@ -337,7 +337,7 @@ class CourseNavigationTest(BnuTestCase):
         data = self._nav(course_type="major")
         self.assertEqual(data["category_id"], self.single_child.id)
 
-    def test_graduate_default_stops_at_college(self):
+    def test_graduate_without_a_matching_tree_stops_at_root(self):
         user = create_user("grad_identity", role="user")
         profile = user.profile
         profile.identity_education = UserProfile.EducationLevel.MASTER
@@ -346,9 +346,8 @@ class CourseNavigationTest(BnuTestCase):
         profile.save()
         self.client.set_token(user)
         data = self._nav(course_type="major")
-        # 从学院出发后，同一单文件夹规则继续深入；学院层仍在面包屑中。
-        self.assertEqual(data["category_id"], self.single_child.id)
-        self.assertEqual(data["path"][1]["name"], "经济与工商管理学院")
+        self.assertEqual(data["category_id"], self.root_major.id)
+        self.assertEqual(data["children"], [])
 
     def test_duplicate_major_falls_back_to_college(self):
         duplicate = create_category(name="金融学", parent=self.college_cat)

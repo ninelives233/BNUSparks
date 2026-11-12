@@ -1313,6 +1313,7 @@ function ttLoadUserData() {
   ttRenderAll();
   if (ttState.data) {
     ttLoadCourseCounts();
+    if (!ttState.viewerMode && currentUser && ['硕士', '博士'].includes(currentUser.identity_education)) ttEnsureCourseTree();
   }
   ttRefreshRequestStatuses(true);
   // 云端同步：拉取账号下的课表，按 importedAt 合并（跨设备）
@@ -2159,7 +2160,8 @@ function ttFindPathByCode(code, courseName) {
   if (idMaj || idCol) {
     for (var m = 0; m < matches.length; m++) {
       var p = matches[m];
-      if (p[0] === '专业课' && idMaj && p.length >= 4 && p[2] === idMaj) return p;
+      if (p[0] === '专业课' && idMaj && p.length >= 4 &&
+          (!idCol || p[1] === idCol) && p.indexOf(idMaj, 2) >= 0) return p;
     }
     for (var n2 = 0; n2 < matches.length; n2++) {
       var q = matches[n2];
@@ -2276,16 +2278,22 @@ function ttIsUndergrad() {
 
 // 目录功能归属于「课表主人」：管理员查看他人课表时以被查看用户的身份为准，
 // 而非当前登录者（总管理员多半是本科身份，不代表正在查看的硕博用户也有目录体系）
-function ttOwnerUndergrad() {
+function ttOwnerHasDirectory() {
   if (ttState.viewerMode) return ttState.viewerEducation === '本科';
-  return ttIsUndergrad();
+  if (ttIsUndergrad()) return true;
+  if (!currentUser || !['硕士', '博士'].includes(currentUser.identity_education) || !ttTreeReady()) return false;
+  var colleges = (courseTree['专业课'] && courseTree['专业课'].children) || [];
+  var college = colleges.find(function (node) { return node.name === currentUser.identity_college; });
+  return !!(college && (college.children || []).some(function (node) {
+    return node.educationLevel === currentUser.identity_education || node.educationLevel === '研究生';
+  }));
 }
 
 // 目录链接总开关 = 课表主人是本科 且 课表本身未锁定目录。
 // noLink：珠海校区等无目录体系的导出格式（二进制 .xls），仅作课程表使用，
 // 本科身份导入同样不链接、不提供建课入口。
 function ttLinksEnabled() {
-  return ttOwnerUndergrad() && !(ttState.data && ttState.data.noLink);
+  return ttOwnerHasDirectory() && !(ttState.data && ttState.data.noLink);
 }
 
 // 珠海等没有课程目录映射的导出表：点击课程卡改为查看本地课表详情。
@@ -2304,7 +2312,7 @@ function ttShowConfirmModal(parsed) {
     ttApplyImport(parsed, []);
     ttToast(parsed.noLink
       ? '珠海校区资料跳转功能暂未上线，暂时只有课程表功能'
-      : '硕、博板块正在筹备中，暂时只有课程表功能');
+      : '课表已导入，可在资料广场查找课程资料');
     return;
   }
   // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入。
@@ -2859,7 +2867,7 @@ function ttOpenCourse(code) {
   } else if (info.state === 'rejected') {
     ttToast('「' + ttCourseNameByCode(code) + '」的建课申请已驳回，请在课程列表点击“重新申请”');
   } else {
-    ttToast('「' + ttCourseNameByCode(code) + '」还没有资料目录，重新导入可为它选择位置');
+    ttToast('「' + ttCourseNameByCode(code) + '」还没有资料目录，请到资料广场查找或创建课程');
   }
 }
 
@@ -3381,6 +3389,11 @@ function ttEditRenderLink(wc) {
   if (requestState && requestState.status === 'pending') {
     hideRejection();
     el.innerHTML = '<span class="tt-edit-hint">该代码的新课程申请审核中，批准后自动可跳转</span>';
+    return;
+  }
+  if (!ttIsUndergrad()) {
+    hideRejection();
+    el.innerHTML = '<span class="tt-edit-hint">课程目录尚未建立，可在资料广场查找或创建课程。</span>';
     return;
   }
   var isGen = /^GEN/i.test(code);

@@ -106,9 +106,11 @@
     }
     // 同名合并：叶子行并列展示全部代码（主代码 / 别名代码），超长由 CSS 省略号截断，
     // 完整列表放 title 悬停可查
-    const codes = (cId && item.courseCodes && item.courseCodes.length > 1) ? item.courseCodes : null;
+    const codes = (item.courseCodes || (cId ? [cId] : [])).filter(function (code) {
+      return !/^BNUX[0-9A-F]{32}$/i.test(code);
+    });
     const meta = cId
-      ? '课程代码 ' + (codes ? codes.join(' / ') : cId)
+      ? (codes.length ? '课程代码 ' + codes.join(' / ') : '课程代码待补充')
       : (hasSub ? getEffectiveChildCount(item) + ' 项' : '');
     const metaTitle = cId ? ' title="' + esc(meta) + '"' : '';
     // 收藏课程星星：仅叶子课程节点（有真实课程代码，非通配符）
@@ -121,7 +123,7 @@
     }
     return '<div class="folder-list-item" data-n="' + esc(item.name) + '">' +
       '<span class="fli-icon">' + (hasSub ? '▸' : '·') + '</span>' +
-      '<div class="fli-info"><div class="fli-name" title="' + esc(item.name) + '">' + esc(item.name) + '</div><div class="fli-meta"' + metaTitle + '>' + meta + '</div></div>' +
+      '<div class="fli-info"><div class="fli-name" title="' + esc(item.name) + '">' + esc(item.name) + '</div><div class="fli-meta"' + metaTitle + '>' + esc(meta) + '</div></div>' +
       badge + favStar +
       (mgmt && item.id && (_userInScope(expPath) || _nodeInScope(item, expPath[0], expPath.length === 1)) ? _mgmtCardMenuHtml(item) : '') + '</div>';
   }
@@ -553,10 +555,11 @@
     // 「实践教育（思政）」例外：各学院教务代码各异且已全量并入同一目录，
     // 不渲染具体代码，显示「通用」。
     const isPracticeIdeology = (course.name || '').replace(/[（）]/g, c => c === '（' ? '(' : ')').trim() === '实践教育(思政)';
+    const visibleCodes = (course.courseCodes || []).filter(c => !/^BNUX[0-9A-F]{32}$/i.test(c));
     const mergeCodes = isPracticeIdeology
       ? '<span class="fa-codes">通用</span>'
-      : (course.courseCodes && course.courseCodes.length > 1)
-      ? '<span class="fa-codes">' + course.courseCodes.map(c => esc(c)).join(' · ') + '</span>'
+      : (visibleCodes.length > 1)
+      ? '<span class="fa-codes">' + visibleCodes.map(c => esc(c)).join(' · ') + '</span>'
       : '';
 
     const isMobileLayout = _fileListIsMobile();

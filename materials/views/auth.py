@@ -33,6 +33,7 @@ from .utils import (
     require_login, UserProfile,
     DAILY_DOWNLOAD_LIMIT,
 )
+from ..services.course_visibility import browse_mode_for_profile
 from ..monitoring_events import record_login_outcome, record_monitoring_event
 from ..models import MonitoringEvent, Notification
 
@@ -494,7 +495,7 @@ def api_verify_email(request):
             "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
             "mobile_nav": _mobile_nav_for_profile(profile),
             "default_view": _default_view_for_profile(profile),
-            "material_browse_mode": profile.material_browse_mode or UserProfile.MaterialBrowseMode.DIRECTORY,
+            "material_browse_mode": browse_mode_for_profile(profile),
             "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
             "appearance_configured": bool(
                 profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
@@ -594,7 +595,7 @@ def api_login(request):
             "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
             "mobile_nav": _mobile_nav_for_profile(profile),
             "default_view": _default_view_for_profile(profile),
-            "material_browse_mode": profile.material_browse_mode or UserProfile.MaterialBrowseMode.DIRECTORY,
+            "material_browse_mode": browse_mode_for_profile(profile),
             "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
             "appearance_configured": bool(
                 profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
@@ -652,7 +653,7 @@ def api_me(request):
         "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
         "mobile_nav": _mobile_nav_for_profile(profile),
         "default_view": _default_view_for_profile(profile),
-        "material_browse_mode": profile.material_browse_mode or UserProfile.MaterialBrowseMode.DIRECTORY,
+        "material_browse_mode": browse_mode_for_profile(profile),
         "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
         "appearance_configured": bool(
             profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or

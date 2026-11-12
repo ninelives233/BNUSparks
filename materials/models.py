@@ -274,6 +274,10 @@ class Course(models.Model):
         verbose_name = "课程"
         verbose_name_plural = "课程"
         ordering = ["-course_type", "college", "name"]
+        constraints = [models.UniqueConstraint(
+            fields=["code"], condition=Q(code__startswith="BNUX"),
+            name="uniq_internal_course_code",
+        )]
         # F13：code 精确/前缀匹配（课程文件入口、树构建）此前全表扫描；
         # 普通索引即可，不加 unique——空值语义与同名拆分路径依赖重复 code。
         indexes = [
@@ -407,6 +411,11 @@ class FolderOperation(models.Model):
 class CourseCategory(models.Model):
     """导航树节点 — 自引用无限层级"""
     name = models.CharField("节点名称", max_length=200, blank=True)
+    education_level = models.CharField(
+        "适用培养层次", max_length=10, blank=True, default="",
+        choices=[("本科", "本科"), ("硕士", "硕士"), ("博士", "博士"), ("研究生", "硕博共用")],
+        help_text="仅用于标注培养层次入口，其下目录继承该范围。",
+    )
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.CASCADE,
         related_name="children", verbose_name="父节点",

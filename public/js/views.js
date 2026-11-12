@@ -1133,13 +1133,13 @@
 
   // 首页与课程目录工具栏共用的「新建课程」申请入口；未登录先弹登录，
   // 与 openCourseSearchUpload 的登录门槛保持一致。
-  function openNewCourseEntry() {
+  function openNewCourseEntry(options) {
     if (!currentUser) { showLoginModal(); return; }
-    openNewCourse();
+    openNewCourse(options);
   }
 
   // 首页可以在 explorer 尚未加载时打开上传弹窗；新建课程入口需要等待完整 feature。
-  function openNewCourse() {
+  function openNewCourse(options) {
     var ready = Promise.resolve();
     if (typeof showNewCourse !== 'function' && typeof ensureFeature === 'function') {
       ready = ensureFeature('explorer');
@@ -1150,7 +1150,7 @@
       }
     }).then(function() {
       if (typeof showNewCourse !== 'function') throw new Error('新建课程模块未就绪');
-      showNewCourse();
+      showNewCourse(options);
     }).catch(function() {
       alert('新建课程模块加载失败，请刷新重试。');
     });

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
@@ -27,6 +28,7 @@ from .utils import (
     CourseCategory,
 )
 from ..monitoring_events import record_outcome
+from ..services.course_codes import adopt_course_code, is_placeholder
 
 
 def _notify_pending_upload(material, uploader, title, context_category):
@@ -113,11 +115,16 @@ def api_file_upload(request):
     elif material_type_id:
         return _err("资料类型不存在", 400)
 
-    from uuid import uuid4
-    course_dir = _safe_dir_name(course.code)
     ext = Path(uploaded_file.name).suffix
     if _blocked_upload_ext(ext):
         return _err("该文件类型不允许上传（可能包含可执行/活动内容）", 400)
+
+    supplied_code = request.POST.get("teaching_code", "").strip()
+    if supplied_code and not is_placeholder(course_code):
+        return _err("该课程已有课程代码", 400)
+
+    from uuid import uuid4
+    course_dir = _safe_dir_name(course.code)
     clean_title = _sanitize_filename_part(title) or _sanitize_filename_part(Path(uploaded_file.name).stem) or "file"
     safe_name = f"{uuid4().hex[:12]}_{clean_title}{ext}"
     save_dir = Path(settings.MEDIA_ROOT) / course_dir
@@ -155,20 +162,26 @@ def api_file_upload(request):
     review_status = "approved" if is_auto_approved else "pending"
 
     try:
-        material = Material.objects.create(
-            course=course, title=title, description=description,
-            teacher=teacher,
-            material_type_id=mtid,
-            file_name=uploaded_file.name,
-            file_path=f"{course_dir}/{safe_name}",
-            file_size=file_size,
-            uploader=request.user,
-            uploader_name=request.user.first_name or request.user.username,
-            review_status=review_status,
-            is_approved=is_auto_approved,
-            reviewed_by=auto_approved_by,
-            reviewed_at=timezone.now() if auto_approved_by else None,
-        )
+        with transaction.atomic():
+            if supplied_code:
+                course = adopt_course_code(course, supplied_code)
+            material = Material.objects.create(
+                course=course, title=title, description=description,
+                teacher=teacher,
+                material_type_id=mtid,
+                file_name=uploaded_file.name,
+                file_path=f"{course_dir}/{safe_name}",
+                file_size=file_size,
+                uploader=request.user,
+                uploader_name=request.user.first_name or request.user.username,
+                review_status=review_status,
+                is_approved=is_auto_approved,
+                reviewed_by=auto_approved_by,
+                reviewed_at=timezone.now() if auto_approved_by else None,
+            )
+    except ValueError as exc:
+        _remove_uploaded_file(final_path)
+        return _err(str(exc), 409)
     except Exception:
         _remove_uploaded_file(final_path)
         return _err("资料保存失败，请稍后重试", 500)
@@ -188,6 +201,7 @@ def api_file_upload(request):
 
     return _ok({
         "id": material.id, "title": material.title,
+        "course_code": course.code,
         "file_name": uploaded_file.name, "file_size": file_size,
         "created_at": material.created_at.strftime("%Y-%m-%d"),
         "review_status": material.review_status,
@@ -266,6 +280,10 @@ def api_file_upload_text(request):
     elif material_type_id:
         return _err("资料类型不存在", 400)
 
+    supplied_code = str(data.get("teaching_code") or "").strip()
+    if supplied_code and not is_placeholder(course_code):
+        return _err("该课程已有课程代码", 400)
+
     from uuid import uuid4
     course_dir = _safe_dir_name(course.code)
     clean_title = _sanitize_filename_part(title) or "text"
@@ -303,20 +321,26 @@ def api_file_upload_text(request):
     review_status = "approved" if is_auto_approved else "pending"
 
     try:
-        material = Material.objects.create(
-            course=course, title=title, description=description,
-            teacher=teacher,
-            material_type_id=mtid,
-            file_name=safe_name,
-            file_path=f"{course_dir}/{safe_name}",
-            file_size=file_size,
-            uploader=request.user,
-            uploader_name=request.user.first_name or request.user.username,
-            review_status=review_status,
-            is_approved=is_auto_approved,
-            reviewed_by=auto_approved_by,
-            reviewed_at=timezone.now() if auto_approved_by else None,
-        )
+        with transaction.atomic():
+            if supplied_code:
+                course = adopt_course_code(course, supplied_code)
+            material = Material.objects.create(
+                course=course, title=title, description=description,
+                teacher=teacher,
+                material_type_id=mtid,
+                file_name=safe_name,
+                file_path=f"{course_dir}/{safe_name}",
+                file_size=file_size,
+                uploader=request.user,
+                uploader_name=request.user.first_name or request.user.username,
+                review_status=review_status,
+                is_approved=is_auto_approved,
+                reviewed_by=auto_approved_by,
+                reviewed_at=timezone.now() if auto_approved_by else None,
+            )
+    except ValueError as exc:
+        _remove_uploaded_file(final_path)
+        return _err(str(exc), 409)
     except Exception:
         _remove_uploaded_file(final_path)
         return _err("资料保存失败，请稍后重试", 500)

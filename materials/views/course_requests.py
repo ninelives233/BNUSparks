@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Max, Q
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -24,6 +24,8 @@ from .utils import (
     _normalize_course_code, _normalized_course_code_expression,
 )
 from ..monitoring_events import record_request_event
+from ..services.course_codes import placeholder_code, is_placeholder, normalized_course_name, PREFIX
+from ..services.course_visibility import visible_category_ids
 from .operations import _can_create_under
 from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
 from .utils_email import send_first_upload_thanks
@@ -50,6 +52,45 @@ def _category_path(cat):
 def _normalize_request_code(value):
     """统一课程申请使用的代码格式，和创建接口保持一致。"""
     return _normalize_course_code(value)
+
+
+def _graduate_target_college(category, college_id):
+    """Only a marked graduate subtree can create an internal course code."""
+    if not category or not college_id:
+        return None
+    from ..models import College
+    college = College.objects.filter(pk=college_id).first()
+    if college is None:
+        return None
+    node, graduate, in_college = category, False, False
+    while node:
+        graduate = graduate or node.education_level in ("硕士", "博士", "研究生")
+        in_college = in_college or bool(
+            node.name == college.name and node.parent and
+            node.parent.name == "专业课" and node.parent.parent_id is None
+        )
+        node = node.parent
+    return college if graduate and in_college else None
+
+
+def _graduate_name_course(college, name):
+    rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
+    allowed = visible_category_ids(rows, "硕士") | visible_category_ids(rows, "博士")
+    candidates = Course.objects.filter(college=college, coursecategory__id__in=allowed).distinct()
+    key = normalized_course_name(name)
+    roots = {}
+    for course in candidates:
+        if normalized_course_name(course.name) == key:
+            primary = _follow_merge(course)
+            roots[primary.id] = primary
+    placeholders = [course for course in roots.values() if is_placeholder(course.code)]
+    if len(placeholders) == 1:
+        return placeholders[0]
+    if len(roots) == 1:
+        return next(iter(roots.values()))
+    if len(roots) > 1:
+        raise ValueError("该学院已有多门同名课程，请填写课程代码以区分")
+    return None
 
 
 def _linked_course_code_details(codes):
@@ -341,6 +382,18 @@ def _resolve_course_or_err(course_code, course_name, course_type, college):
     )
     if existing:
         return existing, None, False
+    if is_placeholder(course_code):
+        try:
+            with transaction.atomic():
+                return Course.objects.create(
+                    code=course_code, name=course_name,
+                    course_type=course_type, college=college,
+                ), None, True
+        except IntegrityError:
+            existing = _find_existing_course(course_code, college.pk if college else None)
+            if existing is None:
+                raise
+            return existing, None, False
     return Course.objects.create(
         code=course_code, name=course_name,
         course_type=course_type, college=college,
@@ -460,8 +513,6 @@ def api_course_request_create(request):
         return _err("请选择通识课或专业课")
     if not course_name:
         return _err("请填写课程名称")
-    if not course_code:
-        return _err("请填写课程代码（可在教务管理网站查询）")
     if course_type == CourseCreationRequest.Type.GENERAL and not general_category_id:
         return _err("请选择通识课类型")
     if course_type == CourseCreationRequest.Type.MAJOR and not target_category_id:
@@ -475,6 +526,17 @@ def api_course_request_create(request):
         target_cat = CourseCategory.objects.filter(id=target_category_id).first()
     elif course_type == CourseCreationRequest.Type.GENERAL and general_category_id:
         target_cat = CourseCategory.objects.filter(id=general_category_id).first()
+    graduate_college = _graduate_target_college(target_cat, college_id)
+    if not course_code:
+        if graduate_college is None:
+            return _err("请填写课程代码（可在教务管理网站查询）")
+        try:
+            existing_name = _graduate_name_course(graduate_college, course_name)
+        except ValueError as exc:
+            return _err(str(exc), 409)
+        course_code = existing_name.code if existing_name else placeholder_code(graduate_college.id, course_name)
+    elif course_code.startswith(PREFIX):
+        return _err("请填写教务系统中的课程代码", 400)
     is_auto = (
         profile.role != UserProfile.Role.USER
         and target_cat is not None
@@ -502,7 +564,7 @@ def api_course_request_create(request):
     # 同名同位不同码 → 自动合并显示（免审核）：新代码登记为主课程别名，
     # 不新建文件夹，资料目录跟随主课程；详情通报辖区管理员与总管理员复核。
     merged_course = None
-    if not will_link:
+    if not will_link and graduate_college is None:
         merged_course = _find_same_name_sibling(target_cat, course_name, course_code)
 
     if merged_course is not None:

@@ -33,8 +33,9 @@ from ..models import (
     QaTag,
 )
 from .qa_helpers import _nickname, _qa_snippet, _strip_html
-from .utils import _err, _ok
+from .utils import _err, _ok, _get_user
 from .utils_course_tree import _normalize_course_code, course_display_names
+from ..services.course_visibility import education_for_user, visible_category_ids
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ class _CourseMount:
         self.segments = segments
 
 
-def _course_topology():
+def _course_topology(request=None):
     """一次请求内可复用的目录拓扑与合并关系映射。
 
     轻量字段批量读取（cat/course/college 各 1 次查询），构建：
@@ -137,9 +138,17 @@ def _course_topology():
     - colleges: College 行映射
     """
     cats = list(CourseCategory.objects.only(
-        "id", "parent_id", "name", "order", "is_divider",
+        "id", "parent_id", "name", "order", "is_divider", "education_level",
         "course_id", "course_text",
     ).order_by("order", "id"))
+    education = education_for_user(_get_user(request)) if request is not None else "本科"
+    if request is not None and (education != "本科" or any(cat.education_level for cat in cats)):
+        allowed = visible_category_ids(
+            ({"id": cat.id, "parent_id": cat.parent_id, "name": cat.name,
+              "education_level": cat.education_level} for cat in cats),
+            education,
+        )
+        cats = [cat for cat in cats if cat.id in allowed]
     child_map = {}
     for cat in cats:
         child_map.setdefault(cat.parent_id, []).append(cat)
@@ -243,7 +252,7 @@ def _search_courses_v2(request, query, page, page_size):
     if course_type == "general" and college_id is not None:
         raise _ParamError("通识课不支持按学院筛选")
 
-    topo = _course_topology()
+    topo = _course_topology(request)
     ql = query.lower()
     qnorm = _normalize_course_code(query)
 
@@ -283,6 +292,7 @@ def _search_courses_v2(request, query, page, page_size):
         g for g in groups.values()
         if any(member.id in topo["mounts"] for member in members_of(g))
     ]
+    visible_groups = list(pre_filter)
     keyword_total = len(pre_filter)
 
     # 2) 过滤（作用于根课程字段）
@@ -382,7 +392,7 @@ def _search_courses_v2(request, query, page, page_size):
     # 5) facets：按当前关键词的未附加筛选匹配集合生成
     facet_colleges = []
     seen = set()
-    for group in groups.values():
+    for group in visible_groups:
         cid = group["root"].college_id
         if cid and cid not in seen and cid in topo["colleges"]:
             seen.add(cid)
@@ -445,10 +455,15 @@ def _search_materials_v2(request, query, page, page_size):
     fmt = _normalize_file_type(request.GET.get("format") or "")
 
     ql = query.lower()
-    rows = list(Material.objects.filter(
+    rows_qs = Material.objects.filter(
         Q(title__icontains=query) | Q(teacher__icontains=query) | Q(description__icontains=query),
         review_status="approved",
-    ).select_related("course", "course__college", "material_type").only(
+    )
+    from .plaza import _visible_course_ids
+    visible_ids = _visible_course_ids(_get_user(request))
+    if visible_ids is not None:
+        rows_qs = rows_qs.filter(course_id__in=visible_ids)
+    rows = list(rows_qs.select_related("course", "course__college", "material_type").only(
         "id", "title", "teacher", "description", "file_type",
         "download_count", "created_at",
         "course__id", "course__code", "course__name",

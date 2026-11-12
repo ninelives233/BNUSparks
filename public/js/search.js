@@ -273,7 +273,9 @@
     badge.className = 'sr-badge ' + (item.course_type === 'general' ? 'sr-badge--general' : 'sr-badge--major');
     badge.textContent = item.course_type === 'general' ? '通识课' : '专业课';
     meta.appendChild(badge);
-    var codes = (item.codes && item.codes.length ? item.codes : [item.code]).join(' · ');
+    var codes = (item.codes && item.codes.length ? item.codes : [item.code]).filter(function(code) {
+      return code && !/^BNUX[0-9A-F]{32}$/i.test(code);
+    }).join(' · ') || '代码待补充';
     var codeEl = document.createElement('span');
     codeEl.className = 'sr-item-code';
     codeEl.textContent = codes;

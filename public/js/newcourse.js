@@ -122,13 +122,30 @@
     }
   }
 
-  function showNewCourse() {
+  function showNewCourse(options) {
     pushViewState('newCourse', {});
     switchView('newCourse');
     updateSidebar(null);
     _renderNewCourseBreadcrumb();
     _ncUpdatePermissionHint();
-    switchNewCourseType('general');
+    var path = options && options.path;
+    switchNewCourseType(path && path.length >= 4 ? 'major' : 'general');
+    if (path && path.length >= 4 && _isGraduateIdentity()) {
+      api('/api/colleges/').then(function(list) {
+        var college = (list || []).find(function(c) { return c.name === path[1].name; });
+        if (!college) return;
+        _ncState.college = { id: college.id, name: college.name };
+        _ncEl('ncMCollegeSearch').value = college.name;
+        _populateMajors();
+        _ncEl('ncMMajor').value = String(path[3].id);
+        onMajorChange();
+        if (_ncState.majorNode) {
+          _ncState.targetCatId = path[path.length - 1].id;
+          _ncState.targetPath = path.slice(3).map(function(x) { return x.name; }).join(' / ');
+          _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+        }
+      }).catch(function() {});
+    }
     _resetNewCourseSubmitButtons();   // 防御：重进视图时复位可能卡死的按钮
     window.scrollTo({ top: 0 });
     _updateFooterVisibility('newCourse');
@@ -254,13 +271,24 @@
     }
     // 只抓取「父节点」（有子节点的目录）。叶子文件夹（如版主手建的「经管实用材料」）
     // 内部无法新建课程，不能作为专业选项。
-    var majors = (colNode.children || []).filter(function(c) {
-      return !c.divider && c.children && c.children.length;
+    var majors = _collegeMajorNodes(colNode).filter(function(c) {
+      return !c.divider && !c.courseId && ((c.children && c.children.length) || _isGraduateIdentity());
     });
     majorSel.innerHTML = '<option value="">请选择专业…</option>' + majors.map(function(m) {
       return '<option value="' + m.id + '" data-id="' + m.id + '">' + esc(m.name) + '</option>';
     }).join('');
     levelBtn.disabled = true;
+  }
+
+  function _isGraduateIdentity() {
+    return !!(currentUser && (currentUser.identity_education === '硕士' || currentUser.identity_education === '博士'));
+  }
+
+  function _collegeMajorNodes(colNode) {
+    var children = (colNode && colNode.children) || [];
+    if (!_isGraduateIdentity()) return children;
+    var level = children.find(function(c) { return c.educationLevel === currentUser.identity_education; });
+    return level ? (level.children || []) : [];
   }
 
   function _findCollegeNode() {
@@ -285,10 +313,14 @@
     }
     var mid = parseInt(opt.getAttribute('data-id'));
     var colNode = _findCollegeNode();
-    _ncState.majorNode = colNode && colNode.children
-      ? (colNode.children.find(function(c) { return c.id === mid; }) || null)
-      : null;
+    _ncState.majorNode = _collegeMajorNodes(colNode).find(function(c) { return c.id === mid; }) || null;
     levelBtn.disabled = !_ncState.majorNode;
+    if (_ncState.majorNode && _isGraduateIdentity() &&
+        (!(_ncState.majorNode.children || []).length || _hasDirectCourses(_ncState.majorNode))) {
+      _ncState.targetCatId = _ncState.majorNode.id;
+      _ncState.targetPath = _ncState.majorNode.name;
+      _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+    }
   }
 
   // ── 专业课：层级选择弹窗（真实课程树，只到「含课程的倒数第二级目录」）──
@@ -309,6 +341,11 @@
   function _openLevelPicker() {
     var major = _ncState.majorNode;
     if (!major) { alert('请先选择专业'); return; }
+    if (_isGraduateIdentity() && (!(major.children || []).length || _hasDirectCourses(major))) {
+      _ncState.targetCatId = major.id;
+      _ncEl('ncMTargetPath').textContent = major.name;
+      return;
+    }
     var overlay = document.createElement('div');
     overlay.className = 'search-overlay lp-overlay';
     overlay.id = 'ncLevelPicker';
@@ -477,7 +514,7 @@
     var name = (_ncEl(isGeneral ? 'ncGeneralName' : 'ncMName').value || '').trim();
     var code = (_ncEl(isGeneral ? 'ncGeneralCode' : 'ncMCode').value || '').trim();
     if (!name) return _ncFail(errEl, '请填写课程名称');
-    if (!code) return _ncFail(errEl, '请填写课程代码（可在教务管理网站查询）');
+    if (!code && (isGeneral || !_isGraduateIdentity())) return _ncFail(errEl, '请填写课程代码（可在教务管理网站查询）');
 
     var body = {
       course_type: isGeneral ? 'general' : 'major',

@@ -15,6 +15,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.cache import cache
 from django.http import JsonResponse, HttpResponse, HttpResponseNotModified
+from django.utils.cache import patch_vary_headers
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ from .utils import (
     Notification, DownloadRecord, Favorite,
 )
 from ..models import COURSE_TREE_CACHE_KEY, get_stats_cache_key
+from ..services.course_visibility import education_for_user, visible_category_ids
 
 
 def _tree_cache_payload(tree):
@@ -45,11 +47,41 @@ def _tree_response_from_cache(request, payload):
     """从缓存的 bytes+ETag 构造响应；命中 If-None-Match 在编码之前返回 304。"""
     etag = payload["etag"]
     if request.headers.get("If-None-Match") == etag:
-        return HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "no-cache"})
+        resp = HttpResponseNotModified(headers={"ETag": etag, "Cache-Control": "private, no-cache"})
+        patch_vary_headers(resp, ["Authorization", "Cookie"])
+        return resp
     resp = HttpResponse(payload["body"], content_type="application/json")
     resp["ETag"] = etag
-    resp["Cache-Control"] = "no-cache"
+    resp["Cache-Control"] = "private, no-cache"
+    patch_vary_headers(resp, ["Authorization", "Cookie"])
     return resp
+
+
+def _visible_tree_response(request, payload):
+    rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
+    education = education_for_user(_get_user(request))
+    if education == "本科" and not any(row["education_level"] for row in rows):
+        return _tree_response_from_cache(request, payload)
+    allowed = visible_category_ids(rows, education)
+    tree = json.loads(payload["body"].decode("utf-8"))["data"]
+
+    def prune(nodes):
+        result = []
+        for node in nodes:
+            if node.get("divider"):
+                if education == "本科":
+                    result.append(node)
+                continue
+            if node.get("id") not in allowed:
+                continue
+            if "children" in node:
+                node["children"] = prune(node["children"])
+            result.append(node)
+        return result
+
+    for root in tree.values():
+        root["children"] = prune(root.get("children", []))
+    return _tree_response_from_cache(request, _tree_cache_payload(tree))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -64,6 +96,10 @@ def api_courses(request):
     # v=147：只返回仍挂在课程树（有 CourseCategory 引用）的课程，
     # 文件夹被删除后残留的孤儿 Course 不再出现在列表里。
     qs = qs.filter(coursecategory__isnull=False)
+    from .plaza import _visible_course_ids
+    visible_ids = _visible_course_ids(_get_user(request))
+    if visible_ids is not None:
+        qs = qs.filter(id__in=visible_ids)
     t = request.GET.get("type")
     s = request.GET.get("search", "").strip()
     college_id = request.GET.get("college")
@@ -232,10 +268,10 @@ def api_course_tree(request):
     cached = cache.get(CACHE_KEY)
     if cached is not None:
         if isinstance(cached, dict) and cached.get("v") == 2:
-            return _tree_response_from_cache(request, cached)
+            return _visible_tree_response(request, cached)
         payload = _tree_cache_payload(cached)
         cache.set(CACHE_KEY, payload, 600)
-        return _tree_response_from_cache(request, payload)
+        return _visible_tree_response(request, payload)
 
     # 1. 一次性加载所有 CourseCategory（避免 FK N+1；merged_into 供同名合并展示）
     all_cats = CourseCategory.objects.select_related('course', 'course__merged_into').all()
@@ -275,7 +311,7 @@ def api_course_tree(request):
 
     payload = _tree_cache_payload(tree)
     cache.set(CACHE_KEY, payload, 600)
-    return _tree_response_from_cache(request, payload)
+    return _visible_tree_response(request, payload)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -347,6 +383,8 @@ def api_search(request):
         return _err("搜索关键词不能为空")
 
     results = {"courses": [], "materials": []}
+    from .plaza import _visible_course_ids
+    visible_ids = _visible_course_ids(_get_user(request))
 
     if search_type in ("all", "course"):
         # 同名合并：别名课程代码也命中主课程（merged_courses 反向联表），
@@ -360,7 +398,10 @@ def api_search(request):
             | Q(merged_courses__code__icontains=query),
             # v=147：排除已删除文件夹的孤儿 Course，避免搜索结果残留
             coursecategory__isnull=False,
-        ).order_by("code").distinct()[:200]
+        )
+        if visible_ids is not None:
+            courses_qs = courses_qs.filter(id__in=visible_ids)
+        courses_qs = courses_qs.order_by("code").distinct()[:200]
         seen = set()
         results["courses"] = []
         merged_codes_all = _merged_codes_map()
@@ -391,7 +432,10 @@ def api_search(request):
 
     if search_type in ("all", "material"):
         q = Q(title__icontains=query) | Q(teacher__icontains=query) | Q(description__icontains=query)
-        materials_qs = Material.objects.filter(q, review_status="approved").select_related("course")[:50]
+        materials_qs = Material.objects.filter(q, review_status="approved")
+        if visible_ids is not None:
+            materials_qs = materials_qs.filter(course_id__in=visible_ids)
+        materials_qs = materials_qs.select_related("course")[:50]
         material_list = list(materials_qs)
         material_tree_names = course_display_names({
             m.course_id for m in material_list if m.course_id

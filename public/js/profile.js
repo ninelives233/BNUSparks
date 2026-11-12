@@ -147,6 +147,7 @@
         currentUser.identity_major = (data && data.identity_major) || '';
         currentUser.identity_can_edit = data && data.identity_can_edit;
       }
+      if (typeof refreshCourseTree === 'function') await refreshCourseTree();
       closeIdentityEditor();
       loadProfile();
       // v184：公开页 60s 前端缓存失效，让公开展示即时生效

@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
+from ..services.course_visibility import browse_mode_for_profile
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile, _identity_can_edit,
@@ -36,7 +37,7 @@ def _appearance_payload(profile):
         "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
         "mobile_nav": _mobile_nav_for_profile(profile),
         "default_view": _default_view_for_profile(profile),
-        "material_browse_mode": profile.material_browse_mode or UserProfile.MaterialBrowseMode.DIRECTORY,
+        "material_browse_mode": browse_mode_for_profile(profile),
         "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
         "appearance_configured": bool(
             profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or

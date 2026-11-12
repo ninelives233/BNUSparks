@@ -418,6 +418,11 @@
     }
   }
 
+  window.addEventListener('bnuauthchange', function () {
+    if (typeof clearApiCache === 'function') clearApiCache();
+    refreshCourseTree();
+  });
+
   // ── 我的课程收藏 ──
   // 登录后加载收藏课程代码集合；星星状态在本地 Set 维护，树缓存不变
   var _courseFavoritesPromise = null;
