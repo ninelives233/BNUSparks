@@ -2843,11 +2843,7 @@ function ttOpenCourse(code) {
       // 优先用课表自己的解析结果（支持区段目录/形势与政策特例，
       // navToLast 只认精确代码会停在板块根）；身份优先级已在解析时应用
       if (info.path && info.path.length >= 2) {
-        expPath = info.path;
-        pushViewState('explorer', { expPath: [...expPath] });
-        switchView('explorer');
-        renderExplorer();
-        updateSidebar(info.path[0] === '通识课' ? 'general' : 'major');
+        openPreferredMaterialPath(info.path);
       } else if (typeof navToCourse === 'function') {
         navToCourse(info.type === '通识课' ? '通识课' : '专业课', code);
       } else if (typeof showExplorer === 'function' && typeof navToLast === 'function') {

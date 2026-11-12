@@ -134,7 +134,7 @@
       _state = restored;
     } else {
       var range = requestedRange;
-      var shared = restoreSessionFilters(range);
+      var shared = options.resetFilters ? Object.assign({ categoryId: null }, DEFAULTS) : restoreSessionFilters(range);
       _state = {
         categoryId: options.categoryId || shared.categoryId,
         q: options.keepFilters ? _state.q : shared.q,

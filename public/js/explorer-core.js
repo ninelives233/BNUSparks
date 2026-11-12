@@ -56,6 +56,21 @@
     }
   }
 
+  // 外部课程入口统一按浏览偏好打开同一个目录范围；调用前需确保课程树已就绪。
+  function openPreferredMaterialPath(path) {
+    var node = getNode(path);
+    if (!node) return Promise.resolve(false);
+    var range = path[0] === '专业课' ? '专业课' : '通识课';
+    if (getMaterialBrowseMode() === 'plaza' && node.id && typeof ensureFeature === 'function') {
+      return ensureFeature('plaza').then(function () {
+        return window.BnuPlaza.show({ categoryId: node.id, courseType: range, resetFilters: true });
+      }).then(function () { return true; }, function () {
+        return showExplorerPath(path);
+      });
+    }
+    return showExplorerPath(path);
+  }
+
   // 独立搜索页课程结果入口（v=350）：按服务端有效 segments 显式定位。
   // 与 navToCourse 的差异：路径由搜索结果携带（多归属时用户已明确选择），
   // 不再按本人身份重排；先等 explorer 与课程树就绪，再验证路径仍指向
@@ -68,12 +83,7 @@
       var node = null;
       try { node = getNode(path); } catch (e) { node = null; }
       if (!node || node.children || node.divider) return false;
-      expPath = path.slice();
-      pushViewState('explorer', { expPath: [...expPath] });
-      switchView('explorer');
-      if (typeof updateSidebar === 'function') updateSidebar('allCourses');
-      renderExplorer();
-      return true;
+      return openPreferredMaterialPath(path);
     };
     var ready = typeof ensureFeature === 'function'
       ? ensureFeature('explorer')
@@ -97,13 +107,9 @@
       var path = null;
       try { path = findPathByCourseId(code); } catch (e) { path = null; }
       if (!path) { fallback(); return; }
-      expPath = path;
-      pushViewState('explorer', { expPath: [...expPath] });
-      switchView('explorer');
-      renderExplorer();
-      if (typeof updateSidebar === 'function') {
-        updateSidebar('allCourses');
-      }
+      // 排行榜等入口需要定位并高亮具体文件，沿用文件列表的定位能力。
+      if (highlightFileId) showExplorerPath(path);
+      else openPreferredMaterialPath(path);
     };
     // explorer-render 是懒加载模块；课程树也只在进入 explorer 时按需加载。
     // 两者都准备好后再执行 go，避免首点时 findPathByCourseId 在 null 上查询，
@@ -652,7 +658,7 @@
     saveScopePosition('directory', range, { path: expPath.slice() });
     if (!skipPreference && typeof setAppearance === 'function') setAppearance('material_browse_mode', 'plaza');
     var node = getNode(expPath);
-    var options = node && node.id ? { categoryId: node.id, courseType: range } : { courseType: range };
+    var options = node && node.id ? { categoryId: node.id, courseType: range, resetFilters: true } : { courseType: range, resetFilters: true };
     var enter = function () {
       if (window.BnuPlaza && typeof window.BnuPlaza.show === 'function') {
         window.BnuPlaza.show(options);

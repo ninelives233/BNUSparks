@@ -395,12 +395,7 @@
       showFileDetail({ id: materialId, title: courseName || ('#' + materialId), course_code: courseCode || '', course_name: courseName || '' });
     } else if (courseCode) {
       var type = courseCode.startsWith('GEN') ? '通识课' : '专业课';
-      showExplorer(type);
-      requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-          navToLast(courseCode);
-        });
-      });
+      navToCourse(type, courseCode);
     } else {
       showHome();
     }

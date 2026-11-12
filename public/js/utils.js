@@ -1023,11 +1023,11 @@
       const pills = document.querySelectorAll('.stat-pill');
       if (pills.length >= 3) {
         pills[0].style.cursor = 'pointer';
-        pills[0].onclick = function(e) { showExplorer('专业课'); };
+        pills[0].onclick = function(e) { showAllCourses('专业课'); };
         pills[1].style.cursor = 'pointer';
-        pills[1].onclick = function(e) { showExplorer('通识课'); };
+        pills[1].onclick = function(e) { showAllCourses('通识课'); };
         pills[2].style.cursor = 'pointer';
-        pills[2].onclick = function(e) { showExplorer('专业课'); };
+        pills[2].onclick = function(e) { showAllCourses('专业课'); };
       }
       // 下载最多（左列）
       const topEl = document.getElementById('topDownloadedList');
