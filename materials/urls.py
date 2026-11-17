@@ -170,7 +170,7 @@ urlpatterns = [
     path("admin/qa/answers/<int:aid>/reject/", views.api_qa_admin_answer_reject, name="api_qa_admin_answer_reject"),
     path("admin/qa/upload-image/", views.api_qa_admin_upload_image, name="api_qa_admin_upload_image"),
 
-    # 用户管理（Iter 3 — 仅 super_admin）
+    # 用户管理：身份汇总对全体管理员开放，其余功能仅 super_admin。
     path("admin/users/", views.api_admin_users, name="api_admin_users"),
     path("admin/monitoring/", views.api_admin_monitoring, name="api_admin_monitoring"),
     path("admin/users/<int:uid>/downloads/", views.api_admin_user_downloads, name="api_admin_user_downloads"),

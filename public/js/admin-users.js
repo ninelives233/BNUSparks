@@ -1,5 +1,5 @@
 /* BNU Sparks · admin-users.js —— 用户监测+用户管理+辖区树+角色与自动托管。顶层函数为跨文件契约。 */
-  // ── 用户管理（仅 super_admin） ──
+  // ── 用户管理（全体管理员可看汇总，其余功能仅 super_admin） ──
   var _userPage = 1;
   var _userRoleFilter = ''; // '' | 'admin' | 'user'
   var _adminUserSections = ['trend', 'identity', 'timetable', 'downloads', 'health', 'users'];
@@ -18,6 +18,7 @@
   var _timetableImportPeriod = 'month';
   var _downloadActivity = 'all';
   var _identityMonitorData = null;
+  var _identityMonitorRequest = 0;
   (function() {
     var state = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
     if (!state || state.view !== 'admin') return;
@@ -34,9 +35,23 @@
       'onclick="switchAdminUserSection(\'' + section + '\')">' + label + '</button>';
   }
 
+  function _canManageAdminUsers() {
+    return !!currentUser && currentUser.role === 'super_admin';
+  }
+
   function renderAdminUsers(content, search, page) {
     if (!content) return;
-    content.innerHTML = '<div class="pc-type-bar admin-user-monitor-nav">' +
+    if (!currentUser || ['super_admin', 'moderator', 'sub_moderator'].indexOf(currentUser.role) === -1) {
+      content.innerHTML = '<div class="admin-empty">权限不足</div>';
+      return;
+    }
+    var fullAccess = _canManageAdminUsers();
+    if (!fullAccess) {
+      _adminUserSection = 'identity';
+      sessionStorage.setItem('bnusparks_admin_user_section', 'identity');
+      if (typeof patchViewState === 'function') patchViewState({ adminUserSection: 'identity' });
+    }
+    content.innerHTML = (fullAccess ? '<div class="pc-type-bar admin-user-monitor-nav">' +
         '<span class="pc-type-label">功能分区</span>' +
         '<div class="pc-seg" role="tablist" aria-label="用户管理功能分区">' +
           _adminUserSectionButton('trend', '活动趋势') +
@@ -46,7 +61,7 @@
           _adminUserSectionButton('health', '运行状态') +
           _adminUserSectionButton('users', '用户名单') +
         '</div>' +
-      '</div>' +
+      '</div>' : '') +
       '<div id="adminUserSectionContent" class="admin-user-section-content"></div>';
     var sectionContent = document.getElementById('adminUserSectionContent');
     if (_adminUserSection === 'trend') renderAdminMonitoringTrend(sectionContent);
@@ -59,6 +74,7 @@
 
   function switchAdminUserSection(section) {
     if (_adminUserSections.indexOf(section) === -1) section = 'trend';
+    if (!_canManageAdminUsers()) section = 'identity';
     _adminUserSection = section;
     sessionStorage.setItem('bnusparks_admin_user_section', section);
     if (typeof patchViewState === 'function') patchViewState({ adminTab: 'users', adminUserSection: section });
@@ -159,14 +175,16 @@
       var attrs = onclickName ? ' onclick="' + onclickName + '(' + index + ')"' : '';
       // 「未识别」是兜底桶而非真实归属，条形降灰与校区图「未判定」口径一致
       var muted = /未识别/.test(row.name || '');
-      return '<button type="button" class="identity-bar-row' + (selected ? ' active' : '') + (muted ? ' is-muted' : '') + '"' + attrs + '>' +
+      var tag = onclickName ? 'button' : 'div';
+      return '<' + tag + (onclickName ? ' type="button"' : '') + ' class="identity-bar-row' + (selected ? ' active' : '') + (muted ? ' is-muted' : '') + '"' + attrs + '>' +
         '<span class="identity-bar-label">' + esc(row.name) + '</span>' +
         '<span class="identity-bar-track"><span style="width:' + Math.max(2, (row.count || 0) / max * 100) + '%"></span></span>' +
-        '<strong>' + (row.count || 0) + '</strong></button>';
+        '<strong>' + (row.count || 0) + '</strong></' + tag + '>';
     }).join('') + '</div>';
   }
 
   function selectIdentityCollege(index) {
+    if (!_canManageAdminUsers()) return;
     if (!_identityMonitorData) return;
     _identityMonitorData.selectedIndex = index;
     // 切换学院后原专业选中失效，收起用户列表
@@ -179,6 +197,7 @@
   }
 
   function renderIdentityMajorPanel() {
+    if (!_canManageAdminUsers()) return;
     var majorPanel = document.getElementById('identityMajorPanel');
     if (!majorPanel) return;
     var colleges = (_identityMonitorData && _identityMonitorData.colleges) || [];
@@ -189,6 +208,7 @@
   }
 
   function selectIdentityMajor(index) {
+    if (!_canManageAdminUsers()) return;
     if (!_identityMonitorData) return;
     // 再次点击同一专业 = 收起用户列表
     _identityMajorIndex = (_identityMajorIndex === index) ? -1 : index;
@@ -203,6 +223,7 @@
   }
 
   function renderIdentityUserPanel() {
+    if (!_canManageAdminUsers()) return;
     var panel = document.getElementById('identityUserPanel');
     if (!panel) return;
     var colleges = (_identityMonitorData && _identityMonitorData.colleges) || [];
@@ -352,11 +373,42 @@
       '</svg><div class="campus-legend">' + legend + '</div></div>';
   }
 
+  function _identityCollegeShareCard(share) {
+    var head = '<section class="monitor-data-card college-share-card"><div class="monitor-card-head"><h4>本院用户占比</h4><span>全站有效用户口径</span></div>';
+    if (!share || !share.name) {
+      return head + '<div class="monitor-sub-empty">在个人资料中补全学院后，即可查看本院占比。</div></section>';
+    }
+    var total = Math.max(0, Number(share.total_users) || 0);
+    var count = Math.min(total, Math.max(0, Number(share.count) || 0));
+    var fraction = total ? count / total : 0;
+    var percent = (fraction * 100).toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + '%';
+    var slice = '';
+    if (fraction >= 1) {
+      slice = '<circle cx="60" cy="60" r="46" fill="var(--primary)" />';
+    } else if (fraction > 0) {
+      var angle = fraction * Math.PI * 2;
+      var x = 60 + 46 * Math.sin(angle), y = 60 - 46 * Math.cos(angle);
+      slice = '<path d="M60 60 L60 14 A46 46 0 ' + (fraction > 0.5 ? 1 : 0) + ' 1 ' + x.toFixed(3) + ' ' + y.toFixed(3) + ' Z" fill="var(--primary)" />';
+    }
+    return head + '<p class="college-share-name">' + esc(share.name) + '</p><div class="college-share-body">' +
+      '<svg viewBox="0 0 120 120" role="img" aria-label="' + esc(share.name) + '占全站用户的' + percent + '">' +
+        '<circle cx="60" cy="60" r="46" fill="var(--border-light)" />' + slice + '</svg>' +
+      '<div class="college-share-detail"><strong class="college-share-percent">' + percent + '</strong>' +
+        '<span class="college-share-legend"><i></i>本院 <strong>' + count + '</strong> 人</span>' +
+        '<span class="college-share-legend is-rest"><i></i>全站其他 <strong>' + (total - count) + '</strong> 人</span></div></div>' +
+      '<p class="college-share-note">按你的身份学院统计 · 不随筛选变化</p></section>';
+  }
+
   function renderAdminIdentityDistribution(content) {
     if (!content) return;
+    var viewer = currentUser;
+    var fullAccess = _canManageAdminUsers();
+    var requestId = ++_identityMonitorRequest;
+    _identityMonitorData = null;
     content.innerHTML = '<div class="admin-loading">加载身份分布…</div>';
     var eduParam = _identityEducation ? '&education=' + encodeURIComponent(_identityEducation) : '';
     api('/api/admin/monitoring/?section=identity&period=' + encodeURIComponent(_identityPeriod) + eduParam).then(function(data) {
+      if (requestId !== _identityMonitorRequest || !currentUser || !viewer || currentUser.id !== viewer.id || currentUser.role !== viewer.role) return;
       data.selectedIndex = data.colleges && data.colleges.length ? 0 : -1;
       _identityMonitorData = data;
       var coverage = data.total_users ? Math.round(data.tagged_users / data.total_users * 100) : 0;
@@ -366,28 +418,29 @@
       });
       var filterNote = _identityEducation ? ' · 筛选：' + esc(_identityEducation) : '';
       _identityMajorIndex = -1;
-      content.innerHTML = '<div class="monitor-section-head"><div><h3>入站身份分布</h3>' +
-        '<p>聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院、专业与年级分布' + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
-        '<div class="monitor-stats-grid monitor-stats-grid--three">' +
-          _monitorStat(data.total_users, _identityEducation ? _identityEducation + '用户' : '有效用户') + _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') +
-          _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' +
-        _identityUserTrendChart(data.user_trend || {}) +
-        '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +
+      content.innerHTML = '<div class="monitor-section-head"><div><h3>' + (fullAccess ? '入站身份分布' : '用户分布看板') + '</h3>' +
+        '<p>' + (fullAccess ? '聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院、专业与年级分布' : '全站用户总数与注册增长趋势；点击培养层次可筛选学院分布') + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
+        '<div class="monitor-stats-grid ' + (fullAccess ? 'monitor-stats-grid--three' : 'monitor-stats-grid--one') + '">' +
+          _monitorStat(data.total_users, fullAccess && _identityEducation ? _identityEducation + '用户' : '用户总数') +
+          (fullAccess ? _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') + _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') : '') + '</div>' +
+        '<div class="identity-trend-grid">' + _identityUserTrendChart(data.user_trend || {}) + _identityCollegeShareCard(data.college_share) + '</div>' +
+        (fullAccess ? '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +
           '<div class="campus-distribution-body">' +
             '<div class="campus-zone"><div class="monitor-card-head"><h4>校区分布</h4></div>' +
               _campusDonutChart(data.campus_distribution || []) + '</div>' +
             '<div class="grade-distribution-block"><div class="monitor-card-head"><h4>年级分布</h4><span>' + (_identityEducation ? esc(_identityEducation) + ' 口径 · 随筛选联动' : '全站口径 · 按学号前四位识别') + '</span></div>' +
               _distributionBars(data.grade_distribution || [], -1, '') + '</div>' +
-          '</div></div>' +
-        '<div class="identity-monitor-grid">' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (data.untagged_users || 0) + ' 人身份未补全') + '</span></div>' +
+          '</div></div>' : '') +
+        '<div class="identity-monitor-grid' + (fullAccess ? '' : ' identity-monitor-grid--summary') + '">' +
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (fullAccess ? (data.untagged_users || 0) + ' 人身份未补全' : '点击筛选学院')) + '</span></div>' +
             _distributionBars(data.education_levels || [], eduSelectedIndex, 'selectIdentityEducation') + '</section>' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4><span>' + (data.untagged_users || 0) + ' 人身份未补全</span></div><div id="identityCollegeBars">' +
-            _distributionBars(data.colleges || [], data.selectedIndex, 'selectIdentityCollege') + '</div></section>' +
-          '<section class="monitor-data-card" id="identityMajorPanel"></section>' +
-          '<section class="monitor-data-card" id="identityUserPanel"></section></div>';
-      selectIdentityCollege(data.selectedIndex);
+          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4>' + (fullAccess ? '<span>' + (data.untagged_users || 0) + ' 人身份未补全</span>' : '') + '</div><div id="identityCollegeBars">' +
+            _distributionBars(data.colleges || [], fullAccess ? data.selectedIndex : -1, fullAccess ? 'selectIdentityCollege' : '') + '</div></section>' +
+          (fullAccess ? '<section class="monitor-data-card" id="identityMajorPanel"></section>' +
+          '<section class="monitor-data-card" id="identityUserPanel"></section>' : '') + '</div>';
+      if (fullAccess) selectIdentityCollege(data.selectedIndex);
     }).catch(function(err) {
+      if (requestId !== _identityMonitorRequest || !currentUser || !viewer || currentUser.id !== viewer.id || currentUser.role !== viewer.role) return;
       content.innerHTML = '<div class="admin-empty">身份分布加载失败：' + esc(err.message) + '</div>';
     });
   }

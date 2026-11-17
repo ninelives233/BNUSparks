@@ -19,6 +19,16 @@ assert.match(chart, /class="axis-new-users"[^>]*>4<\/text>/);
 assert.match(chart, /monitor-area-total-users/);
 assert.doesNotMatch(context._identityUserTrendChart({ labels: [], total_users: [], new_users: [] }), /NaN|Infinity/);
 
+// 本院占比覆盖 0%、100%、空站点和缺少身份学院，避免退化扇形或除零。
+for (const [count, total] of [[0, 10], [10, 10], [0, 0], [3, 10]]) {
+  const pie = context._identityCollegeShareCard({ name: '测试学院', count, total_users: total });
+  assert.doesNotMatch(pie, /NaN|Infinity/);
+  assert.match(pie, new RegExp((total ? count / total * 100 : 0) + '%'));
+  assert.match(pie, /role="img" aria-label="测试学院占全站用户的/);
+}
+assert.match(context._identityCollegeShareCard(null), /补全学院/);
+assert.doesNotMatch(context._distributionBars([{ name: '测试学院', count: 2 }], -1, ''), /<button|onclick=/);
+
 const rows = Array.from({ length: 50 }, (_, i) => ({
   date: '2026-01-' + String(i + 1).padStart(2, '0'), label: '日' + i, all: i,
 }));

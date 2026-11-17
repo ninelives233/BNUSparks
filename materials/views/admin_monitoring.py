@@ -1,4 +1,4 @@
-"""总管理员用户监测：趋势、身份分布、下载流水、运行状态与用户下载追溯。"""
+"""管理员汇总看板与总管理员专属的用户监测、流水及追溯。"""
 
 import os
 import re
@@ -244,15 +244,12 @@ def _user_trend_payload(period):
     }
 
 
-def _identity_payload(period="month", education=None):
+def _identity_payload(period="month", education=None, *, viewer_profile):
     profiles = UserProfile.objects.filter(user__is_active=True)
     if education:
         # 培养层次筛选：统计卡（有效用户/已完整/覆盖率）、学院/专业与未补全数
         # 都取筛选内口径，三者分母分子一致；层次卡片与用户趋势保持全局口径。
         profiles = profiles.filter(identity_education=education)
-    total = profiles.count()
-    complete = profiles.exclude(identity_education="").exclude(identity_college="").exclude(identity_major="")
-    tagged = complete.count()
     # 层次分布始终全局统计，保证筛选后仍可切换其他层次。
     education_rows = list(
         UserProfile.objects.filter(user__is_active=True)
@@ -269,6 +266,39 @@ def _identity_payload(period="month", education=None):
         .annotate(count=Count("id"))
         .order_by("-count", "identity_college")
     )
+    site_total = User.objects.filter(is_active=True).count()
+    own_college = viewer_profile.identity_college.strip()
+    college_share = None
+    if own_college and own_college not in {"其他", "其它"}:
+        college_share = {
+            "name": own_college,
+            "count": UserProfile.objects.filter(
+                user__is_active=True, identity_college=own_college,
+            ).count(),
+            "total_users": site_total,
+        }
+    payload = {
+        "total_users": site_total,
+        "education_filter": education or "",
+        "user_trend": _user_trend_payload(period),
+        "education_levels": [
+            {"name": row["identity_education"], "count": row["count"]}
+            for row in education_rows
+        ],
+        "colleges": [
+            {"name": row["identity_college"], "count": row["count"]}
+            for row in college_rows
+        ],
+        # 本院取查看者的身份学院，始终使用全站口径，不随层次/时间筛选变化。
+        "college_share": college_share,
+    }
+    if viewer_profile.role != UserProfile.Role.SUPER_ADMIN:
+        # 汇总视图采用字段白名单；不查询或序列化专业、年级、账号与完整度。
+        return payload
+
+    total = profiles.count()
+    complete = profiles.exclude(identity_education="").exclude(identity_college="").exclude(identity_major="")
+    tagged = complete.count()
     major_rows = (
         profiles.exclude(identity_college="")
         .exclude(identity_college__in=("其他", "其它"))
@@ -312,23 +342,19 @@ def _identity_payload(period="month", education=None):
         {"name": name, "count": grade_counts[name]}
         for name in sorted(grade_counts, key=_grade_sort_key)
     ]
-    return {
+    payload.update({
         "total_users": total,
         "education_filter": education or "",
         "tagged_users": tagged,
         "untagged_users": max(0, total - tagged),
         "campus_distribution": campus_distribution,
         "grade_distribution": grade_distribution,
-        "user_trend": _user_trend_payload(period),
-        "education_levels": [
-            {"name": row["identity_education"], "count": row["count"]}
-            for row in education_rows
-        ],
         "colleges": [
             {"name": row["identity_college"], "count": row["count"], "majors": majors.get(row["identity_college"], [])}
             for row in college_rows
         ],
-    }
+    })
+    return payload
 
 
 def _identity_users_payload(education, college, major):
@@ -767,12 +793,17 @@ def _health_payload(period="week"):
     }
 
 
-@require_role(UserProfile.Role.SUPER_ADMIN)
+@require_role(UserProfile.Role.SUPER_ADMIN, UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR)
 def api_admin_monitoring(request):
     """GET /api/admin/monitoring/?section=trend|identity|identity_users|timetable|downloads|health|events。"""
+    if not request.user.is_active:
+        return _err("请先登录", 401)
     if request.method != "GET":
         return _err("仅支持 GET", 405)
     section = (request.GET.get("section") or "trend").strip()
+    profile = request.user.profile
+    if profile.role != UserProfile.Role.SUPER_ADMIN and section != "identity":
+        return _err("权限不足", 403)
     try:
         if section == "trend":
             period = (request.GET.get("period") or "week").strip()
@@ -784,7 +815,7 @@ def api_admin_monitoring(request):
             if period not in {"day", "week", "month", "all"}:
                 return _err("无效的时间范围")
             education = (request.GET.get("education") or "").strip()
-            return _ok(_identity_payload(period, education=education or None))
+            return _ok(_identity_payload(period, education=education or None, viewer_profile=profile))
         if section == "identity_users":
             payload = _identity_users_payload(
                 (request.GET.get("education") or "").strip(),

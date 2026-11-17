@@ -55,10 +55,10 @@
   function loadAdminPanel() {
     var content = document.getElementById('adminContent');
     if (!content) return;
-    // 隐藏用户管理 tab（仅 super_admin 可见）
+    // 所有管理员可进入用户管理；内部按角色开放汇总看板或完整功能。
     var usersTab = document.getElementById('adminUsersTab');
     if (usersTab) {
-      usersTab.style.display = currentUser && currentUser.role === 'super_admin' ? '' : 'none';
+      usersTab.style.display = currentUser && ['super_admin', 'moderator', 'sub_moderator'].indexOf(currentUser.role) !== -1 ? '' : 'none';
     }
     // 显示操作记录 tab（所有管理员可见）
     var opTab = document.querySelector('.admin-tab[data-tab="operations"]');

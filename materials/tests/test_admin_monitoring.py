@@ -1,4 +1,4 @@
-"""总管理员用户监测、下载流水与单用户下载追溯。"""
+"""管理员汇总看板、总管理员用户监测及单用户追溯。"""
 
 from datetime import timedelta
 from unittest.mock import patch
@@ -51,6 +51,107 @@ class AdminMonitoringTest(TestCase):
         self.assertEqual(denied_trace.status_code, 403)
         allowed = self._get("/api/admin/monitoring/?section=trend")
         self.assertEqual(allowed.status_code, 200)
+
+    def test_all_admin_roles_receive_only_identity_aggregates(self):
+        allowed_keys = {
+            "total_users", "education_filter", "user_trend", "education_levels",
+            "colleges", "college_share",
+        }
+        for role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+            viewer = create_user(f"aggregate_{role}", role=role)
+            for period, buckets in (("day", 24), ("week", 7), ("month", 30), ("all", None)):
+                with self.subTest(role=role, period=period):
+                    response = self._get(f"/api/admin/monitoring/?section=identity&period={period}", viewer)
+                    self.assertEqual(response.status_code, 200)
+                    data = response.json()["data"]
+                    self.assertEqual(set(data), allowed_keys)
+                    self.assertEqual(data["total_users"], UserProfile.objects.filter(user__is_active=True).count())
+                    self.assertEqual(data["colleges"], [{"name": "文学院", "count": 1}])
+                    self.assertEqual(data["education_levels"], [{"name": "本科", "count": 1}])
+                    self.assertIsNone(data["college_share"])
+                    self.assertEqual(set(data["user_trend"]), {"period", "period_label", "labels", "new_users", "total_users"})
+                    if buckets:
+                        self.assertEqual(len(data["user_trend"]["labels"]), buckets)
+                    self.assertNotContains(response, self.user.username)
+                    self.assertNotContains(response, self.user.first_name)
+                    self.assertNotContains(response, "汉语言文学")
+
+    def test_other_monitoring_and_user_management_remain_super_admin_only(self):
+        for role in (UserProfile.Role.MODERATOR, UserProfile.Role.SUB_MODERATOR):
+            viewer = create_user(f"restricted_{role}", role=role)
+            paths = [
+                "/api/admin/monitoring/",
+                *[f"/api/admin/monitoring/?section={section}" for section in (
+                    "trend", "identity_users&college=文学院", "timetable", "downloads", "health", "events", "unknown",
+                )],
+                "/api/admin/users/", "/api/admin/sections/",
+                f"/api/admin/users/{self.user.id}/downloads/",
+                f"/api/admin/users/{self.user.id}/timetable/",
+            ]
+            for path in paths:
+                with self.subTest(role=role, path=path):
+                    self.assertEqual(self._get(path, viewer).status_code, 403)
+            for action in ("role", "auto-approve"):
+                with self.subTest(role=role, action=action):
+                    self.client.set_token(viewer)
+                    response = self.client.post_json(f"/api/admin/users/{self.user.id}/{action}/", {"role": "super_admin", "enabled": True})
+                    self.assertEqual(response.status_code, 403)
+
+    def test_identity_aggregate_requires_active_admin_and_valid_request(self):
+        path = "/api/admin/monitoring/?section=identity"
+        self.assertEqual(AuthClient().get_json(path).status_code, 401)
+        self.assertEqual(self._get(path, self.user).status_code, 403)
+        viewer = create_user("aggregate_active", role=UserProfile.Role.MODERATOR)
+        self.assertEqual(self._get(path + "&period=invalid", viewer).status_code, 400)
+        self.assertEqual(self.client.post_json(path).status_code, 405)
+        viewer.is_active = False
+        viewer.save(update_fields=["is_active"])
+        self.assertEqual(self._get(path, viewer).status_code, 401)
+
+    def test_college_share_uses_viewer_identity_and_global_active_user_denominator(self):
+        from django.contrib.auth.models import User
+        from ..models import College
+        viewer = create_user("aggregate_college", role=UserProfile.Role.SUB_MODERATOR)
+        viewer.profile.identity_college = "文学院"
+        viewer.profile.save(update_fields=["identity_college"])
+        # 管辖学院、请求参数不能替换查看者的身份学院。
+        managed = College.objects.create(name="教育学院", slug="aggregate-managed")
+        viewer.profile.managed_majors.add(managed)
+        grad = create_user("aggregate_grad")
+        grad.profile.identity_education = "硕士"
+        grad.profile.identity_college = "教育学院"
+        grad.profile.save(update_fields=["identity_education", "identity_college"])
+        inactive = create_user("aggregate_inactive")
+        inactive.profile.identity_college = "文学院"
+        inactive.profile.save(update_fields=["identity_college"])
+        inactive.is_active = False
+        inactive.save(update_fields=["is_active"])
+        # 历史上缺少 profile 的有效用户也属于全站分母。
+        no_profile = create_user("aggregate_no_profile")
+        no_profile.profile.delete()
+        total = User.objects.filter(is_active=True).count()
+        path = "/api/admin/monitoring/?section=identity"
+        data = self._get(path, viewer).json()["data"]
+        expected = {"name": "文学院", "count": 2, "total_users": total}
+        self.assertEqual(data["college_share"], expected)
+        for education in ("本科", "硕士", "无此层次"):
+            with self.subTest(education=education):
+                filtered = self._get(path + f"&education={education}&period=day&college=教育学院&major=汉语言文学", viewer).json()["data"]
+                self.assertEqual(filtered["college_share"], expected)
+                self.assertEqual(filtered["total_users"], total)
+                self.assertEqual(filtered["education_levels"], data["education_levels"])
+                if education == "硕士":
+                    self.assertEqual(filtered["colleges"], [{"name": "教育学院", "count": 1}])
+                if education == "无此层次":
+                    self.assertEqual(filtered["colleges"], [])
+
+    def test_college_share_handles_missing_or_fallback_college(self):
+        for college in ("", "其他", "其它"):
+            with self.subTest(college=college):
+                self.admin.profile.identity_college = college
+                self.admin.profile.save(update_fields=["identity_college"])
+                data = self._get("/api/admin/monitoring/?section=identity").json()["data"]
+                self.assertIsNone(data["college_share"])
 
     def test_trend_has_complete_24_hour_buckets(self):
         response = self._get("/api/admin/monitoring/?section=trend&period=day")
