@@ -223,7 +223,7 @@
       '<div class="plaza-toolbar">' +
         '<label class="plaza-search">' + iconSvg('search') +
           '<input id="plazaSearchInput" type="search" autocomplete="off" placeholder="搜索资料或课程…" aria-label="搜索当前范围的资料">' +
-          '<button type="button" class="plaza-search-filter" id="plazaMobileFilter" aria-label="筛选">' + iconSvg('filter') + '</button>' +
+          '<button type="button" class="plaza-search-filter" id="plazaMobileFilter" aria-label="筛选资料" aria-haspopup="dialog">' + iconSvg('filter') + '<span>筛选</span></button>' +
         '</label>' +
         '<div class="plaza-selects" id="plazaSelects">' +
           filterPillHtml({ label: '类型', id: 'plazaTypeSelect', aria: '资料类型筛选', value: '全部' }) +
@@ -819,7 +819,7 @@
   }
 
   function renderTreeHost() {
-    var host = document.getElementById('plazaBreadcrumb');
+    var host = document.querySelector('#plazaView .plaza-top-actions');
     if (!host) return;
     var old = host.querySelector('.plaza-tree-btn');
     if (old) old.remove();
@@ -828,9 +828,9 @@
     button.type = 'button';
     button.className = 'plaza-tree-btn';
     button.setAttribute('aria-label', '展开课程树');
-    button.innerHTML = iconSvg('layers') + '<span>展开课程树</span>';
+    button.innerHTML = iconSvg('layers') + '<span>课程树</span>';
     button.addEventListener('click', openCourseTree);
-    host.appendChild(button);
+    host.insertBefore(button, host.firstChild);
   }
 
   function navigateCategory(categoryId, replace) {

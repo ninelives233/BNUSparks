@@ -326,6 +326,16 @@
   /* 下载列占满剩余宽度 */
   .file-table thead th:nth-child(7) { width: auto; }
 }
+
+@media (max-width: 640px) {
+  .explorer-view .explorer-top-actions .explorer-newcourse-btn,
+  .explorer-view .explorer-top-actions .mgmt-new-btn {
+    font-size: var(--fs-xs);
+  }
+}
+@media (max-width: 360px) {
+  .explorer-view .explorer-top-actions .explorer-newcourse-btn .ui-icon { display: none; }
+}
 /* 移动端(<640px)：隐藏预览按钮，单按钮宽度 */
 @media (max-width: 640px) {
   .file-table .pv-link { display: none; }

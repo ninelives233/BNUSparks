@@ -470,6 +470,7 @@
     .footer-grid .footer-col:first-child { grid-column: 1 / -1; }
   }
   @media (max-width: 640px) {
+    .search-hero-wrap, .search-box input { min-width: 0; }
     .search-box { max-width: none; padding: 5px 5px 5px 16px; }
     .search-box input { font-size: 0.85rem; }
     .search-box button { width: 30px; height: 30px; font-size: 0.8rem; }
@@ -1069,9 +1070,9 @@
 
   @media (max-width: 640px) {
     .explorer-view .explorer-top-row {
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 10px;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      row-gap: 4px;
     }
     .explorer-view .explorer-top-row .breadcrumb {
       grid-column: 1;
@@ -1079,10 +1080,12 @@
       padding: 0;
     }
     .explorer-view .explorer-top-actions {
-      grid-column: 2;
-      grid-row: 1;
-      align-self: center;
-      gap: 7px;
+      grid-column: 1;
+      grid-row: 2;
+      width: 100%;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 4px;
       padding-bottom: 0;
     }
     .explorer-view .explorer-top-actions .course-nav-bar {
@@ -1094,9 +1097,12 @@
     .explorer-view .explorer-top-actions .mgmt-new-btn,
     .explorer-view .explorer-top-actions .explorer-newcourse-btn {
       margin-bottom: 0;
-      /* 窄屏仍与根页签同高同字号，只收水平内边距（页签此断点为 6px 14px） */
-      padding: 6px 12px;
+      min-height: 40px;
+      margin-left: auto;
+      padding: 6px 9px;
     }
+    .explorer-view .explorer-top-actions .browse-mode-link { min-height: 40px; padding-inline: 6px; font-size: var(--fs-xs); }
+    .explorer-view .explorer-top-actions .course-root-tab { min-height: 36px; padding-inline: 8px; font-size: var(--fs-xs); }
   }
 
   .fc-card-menu {

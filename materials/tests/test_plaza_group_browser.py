@@ -15,6 +15,9 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
     def setUp(self):
         from playwright.sync_api import sync_playwright
         root = CourseCategory.objects.create(name='通识课')
+        if self._testMethodName == 'test_mobile_navigation_controls_do_not_overlap_and_remain_usable':
+            self.major = CourseCategory.objects.create(name='专业课')
+            CourseCategory.objects.create(name='专业课程目录', parent=self.major)
         self.folder = CourseCategory.objects.create(name='测试目录', parent=root)
         CourseCategory.objects.create(name='另一目录', parent=root)
         course_name = ('微观经济学原理与金融市场分析' * 3
@@ -250,6 +253,56 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         to_plaza.click()
         page.wait_for_selector('#plazaView.active')
         self.assertTrue(page.locator('#plazaBrowseBar .browse-mode-link').is_visible())
+
+    def test_mobile_navigation_controls_do_not_overlap_and_remain_usable(self):
+        context = self.browser.new_context(viewport={'width': 320, 'height': 760}, has_touch=True,
+                                           color_scheme='dark', reduced_motion='reduce')
+        self.addCleanup(context.close)
+        page = context.new_page()
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.id))
+        page.wait_for_selector('.plaza-tree-btn:visible')
+        page.wait_for_selector('#plazaGrid .plaza-stack')
+        page.evaluate("document.documentElement.dataset.bnuTheme = 'dark'")
+        for width in (320, 375, 414):
+            with self.subTest(width=width):
+                page.set_viewport_size({'width': width, 'height': 760})
+                result = page.evaluate('''async () => {
+                  await new Promise(requestAnimationFrame);
+                  const sels = ['.plaza-breadcrumb', '.plaza-tree-btn', '#plazaBrowseBar .browse-mode-link',
+                                '.plaza-search', '#plazaUploadBtn'];
+                  const rects = sels.map(s => document.querySelector(s).getBoundingClientRect());
+                  const overlaps = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 &&
+                    a.top < b.bottom - 1 && b.top < a.bottom - 1;
+                  return {overflow: document.documentElement.scrollWidth > innerWidth,
+                    inView: rects.every(r => r.left >= 0 && r.right <= innerWidth && r.width > 0),
+                    overlap: rects.some((a, i) => rects.slice(i + 1).some(b => overlaps(a, b))),
+                    filterHeight: document.querySelector('#plazaMobileFilter').getBoundingClientRect().height,
+                    offenders: Array.from(document.querySelectorAll('body *')).filter(el => {
+                      const r = el.getBoundingClientRect(); return r.right > innerWidth + 1 && r.width > 0;
+                    }).map(el => el.id || String(el.className)).slice(0, 15)};
+                }''')
+                self.assertFalse(result['overflow'], result['offenders'])
+                self.assertTrue(result['inView'])
+                self.assertFalse(result['overlap'])
+                self.assertGreaterEqual(result['filterHeight'], 40)
+        page.locator('#plazaMobileFilter').tap()
+        page.locator('#plazaSheetSort').select_option('latest')
+        page.locator('[data-sheet-apply]').tap()
+        self.assertEqual(page.locator('#plazaSortSelect').input_value(), 'latest')
+        tree = page.locator('.plaza-tree-btn')
+        tree.focus()
+        page.keyboard.press('Enter')
+        page.locator('#plazaTreeBody').wait_for()
+        page.locator('.plaza-overlay .plaza-close').click()
+        page.locator('#plazaBrowseBar .browse-mode-link').tap()
+        page.wait_for_selector('#explorerView.active')
+        page.locator('#explorerTopActions .browse-mode-link').tap()
+        page.wait_for_selector('#plazaView.active')
+        page.goto(self.live_server_url + '/plaza?category_id=' + str(self.folder.parent_id))
+        major_button = page.locator('#plazaBrowseBar [data-browse-range="专业课"]')
+        major_button.wait_for(state='visible')
+        major_button.tap()
+        page.wait_for_function("history.state && history.state.view === 'plaza' && history.state.categoryId === %d" % self.major.id)
 
     def test_fan_animates_from_stack_without_centered_panel(self):
         page = self.browser.new_page(viewport={'width': 1440, 'height': 900})

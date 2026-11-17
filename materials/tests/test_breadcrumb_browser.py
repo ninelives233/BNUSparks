@@ -134,10 +134,15 @@ class BreadcrumbBrowserTest(StaticLiveServerTestCase):
                     self.assertAlmostEqual(geometry['bc']['height'], 40, delta=1)
                     self.assertAlmostEqual(geometry['home']['y'] - geometry['bc']['y'],
                                            (40 - geometry['home']['height']) / 2, delta=1)
-                    self.assertAlmostEqual(geometry['nav']['bottom'] - geometry['bc']['bottom'], bottom, delta=1)
+                    if view == 'explorer' and width <= 640:
+                        actions = self.page.locator('#explorerTopActions').bounding_box()
+                        self.assertGreaterEqual(actions['y'], geometry['bc']['bottom'])
+                        self.assertAlmostEqual(geometry['nav']['bottom'] - (actions['y'] + actions['height']), bottom, delta=1)
+                    else:
+                        self.assertAlmostEqual(geometry['nav']['bottom'] - geometry['bc']['bottom'], bottom, delta=1)
                     self.assertAlmostEqual(geometry['content']['y'], geometry['nav']['bottom'], delta=1)
                     self.assertFalse(geometry['overflow'])
-                    if view in ('leaderboard', 'explorer', 'fileDetail') and width in (3440, 390):
+                    if view in ('leaderboard', 'explorer', 'fileDetail') and width in (3440, 390, 320):
                         kind = '-root' if path == '/explorer/通识课' else ''
                         self.screenshot(f'{view}{kind}-{width}-{theme}')
                     if path == '/explorer/通识课':
@@ -175,3 +180,27 @@ class BreadcrumbBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('#qaView.qa-detail-mode #qaContent .qa-detail')
         self.assertFalse(self.page.locator('#qaView .page-navigation').is_visible())
         self.assertEqual(self.errors, [])
+
+    def test_mobile_course_navigation_buttons_are_not_clipped(self):
+        self.page.set_viewport_size({'width': 320, 'height': 760})
+        for path in ('/explorer/通识课', '/explorer/' + '/'.join(self.path[:-1]),
+                     '/explorer/' + '/'.join(self.path)):
+            self.open_path(path, 'explorer')
+            for width in (320, 390):
+                with self.subTest(path=path, width=width):
+                    self.page.set_viewport_size({'width': width, 'height': 760})
+                    geometry = self.page.evaluate('''async () => {
+                      await new Promise(requestAnimationFrame);
+                      const bc = document.querySelector('#breadcrumb').getBoundingClientRect();
+                      const buttons = Array.from(document.querySelectorAll('#explorerTopActions button'))
+                        .filter(el => el.getClientRects().length).map(el => el.getBoundingClientRect());
+                      const overlap = (a,b) => a.left < b.right - 1 && b.left < a.right - 1 &&
+                        a.top < b.bottom - 1 && b.top < a.bottom - 1;
+                      return {buttons: buttons.length, below: buttons.every(r => r.top >= bc.bottom),
+                        inside: buttons.every(r => r.left >= 0 && r.right <= innerWidth),
+                        overlap: buttons.some((a,i) => buttons.slice(i+1).some(b => overlap(a,b)))};
+                    }''')
+                    self.assertGreater(geometry['buttons'], 0)
+                    self.assertTrue(geometry['below'])
+                    self.assertTrue(geometry['inside'])
+                    self.assertFalse(geometry['overlap'])
