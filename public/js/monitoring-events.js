@@ -53,7 +53,7 @@
   function authenticated() {
     try {
       if (typeof currentUser !== 'undefined' && !!currentUser) return true;
-      return !!(sessionStorage.getItem('token') || localStorage.getItem('token'));
+      return !!(getAuthToken());
     } catch (e) { return false; }
   }
 
@@ -90,7 +90,7 @@
   }
 
   function token() {
-    try { return sessionStorage.getItem('token') || localStorage.getItem('token') || ''; } catch (e) { return ''; }
+    try { return getAuthToken() || ''; } catch (e) { return ''; }
   }
 
   function flush(keepalive) {

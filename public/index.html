@@ -30,9 +30,13 @@
 <script>
   /* 在首个可绘制样式加载前恢复主题，避免暗色用户先看到暖色/浅色首屏。 */
   try {
-    var bnuHasAuthToken = sessionStorage.getItem('token') || localStorage.getItem('token');
-    var bnuAppearanceCache = bnuHasAuthToken && localStorage.getItem('bnusparks_user_id')
-      ? JSON.parse(localStorage.getItem('bnusparks_appearance_user_' + localStorage.getItem('bnusparks_user_id')) || '{}')
+    var bnuSessionToken = sessionStorage.getItem('token');
+    var bnuSharedToken = localStorage.getItem('token');
+    var bnuHasAuthToken = bnuSessionToken || (!sessionStorage.getItem('bnusparks_auth_initialized') && bnuSharedToken);
+    var bnuUserId = sessionStorage.getItem('bnusparks_user_id') ||
+      (bnuHasAuthToken && bnuHasAuthToken === bnuSharedToken ? localStorage.getItem('bnusparks_user_id') : '');
+    var bnuAppearanceCache = bnuHasAuthToken && bnuUserId
+      ? JSON.parse(localStorage.getItem('bnusparks_appearance_user_' + bnuUserId) || '{}')
       : {};
     var bnuGuestAppearance = bnuHasAuthToken ? bnuAppearanceCache : JSON.parse(localStorage.getItem('bnusparks_appearance_guest') || '{}');
     var bnuThemePreference = ['warm', 'cool', 'dark', 'system'].indexOf(bnuGuestAppearance.color_theme) >= 0 ? bnuGuestAppearance.color_theme : 'warm';
@@ -1674,21 +1678,21 @@
 </div>
 
 <!-- ═══ Scripts ═══ -->
-<script src="/static/js/utils.js?v=385" defer></script>
-<script src="/static/js/monitoring-events.js?v=300" defer></script>
+<script src="/static/js/utils.js?v=388" defer></script>
+<script src="/static/js/monitoring-events.js?v=388" defer></script>
 <script src="/static/js/appearance.js?v=15" defer></script>
-<script src="/static/js/auth.js?v=345" defer></script>
-<script src="/static/js/profile.js?v=386" defer></script>
+<script src="/static/js/auth.js?v=388" defer></script>
+<script src="/static/js/profile.js?v=388" defer></script>
 <script src="/static/js/notifications.js?v=385" defer></script>
 <script src="/static/js/admin-core.js?v=301" defer></script>
-<script src="/static/js/views.js?v=387" defer></script>
+<script src="/static/js/views.js?v=388" defer></script>
 <script src="/static/js/tutorial-entry.js?v=355" defer></script>
 <script src="/static/js/explorer-core.js?v=386" defer></script>
 <script src="/static/js/explorer-file.js?v=374" defer></script>
-<script src="/static/js/explorer-preview.js?v=341" defer></script>
+<script src="/static/js/explorer-preview.js?v=388" defer></script>
 <script src="/static/js/home.js?v=329" defer></script>
-<script src="/static/js/feature-loader.js?v=387" defer></script>
-<script src="/static/js/app.js?v=385" defer></script>
+<script src="/static/js/feature-loader.js?v=388" defer></script>
+<script src="/static/js/app.js?v=388" defer></script>
 
 </body>
 </html>

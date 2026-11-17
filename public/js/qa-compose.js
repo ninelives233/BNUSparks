@@ -225,7 +225,7 @@ function _qaComposeTitle(mode) {
 function _qaDraftKey() {
   var mode = _qaComposeMode || {};
   var uid = (currentUser && currentUser.id) ||
-    (function() { try { return localStorage.getItem('bnusparks_user_id') || 'anon'; } catch (e) { return 'anon'; } })();
+    (function() { try { return sessionStorage.getItem('bnusparks_user_id') || 'anon'; } catch (e) { return 'anon'; } })();
   var type = mode.type === 'answer' ? 'answer' : 'question';
   var scope;
   if (mode.action === 'edit') {

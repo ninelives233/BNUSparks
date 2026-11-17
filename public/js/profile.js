@@ -198,7 +198,7 @@
     var fd = new FormData();
     fd.append('avatar', file);
     try {
-      var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      var token = getAuthToken();
       var resp = await fetch('/api/auth/avatar/', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },

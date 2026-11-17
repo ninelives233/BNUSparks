@@ -506,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 搜索页不是受保护视图，但渲染需等认证完成（访客深链显示需登录态，不误判）
   var needsAuthWait = needsAuth || initialView === 'search' || initialView === 'plaza';
   var isRootLanding = location.pathname === '/';
-  var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+  var hasToken = getAuthToken();
   // 根路径是“打开网站”的默认入口；有会话时等认证完成，才能按账号偏好决定首页或我的课程。
   var needsLandingAuth = isRootLanding && !!hasToken;
 

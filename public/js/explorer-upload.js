@@ -147,7 +147,7 @@
       text.textContent = '正在提交文字内容…';
 
       try {
-        var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        var token = getAuthToken();
         const resp = await fetch('/api/files/upload-text/', {
           method: 'POST',
           headers: token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
@@ -195,7 +195,7 @@
 
     progress.style.display = 'flex';
     var successCount = 0, failCount = 0;
-    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var token = getAuthToken();
 
     for (var i = 0; i < files.length; i++) {
       var file = files[i];

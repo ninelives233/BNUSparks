@@ -1,3 +1,20 @@
+  // 新标签页只在首次打开时继承共享登录；之后登录和退出都属于该标签页。
+  // 复制标签页会复制 sessionStorage，也因此继承独立的当前账号。
+  if (!sessionStorage.getItem('bnusparks_auth_initialized')) {
+    var initialToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (initialToken) {
+      sessionStorage.setItem('token', initialToken);
+      if (initialToken === localStorage.getItem('token') && localStorage.getItem('bnusparks_user_id')) {
+        sessionStorage.setItem('bnusparks_user_id', localStorage.getItem('bnusparks_user_id'));
+      }
+    }
+    sessionStorage.setItem('bnusparks_auth_initialized', '1');
+  }
+
+  function getAuthToken() {
+    return sessionStorage.getItem('token');
+  }
+
   // ── Token 缓存 + API 内存缓存 ──
   let _cachedToken = null;
   // F06：缓存身份 = pathname + 规范化后的完整查询参数（不同关键词/页码互不串用）；
@@ -48,7 +65,7 @@
     try {
       if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) return currentUser.id;
     } catch (e) { /* currentUser 未声明（脚本加载早期） */ }
-    return localStorage.getItem('bnusparks_user_id') || '';
+    return sessionStorage.getItem('bnusparks_user_id') || '';
   }
 
   function _apiCacheSet(key, data, ttl) {
@@ -86,20 +103,26 @@
 
   function clearAuthToken() {
     if (window.BnuClassrooms) window.BnuClassrooms.destroy();
+    var token = getAuthToken();
     _cachedToken = null;
     _apiCache.clear();
     _apiInflight.clear();
     sessionStorage.removeItem('token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('_loginTime');
-    localStorage.removeItem('_loginRemember');
-    localStorage.removeItem('bnusparks_user_id');
+    sessionStorage.removeItem('bnusparks_user_id');
+    sessionStorage.setItem('bnusparks_auth_initialized', '1');
+    // 其他标签页可能已经写入了另一个账号，不能清除其共享登录。
+    if (token && token === localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('_loginTime');
+      localStorage.removeItem('_loginRemember');
+      localStorage.removeItem('bnusparks_user_id');
+    }
   }
 
   async function _apiRequest(url, opts) {
     // Token 缓存（避免每次读取 storage）
     if (!_cachedToken) {
-      _cachedToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+      _cachedToken = getAuthToken();
     }
     const headers = { ...opts.headers };
     if (!(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
@@ -750,7 +773,7 @@
 
   // ── 直接下载（短时令牌替代 JWT 放入 URL，避免 JWT 泄露到日志） ──
   async function doDirectDownload(fileId, fileName) {
-    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var token = getAuthToken();
     if (!token) { showLoginModal(); return; }
     try {
       var resp = await fetch('/api/files/' + fileId + '/download-token/', {

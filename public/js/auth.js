@@ -64,9 +64,10 @@
   async function refreshCurrentUser() {
     if (_refreshing || !currentUser) return;
     _refreshing = true;
+    var token = getAuthToken();
     try {
       var fresh = await api('/api/auth/me/');
-      if (!fresh) return;
+      if (!fresh || token !== getAuthToken() || !currentUser) return;
       var roleChanged = fresh.role !== currentUser.role;
       setAuthenticatedUser(fresh, { preserveGeneration: true });
       if (roleChanged) {
@@ -79,7 +80,7 @@
       var circle = document.getElementById('userAvatarCircle');
       if (circle) circle.textContent = (currentUser.nickname || currentUser.username).charAt(0).toUpperCase();
     } catch(e) { /* 静默失败，沿用缓存 */ }
-    _refreshing = false;
+    finally { _refreshing = false; }
   }
 
   // 点击页面其他地方关闭抽屉
@@ -719,6 +720,9 @@
   function _persistToken(token, remember, userId) {
     setAuthTokenCache(token);
     sessionStorage.setItem('token', token);
+    sessionStorage.setItem('bnusparks_auth_initialized', '1');
+    if (userId) sessionStorage.setItem('bnusparks_user_id', String(userId));
+    else sessionStorage.removeItem('bnusparks_user_id');
     localStorage.setItem('token', token);
     localStorage.setItem('_loginTime', Date.now().toString());
     localStorage.setItem('_loginRemember', remember ? '1' : '0');
@@ -726,22 +730,16 @@
   }
 
   async function checkAuth() {
-    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    const token = getAuthToken();
     if (!token) { setAuthenticatedUser(null, { preserveGeneration: true }); return; }
-    // 从 localStorage 恢复 sessionStorage（页面刷新后）
-    // 但仅在 localStorage 用户 ID 与当前 session 一致时才恢复
-    if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
-      var savedUserId = localStorage.getItem('bnusparks_user_id');
-      if (savedUserId) {
-        sessionStorage.setItem('token', localStorage.getItem('token'));
-      } else {
-        // 无存储的用户 ID，安全起见不清除 localStorage 但也不恢复
-      }
-    }
     try {
-      setAuthenticatedUser(await api('/api/auth/me/'));
+      var user = await api('/api/auth/me/');
+      if (token !== getAuthToken()) return;
+      if (user && user.id) sessionStorage.setItem('bnusparks_user_id', String(user.id));
+      setAuthenticatedUser(user);
     }
     catch (err) {
+      if (token !== getAuthToken()) return;
       // 只有服务端明确拒绝认证时才清 token；断网/超时保留会话，避免误登出。
       if (err && (err.status === 401 || err.status === 403)) _clearStaleToken();
       setAuthenticatedUser(null, { preserveGeneration: true });

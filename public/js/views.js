@@ -1516,7 +1516,7 @@
   }
 
   function ttNavTimetable(targetUserId, skipHistory) {
-    var hasToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var hasToken = getAuthToken();
     var authReady = window._bnusparksAuthReady;
     if (!currentUser && hasToken && authReady) {
       if (!_ttNavPromise) {

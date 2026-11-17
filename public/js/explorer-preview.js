@@ -10,7 +10,7 @@
 
   // 获取短时下载令牌（供 _previewUrl 和 doDirectDownload 使用）
   async function _getDownloadToken(fileId) {
-    var token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    var token = getAuthToken();
     if (!token) { throw new Error('请先登录'); }
     var resp = await fetch('/api/files/' + fileId + '/download-token/', {
       headers: { 'Authorization': 'Bearer ' + token }
