@@ -382,17 +382,10 @@
     var count = Math.min(total, Math.max(0, Number(share.count) || 0));
     var fraction = total ? count / total : 0;
     var percent = (fraction * 100).toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + '%';
-    var slice = '';
-    if (fraction >= 1) {
-      slice = '<circle cx="60" cy="60" r="46" fill="var(--primary)" />';
-    } else if (fraction > 0) {
-      var angle = fraction * Math.PI * 2;
-      var x = 60 + 46 * Math.sin(angle), y = 60 - 46 * Math.cos(angle);
-      slice = '<path d="M60 60 L60 14 A46 46 0 ' + (fraction > 0.5 ? 1 : 0) + ' 1 ' + x.toFixed(3) + ' ' + y.toFixed(3) + ' Z" fill="var(--primary)" />';
-    }
     return head + '<p class="college-share-name">' + esc(share.name) + '</p><div class="college-share-body">' +
-      '<svg viewBox="0 0 120 120" role="img" aria-label="' + esc(share.name) + '占全站用户的' + percent + '">' +
-        '<circle cx="60" cy="60" r="46" fill="var(--border-light)" />' + slice + '</svg>' +
+      '<svg class="college-share-donut" viewBox="0 0 120 120" role="img" aria-label="' + esc(share.name) + '占全站用户的' + percent + '，环形图">' +
+        '<circle class="college-share-donut-track" cx="60" cy="60" r="44" />' +
+        '<circle class="college-share-donut-fill" cx="60" cy="60" r="44" pathLength="100" stroke-dasharray="' + (fraction * 100).toFixed(3) + ' ' + ((1 - fraction) * 100).toFixed(3) + '" transform="rotate(-90 60 60)" /></svg>' +
       '<div class="college-share-detail"><strong class="college-share-percent">' + percent + '</strong>' +
         '<span class="college-share-legend"><i></i>本院 <strong>' + count + '</strong> 人</span>' +
         '<span class="college-share-legend is-rest"><i></i>全站其他 <strong>' + (total - count) + '</strong> 人</span></div></div>' +
@@ -420,10 +413,9 @@
       _identityMajorIndex = -1;
       content.innerHTML = '<div class="monitor-section-head"><div><h3>' + (fullAccess ? '入站身份分布' : '用户分布看板') + '</h3>' +
         '<p>' + (fullAccess ? '聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院、专业与年级分布' : '全站用户总数与注册增长趋势；点击培养层次可筛选学院分布') + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
-        '<div class="monitor-stats-grid ' + (fullAccess ? 'monitor-stats-grid--three' : 'monitor-stats-grid--one') + '">' +
-          _monitorStat(data.total_users, fullAccess && _identityEducation ? _identityEducation + '用户' : '用户总数') +
-          (fullAccess ? _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') + _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') : '') + '</div>' +
-        '<div class="identity-trend-grid">' + _identityUserTrendChart(data.user_trend || {}) + _identityCollegeShareCard(data.college_share) + '</div>' +
+        (fullAccess ? '<div class="monitor-stats-grid monitor-stats-grid--two">' +
+          _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') + _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' : '') +
+        _identityUserTrendChart(data.user_trend || {}) +
         (fullAccess ? '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +
           '<div class="campus-distribution-body">' +
             '<div class="campus-zone"><div class="monitor-card-head"><h4>校区分布</h4></div>' +
@@ -432,8 +424,10 @@
               _distributionBars(data.grade_distribution || [], -1, '') + '</div>' +
           '</div></div>' : '') +
         '<div class="identity-monitor-grid' + (fullAccess ? '' : ' identity-monitor-grid--summary') + '">' +
-          '<section class="monitor-data-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (fullAccess ? (data.untagged_users || 0) + ' 人身份未补全' : '点击筛选学院')) + '</span></div>' +
+          '<div class="identity-monitor-column"><section class="monitor-data-card identity-education-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (fullAccess ? (data.untagged_users || 0) + ' 人身份未补全' : '点击筛选学院')) + '</span></div>' +
             _distributionBars(data.education_levels || [], eduSelectedIndex, 'selectIdentityEducation') + '</section>' +
+            _monitorStat(data.total_users, fullAccess && _identityEducation ? _identityEducation + '用户' : '用户总数') +
+            _identityCollegeShareCard(data.college_share) + '</div>' +
           '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4>' + (fullAccess ? '<span>' + (data.untagged_users || 0) + ' 人身份未补全</span>' : '') + '</div><div id="identityCollegeBars">' +
             _distributionBars(data.colleges || [], fullAccess ? data.selectedIndex : -1, fullAccess ? 'selectIdentityCollege' : '') + '</div></section>' +
           (fullAccess ? '<section class="monitor-data-card" id="identityMajorPanel"></section>' +

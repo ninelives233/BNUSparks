@@ -975,7 +975,7 @@
   gap: 10px; margin-bottom: 12px;
 }
 .monitor-stats-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.monitor-stats-grid.monitor-stats-grid--one { grid-template-columns: minmax(0, 1fr); }
+.monitor-stats-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .monitor-stat-card {
   min-width: 0; padding: 15px 16px; background: oklch(1 0 0 / 0.62);
   border: 1px solid var(--border-light); border-radius: var(--radius-md);
@@ -1022,24 +1022,20 @@
 .monitor-line-timetable-import { stroke: var(--accent); }
 
 .identity-user-trend-card { margin-bottom: 12px; }
-.identity-trend-grid {
-  display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(260px, 1fr);
-  gap: 12px; margin-bottom: 12px;
-}
-.identity-trend-grid .identity-user-trend-card { min-width: 0; margin-bottom: 0; }
+.identity-monitor-column { display: grid; gap: 12px; min-width: 0; }
 .college-share-card { display: flex; flex-direction: column; }
 .college-share-name { margin-top: 12px; color: var(--ink); font-size: 0.88rem; overflow-wrap: anywhere; }
-.college-share-body { display: flex; align-items: center; justify-content: center; gap: 14px; flex: 1; padding: 10px 0; }
-.college-share-body svg { width: 140px; max-width: 48%; flex-shrink: 0; }
+.college-share-body { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 10px 0; }
+.college-share-body svg { width: 140px; max-width: 100%; flex-shrink: 0; }
+.college-share-donut circle { fill: none; stroke-width: 16; }
+.college-share-donut-track { stroke: var(--border-light); }
+.college-share-donut-fill { stroke: var(--primary); }
 .college-share-detail { display: grid; gap: 9px; min-width: 0; }
 .college-share-percent { color: var(--primary); font-size: 1.8rem; font-variant-numeric: tabular-nums; }
 .college-share-legend { color: var(--ink-soft); font-size: 0.76rem; }
 .college-share-legend i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 2px; background: var(--primary); }
 .college-share-legend.is-rest i { background: var(--border-light); }
 .college-share-note { color: var(--ink-faint); font-size: 0.7rem; }
-@media (max-width: 1080px) {
-  .identity-trend-grid { grid-template-columns: minmax(0, 1fr); }
-}
 /* 校区分布环形图：与 monitor-data-card 同语言，色板取自 tokens */
 .campus-distribution-card { margin-bottom: 12px; }
 /* 用户分布卡：左校区环形图 + 右年级条形，双栏吃满卡宽，窄屏上下堆叠 */
