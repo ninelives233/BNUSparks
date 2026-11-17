@@ -1024,6 +1024,7 @@
 .identity-user-trend-card { margin-bottom: 12px; }
 .identity-monitor-column { display: grid; gap: 12px; min-width: 0; }
 .college-share-card { display: flex; flex-direction: column; }
+.college-share-card--embedded { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
 .college-share-name { margin-top: 12px; color: var(--ink); font-size: 0.88rem; overflow-wrap: anywhere; }
 .college-share-body { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; padding: 10px 0; }
 .college-share-body svg { width: 140px; max-width: 100%; flex-shrink: 0; }

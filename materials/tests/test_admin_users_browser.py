@@ -147,9 +147,32 @@ class AdminUsersBrowserTest(StaticLiveServerTestCase):
     def test_super_admin_keeps_full_functions_and_user_drilldown(self):
         self._enter(UserProfile.Role.SUPER_ADMIN, section="identity")
         self.assertEqual(self.page.locator(".admin-user-monitor-nav [role=tab]").count(), 6)
-        self.assertEqual(self.page.locator("#adminContent .monitor-stat-card").count(), 3)
+        self.assertEqual(self.page.locator("#adminContent .monitor-stat-card").count(), 2)
+        self.assertEqual(self.page.locator(".identity-monitor-column .monitor-stat-card, .identity-monitor-column .college-share-card").count(), 0)
+        self.assertEqual(self.page.locator(".campus-distribution-card .campus-zone .college-share-card--embedded").count(), 1)
+        self.assertEqual(self.page.locator(".college-share-card").count(), 1)
+        self.assertEqual(self.page.locator(".campus-donut-total").text_content(), "4")
         self.assertTrue(self.page.locator(".campus-distribution-card").is_visible())
         self.assertTrue(self.page.locator("#identityMajorPanel").is_visible())
+        for width in (1440, 390):
+            for theme in ("warm", "dark"):
+                with self.subTest(width=width, theme=theme):
+                    self.page.set_viewport_size({"width": width, "height": 1000})
+                    self.page.emulate_media(reduced_motion="reduce")
+                    self.page.evaluate("theme => document.documentElement.dataset.bnuTheme = theme", theme)
+                    self.assertTrue(self.page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+                    distribution = self.page.locator(".campus-distribution-card").bounding_box()
+                    share = self.page.locator(".college-share-card").bounding_box()
+                    education = self.page.locator(".identity-education-card").bounding_box()
+                    self.assertGreater(share["y"], distribution["y"])
+                    self.assertLessEqual(share["y"] + share["height"], distribution["y"] + distribution["height"])
+                    self.assertGreater(education["y"], distribution["y"] + distribution["height"])
+                    screenshots = os.environ.get("BNU_BROWSER_SCREENSHOT_DIR")
+                    if screenshots:
+                        target = Path(screenshots)
+                        target.mkdir(parents=True, exist_ok=True)
+                        self.page.screenshot(path=str(target / f"admin-super-{width}-{theme}.png"), full_page=True)
+        self.page.set_viewport_size({"width": 1440, "height": 1000})
         self.page.locator("#identityCollegeBars button", has_text="看板测试学院").click()
         self.page.locator("#identityMajorPanel button", has_text="看板测试专业").click()
         self.page.wait_for_selector("#identityUserPanel .iu-row")

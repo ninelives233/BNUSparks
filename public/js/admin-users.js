@@ -373,8 +373,8 @@
       '</svg><div class="campus-legend">' + legend + '</div></div>';
   }
 
-  function _identityCollegeShareCard(share) {
-    var head = '<section class="monitor-data-card college-share-card"><div class="monitor-card-head"><h4>本院用户占比</h4><span>全站有效用户口径</span></div>';
+  function _identityCollegeShareCard(share, embedded) {
+    var head = '<section class="college-share-card ' + (embedded ? 'college-share-card--embedded' : 'monitor-data-card') + '"><div class="monitor-card-head"><h4>本院用户占比</h4><span>全站有效用户口径</span></div>';
     if (!share || !share.name) {
       return head + '<div class="monitor-sub-empty">在个人资料中补全学院后，即可查看本院占比。</div></section>';
     }
@@ -419,15 +419,14 @@
         (fullAccess ? '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +
           '<div class="campus-distribution-body">' +
             '<div class="campus-zone"><div class="monitor-card-head"><h4>校区分布</h4></div>' +
-              _campusDonutChart(data.campus_distribution || []) + '</div>' +
+              _campusDonutChart(data.campus_distribution || []) + _identityCollegeShareCard(data.college_share, true) + '</div>' +
             '<div class="grade-distribution-block"><div class="monitor-card-head"><h4>年级分布</h4><span>' + (_identityEducation ? esc(_identityEducation) + ' 口径 · 随筛选联动' : '全站口径 · 按学号前四位识别') + '</span></div>' +
               _distributionBars(data.grade_distribution || [], -1, '') + '</div>' +
           '</div></div>' : '') +
         '<div class="identity-monitor-grid' + (fullAccess ? '' : ' identity-monitor-grid--summary') + '">' +
           '<div class="identity-monitor-column"><section class="monitor-data-card identity-education-card"><div class="monitor-card-head"><h4>培养层次</h4><span>' + (_identityEducation ? '点击「' + esc(_identityEducation) + '」取消筛选' : (fullAccess ? (data.untagged_users || 0) + ' 人身份未补全' : '点击筛选学院')) + '</span></div>' +
             _distributionBars(data.education_levels || [], eduSelectedIndex, 'selectIdentityEducation') + '</section>' +
-            _monitorStat(data.total_users, fullAccess && _identityEducation ? _identityEducation + '用户' : '用户总数') +
-            _identityCollegeShareCard(data.college_share) + '</div>' +
+            (fullAccess ? '' : _monitorStat(data.total_users, '用户总数') + _identityCollegeShareCard(data.college_share)) + '</div>' +
           '<section class="monitor-data-card"><div class="monitor-card-head"><h4>' + (_identityEducation ? esc(_identityEducation) + ' · 学院分布' : '学院分布') + '</h4>' + (fullAccess ? '<span>' + (data.untagged_users || 0) + ' 人身份未补全</span>' : '') + '</div><div id="identityCollegeBars">' +
             _distributionBars(data.colleges || [], fullAccess ? data.selectedIndex : -1, fullAccess ? 'selectIdentityCollege' : '') + '</div></section>' +
           (fullAccess ? '<section class="monitor-data-card" id="identityMajorPanel"></section>' +
