@@ -413,7 +413,8 @@
       _identityMajorIndex = -1;
       content.innerHTML = '<div class="monitor-section-head"><div><h3>' + (fullAccess ? '入站身份分布' : '用户分布看板') + '</h3>' +
         '<p>' + (fullAccess ? '聚合统计培养层次、学院与专业；“已完整”要求三项均有值。点击培养层次可筛选学院、专业与年级分布' : '全站用户总数与注册增长趋势；点击培养层次可筛选学院分布') + filterNote + '。</p></div>' + _identityPeriodButtons() + '</div>' +
-        (fullAccess ? '<div class="monitor-stats-grid monitor-stats-grid--two">' +
+        (fullAccess ? '<div class="monitor-stats-grid monitor-stats-grid--three">' +
+          _monitorStat(data.total_users, _identityEducation ? esc(_identityEducation) + '用户' : '用户总数') +
           _monitorStat(data.tagged_users, '身份已完整', 'tone-upload') + _monitorStat(coverage, '身份覆盖率（%）', 'tone-download') + '</div>' : '') +
         _identityUserTrendChart(data.user_trend || {}) +
         (fullAccess ? '<div class="monitor-data-card campus-distribution-card"><div class="monitor-card-head"><h4>用户分布</h4><span>校区按身份标签学院判定 · 年级按学号前四位识别</span></div>' +

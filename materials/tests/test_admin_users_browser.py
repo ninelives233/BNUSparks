@@ -147,7 +147,9 @@ class AdminUsersBrowserTest(StaticLiveServerTestCase):
     def test_super_admin_keeps_full_functions_and_user_drilldown(self):
         self._enter(UserProfile.Role.SUPER_ADMIN, section="identity")
         self.assertEqual(self.page.locator(".admin-user-monitor-nav [role=tab]").count(), 6)
-        self.assertEqual(self.page.locator("#adminContent .monitor-stat-card").count(), 2)
+        self.assertEqual(self.page.locator("#adminContent .monitor-stat-card").count(), 3)
+        self.assertEqual(self.page.locator(".monitor-stats-grid .monitor-stat-label").all_text_contents(), ["用户总数", "身份已完整", "身份覆盖率（%）"])
+        self.assertEqual(self.page.locator(".monitor-stats-grid .monitor-stat-value").first.inner_text(), "4")
         self.assertEqual(self.page.locator(".identity-monitor-column .monitor-stat-card, .identity-monitor-column .college-share-card").count(), 0)
         self.assertEqual(self.page.locator(".campus-distribution-card .campus-zone .college-share-card--embedded").count(), 1)
         self.assertEqual(self.page.locator(".college-share-card").count(), 1)

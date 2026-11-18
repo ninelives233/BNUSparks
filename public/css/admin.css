@@ -975,7 +975,6 @@
   gap: 10px; margin-bottom: 12px;
 }
 .monitor-stats-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.monitor-stats-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .monitor-stat-card {
   min-width: 0; padding: 15px 16px; background: oklch(1 0 0 / 0.62);
   border: 1px solid var(--border-light); border-radius: var(--radius-md);
