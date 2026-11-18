@@ -26,7 +26,7 @@ from django.core.cache import cache
 from django.db import connections
 
 from materials.models import (
-    College, Course, CourseCategory, Material, MaterialType,
+    College, Course, CourseCategory, CourseFavorite, Material, MaterialType,
     QaAnswer, QaQuestion, QaTag, UserProfile,
 )
 
@@ -53,7 +53,10 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
             cats[name] = parent
         CourseCategory.objects.create(name=self.course.name, parent=parent, course=self.course)
         CourseCategory.objects.create(name=self.course2.name, parent=parent, course=self.course2)
-        self.mt = MaterialType.objects.create(name='笔记', slug='search-notes')
+        self.college_cat = cats['搜索学院']
+        CourseFavorite.objects.create(user=self.user, course=self.course2)
+        self.mt, _ = MaterialType.objects.update_or_create(
+            id=5, defaults={'name': '笔记', 'slug': 'search-notes'})
         self.files = {}
         for idx in range(24):
             m = Material.objects.create(
@@ -406,19 +409,71 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('[data-sr-group="material"] .sr-item')
         self.assertEqual(self.page.evaluate('history.state.searchQuery'), '搜索学')
 
-    # ── 场景 7：无 JS 错误 & 上传选课浮层不受影响 ──
-    def test_upload_picker_overlay_still_works(self):
+    # ── 场景 7：无 JS 错误 & Plib 风格双模式上传工作区（首页/非叶子 → /upload；叶子 → 轻量弹窗） ──
+    def test_upload_workspace_dual_mode(self):
         self._login()
         self._goto_root_ready()
         self.page.click('.h8-upload-btn')
-        self.page.wait_for_selector('.search-overlay', state='visible')
-        self.page.fill('#courseSearchInput', '搜索学')
-        self.page.wait_for_selector('.so-result-item')
-        self.assertTrue(self.page.evaluate(
-            "document.body.style.position === 'fixed'"), '上传选课浮层仍应锁定滚动')
-        self.page.click('.search-overlay-close')
-        self.page.wait_for_timeout(300)
+        self.page.wait_for_selector('#uploadView.active')
+        self.assertTrue(self.page.url.endswith('/upload'))
+
+        # 右侧「我的课程」卡片挂载并支持一键填入
+        self.page.wait_for_selector('#upMyList .up-my-item')
+        self.page.click('#upMyList .up-my-item')
+        self.assertEqual(self.page.input_value('#upCollegeInput'), '搜索学院')
+        self.assertEqual(self.page.input_value('#upCourseInput'), '搜索学进阶')
+
+        # 清空后仅搜课程名称 → 下拉项后方显示课程代码；选中后自动填院系 + 展示包含专业
+        self.page.click('#upCollegeClear')
+        self.page.click('#upCourseClear')
+        self.page.fill('#upCourseInput', '搜索学导论')
+        self.page.wait_for_selector('#upCourseList .up-combo-item')
+        combo_text = self.page.locator('#upCourseList .up-combo-item').first.inner_text()
+        self.assertIn('SRCH101', combo_text)
+        self.page.click('#upCourseList .up-combo-item')
+
+        self.assertEqual(self.page.input_value('#upCollegeInput'), '搜索学院')
+        majors_text = self.page.locator('#upMajorsLine').inner_text()
+        self.assertIn('包含此课程的专业', majors_text)
+        self.assertIn('搜索专业', majors_text)
+
+        # 「精准定位」弹窗可打开与关闭
+        self.page.click('#upLocateBtn')
+        self.page.wait_for_selector('#upTreeLocateOverlay', state='visible')
+        self.page.wait_for_selector('#upLocateTreeBox .up-tree-node.is-current-leaf')
+        self.page.click('#upLocateCloseBtn')
+        self.page.wait_for_timeout(200)
         self.assertFalse(self.page.evaluate(
-            "!!document.querySelector('.search-overlay')"), '关闭后浮层应移除')
+            "!!document.querySelector('#upTreeLocateOverlay')"))
+
+        # 文字录入提交真实生效（id=5 对应前端 MATERIAL_TYPES 固定「笔记」）
+        self.page.click('.up-mode-tab[data-up-mode="text"]')
+        self.page.select_option('#upMaterialType', '5')
+        self.page.fill('#upTeacher', '张老师')
+        self.page.fill('#upTextContent', '搜索学课程重点整理与课后习题思路')
+        self.page.click('#upSubmitBtn')
+        self.page.wait_for_selector('#upSuccessBox', state='visible')
+
+        # 刷新 /upload 深链仍可恢复独立上传页
+        self.page.reload()
+        self.page.wait_for_function('window._bnusparksReady === true')
+        self.page.wait_for_selector('#uploadView.active')
+
+        # 课程叶子节点仍保留轻量级弹窗 #uploadModal
+        self.page.evaluate("showExplorerPath(['专业课', '搜索学院', '搜索专业', '搜索学导论'])")
+        self.page.wait_for_selector('.fa-upload-btn')
+        self.page.click('.fa-upload-btn')
+        self.page.wait_for_selector('#uploadModal', state='visible')
+        self.page.evaluate('closeUploadModal()')
+
+        # 广场非叶子节点上传按钮进入 /upload 并自动带入学院上下文 + 窄屏/暗色无溢出
+        self.page.goto(f'{self.live_server_url}/plaza?category_id={self.college_cat.id}')
+        self.page.wait_for_selector('#plazaUploadBtn')
+        self.page.click('#plazaUploadBtn')
+        self.page.wait_for_selector('#uploadView.active')
+        self.page.wait_for_function("document.getElementById('upCollegeInput').value === '搜索学院'")
+        self.page.set_viewport_size({'width': 360, 'height': 760})
+        self.page.evaluate("document.documentElement.dataset.bnuTheme = 'dark'")
+        self.page.wait_for_timeout(100)
         self.assertFalse(self.page.evaluate(
-            "document.body.style.position === 'fixed'"), '关闭后应解锁滚动')
+            "document.documentElement.scrollWidth > window.innerWidth"), '窄屏暗色上传页不应水平溢出')

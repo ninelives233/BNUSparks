@@ -378,6 +378,15 @@ window.addEventListener('popstate', async function(e) {
       if (typeof renderNewCourseView === 'function') _renderNewCourse();
       else if (typeof ensureFeature === 'function') ensureFeature('explorer').then(_renderNewCourse).catch(function() {});
     }
+    if (state.view === 'upload') {
+      var _renderUpload = function () {
+        if (!window.BnuUploadWorkspace || typeof window.BnuUploadWorkspace.open !== 'function') return;
+        window.BnuUploadWorkspace.open({ fromHistory: true });
+        if (state.scrollY) requestAnimationFrame(function(){ scrollToInstant(state.scrollY); });
+      };
+      if (window.BnuUploadWorkspace && typeof window.BnuUploadWorkspace.open === 'function') _renderUpload();
+      else if (typeof ensureFeature === 'function') ensureFeature('upload').then(_renderUpload).catch(function() {});
+    }
     // 个人中心三视图：返回时重新渲染（数据可能已变化，且 popstate 路径此前未恢复）
     if (state.view === 'myuploads' && typeof renderMyUploadsPage === 'function') renderMyUploadsPage();
     if (state.view === 'mydownloads' && typeof renderMyDownloadsPage === 'function') renderMyDownloadsPage();
@@ -509,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saved = stored;
   }
   var initialView = saved && saved._bnusparks ? saved.view : 'home';
-  var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'qaCompose', 'timetable'];
+  var authViews = ['profile', 'notif', 'admin', 'myuploads', 'mydownloads', 'myfavorites', 'newCourse', 'upload', 'qaCompose', 'timetable'];
   var needsAuth = authViews.indexOf(initialView) !== -1;
   // 搜索页不是受保护视图，但渲染需等认证完成（访客深链显示需登录态，不误判）
   var needsAuthWait = needsAuth || initialView === 'search' || initialView === 'plaza';
@@ -531,6 +540,8 @@ document.addEventListener('DOMContentLoaded', () => {
     viewFeaturePromise = ensureFeature('timetable');
   } else if (initialView === 'search') {
     viewFeaturePromise = ensureFeature('search');
+  } else if (initialView === 'upload') {
+    viewFeaturePromise = ensureFeature('upload');
   }
 
   // 刷新课表时先保留目标视图，避免认证/懒加载期间短暂显示首页，
@@ -541,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 课程树只在首次视图确实需要时加载；进入 explorer 时 renderExplorer 会兜底按需加载。
-  const needsCourseTree = initialView === 'explorer' || initialView === 'newCourse';
+  const needsCourseTree = initialView === 'explorer' || initialView === 'newCourse' || initialView === 'upload';
   const treePromise = needsCourseTree
     ? viewFeaturePromise.then(() => loadCourseTree()).then(() => buildSameNameMap())
     : viewFeaturePromise;
@@ -709,6 +720,13 @@ document.addEventListener('DOMContentLoaded', () => {
           break;
         case 'userPublic': showUserPublic(saved.userId); break;
         case 'newCourse': renderNewCourseView(); break;
+        case 'upload':
+          if (window.BnuUploadWorkspace && typeof window.BnuUploadWorkspace.open === 'function') {
+            window.BnuUploadWorkspace.open({ fromHistory: true });
+          } else {
+            showHome();
+          }
+          break;
         case 'timetable': ttNavTimetable(saved.userId || null); break;
         default: showHome();
       }

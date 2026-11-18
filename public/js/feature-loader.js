@@ -104,7 +104,7 @@
   //        未补全/未填写口径文案统一；v382 已被 plaza 长课程名截断占用；缓存键同步推进。
   // v384：身份四列网格修复培养层次卡被挤扁——数字列改 auto 永不截断、
   //        各列设内容下限、2 列断点 1180→1340；缓存键同步推进。
-  var VERSION = '396';
+  var VERSION = '397';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -153,6 +153,9 @@
     search: [
       'search.js'
     ],
+    upload: [
+      'upload-workspace.js'
+    ],
     tutorial: [
       'tutorial-data.js',
       'tutorial-scenes.js',
@@ -171,6 +174,7 @@
     timetable: ['timetable.css', 'classrooms.css'],
     plaza: ['plaza.css'],
     search: ['search.css'],
+    upload: ['upload.css'],
     // 演示 DOM 复用站点真实 class：教程需要 Explorer/问答/课表的业务 CSS 同源渲染
     // v350：教程搜索场景改用独立结果页演示（search.css 与业务同源）
     tutorial: ['tutorial.css', 'course.css', 'qa.css', 'timetable.css', 'search.css']

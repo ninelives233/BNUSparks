@@ -1189,89 +1189,19 @@
     openNewCourse();
   }
 
-  function openCourseSearchUpload() {
+  function openCourseSearchUpload(options) {
     if (!currentUser) { showLoginModal(); return; }
-    var overlay = document.createElement('div');
-    overlay.className = 'search-overlay';
-    overlay.innerHTML =
-      '<div class="search-overlay-inner" onclick="event.stopPropagation()">' +
-        '<button type="button" class="search-overlay-close" aria-label="关闭课程搜索" onclick="_removeOverlay(this.closest(\'.search-overlay\'))">✕</button>' +
-        '<div class="so-header">' +
-          '<div class="so-icon">' + iconSvg('upload') + '</div>' +
-          '<div class="so-title">上传资料</div>' +
-          '<div class="so-sub">搜索课程，找到你希望贡献资料的课程</div>' +
-        '</div>' +
-        '<div class="so-input-group">' +
-          '<span class="so-input-icon">' + iconSvg('search') + '</span>' +
-          '<input type="text" id="courseSearchInput" placeholder="课程名称或代码…" autofocus>' +
-        '</div>' +
-        '<div class="so-new-course">' +
-          '<div class="so-new-hint">找不到课程？申请新建课程</div>' +
-          '<button class="so-new-btn" onclick="openNewCourseFromSearch(this)">新建课程</button>' +
-        '</div>' +
-        '<div class="search-overlay-results" id="courseSearchResults">' +
-          '<div class="so-hint">' +
-            '<div class="so-hint-text">' + iconSvg('info') + ' 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(overlay);
-    lockScroll();
-    // 记录浮层打开前的 SPA 状态，导航到新建课程时就地恢复，不再异步回退。
-    overlay._bnusparksReturnState = history.state;
-    _pushModalHistory(overlay);
-    document.getElementById('courseSearchInput').focus();
-
-    var timer;
-    var searchSeq = 0;
-    document.getElementById('courseSearchInput').addEventListener('input', function() {
-      clearTimeout(timer);
-      var seq = ++searchSeq;
-      var q = this.value.trim();
-      if (q.length < 1) {
-        document.getElementById('courseSearchResults').innerHTML =
-          '<div class="so-hint"><div class="so-hint-text">' + iconSvg('info') + ' 支持按课程名称或代码搜索，如「高等数学」「GEN01」「心理学导论」</div></div>';
-        return;
+    var ready = window.BnuUploadWorkspace && typeof window.BnuUploadWorkspace.open === 'function'
+      ? Promise.resolve()
+      : (typeof ensureFeature === 'function' ? ensureFeature('upload') : Promise.resolve());
+    ready.then(function() {
+      if (!window.BnuUploadWorkspace || typeof window.BnuUploadWorkspace.open !== 'function') {
+        throw new Error('上传工作区未就绪');
       }
-      timer = setTimeout(function() { searchCourses(q, overlay, seq, function() { return searchSeq; }); }, 300);
+      window.BnuUploadWorkspace.open(options || {});
+    }).catch(function() {
+      alert('上传页面加载失败，请刷新重试。');
     });
-    overlay.onclick = function(e) { if (e.target === overlay) _removeOverlay(overlay); };
-  }
-
-  async function searchCourses(q, overlay, requestSeq, currentSeq) {
-    var resultsEl = overlay ? overlay.querySelector('#courseSearchResults') : document.getElementById('courseSearchResults');
-    if (!resultsEl) return;
-    try {
-      var data = await api('/api/search/?q=' + encodeURIComponent(q));
-      if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
-      var courses = data.courses || [];
-      if (window.BnuMonitoring && typeof window.BnuMonitoring.track === 'function') {
-        window.BnuMonitoring.track('search.execute');
-        if (!courses.length) window.BnuMonitoring.track('search.no_result');
-      }
-      if (!courses.length) {
-        // 无结果时强化申请引导：只做文字指路，弹窗内仍只有一个申请入口（上方「新建课程」按钮）
-        resultsEl.innerHTML = '<div class="so-empty">' +
-          '<div class="so-empty-icon">' + iconSvg('search') + '</div>' +
-          '<div class="so-empty-text">未找到相关课程，试试其他关键词</div>' +
-          '<div class="so-empty-sub">课程尚未被平台收录？点击上方「新建课程」提交申请，审核通过后即可上传资料</div>' +
-          '</div>';
-        return;
-      }
-      var html = '<div class="so-results-list">';
-      courses.forEach(function(c) {
-        var typeLabel = c.course_type === 'general' ? '通识课' : '专业课';
-        html += '<a href="#" class="so-result-item" onclick="event.preventDefault();_removeOverlay(this.closest(\'.search-overlay\'));navToCourse(\'' + (c.course_type === 'general' ? '通识课' : '专业课') + '\',\'' + escJs(c.code) + '\')">' +
-          '<span class="so-ri-name">' + esc(c.name) + '</span>' +
-          '<span class="so-ri-code">' + esc((c.codes && c.codes.length > 1 ? c.codes : [c.code]).join(' · ')) + ' · ' + typeLabel + '</span>' +
-          '<span class="so-ri-arrow">→</span></a>';
-      });
-      html += '</div>';
-      resultsEl.innerHTML = html;
-    } catch(e) {
-      if (!resultsEl.isConnected || (currentSeq && requestSeq !== currentSeq())) return;
-      resultsEl.innerHTML = '<div class="so-empty"><div class="so-empty-icon">' + iconSvg('alert') + '</div><div class="so-empty-text">搜索失败</div></div>';
-    }
   }
 
   /* ═══════════════════════════════════════════════════════════

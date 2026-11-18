@@ -1081,62 +1081,32 @@
 
   function openUploadEntry() {
     if (!currentUser) { showLoginModal(); return; }
-    var ensureUpload = typeof showUploadModal === 'function'
-      ? Promise.resolve()
-      : (typeof ensureFeature === 'function' ? ensureFeature('plaza') : Promise.resolve());
-    ensureUpload.then(function () {
-      if (_nav && !_nav.can_expand_tree && _nav.course_code) {
+    if (_nav && !_nav.can_expand_tree && _nav.course_code) {
+      var ensureModal = typeof showUploadModal === 'function'
+        ? Promise.resolve()
+        : (typeof ensureFeature === 'function' ? ensureFeature('plaza') : Promise.resolve());
+      ensureModal.then(function () {
         fetchNavigation(_nav.category_id, _nav.course_type).then(function (nav) {
           _nav = nav;
           showUploadModal(nav.course_code, nav.name, nav.category_id);
         }).catch(function () { showUploadModal(_nav.course_code, _nav.name, _nav.category_id); });
-        return;
-      }
-      if (!_nav) return;
-      var navCoursesUrl = '/api/courses/navigation/?category_id=' + _nav.category_id + '&courses=1';
-      if (typeof appendPeekEduParam === 'function') navCoursesUrl = appendPeekEduParam(navCoursesUrl);
-      api(navCoursesUrl).then(function (nav) {
-        var courses = nav.courses || [];
-        var body = '<div class="plaza-overlay-head"><div><span class="plaza-kicker">上传文件</span><h3>选择课程</h3></div>' +
-          '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
-          (courses.length
-            ? '<label class="plaza-menu-search">' + iconSvg('search') + '<input type="search" id="plazaCourseSearch" autofocus placeholder="搜索课程名称或代码" aria-label="搜索课程"></label>' +
-              '<div class="plaza-course-list" id="plazaCourseList">' + courses.map(function (course) {
-                return '<button type="button" class="plaza-course-row" data-course-code="' + esc(course.code) + '" data-course-name="' + esc(course.name) + '" data-course-cat="' + (course.category_id || '') + '">' +
-                  '<span class="plaza-course-row-name">' + esc(course.name) + '</span><span class="plaza-course-row-code">' + (/^BNUX[0-9A-F]{32}$/i.test(course.code || '') ? '代码待补充' : esc(course.code)) + '</span></button>';
-              }).join('') + '</div>' +
-              '<div class="plaza-course-picker-foot"><button type="button" class="plaza-state-btn" id="plazaCreateCourse">没找到课程？新建课程</button></div>'
-            : '<div class="plaza-state"><p>当前范围还没有课程。</p><button type="button" class="plaza-upload" id="plazaCreateCourse">创建课程</button></div>');
-        openOverlay('picker', body, { onMount: function (overlay) {
-          var createCourse = overlay.querySelector('#plazaCreateCourse');
-          if (createCourse) createCourse.addEventListener('click', openCreateCourse);
-          var search = overlay.querySelector('#plazaCourseSearch');
-          if (search) {
-            search.addEventListener('input', function () {
-              var value = search.value.trim().toLowerCase();
-              overlay.querySelectorAll('[data-course-code]').forEach(function (row) {
-                var haystack = (row.getAttribute('data-course-code') + ' ' + row.getAttribute('data-course-name')).toLowerCase();
-                row.hidden = !!value && haystack.indexOf(value) === -1;
-              });
-            });
-          } else {
-            var firstCourse = overlay.querySelector('[data-course-code]');
-            if (firstCourse) setTimeout(function () { firstCourse.focus(); }, 0);
-          }
-          overlay.querySelectorAll('[data-course-code]').forEach(function (row) {
-            row.addEventListener('click', function () {
-              var code = row.getAttribute('data-course-code');
-              var name = row.getAttribute('data-course-name');
-              var cat = row.getAttribute('data-course-cat');
-              closeOverlay(true);
-              showUploadModal(code, name, cat ? parseInt(cat, 10) : null);
-            });
-          });
-        } });
-      }).catch(function (error) {
-        alert(error && error.message ? error.message : '课程加载失败');
       });
-    });
+      return;
+    }
+    if (!_nav) return;
+    var pathSegs = Array.isArray(_nav.path) ? _nav.path : [];
+    var isGeneral = _nav.course_type === 'general' || (pathSegs[0] && pathSegs[0].name === '通识课');
+    var collegeName = isGeneral
+      ? '通识课'
+      : (pathSegs.length >= 2 && pathSegs[1] && pathSegs[1].name ? pathSegs[1].name : '');
+    if (typeof openCourseSearchUpload === 'function') {
+      openCourseSearchUpload({
+        collegeName: collegeName,
+        categoryId: _nav.category_id || null,
+        path: pathSegs,
+        courseType: _nav.course_type || (isGeneral ? 'general' : 'major'),
+      });
+    }
   }
 
   window.addEventListener('bnuauthchange', function () {

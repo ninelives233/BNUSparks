@@ -129,26 +129,45 @@
     _renderNewCourseBreadcrumb();
     _ncUpdatePermissionHint();
     var path = options && options.path;
-    var isMajorPath = !!(path && path.length && path[0].course_type === 'major') || !!(path && path.length >= 3 && path[0].name === '专业课');
+    var preCourseName = options && options.courseName ? String(options.courseName).trim() : '';
+    var preCourseCode = options && options.courseCode ? String(options.courseCode).trim() : '';
+    var preCollegeName = options && options.collegeName ? String(options.collegeName).trim() : '';
+    var isMajorPath = !!(path && path.length && path[0].course_type === 'major')
+      || !!(path && path.length >= 3 && path[0].name === '专业课')
+      || !!(preCollegeName && preCollegeName !== '通识课' && preCollegeName !== '公共课');
     switchNewCourseType(isMajorPath ? 'major' : 'general');
-    if (isMajorPath && path.length >= 3 && _isGraduateIdentity()) {
+    if (preCourseName) {
+      var nameEl = _ncEl(isMajorPath ? 'ncMName' : 'ncGeneralName');
+      if (nameEl) nameEl.value = preCourseName;
+    }
+    if (preCourseCode && !/^BNUX[0-9A-F]{32}$/i.test(preCourseCode)) {
+      var codeEl = _ncEl(isMajorPath ? 'ncMCode' : 'ncGeneralCode');
+      if (codeEl) {
+        codeEl.value = preCourseCode;
+        _ncRefreshRejection(isMajorPath ? 'M' : 'G');
+      }
+    }
+    var targetCollegeName = (isMajorPath && path && path.length >= 2 && path[1] && path[1].name) || preCollegeName;
+    if (isMajorPath && targetCollegeName) {
       api('/api/colleges/').then(function(list) {
-        var college = (list || []).find(function(c) { return c.name === path[1].name; });
+        var college = (list || []).find(function(c) { return c.name === targetCollegeName; });
         if (!college) return;
         _ncState.college = { id: college.id, name: college.name };
         _ncEl('ncMCollegeSearch').value = college.name;
         _populateMajors();
         var majorSel = _ncEl('ncMMajor');
-        var majorIdx = path.findIndex(function(seg, idx) {
-          return idx >= 2 && majorSel && Array.from(majorSel.options).some(function(o) { return o.value === String(seg.id); });
-        });
-        if (majorIdx >= 2) {
-          majorSel.value = String(path[majorIdx].id);
-          onMajorChange();
-          if (_ncState.majorNode) {
-            _ncState.targetCatId = path[path.length - 1].id;
-            _ncState.targetPath = path.slice(majorIdx).map(function(x) { return x.name; }).join(' / ');
-            _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+        if (path && path.length >= 3 && _isGraduateIdentity()) {
+          var majorIdx = path.findIndex(function(seg, idx) {
+            return idx >= 2 && majorSel && Array.from(majorSel.options).some(function(o) { return o.value === String(seg.id); });
+          });
+          if (majorIdx >= 2) {
+            majorSel.value = String(path[majorIdx].id);
+            onMajorChange();
+            if (_ncState.majorNode) {
+              _ncState.targetCatId = path[path.length - 1].id;
+              _ncState.targetPath = path.slice(majorIdx).map(function(x) { return x.name; }).join(' / ');
+              _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+            }
           }
         }
       }).catch(function() {});

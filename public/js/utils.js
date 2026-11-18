@@ -491,7 +491,7 @@
     recentAll: '/recent', recommendations: '/recommendations', leaderboard: '/leaderboard', profile: '/profile',
     myuploads: '/uploads', mydownloads: '/downloads', myfavorites: '/favorites',
     admin: '/manage', notif: '/notifications', newCourse: '/new-course', qa: '/qa',
-    qaCompose: '/qa/compose', timetable: '/timetable', search: '/search' };
+    qaCompose: '/qa/compose', timetable: '/timetable', search: '/search', upload: '/upload' };
 
   // state = { view, expPath, userId, fileId, ... } → 路径字符串；返回 null 表示保持当前 URL
   function routeToPath(view, state) {
