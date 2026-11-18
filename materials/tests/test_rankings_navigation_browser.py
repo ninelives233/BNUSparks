@@ -35,10 +35,14 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         master = create_category('硕士', parent=college_node)
         master.education_level = '硕士'
         master.save()
-        create_category('研究生专业', parent=master)
+        self.grad_major = create_category('研究生专业', parent=master)
         law = create_college('法学院', 'ranking-nav-law')
         law_cat = create_category('法学院', parent=root)
         law_major = create_category('法学', parent=law_cat)
+        if self._testMethodName == 'test_graduate_bottom_peek_undergrad_and_public_course_labels':
+            law_grad = create_category('法律', parent=law_cat)
+            law_grad.education_level = '硕士'
+            law_grad.save()
         law_course = create_course('RANKLAW', '法学课程', college=law)
         create_category(law_course.name, parent=law_major, course=law_course)
         if self._testMethodName == 'test_graduate_bottom_peek_undergrad_and_public_course_labels':
@@ -47,6 +51,9 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
             grad_gen = create_category('思想政治理论课', parent=gen_root)
             grad_gen.education_level = '研究生'
             grad_gen.save()
+            grad_gen2 = create_category('外语', parent=gen_root)
+            grad_gen2.education_level = '研究生'
+            grad_gen2.save()
         self.files = []
         for i in range(2):
             course = create_course('RANKNAV' + str(i), '本科课程' + str(i), college=college)
@@ -203,13 +210,30 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('#plazaEduPeekTop .edu-peek-bar')
         self.page.wait_for_selector('#plazaBreadcrumb .bc-current')
         self.assertIn('通识课', self.page.locator('#plazaBreadcrumb').inner_text())
-        self.assertIn('返回硕士板块', self.page.locator('#plazaEduPeekBottom').inner_text())
+        self.assertIn('返回硕士板块', self.page.locator('#plazaEduPeekTop').inner_text())
+        self.assertEqual(self.page.locator('#plazaEduPeekBottom').inner_text().strip(), '')
 
         self.page.locator('#plazaBrowseBar .browse-mode-link').click()
-        self.page.wait_for_selector('#explorerView.active #explorerEduPeekBottom .edu-peek-btn')
-        self.assertIn('返回硕士板块', self.page.locator('#explorerEduPeekBottom').inner_text())
+        self.page.wait_for_selector('#explorerView.active #explorerEduPeekTop .edu-peek-btn')
+        self.assertIn('返回硕士板块', self.page.locator('#explorerEduPeekTop').inner_text())
+        self.assertEqual(self.page.locator('#explorerEduPeekBottom').inner_text().strip(), '')
 
-        self.page.locator('#explorerEduPeekBottom .edu-peek-btn').click()
+        self.page.locator('#explorerEduPeekTop .edu-peek-btn').click()
         self.page.wait_for_selector('#explorerEduPeekBottom .edu-peek-bar:not(.is-peeking)')
+        self.assertEqual(self.page.locator('#explorerEduPeekTop').inner_text().strip(), '')
         self.assertIn('去看看本科板块', self.page.locator('#explorerEduPeekBottom').inner_text())
         self.assertIn('公共课', self.page.locator('#breadcrumb').inner_text())
+
+        # 直接刷新/直达专业课目录页也必须在底部保留跨层次浏览提示
+        self.page.goto(self.live_server_url + '/explorer/%E4%B8%93%E4%B8%9A%E8%AF%BE')
+        self.page.wait_for_function('window._bnusparksReady === true && currentUser')
+        self.page.wait_for_selector('#explorerView.active #explorerEduPeekBottom .edu-peek-btn')
+        self.assertIn('去看看本科板块', self.page.locator('#explorerEduPeekBottom').inner_text())
+
+        # 进入学院子目录与广场子目录后不再展示底部跨层次提示条（仅最高级目录保留）
+        self.page.evaluate("showExplorerPath(['专业课', '测试学院'])")
+        self.page.wait_for_function("Array.isArray(expPath) && expPath.length > 1 && expPath[1] === '测试学院'")
+        self.assertEqual(self.page.locator('#explorerEduPeekBottom').inner_text().strip(), '')
+        self.page.goto(f'{self.live_server_url}/plaza?category_id={self.grad_major.id}')
+        self.page.wait_for_selector('#plazaView.active #plazaBreadcrumb .bc-current')
+        self.assertEqual(self.page.locator('#plazaEduPeekBottom').inner_text().strip(), '')

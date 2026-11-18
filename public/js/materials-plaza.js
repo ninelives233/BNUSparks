@@ -453,7 +453,8 @@
     var peekTop = document.getElementById('plazaEduPeekTop');
     if (peekTop) peekTop.innerHTML = typeof eduPeekTopBarHtml === 'function' ? eduPeekTopBarHtml('plaza') : '';
     var peekBottom = document.getElementById('plazaEduPeekBottom');
-    if (peekBottom) peekBottom.innerHTML = typeof eduPeekBarHtml === 'function' ? eduPeekBarHtml('plaza') : '';
+    var isRootLevel = !!(_nav && Array.isArray(_nav.path) && _nav.path.length <= 1);
+    if (peekBottom) peekBottom.innerHTML = (isRootLevel && typeof eduPeekBarHtml === 'function') ? eduPeekBarHtml('plaza') : '';
     var typeSelect = document.getElementById('plazaTypeSelect');
     var formatSelect = document.getElementById('plazaFormatSelect');
     var sortSelect = document.getElementById('plazaSortSelect');
@@ -728,7 +729,7 @@
         '</div>' +
       '</div>' +
       '<h3 class="pc-title">' + esc(item.title) + '</h3>' +
-      (group ? '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + group.index + '">查看全部 ' + group.count + ' 份 <span aria-hidden="true">→</span></button>' : '') +
+      (group ? '<button type="button" class="plaza-stack-more" data-plaza-group-more="' + group.index + '"><span>查看全部 ' + group.count + ' 份</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>' : '') +
       (item.description ? '<p class="pc-desc">' + esc(item.description) + '</p>' : '') +
       '<div class="pc-meta">' + contributorHtml(item) +
         '<span class="pc-date">' + esc(item.created_at) + '</span>' +

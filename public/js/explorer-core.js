@@ -765,9 +765,15 @@
   function renderEduPeekBars() {
     var topHost = document.getElementById('explorerEduPeekTop');
     var bottomHost = document.getElementById('explorerEduPeekBottom');
+    var isRootLevel = !expPath || expPath.length <= 1;
     if (topHost) topHost.innerHTML = typeof eduPeekTopBarHtml === 'function' ? eduPeekTopBarHtml('explorer') : '';
-    if (bottomHost) bottomHost.innerHTML = typeof eduPeekBarHtml === 'function' ? eduPeekBarHtml('explorer') : '';
+    if (bottomHost) bottomHost.innerHTML = (isRootLevel && typeof eduPeekBarHtml === 'function') ? eduPeekBarHtml('explorer') : '';
   }
+
+  window.addEventListener('bnuauthchange', function () {
+    var explorer = document.getElementById('explorerView');
+    if (explorer && explorer.classList.contains('active')) renderEduPeekBars();
+  });
 
   // ── Breadcrumb ──
   function renderBC() {
