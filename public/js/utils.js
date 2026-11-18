@@ -1017,6 +1017,17 @@
 
   var _statsPromise = null;
 
+  // 首页、排行榜和最近上传的每一行都是具体资料，始终按文件 ID 打开。
+  function openListedMaterial(event, fileId) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (!currentUser) { showLoginModal(); return; }
+    if (!Number.isSafeInteger(fileId) || fileId <= 0) return;
+    highlightFileId = null;
+    returnState = null;
+    showFileDetail({ id: fileId });
+  }
+
   // 同一页面内只允许一个统计请求；首页切换/重复初始化时复用进行中的请求。
   function loadStats() {
     if (_statsPromise) return _statsPromise;
@@ -1057,7 +1068,7 @@
       const homeTopDownloaded = (s.top_downloaded || []).slice(0, homeRankingLimit);
       if (topEl && homeTopDownloaded.length) {
         topEl.innerHTML = homeTopDownloaded.map(m =>
-          '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};navToCourse(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + escJs(m.course_code) + '\')">' +
+          '<a href="/file/' + Number(m.id) + '" class="hc-item" onclick="openListedMaterial(event,' + Number(m.id) + ')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + '</div><div class="hc-item-meta">' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + m.download_count + ' 次</span>' +
           '</a>'
@@ -1074,7 +1085,7 @@
           if (m.review_status && m.review_status !== 'approved') {
             badge = '<span class="review-badge review-badge-' + m.review_status + '" style="margin-left:6px;font-size:0.7rem">' + (m.review_status === 'pending' ? '审核中' : '已驳回') + '</span>';
           }
-          return '<a href="#" class="hc-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'home\',scrollY:pageYOffset};navToCourse(\'' + (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + escJs(m.course_code) + '\')">' +
+          return '<a href="/file/' + Number(m.id) + '" class="hc-item" onclick="openListedMaterial(event,' + Number(m.id) + ')">' +
             '<div class="hc-item-left"><div class="hc-item-name">' + esc(m.title) + badge + '</div><div class="hc-item-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
             '<span class="hc-item-count">' + esc(m.uploader_name) + '</span>' +
           '</a>';

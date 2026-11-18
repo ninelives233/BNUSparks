@@ -6,7 +6,7 @@ import unittest
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.core.cache import cache
 
-from materials.models import Material
+from materials.models import Favorite, Material
 
 from .helpers import _make_jwt, create_category, create_college, create_course, create_user
 
@@ -49,6 +49,11 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
                 file_name='test.pdf', file_path='test.pdf', file_size=1024, review_status='approved',
                 is_approved=True, download_count=10 + i)
             self.files.append(material)
+        self.files.append(Material.objects.create(
+            course=self.files[0].course, uploader=self.user, title='同课另一份资料',
+            file_name='another.pdf', file_path='another.pdf', file_size=1024,
+            review_status='approved', is_approved=True, download_count=20))
+        Favorite.objects.create(user=self.undergrad_user, material=self.files[1])
         token = _make_jwt(self.user.id)
         self.pw = sync_playwright().start()
         self.addCleanup(self.pw.stop)
@@ -65,7 +70,7 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_function('window._bnusparksReady === true && currentUser')
         self.page.wait_for_selector('#rankingsContent .rankings-item')
         for material in self.files:
-            self.page.locator('#rankingsContent .rankings-item', has_text=material.title).click()
+            self.page.locator('#rankingsContent .rankings-item').filter(has=self.page.get_by_text(material.title, exact=True)).click()
             self.page.wait_for_url('**/file/' + str(material.id))
             self.page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent.includes(title)', arg=material.title)
             self.page.go_back()
@@ -77,7 +82,7 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_url('**/file/' + str(self.files[0].id))
         self.page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent.includes(title)', arg=self.files[0].title)
 
-    def test_visible_course_keeps_course_navigation(self):
+    def test_visible_course_opens_exact_material_for_undergraduate(self):
         context = self.browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion='reduce')
         self.addCleanup(context.close)
         page = context.new_page()
@@ -85,10 +90,19 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         page.set_default_timeout(10000)
         page.goto(self.live_server_url + '/rankings')
         page.wait_for_function('window._bnusparksReady === true && currentUser')
-        page.locator('#rankingsContent .rankings-item', has_text=self.files[0].title).click()
-        page.wait_for_function("typeof expPath !== 'undefined' && expPath[expPath.length - 1] === '本科课程0'")
-        page.wait_for_selector('#explorerView.active')
-        self.assertEqual(page.evaluate('history.state.view'), 'explorer')
+        for material in (self.files[0], self.files[2]):
+            item = page.locator('#rankingsContent .rankings-item').filter(has=page.get_by_text(material.title, exact=True))
+            item.focus()
+            item.press('Enter')
+            page.wait_for_url('**/file/' + str(material.id))
+            page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent === title', arg=material.title)
+            page.go_back()
+            page.wait_for_url('**/rankings')
+        page.locator('#rankingsModeTabs [data-ranking-type="favorite"]').click()
+        item = page.locator('#rankingsContent .rankings-item').filter(has=page.get_by_text(self.files[1].title, exact=True))
+        item.click()
+        page.wait_for_url('**/file/' + str(self.files[1].id))
+        page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent === title', arg=self.files[1].title)
 
     def test_guest_is_prompted_to_log_in(self):
         context = self.browser.new_context(viewport={'width': 390, 'height': 844}, reduced_motion='reduce')
@@ -117,5 +131,31 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         self.assertFalse(page.evaluate('_isGraduateIdentity()'))
         page.evaluate('showTopDownloaded()')
         page.locator('#rankingsContent .rankings-item', has_text=self.files[0].title).click()
-        page.wait_for_function("expPath[expPath.length - 1] === '本科课程0'")
-        self.assertEqual(page.evaluate('history.state.view'), 'explorer')
+        page.wait_for_url('**/file/' + str(self.files[0].id))
+        page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent === title', arg=self.files[0].title)
+
+    def test_wide_home_rank_and_recent_open_exact_material(self):
+        context = self.browser.new_context(viewport={'width': 1280, 'height': 800})
+        self.addCleanup(context.close)
+        page = context.new_page()
+        page.set_default_timeout(10000)
+        page.add_init_script('sessionStorage.setItem("token", ' + repr(_make_jwt(self.undergrad_user.id)) + ');')
+        page.goto(self.live_server_url + '/')
+        page.wait_for_function('window._bnusparksReady === true && currentUser && document.querySelector("#homeView.active")')
+        page.evaluate('''async () => {
+          document.body.classList.remove('home-layout-compact');
+          document.body.dataset.homeLayout = 'loose';
+          await loadStats();
+        }''')
+        page.locator('#topDownloadedList .hc-item').filter(
+            has=page.get_by_text(self.files[0].title, exact=True)).click()
+        page.wait_for_url('**/file/' + str(self.files[0].id))
+        page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent === title',
+                               arg=self.files[0].title)
+        page.go_back()
+        page.wait_for_url(self.live_server_url + '/')
+        page.locator('#recentUploadsList .hc-item').filter(
+            has=page.get_by_text(self.files[2].title, exact=True)).click()
+        page.wait_for_url('**/file/' + str(self.files[2].id))
+        page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent === title',
+                               arg=self.files[2].title)

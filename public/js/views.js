@@ -329,8 +329,7 @@
         } else {
           html += filtered.map(function(m, i){
             var idx = allItems.indexOf(m) + 1;
-            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'rankings\',scrollY:pageYOffset,rankingType:\'' + (isFavoriteRanking ? 'favorite' : 'download') + '\'};navToCourse(\'' +
-                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + esc(m.course_code) + '\')">' +
+            return '<a href="/file/' + Number(m.id) + '" class="rankings-item" onclick="openListedMaterial(event,' + Number(m.id) + ')">' +
               '<span class="ri-rank">#' + idx + '</span>' +
               '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + esc(m.course_name) + '</div></div>' +
               '<span class="ri-stat">' + (isFavoriteRanking ? (m.favorite_count || 0) + ' 次收藏' : (m.download_count || 0) + ' 次下载') + '</span>' +
@@ -390,8 +389,7 @@
           html += '<div class="rankings-item" style="justify-content:center;color:var(--ink-faint);border:none;background:none">暂无该学院的资料</div>';
         } else {
           html += filtered.map(function(m){
-            return '<a href="#" class="rankings-item" onclick="event.preventDefault();highlightFileId=' + m.id + ';returnState={view:\'recentAll\',scrollY:pageYOffset};navToCourse(\'' +
-                (m.course_code.startsWith('GEN') ? '通识课' : '专业课') + '\',\'' + esc(m.course_code) + '\')">' +
+            return '<a href="/file/' + Number(m.id) + '" class="rankings-item" onclick="openListedMaterial(event,' + Number(m.id) + ')">' +
               '<div class="ri-info"><div class="ri-name">' + esc(m.title) + '</div><div class="ri-meta">' + m.created_at + ' · ' + esc(m.course_name) + '</div></div>' +
               '<span class="ri-stat">' + esc(m.uploader_name) + '</span>' +
             '</a>';
