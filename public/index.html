@@ -239,7 +239,7 @@
           <div class="h8-scale" aria-label="平台规模" data-nosnippet>
             <strong><span data-stat="total_files">—</span> <small>份共享资料</small></strong>
             <span><span data-stat="college_with_data_count">—</span> 个学院 / 学部目录</span>
-            <span><span data-stat="general_with_data_count">—</span> 个通识分类</span>
+            <span><span data-stat="general_with_data_count">—</span> 个<span data-general-cat-label>通识分类</span></span>
           </div>
         </div>
       </header>
@@ -353,7 +353,7 @@
       <p class="hero-stats-label" data-motion-reveal data-motion-delay="240">当前已有</p>
       <div class="stats-row" data-motion-reveal data-motion-delay="240">
         <span class="stat-pill"><strong id="statColleges">-</strong> 个学院</span>
-        <span class="stat-pill"><strong id="statGeneral">-</strong> 门通识课</span>
+        <span class="stat-pill"><strong id="statGeneral">-</strong> 门<span data-general-root-label>通识课</span></span>
         <span class="stat-pill"><strong id="statMajor">-</strong> 门专业课</span>
       </div>
       <!-- ═══ 上传按钮（窄屏：hero 内；宽屏：nav-cards 下方）═══ -->
@@ -506,7 +506,9 @@
         </div>
       </nav>
       <div class="container">
+      <div id="explorerEduPeekTop"></div>
       <div class="explorer-content" id="explorerContent"></div>
+      <div id="explorerEduPeekBottom"></div>
       </div>
   </div>
 </div>

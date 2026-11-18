@@ -372,7 +372,7 @@ def _find_nodes_containing_course(root, course):
     return found
 
 
-def course_display_names(course_ids):
+def course_display_names(course_ids, education=None):
     """course_id → 导航树叶子节点名的映射。
 
     管理员重命名目录只改 CourseCategory.name，不同步 Course.name；
@@ -384,9 +384,17 @@ def course_display_names(course_ids):
     if not wanted:
         return {}
     names = {}
-    categories = CourseCategory.objects.only(
-        "id", "parent_id", "order", "name", "course_id", "is_divider"
-    ).order_by("order", "id")
+    categories = list(CourseCategory.objects.only(
+        "id", "parent_id", "order", "name", "course_id", "is_divider", "education_level"
+    ).order_by("order", "id"))
+    if education is not None:
+        from ..services.course_visibility import visible_category_ids
+        allowed = visible_category_ids(
+            ({"id": c.id, "parent_id": c.parent_id, "name": c.name,
+              "education_level": c.education_level} for c in categories),
+            education,
+        )
+        categories = [c for c in categories if c.id in allowed]
     children_by_parent = {}
     for category in categories:
         children_by_parent.setdefault(category.parent_id, []).append(category)

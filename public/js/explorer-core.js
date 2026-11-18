@@ -25,7 +25,7 @@
     if (idMaj || idCol) {
       for (var m = 0; m < matches.length; m++) {
         var p = matches[m];
-        if (p[0] === '专业课' && idMaj && p.length >= 4 && p[2] === idMaj) return p;
+        if (p[0] === '专业课' && idMaj && ((p.length >= 4 && p[2] === idMaj) || (p.length >= 5 && p[3] === idMaj))) return p;
       }
       for (var n2 = 0; n2 < matches.length; n2++) {
         var q = matches[n2];
@@ -466,7 +466,8 @@
 
   async function _loadCourseTree() {
     try {
-      courseTree = await api('/api/courses/tree/');
+      var treeUrl = typeof appendPeekEduParam === 'function' ? appendPeekEduParam('/api/courses/tree/') : '/api/courses/tree/';
+      courseTree = await api(treeUrl);
       if (typeof buildSameNameMap === 'function') buildSameNameMap();
       if (_pendingNavToLastCode && _courseTreeReady()) {
         var pendingCode = _pendingNavToLastCode;
@@ -484,7 +485,8 @@
   async function refreshCourseTree() {
     try {
       clearApiCache('/api/courses/tree/');
-      courseTree = await api('/api/courses/tree/');
+      var treeUrl = typeof appendPeekEduParam === 'function' ? appendPeekEduParam('/api/courses/tree/') : '/api/courses/tree/';
+      courseTree = await api(treeUrl);
       if (typeof buildSameNameMap === 'function') buildSameNameMap();
       var expView = document.getElementById('explorerView');
       if (expView && expView.classList.contains('active')) renderExplorer();
@@ -698,16 +700,22 @@
       var crumb = null;
       if (isLast && !hasTail && options && options.lastStatic) {
         var cur = document.createElement('span');
-        cur.className = 'bc-current'; cur.textContent = options.lastStatic;
+        cur.className = 'bc-current';
+        cur.textContent = (i === 0 && typeof displayCategoryLabel === 'function')
+          ? displayCategoryLabel(options.lastStatic)
+          : options.lastStatic;
         el.appendChild(cur);
       } else if (options && options.onNavigate) {
+        var crumbLabel = (i === 0 && typeof displayCategoryLabel === 'function')
+          ? displayCategoryLabel(path[i])
+          : path[i];
         (function(text, depth, mid) {
           var link = document.createElement('a');
           link.textContent = text;
           if (mid) link.classList.add('bc-mid');
           link.onclick = function(e) { e.preventDefault(); options.onNavigate(depth); };
           crumb = link;
-        })(path[i], i + 1, isMid);
+        })(crumbLabel, i + 1, isMid);
       }
       if (crumb) el.appendChild(crumb);
       if (isMid && i === lastMid && ellipsis) el.appendChild(ellipsis);
@@ -754,9 +762,17 @@
     return link;
   }
 
+  function renderEduPeekBars() {
+    var topHost = document.getElementById('explorerEduPeekTop');
+    var bottomHost = document.getElementById('explorerEduPeekBottom');
+    if (topHost) topHost.innerHTML = typeof eduPeekTopBarHtml === 'function' ? eduPeekTopBarHtml('explorer') : '';
+    if (bottomHost) bottomHost.innerHTML = typeof eduPeekBarHtml === 'function' ? eduPeekBarHtml('explorer') : '';
+  }
+
   // ── Breadcrumb ──
   function renderBC() {
     renderCourseNav();
+    renderEduPeekBars();
     const el = document.getElementById('breadcrumb');
     _renderBreadcrumb(el, expPath, {
       onNavigate: function(depth) { navTo(depth); },
@@ -833,8 +849,9 @@
       host.innerHTML = '';
       return;
     }
+    var generalLabel = typeof displayCategoryLabel === 'function' ? displayCategoryLabel('通识课') : '通识课';
     host.innerHTML = '<div class="course-root-tabs" role="tablist" aria-label="课程类型">' +
-      '<button type="button" role="tab" data-course-root="通识课" aria-selected="' + (root === '通识课') + '" class="course-root-tab' + (root === '通识课' ? ' is-active' : '') + '">通识课</button>' +
+      '<button type="button" role="tab" data-course-root="通识课" aria-selected="' + (root === '通识课') + '" class="course-root-tab' + (root === '通识课' ? ' is-active' : '') + '">' + esc(generalLabel) + '</button>' +
       '<button type="button" role="tab" data-course-root="专业课" aria-selected="' + (root === '专业课') + '" class="course-root-tab' + (root === '专业课' ? ' is-active' : '') + '">专业课</button>' +
     '</div>';
     host.querySelectorAll('[data-course-root]').forEach(function (button) {
@@ -859,16 +876,20 @@
     function renderPanel(root) {
       var node = courseTree[root] || {};
       var children = (node.children || []).filter(function (item) { return !item.divider; });
+      var displayRoot = typeof displayCategoryLabel === 'function' ? displayCategoryLabel(root) : root;
       overlay.querySelector('.course-switch-dialog').innerHTML =
         '<div class="course-switch-head"><div><span class="appearance-kicker">课程目录</span><h3>切换分类</h3></div><button type="button" class="course-switch-close" aria-label="关闭" onclick="closeCourseSwitchPanel()">✕</button></div>' +
         '<div class="course-switch-tabs" role="tablist" aria-label="课程类型">' +
-          ['通识课', '专业课'].map(function (item) { return '<button type="button" role="tab" class="course-switch-tab' + (item === root ? ' is-active' : '') + '" aria-selected="' + (item === root ? 'true' : 'false') + '" data-switch-root="' + item + '">' + item + '</button>'; }).join('') +
+          ['通识课', '专业课'].map(function (item) {
+            var itemLabel = typeof displayCategoryLabel === 'function' ? displayCategoryLabel(item) : item;
+            return '<button type="button" role="tab" class="course-switch-tab' + (item === root ? ' is-active' : '') + '" aria-selected="' + (item === root ? 'true' : 'false') + '" data-switch-root="' + item + '">' + esc(itemLabel) + '</button>';
+          }).join('') +
         '</div>' +
-        '<p class="course-switch-current">选择一个目录后才会离开当前页面；也可以直接查看全部' + esc(root) + '。</p>' +
-        '<section class="course-switch-section"><h4>' + esc(root) + '</h4><div class="course-switch-grid">' +
+        '<p class="course-switch-current">选择一个目录后才会离开当前页面；也可以直接查看全部' + esc(displayRoot) + '。</p>' +
+        '<section class="course-switch-section"><h4>' + esc(displayRoot) + '</h4><div class="course-switch-grid">' +
           children.map(function (item) { return '<button type="button" data-root="' + esc(root) + '" data-category="' + esc(item.name) + '">' + esc(item.name) + '</button>'; }).join('') +
         '</div></section>' +
-        '<button type="button" class="course-switch-all" data-root="' + esc(root) + '" data-category="">查看全部' + esc(root) + '</button>';
+        '<button type="button" class="course-switch-all" data-root="' + esc(root) + '" data-category="">查看全部' + esc(displayRoot) + '</button>';
       overlay.querySelectorAll('[data-switch-root]').forEach(function (button) {
         button.addEventListener('click', function () { activeRoot = button.getAttribute('data-switch-root'); renderPanel(activeRoot); });
       });

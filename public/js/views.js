@@ -1324,6 +1324,7 @@
   function showExplorerPath(path) {
     if (typeof _directCourse !== 'undefined') _directCourse = null;
     var nextPath = Array.isArray(path) && path.length ? path.slice() : ['通识课'];
+    if (nextPath[0] === '公共课') nextPath[0] = '通识课';
     pushViewState('explorer', { expPath: nextPath });
     switchView('explorer');
     updateSidebar('allCourses');
@@ -1415,8 +1416,9 @@
   function browseSwitcherHtml(mode, range) {
     var rangeButton = function (value) {
       var active = range === value;
+      var label = typeof displayCategoryLabel === 'function' ? displayCategoryLabel(value) : value;
       return '<button type="button" class="browse-switch-btn' + (active ? ' is-active' : '') +
-        '" data-browse-range="' + value + '" aria-pressed="' + active + '">' + value + '</button>';
+        '" data-browse-range="' + value + '" aria-pressed="' + active + '">' + label + '</button>';
     };
     var modeButton = function (value, label) {
       var active = mode === value;
@@ -1445,7 +1447,9 @@
   }
 
   function fetchDefaultNavigationPath(courseType) {
-    return api('/api/courses/navigation/?course_type=' + encodeURIComponent(courseType))
+    var url = '/api/courses/navigation/?course_type=' + encodeURIComponent(courseType);
+    if (typeof appendPeekEduParam === 'function') url = appendPeekEduParam(url);
+    return api(url)
       .then(function (data) {
         return (data.path || []).map(function (level) { return level.name; });
       });

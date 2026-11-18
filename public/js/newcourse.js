@@ -129,20 +129,27 @@
     _renderNewCourseBreadcrumb();
     _ncUpdatePermissionHint();
     var path = options && options.path;
-    switchNewCourseType(path && path.length >= 4 ? 'major' : 'general');
-    if (path && path.length >= 4 && _isGraduateIdentity()) {
+    var isMajorPath = !!(path && path.length && path[0].course_type === 'major') || !!(path && path.length >= 3 && path[0].name === '专业课');
+    switchNewCourseType(isMajorPath ? 'major' : 'general');
+    if (isMajorPath && path.length >= 3 && _isGraduateIdentity()) {
       api('/api/colleges/').then(function(list) {
         var college = (list || []).find(function(c) { return c.name === path[1].name; });
         if (!college) return;
         _ncState.college = { id: college.id, name: college.name };
         _ncEl('ncMCollegeSearch').value = college.name;
         _populateMajors();
-        _ncEl('ncMMajor').value = String(path[3].id);
-        onMajorChange();
-        if (_ncState.majorNode) {
-          _ncState.targetCatId = path[path.length - 1].id;
-          _ncState.targetPath = path.slice(3).map(function(x) { return x.name; }).join(' / ');
-          _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+        var majorSel = _ncEl('ncMMajor');
+        var majorIdx = path.findIndex(function(seg, idx) {
+          return idx >= 2 && majorSel && Array.from(majorSel.options).some(function(o) { return o.value === String(seg.id); });
+        });
+        if (majorIdx >= 2) {
+          majorSel.value = String(path[majorIdx].id);
+          onMajorChange();
+          if (_ncState.majorNode) {
+            _ncState.targetCatId = path[path.length - 1].id;
+            _ncState.targetPath = path.slice(majorIdx).map(function(x) { return x.name; }).join(' / ');
+            _ncEl('ncMTargetPath').textContent = _ncState.targetPath;
+          }
         }
       }).catch(function() {});
     }
@@ -172,8 +179,11 @@
   // ── 分段控制器 ──
   function switchNewCourseType(type) {
     var isGeneral = type === 'general';
+    var generalLabel = typeof getGeneralRootLabel === 'function' ? getGeneralRootLabel() : '通识课';
     document.querySelectorAll('.nc-seg-btn').forEach(function(b) {
-      b.classList.toggle('active', b.getAttribute('data-nc-type') === type);
+      var bType = b.getAttribute('data-nc-type');
+      b.classList.toggle('active', bType === type);
+      if (bType === 'general') b.textContent = generalLabel;
     });
     var g = _ncEl('ncGeneralPane'), m = _ncEl('ncMajorPane');
     if (g) g.style.display = isGeneral ? '' : 'none';
@@ -288,7 +298,16 @@
   function _collegeMajorNodes(colNode) {
     var children = (colNode && colNode.children) || [];
     if (!_isGraduateIdentity()) return children;
-    var level = children.find(function(c) { return c.educationLevel === (currentUser.course_navigation_education || currentUser.identity_education) || c.educationLevel === '研究生'; });
+    var targetEdu = currentUser.course_navigation_education || currentUser.identity_education;
+    var direct = children.filter(function(c) {
+      return c.educationLevel === targetEdu || c.educationLevel === '研究生';
+    });
+    if (direct.length === 1 && !direct[0].courseId &&
+        (direct[0].name === targetEdu || direct[0].name === '硕士' || direct[0].name === '博士')) {
+      return direct[0].children || [];
+    }
+    if (direct.length) return direct;
+    var level = children.find(function(c) { return c.educationLevel === targetEdu || c.educationLevel === '研究生'; });
     return level ? (level.children || []) : [];
   }
 
@@ -493,6 +512,9 @@
         if (d.in_target) {
           hint.className = 'nc-code-hint nc-code-hint-error';
           setIconText(hint, 'alert', '该课程已在本专业课程树「' + (d.locations[0] || '该位置') + '」中，请直接到对应目录上传资料');
+        } else if (d.cross_level) {
+          hint.className = 'nc-code-hint nc-code-hint-warn';
+          setIconText(hint, 'info', '该课程代码在站内已有共享课程资料库（跨培养层次共享），提交建档后将直接共享既有资料');
         } else {
           hint.className = 'nc-code-hint nc-code-hint-warn';
           setIconText(hint, 'info', '该课程已存在于别处（' + (d.locations.length || 1) + ' 处）。提交后批准将链接到既有课程目录，不新建独立文件夹');

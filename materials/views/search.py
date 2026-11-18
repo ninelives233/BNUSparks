@@ -141,7 +141,7 @@ def _course_topology(request=None):
         "id", "parent_id", "name", "order", "is_divider", "education_level",
         "course_id", "course_text",
     ).order_by("order", "id"))
-    education = education_for_user(_get_user(request)) if request is not None else "本科"
+    education = education_for_user(_get_user(request), request) if request is not None else "本科"
     if request is not None and (education != "本科" or any(cat.education_level for cat in cats)):
         allowed = visible_category_ids(
             ({"id": cat.id, "parent_id": cat.parent_id, "name": cat.name,
@@ -460,7 +460,9 @@ def _search_materials_v2(request, query, page, page_size):
         review_status="approved",
     )
     from .plaza import _visible_course_ids
-    visible_ids = _visible_course_ids(_get_user(request))
+    user = _get_user(request)
+    education = education_for_user(user, request)
+    visible_ids = _visible_course_ids(user, request=request)
     if visible_ids is not None:
         rows_qs = rows_qs.filter(course_id__in=visible_ids)
     rows = list(rows_qs.select_related("course", "course__college", "material_type").only(
@@ -522,7 +524,7 @@ def _search_materials_v2(request, query, page, page_size):
 
     tree_names = course_display_names({
         m.course_id for (m, _matched) in page_rows if m.course_id
-    })
+    }, education=education)
 
     items = []
     for m, matched in page_rows:

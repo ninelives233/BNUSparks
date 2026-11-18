@@ -109,6 +109,7 @@
     _apiInflight.clear();
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('bnusparks_user_id');
+    sessionStorage.removeItem('bnusparks_peek_undergrad');
     sessionStorage.setItem('bnusparks_auth_initialized', '1');
     // 其他标签页可能已经写入了另一个账号，不能清除其共享登录。
     if (token && token === localStorage.getItem('token')) {
@@ -601,7 +602,9 @@
     var segs = path.split('/').filter(Boolean).map(decodeURIComponent);
     var head = segs[0];
     if (head === 'explorer') {
-      var expRoute = { view: 'explorer', expPath: segs.slice(1) };
+      var expSegs = segs.slice(1);
+      if (expSegs[0] === '公共课') expSegs[0] = '通识课';
+      var expRoute = { view: 'explorer', expPath: expSegs };
       try {
         var esp = new URLSearchParams(location.search);
         var dCode = (esp.get('course') || '').trim();
@@ -609,7 +612,7 @@
           expRoute.directCourse = {
             code: dCode,
             name: segs[segs.length - 1] || dCode,
-            type: segs[1] === '通识课' ? '通识课' : '专业课',
+            type: expSegs[0] === '通识课' ? '通识课' : '专业课',
           };
         }
       } catch (e) { /* URLSearchParams 不可用时保留普通目录路由 */ }
@@ -1060,6 +1063,7 @@
   }
 
   async function _loadStats() {
+    if (typeof syncGeneralRootLabels === 'function') syncGeneralRootLabels();
     try {
       const s = await api('/api/stats/');
       const homeRankingLimit = 10;
@@ -1163,4 +1167,124 @@
     var template = document.createElement('template');
     template.innerHTML = iconSvg(name);
     element.replaceChildren(template.content.firstElementChild, document.createTextNode(String(label || '')));
+  }
+
+  var PEEK_UNDERGRAD_KEY = 'bnusparks_peek_undergrad';
+
+  function isGraduateIdentity() {
+    if (typeof currentUser === 'undefined' || !currentUser) return false;
+    var level = currentUser.identity_education;
+    if (level !== '硕士' && level !== '博士') return false;
+    if (currentUser.course_navigation_education === '本科') return false;
+    return true;
+  }
+
+  function isPeekingUndergrad() {
+    if (!isGraduateIdentity()) {
+      try { sessionStorage.removeItem(PEEK_UNDERGRAD_KEY); } catch (e) {}
+      return false;
+    }
+    try { return sessionStorage.getItem(PEEK_UNDERGRAD_KEY) === '1'; }
+    catch (e) { return false; }
+  }
+
+  function setPeekingUndergrad(enabled) {
+    try {
+      if (enabled && isGraduateIdentity()) sessionStorage.setItem(PEEK_UNDERGRAD_KEY, '1');
+      else sessionStorage.removeItem(PEEK_UNDERGRAD_KEY);
+    } catch (e) {}
+  }
+
+  function getEffectiveEducation() {
+    if (!isGraduateIdentity() || isPeekingUndergrad()) return '本科';
+    return currentUser.identity_education;
+  }
+
+  function getGeneralRootLabel() {
+    return getEffectiveEducation() === '本科' ? '通识课' : '公共课';
+  }
+
+  function displayCategoryLabel(name) {
+    return name === '通识课' ? getGeneralRootLabel() : (name || '');
+  }
+
+  function appendPeekEduParam(url) {
+    if (!url || !isPeekingUndergrad()) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'edu=undergrad';
+  }
+
+  function eduPeekBarHtml(mode) {
+    if (!isGraduateIdentity()) return '';
+    var level = currentUser.identity_education;
+    var safeEsc = typeof esc === 'function' ? esc : escapeHtml;
+    if (isPeekingUndergrad()) {
+      return '<div class="edu-peek-bar is-peeking" role="region" aria-label="临时浏览本科板块">' +
+        '<span class="edu-peek-text">当前正在临时浏览本科板块（未更改你的' + safeEsc(level) + '身份）</span>' +
+        '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(false,\'' + safeEsc(mode || '') + '\')">返回' + safeEsc(level) + '板块 →</button>' +
+      '</div>';
+    }
+    return '<div class="edu-peek-bar" role="region" aria-label="跨培养层次浏览提示">' +
+      '<span class="edu-peek-text">' + safeEsc(level) + '板块资料仍在持续建设中 · 想看看本科板块或查找基础课资料？</span>' +
+      '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(true,\'' + safeEsc(mode || '') + '\')">去看看本科板块 →</button>' +
+    '</div>';
+  }
+
+  function eduPeekTopBarHtml(mode) {
+    if (!isGraduateIdentity() || !isPeekingUndergrad()) return '';
+    var level = currentUser.identity_education;
+    var safeEsc = typeof esc === 'function' ? esc : escapeHtml;
+    return '<div class="edu-peek-bar edu-peek-bar--top is-peeking" role="status">' +
+      '<span class="edu-peek-text">正在临时浏览本科板块（未更改你的' + safeEsc(level) + '身份）</span>' +
+      '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(false,\'' + safeEsc(mode || '') + '\')">返回' + safeEsc(level) + '板块 →</button>' +
+    '</div>';
+  }
+
+  function syncGeneralRootLabels() {
+    var rootLabel = getGeneralRootLabel();
+    var catLabel = rootLabel === '公共课' ? '公共分类' : '通识分类';
+    document.querySelectorAll('[data-general-root-label]').forEach(function (el) { el.textContent = rootLabel; });
+    document.querySelectorAll('[data-general-cat-label]').forEach(function (el) { el.textContent = catLabel; });
+  }
+
+  window.addEventListener('bnuauthchange', function () {
+    if (!isGraduateIdentity()) setPeekingUndergrad(false);
+    syncGeneralRootLabels();
+  });
+
+  async function togglePeekUndergrad(enable, context) {
+    setPeekingUndergrad(!!enable);
+    if (typeof clearApiCache === 'function') {
+      clearApiCache('/api/courses/');
+      clearApiCache('/api/materials/');
+    }
+    try { sessionStorage.removeItem('bnusparks_course_positions'); } catch (e) {}
+    if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+    if (typeof courseTree !== 'undefined') courseTree = null;
+    if (typeof loadCourseTree === 'function') {
+      await loadCourseTree();
+    } else if (typeof refreshCourseTree === 'function') {
+      await refreshCourseTree();
+    }
+    var plazaActive = document.getElementById('plazaView') && document.getElementById('plazaView').classList.contains('active');
+    var explorerActive = document.getElementById('explorerView') && document.getElementById('explorerView').classList.contains('active');
+    var searchActive = document.getElementById('searchView') && document.getElementById('searchView').classList.contains('active');
+    if (plazaActive && window.BnuPlaza && typeof window.BnuPlaza.show === 'function') {
+      var range = window.BnuPlaza.getRange ? window.BnuPlaza.getRange() : '通识课';
+      window.BnuPlaza.show({ courseType: range, resetFilters: true, replace: true });
+      if (typeof scrollToInstant === 'function') scrollToInstant(0);
+      return;
+    }
+    if (explorerActive && typeof showExplorerPath === 'function') {
+      var root = (typeof expPath !== 'undefined' && expPath && expPath[0] === '专业课') ? '专业课' : '通识课';
+      if (!enable && root === '专业课' && typeof navigateDirectoryToRange === 'function') {
+        navigateDirectoryToRange('专业课');
+      } else {
+        showExplorerPath([root]);
+      }
+      if (typeof scrollToInstant === 'function') scrollToInstant(0);
+      return;
+    }
+    if (searchActive && window.BnuSearch && typeof window.BnuSearch.reload === 'function') {
+      window.BnuSearch.reload();
+    }
   }

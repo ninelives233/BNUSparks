@@ -13,15 +13,35 @@ def _has_graduate_directory(profile):
     ).exists()
 
 
-def education_for_user(user):
-    """未开通本院硕士目录时，暂按本科范围浏览；不改变用户身份。"""
+def is_peeking_undergrad(user, request=None):
+    """Return True when a graduate user explicitly requests the undergrad view."""
+    if user is None or request is None:
+        return False
+    profile = getattr(user, "profile", None)
+    level = getattr(profile, "identity_education", "")
+    if level not in ("硕士", "博士"):
+        return False
+    params = getattr(request, "GET", None)
+    if not params:
+        return False
+    return str(params.get("edu") or "").strip().lower() in ("undergrad", "本科")
+
+
+def education_for_user(user, request=None):
+    """未开通本院硕士目录或主动临时浏览本科时，按本科范围浏览；不改变用户身份。"""
     if user is None:
+        return "本科"
+    if is_peeking_undergrad(user, request):
         return "本科"
     profile = getattr(user, "profile", None)
     level = getattr(profile, "identity_education", "")
     if level == "硕士" and not _has_graduate_directory(profile):
         return "本科"
     return level if level in ("硕士", "博士") else "本科"
+
+
+def general_root_label(education):
+    return "公共课" if education in ("硕士", "博士") else "通识课"
 
 
 def browse_mode_for_profile(profile):

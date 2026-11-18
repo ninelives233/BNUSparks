@@ -41,6 +41,12 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         law_major = create_category('法学', parent=law_cat)
         law_course = create_course('RANKLAW', '法学课程', college=law)
         create_category(law_course.name, parent=law_major, course=law_course)
+        if self._testMethodName == 'test_graduate_bottom_peek_undergrad_and_public_course_labels':
+            gen_root = create_category('通识课')
+            create_category('大学外语类', parent=gen_root)
+            grad_gen = create_category('思想政治理论课', parent=gen_root)
+            grad_gen.education_level = '研究生'
+            grad_gen.save()
         self.files = []
         for i in range(2):
             course = create_course('RANKNAV' + str(i), '本科课程' + str(i), college=college)
@@ -184,3 +190,26 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_function("document.querySelector('#explorerView .file-area-header h3')?.textContent.includes('本科课程1')")
         self.page.wait_for_selector('#explorerView.active #fileTableBody tr[data-file-id]')
         self.assertIn(self.files[1].title, self.page.locator('#fileTableBody').inner_text())
+
+    def test_graduate_bottom_peek_undergrad_and_public_course_labels(self):
+        self.page.goto(self.live_server_url + '/plaza')
+        self.page.wait_for_function('window._bnusparksReady === true && currentUser')
+        self.page.wait_for_selector('#plazaView.active #plazaBreadcrumb .bc-current')
+        self.page.wait_for_selector('#plazaView.active #plazaEduPeekBottom .edu-peek-btn')
+        self.assertIn('公共课', self.page.locator('#plazaBreadcrumb').inner_text())
+        self.assertIn('去看看本科板块', self.page.locator('#plazaEduPeekBottom').inner_text())
+
+        self.page.locator('#plazaEduPeekBottom .edu-peek-btn').click()
+        self.page.wait_for_selector('#plazaEduPeekTop .edu-peek-bar')
+        self.page.wait_for_selector('#plazaBreadcrumb .bc-current')
+        self.assertIn('通识课', self.page.locator('#plazaBreadcrumb').inner_text())
+        self.assertIn('返回硕士板块', self.page.locator('#plazaEduPeekBottom').inner_text())
+
+        self.page.locator('#plazaBrowseBar .browse-mode-link').click()
+        self.page.wait_for_selector('#explorerView.active #explorerEduPeekBottom .edu-peek-btn')
+        self.assertIn('返回硕士板块', self.page.locator('#explorerEduPeekBottom').inner_text())
+
+        self.page.locator('#explorerEduPeekBottom .edu-peek-btn').click()
+        self.page.wait_for_selector('#explorerEduPeekBottom .edu-peek-bar:not(.is-peeking)')
+        self.assertIn('去看看本科板块', self.page.locator('#explorerEduPeekBottom').inner_text())
+        self.assertIn('公共课', self.page.locator('#breadcrumb').inner_text())

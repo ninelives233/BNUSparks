@@ -10,7 +10,8 @@ from datetime import timedelta
 from django.db.models import Count, F, Q
 from django.utils import timezone
 
-from .utils import _ok, _get_user, _get_or_create_profile
+from .utils import _ok, _get_user, _get_or_create_profile, course_display_names
+from ..services.course_visibility import education_for_user, visible_category_ids
 from ..models import (
     Course, CourseCategory, CourseFavorite, DeletionRecord, DownloadRecord, Favorite,
     Material, UserProfile, UserTimetable,
@@ -87,27 +88,57 @@ def _resolve_course_codes(codes, courses):
     return resolved
 
 
-def _category_course_roots(profile, courses, categories=None):
+def _visible_categories(categories, education):
+    rows = list(categories)
+    if education == "本科" and not any(c.education_level for c in rows):
+        return rows
+    allowed = visible_category_ids(
+        ({"id": c.id, "parent_id": c.parent_id, "name": c.name,
+          "education_level": c.education_level} for c in rows),
+        education,
+    )
+    return [c for c in rows if c.id in allowed]
+
+
+def _category_course_roots(profile, courses, categories=None, education="本科"):
     """从明确的学院+专业身份递归取课程树节点，不按学院名称猜专业。"""
     if not profile.identity_college or not profile.identity_major:
         return set()
     if categories is None:
         categories = list(CourseCategory.objects.only(
-            "id", "parent_id", "name", "is_divider", "course_id", "course_text"
+            "id", "parent_id", "name", "is_divider", "course_id", "course_text", "education_level"
         ))
+    categories = _visible_categories(categories, education)
+    category_by_id = {category.id: category for category in categories}
     by_parent = {}
     for category in categories:
         by_parent.setdefault(category.parent_id, []).append(category)
-    major = next((category for category in categories
-                  if category.name == profile.identity_major
-                  and not category.is_divider
-                  and any(parent.id == category.parent_id and parent.name == profile.identity_college
-                          for parent in categories)), None)
-    if not major:
+
+    college_nodes = []
+    for category in categories:
+        if category.is_divider or category.name != profile.identity_college:
+            continue
+        parent = category_by_id.get(category.parent_id)
+        if parent and parent.parent_id is None and parent.name == "专业课":
+            college_nodes.append(category)
+
+    majors = []
+    queue = list(college_nodes)
+    seen_nodes = set()
+    while queue:
+        node = queue.pop(0)
+        if node.id in seen_nodes or node.is_divider:
+            continue
+        seen_nodes.add(node.id)
+        if node.name == profile.identity_major and node.id not in {c.id for c in college_nodes}:
+            majors.append(node)
+            continue
+        queue.extend(by_parent.get(node.id, []))
+    if not majors:
         return set()
 
     roots = set()
-    pending = [major]
+    pending = list(majors)
     visited = set()
     while pending:
         category = pending.pop()
@@ -126,15 +157,9 @@ def _category_course_roots(profile, courses, categories=None):
     return {root for root in roots if root}
 
 
-def _college_practical_context(profile, courses, categories=None):
-    """返回本科生所在学院直属「实用资料」目录的课程根和展示名称。
-
-    这类目录由管理端以自建文件夹创建，通常使用 ``UNB`` 课程代码，
-    并直接挂在「专业课 → 学院」节点下。名称可以由管理端再次修改，
-    所以推荐展示名必须来自 CourseCategory，而不是 Course.name。
-    名称标记作为旧数据/手工建目录的兼容兜底；硕博身份不参与该召回。
-    """
-    if not profile or profile.identity_education != UserProfile.EducationLevel.UNDERGRADUATE:
+def _college_practical_context(profile, courses, categories=None, education="本科"):
+    """返回用户所在学院「实用资料」目录的课程根和展示名称（按可见培养层次隔离）。"""
+    if not profile:
         return set(), {}
     college_name = (profile.identity_college or "").strip()
     if not college_name:
@@ -143,8 +168,9 @@ def _college_practical_context(profile, courses, categories=None):
     course_by_id = {course.id: course for course in courses}
     if categories is None:
         categories = list(CourseCategory.objects.only(
-            "id", "parent_id", "name", "is_divider", "course_id", "course_text"
+            "id", "parent_id", "name", "is_divider", "course_id", "course_text", "education_level"
         ))
+    categories = _visible_categories(categories, education)
     category_by_id = {category.id: category for category in categories}
     child_map = {}
     for category in categories:
@@ -265,22 +291,24 @@ def _course_signals(user, now):
         signal_names.append("最近浏览")
 
     profile = _get_or_create_profile(user)
+    education = education_for_user(user)
     category_snapshot = None
     if profile.identity_college and (
         profile.identity_major
         or profile.identity_education == UserProfile.EducationLevel.UNDERGRADUATE
+        or education in ("硕士", "博士")
     ):
         category_snapshot = list(CourseCategory.objects.only(
-            "id", "parent_id", "name", "is_divider", "course_id", "course_text"
+            "id", "parent_id", "name", "is_divider", "course_id", "course_text", "education_level"
         ))
-    major_roots = _category_course_roots(profile, courses, category_snapshot)
+    major_roots = _category_course_roots(profile, courses, category_snapshot, education=education)
     if major_roots:
         signal_names.append("专业相关")
         for root_id in major_roots:
             add_signal(root_id, RECOMMENDATION_CONFIG["course_weights"]["major"], "与你的专业相关。")
 
     practical_roots, practical_names = _college_practical_context(
-        profile, courses, category_snapshot
+        profile, courses, category_snapshot, education=education
     )
     if practical_roots:
         signal_names.append("学院实用资料")
@@ -411,6 +439,10 @@ def api_recommendations(request):
     ).exclude(id__in=ghost_ids).exclude(_test_account_q()).select_related(
         "course", "course__merged_into", "material_type",
     ).annotate(favorite_count=Count("favorited_by", distinct=True))
+    from .plaza import _visible_course_ids
+    visible_ids = _visible_course_ids(user)
+    if visible_ids is not None:
+        base = base.filter(course_id__in=visible_ids)
 
     if source_by_course:
         related_filter = _course_filter(set(source_by_course))
@@ -493,10 +525,19 @@ def api_recommendations(request):
         if len(selected) >= limit:
             break
 
+    education = education_for_user(user)
+    tree_names = course_display_names(
+        {m.course_id for _, m, _, _, _ in selected if m.course_id}
+        | {_root_id(m.course) for _, m, _, _, _ in selected if m.course_id},
+        education=education,
+    )
     mode = "personalized" if source_by_course else "popular"
     items = [_serialize_candidate(
         material, score, relevance, reason, is_exploration, material.id in favorite_ids,
-        practical_names.get(_root_id(material.course), ""),
+        practical_names.get(_root_id(material.course))
+        or tree_names.get(_root_id(material.course))
+        or tree_names.get(material.course_id)
+        or "",
     )
              for score, material, relevance, reason, is_exploration in selected]
     return _ok({

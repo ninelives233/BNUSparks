@@ -86,7 +86,9 @@
     var query = categoryId
       ? '?category_id=' + encodeURIComponent(categoryId)
       : '?course_type=' + encodeURIComponent(type);
-    return api('/api/courses/navigation/' + query);
+    var url = '/api/courses/navigation/' + query;
+    if (typeof appendPeekEduParam === 'function') url = appendPeekEduParam(url);
+    return api(url);
   }
 
   function materialsQuery() {
@@ -97,6 +99,7 @@
     if (_state.teacher) params.set('teacher', _state.teacher);
     if (_state.format) params.set('format', _state.format);
     if (_state.favorites) params.set('favorites', '1');
+    if (typeof isPeekingUndergrad === 'function' && isPeekingUndergrad()) params.set('edu', 'undergrad');
     params.set('sort', _state.sort);
     params.set('page', _state.page);
     return params.toString();
@@ -236,9 +239,11 @@
         '<button type="button" class="plaza-upload" id="plazaUploadBtn" aria-label="上传文件">' + iconSvg('upload') + '<span>上传文件</span></button>' +
       '</div>' +
       '<div class="plaza-summary"><span id="plazaScopeLabel">当前范围加载中…</span><span id="plazaCount"></span></div>' +
+      '<div id="plazaEduPeekTop"></div>' +
       '<div class="plaza-filter-chips" id="plazaFilterChips"></div>' +
       '<div class="plaza-grid" id="plazaGrid" aria-live="polite"></div>' +
-      '<div class="file-pagination" id="plazaPager" aria-label="资料分页"></div>';
+      '<div class="file-pagination" id="plazaPager" aria-label="资料分页"></div>' +
+      '<div id="plazaEduPeekBottom"></div>';
 
     var search = document.getElementById('plazaSearchInput');
     search.addEventListener('input', function () {
@@ -438,10 +443,17 @@
   function renderChrome() {
     var scope = document.getElementById('plazaScopeLabel');
     if (scope) {
+      var scopeName = _nav
+        ? (_nav.display_name || (typeof displayCategoryLabel === 'function' ? displayCategoryLabel(_nav.name) : _nav.name))
+        : '';
       scope.textContent = _nav
-        ? '当前范围：' + _nav.name + (_nav.can_expand_tree ? '及其下属课程' : ' · 本课程')
+        ? '当前范围：' + scopeName + (_nav.can_expand_tree ? '及其下属课程' : ' · 本课程')
         : '当前范围加载中…';
     }
+    var peekTop = document.getElementById('plazaEduPeekTop');
+    if (peekTop) peekTop.innerHTML = typeof eduPeekTopBarHtml === 'function' ? eduPeekTopBarHtml('plaza') : '';
+    var peekBottom = document.getElementById('plazaEduPeekBottom');
+    if (peekBottom) peekBottom.innerHTML = typeof eduPeekBarHtml === 'function' ? eduPeekBarHtml('plaza') : '';
     var typeSelect = document.getElementById('plazaTypeSelect');
     var formatSelect = document.getElementById('plazaFormatSelect');
     var sortSelect = document.getElementById('plazaSortSelect');
@@ -578,7 +590,8 @@
         '<button type="button" class="plaza-state-btn" data-plaza-clear="all">清除筛选</button></div>';
     }
     if (_nav && _nav.course_type === 'major' && _nav.can_expand_tree &&
-        !_nav.children.length && currentUser && currentUser.identity_education === '硕士') {
+        !_nav.children.length && typeof isGraduateIdentity === 'function' && isGraduateIdentity() &&
+        !(typeof isPeekingUndergrad === 'function' && isPeekingUndergrad())) {
       return '<div class="plaza-state"><p>这里还没有课程。</p>' +
         '<button type="button" class="plaza-state-btn" data-plaza-create>创建课程</button></div>';
     }
@@ -768,6 +781,7 @@
 
     _nav.path.forEach(function (level, index) {
       var isLast = index === _nav.path.length - 1;
+      var levelLabel = level.display_name || (typeof displayCategoryLabel === 'function' ? displayCategoryLabel(level.name) : level.name);
       var separator = document.createElement('span');
       separator.className = 'bc-sep' + (!isLast && index > 0 ? ' bc-mid' : '');
       separator.textContent = ' / ';
@@ -776,14 +790,14 @@
       if (isLast) {
         var current = document.createElement('span');
         current.className = 'bc-current';
-        current.textContent = level.name;
+        current.textContent = levelLabel;
         host.appendChild(current);
       } else {
         var link = document.createElement('button');
         link.type = 'button';
         link.className = 'plaza-crumb-link bc-mid';
-        link.textContent = level.name;
-        link.setAttribute('aria-label', '返回' + level.name);
+        link.textContent = levelLabel;
+        link.setAttribute('aria-label', '返回' + levelLabel);
         link.addEventListener('click', function () { navigateCategory(level.id); });
         host.appendChild(link);
       }
@@ -796,18 +810,20 @@
         arrow.setAttribute('aria-hidden', 'true');
         var select = document.createElement('select');
         select.className = 'plaza-crumb-select';
-        select.setAttribute('aria-label', index === 0 ? '切换课程范围' : '切换' + level.name + '同级目录');
+        select.setAttribute('aria-label', index === 0 ? '切换课程范围' : '切换' + levelLabel + '同级目录');
         (level.siblings || []).forEach(function (sibling) {
           var option = document.createElement('option');
           option.value = sibling.id;
-          option.textContent = sibling.name || '未命名目录';
+          option.dataset.canonicalName = sibling.name || '';
+          option.textContent = sibling.display_name || (typeof displayCategoryLabel === 'function' ? displayCategoryLabel(sibling.name) : sibling.name) || '未命名目录';
           if (sibling.is_current) option.selected = true;
           select.appendChild(option);
         });
         select.addEventListener('change', function () {
           var id = parseInt(select.value, 10);
           if (!id || id === level.id) return;
-          if (index === 0) switchPlazaRange(select.options[select.selectedIndex].textContent);
+          var chosen = select.options[select.selectedIndex];
+          if (index === 0) switchPlazaRange((chosen && chosen.dataset.canonicalName) || chosen.textContent);
           else navigateCategory(id);
         });
         switchWrap.appendChild(arrow);
@@ -1046,7 +1062,8 @@
         _state.format = format.value || '';
         _state.sort = sort.value;
         _state.page = 1;
-        closeOverlay();
+        closeOverlay(true);
+        if (typeof pushViewState === 'function') pushViewState('plaza', historyState(), true);
         renderChrome();
         loadMaterials();
       });
@@ -1076,7 +1093,9 @@
         return;
       }
       if (!_nav) return;
-      api('/api/courses/navigation/?category_id=' + _nav.category_id + '&courses=1').then(function (nav) {
+      var navCoursesUrl = '/api/courses/navigation/?category_id=' + _nav.category_id + '&courses=1';
+      if (typeof appendPeekEduParam === 'function') navCoursesUrl = appendPeekEduParam(navCoursesUrl);
+      api(navCoursesUrl).then(function (nav) {
         var courses = nav.courses || [];
         var body = '<div class="plaza-overlay-head"><div><span class="plaza-kicker">上传文件</span><h3>选择课程</h3></div>' +
           '<button type="button" class="plaza-close" aria-label="关闭">' + iconSvg('close') + '</button></div>' +
@@ -1085,7 +1104,8 @@
               '<div class="plaza-course-list" id="plazaCourseList">' + courses.map(function (course) {
                 return '<button type="button" class="plaza-course-row" data-course-code="' + esc(course.code) + '" data-course-name="' + esc(course.name) + '" data-course-cat="' + (course.category_id || '') + '">' +
                   '<span class="plaza-course-row-name">' + esc(course.name) + '</span><span class="plaza-course-row-code">' + (/^BNUX[0-9A-F]{32}$/i.test(course.code || '') ? '代码待补充' : esc(course.code)) + '</span></button>';
-              }).join('') + '</div>'
+              }).join('') + '</div>' +
+              '<div class="plaza-course-picker-foot"><button type="button" class="plaza-state-btn" id="plazaCreateCourse">没找到课程？新建课程</button></div>'
             : '<div class="plaza-state"><p>当前范围还没有课程。</p><button type="button" class="plaza-upload" id="plazaCreateCourse">创建课程</button></div>');
         openOverlay('picker', body, { onMount: function (overlay) {
           var createCourse = overlay.querySelector('#plazaCreateCourse');

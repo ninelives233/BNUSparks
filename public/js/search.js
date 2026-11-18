@@ -85,12 +85,16 @@
 
   function signature(state) {
     var f = state.searchFilters;
+    var peek = (typeof isPeekingUndergrad === 'function' && isPeekingUndergrad()) ? '1' : '0';
     return [state.searchQuery, state.searchType, state.searchPage,
       state.searchSort, f.course_type || '', f.college || '', f.material_type || '',
-      f.format || '', f.tag_l1 || '', f.tag_l2 || ''].join('|');
+      f.format || '', f.tag_l1 || '', f.tag_l2 || '', peek].join('|');
   }
 
-  function countsSignature(q) { return String(q); }
+  function countsSignature(q) {
+    var peek = (typeof isPeekingUndergrad === 'function' && isPeekingUndergrad()) ? '1' : '0';
+    return String(q) + '|' + peek;
+  }
 
   function rememberSnapshot(key, data) {
     snapshots.set(key, { data: data, ts: Date.now(), ownerId: ownerId(), gen: accountGen() });
@@ -138,6 +142,7 @@
         if (filters.material_type) url += '&material_type=' + filters.material_type;
         if (filters.format) url += '&format=' + encodeURIComponent(filters.format);
       }
+      if (typeof appendPeekEduParam === 'function') url = appendPeekEduParam(url);
     }
     var genAtStart = accountGen();
     return api(url, { signal: ctrl.signal }).then(
@@ -223,7 +228,7 @@
     if (idMaj) {
       for (i = 0; i < paths.length; i++) {
         p = paths[i];
-        if (p.segments[0] === '专业课' && p.segments.length >= 4 && p.segments[2] === idMaj) return p;
+        if (p.segments[0] === '专业课' && ((p.segments.length >= 4 && p.segments[2] === idMaj) || (p.segments.length >= 5 && p.segments[3] === idMaj))) return p;
       }
     }
     if (idCol) {
@@ -271,7 +276,9 @@
     meta.className = 'sr-item-meta';
     var badge = document.createElement('span');
     badge.className = 'sr-badge ' + (item.course_type === 'general' ? 'sr-badge--general' : 'sr-badge--major');
-    badge.textContent = item.course_type === 'general' ? '通识课' : '专业课';
+    badge.textContent = item.course_type === 'general'
+      ? (typeof getGeneralRootLabel === 'function' ? getGeneralRootLabel() : '通识课')
+      : '专业课';
     meta.appendChild(badge);
     var codes = (item.codes && item.codes.length ? item.codes : [item.code]).filter(function(code) {
       return code && !/^BNUX[0-9A-F]{32}$/i.test(code);
@@ -325,7 +332,9 @@
         link.href = explorerHref(p.segments);
         link.setAttribute('data-sr-course', String(item.id));
         link.setAttribute('data-sr-path', JSON.stringify(p.segments));
-        link.textContent = p.segments.join(' / ');
+        link.textContent = (p.segments || []).map(function (s, idx) {
+          return idx === 0 && typeof displayCategoryLabel === 'function' ? displayCategoryLabel(s) : s;
+        }).join(' / ');
         list.appendChild(link);
       });
       toggle.addEventListener('click', function () {
@@ -656,7 +665,8 @@
     }
 
     if (type === 'course' || type === 'material') {
-      addSelect('course_type', '类别', [['', '全部'], ['major', '专业课'], ['general', '通识课']], filters.course_type);
+      var generalLabel = typeof getGeneralRootLabel === 'function' ? getGeneralRootLabel() : '通识课';
+      addSelect('course_type', '类别', [['', '全部'], ['major', '专业课'], ['general', generalLabel]], filters.course_type);
       var colleges = facets.colleges || [];
       if (!filters.course_type || filters.course_type === 'major') {
         var colOpts = [['', '全部学院']].concat(colleges.map(function (c) {
@@ -1552,5 +1562,11 @@
     render: render,
     suspend: suspend,
     reset: reset,
+    reload: function () {
+      if (!current) return;
+      snapshots.clear();
+      countsCache.clear();
+      render(current, { restore: true });
+    },
   };
 })();

@@ -25,7 +25,7 @@ from .utils import (
 )
 from ..monitoring_events import record_request_event
 from ..services.course_codes import placeholder_code, is_placeholder, normalized_course_name, PREFIX
-from ..services.course_visibility import visible_category_ids
+from ..services.course_visibility import education_for_user, visible_category_ids
 from .operations import _can_create_under
 from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
 from .utils_email import send_first_upload_thanks
@@ -73,9 +73,12 @@ def _graduate_target_college(category, college_id):
     return college if graduate and in_college else None
 
 
-def _graduate_name_course(college, name):
+def _graduate_name_course(college, name, education=None):
     rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
-    allowed = visible_category_ids(rows, "硕士") | visible_category_ids(rows, "博士")
+    if education in ("硕士", "博士"):
+        allowed = visible_category_ids(rows, education)
+    else:
+        allowed = visible_category_ids(rows, "硕士") | visible_category_ids(rows, "博士")
     candidates = Course.objects.filter(college=college, coursecategory__id__in=allowed).distinct()
     key = normalized_course_name(name)
     roots = {}
@@ -178,7 +181,15 @@ def _leaf_under_parent(leaf, parent):
     return False
 
 
-def _course_locations(code, parent=None):
+def _visible_category_set(user):
+    rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
+    education = education_for_user(user)
+    if education == "本科" and not any(row["education_level"] for row in rows):
+        return None
+    return visible_category_ids(rows, education)
+
+
+def _course_locations(code, parent=None, allowed_ids=None):
     """该 code 在课程树中的所有叶子面包屑路径 + 是否已有入口落在 parent 下。
 
     返回 (locations: [str], in_target: bool)。叶子来源：course FK 命中 + 通配前缀命中。
@@ -189,11 +200,13 @@ def _course_locations(code, parent=None):
                if _code_matches_wildcard(c.course_text, code)]
     locations, in_target = [], False
     for leaf in leaves:
+        if parent is not None and _leaf_under_parent(leaf, parent):
+            in_target = True
+        if allowed_ids is not None and leaf.id not in allowed_ids:
+            continue
         path = _category_path(leaf)
         if path and path not in locations:
             locations.append(path)
-        if parent is not None and _leaf_under_parent(leaf, parent):
-            in_target = True
     return locations, in_target
 
 
@@ -414,14 +427,18 @@ def api_course_request_check(request):
     code = _normalize_request_code(request.GET.get("course_code"))
     target_id = request.GET.get("target_category_id") or request.GET.get("general_category_id")
     if not code:
-        return _ok({"exists": False, "in_target": False, "locations": []})
+        return _ok({"exists": False, "in_target": False, "locations": [], "cross_level": False})
     parent = CourseCategory.objects.filter(id=target_id).first() if target_id else None
-    locations, in_target = _course_locations(code, parent)
-    exists = bool(_matching_course_ids(code)) or bool(locations)
+    allowed_ids = _visible_category_set(request.user)
+    locations, in_target = _course_locations(code, parent, allowed_ids=allowed_ids)
+    all_locations, _ = _course_locations(code, parent) if allowed_ids is not None else (locations, in_target)
+    exists = bool(_matching_course_ids(code)) or bool(all_locations)
+    cross_level = bool(exists and not locations and not in_target)
     return _ok({
         "exists": exists,
         "in_target": in_target,
         "locations": locations,
+        "cross_level": cross_level,
     })
 
 
@@ -531,7 +548,9 @@ def api_course_request_create(request):
         if graduate_college is None:
             return _err("请填写课程代码（可在教务管理网站查询）")
         try:
-            existing_name = _graduate_name_course(graduate_college, course_name)
+            existing_name = _graduate_name_course(
+                graduate_college, course_name, education=education_for_user(request.user),
+            )
         except ValueError as exc:
             return _err(str(exc), 409)
         course_code = existing_name.code if existing_name else placeholder_code(graduate_college.id, course_name)
@@ -551,7 +570,10 @@ def api_course_request_create(request):
     existing_locations = []
     existing_course = _find_existing_course(course_code)
     if existing_course is not None:
-        locations, in_target = _course_locations(existing_course.code, target_cat)
+        allowed_ids = _visible_category_set(request.user)
+        locations, in_target = _course_locations(
+            existing_course.code, target_cat, allowed_ids=allowed_ids,
+        )
         if in_target:
             return _err(
                 f"该课程已在本专业课程树「{locations[0] if locations else '该位置'}」中，"

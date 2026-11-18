@@ -19,7 +19,9 @@ from ..models import (
 )
 from .utils import _err, _get_or_create_profile, _get_user, _ok
 from ..services.plaza_ranking import interaction_signals, material_score
-from ..services.course_visibility import education_for_user, visible_category_ids
+from ..services.course_visibility import (
+    education_for_user, general_root_label, is_peeking_undergrad, visible_category_ids,
+)
 
 
 PAGE_SIZE = 24
@@ -102,11 +104,11 @@ def _catalog():
     return _catalog_cache["data"]
 
 
-def _visible_catalog(user):
+def _visible_catalog(user, request=None):
     base = _catalog()
-    education = education_for_user(user)
+    education = education_for_user(user, request)
     if education == "本科" and not any(row["education_level"] for row in base["cats"].values()):
-        return base
+        return {**base, "education": education}
     allowed = visible_category_ids(base["cats"].values(), education)
     cats = {cid: row for cid, row in base["cats"].items() if cid in allowed}
     children = {
@@ -123,7 +125,7 @@ def _visible_catalog(user):
     for root in children.get(None, []):
         walk(root)
     return {**base, "cats": cats, "children": children,
-            "roots": children.get(None, []), "leaf_map": leaves}
+            "roots": children.get(None, []), "leaf_map": leaves, "education": education}
 
 
 def _with_scoped_leaves(catalog, category_id):
@@ -141,11 +143,12 @@ def _with_scoped_leaves(catalog, category_id):
     return {**catalog, "leaf_map": leaves}
 
 
-def _visible_course_ids(user):
+def _visible_course_ids(user, request=None):
     base = _catalog()
-    if education_for_user(user) == "本科" and not any(row["education_level"] for row in base["cats"].values()):
+    education = education_for_user(user, request)
+    if education == "本科" and not any(row["education_level"] for row in base["cats"].values()):
         return None
-    catalog = _visible_catalog(user)
+    catalog = _visible_catalog(user, request=request)
     result = set()
     for root in catalog["roots"]:
         result.update(_scoped_course_ids(root, catalog))
@@ -196,7 +199,7 @@ def _auto_skip(cat_id, catalog):
         cat_id = child["id"]
 
 
-def _default_category_id(course_type, user, catalog):
+def _default_category_id(course_type, user, catalog, education=None, peeking_undergrad=False):
     cats = catalog["cats"]
     children = catalog["children"]
     wanted_root = "专业课" if course_type == "major" else "通识课"
@@ -206,17 +209,18 @@ def _default_category_id(course_type, user, catalog):
     )
     if root_id is None:
         return None
+    effective_edu = education or catalog.get("education") or education_for_user(user)
     if course_type != "major" or user is None:
-        if course_type != "major" and user is not None:
-            education = education_for_user(user)
-            if education in ("硕士", "博士"):
-                matches = [cid for cid in children.get(root_id, [])
-                           if cats[cid]["education_level"] in (education, "研究生")]
-                if len(matches) == 1:
-                    return matches[0]
+        if course_type != "major" and user is not None and effective_edu in ("硕士", "博士"):
+            matches = [cid for cid in children.get(root_id, [])
+                       if cats[cid]["education_level"] in (effective_edu, "研究生")]
+            if len(matches) == 1:
+                return matches[0]
         return root_id
 
     profile = _get_or_create_profile(user)
+    if peeking_undergrad:
+        return root_id
     if not profile.identity_college:
         return root_id
     college_matches = [
@@ -226,13 +230,19 @@ def _default_category_id(course_type, user, catalog):
     if len(college_matches) != 1:
         return root_id
     college_id = college_matches[0]
-    education = education_for_user(user)
-    if education in ("硕士", "博士"):
+    direct_majors = (
+        [cid for cid in children.get(college_id, []) if cats[cid]["name"] == profile.identity_major]
+        if profile.identity_major else []
+    )
+    if len(direct_majors) == 1:
+        return direct_majors[0]
+    if effective_edu in ("硕士", "博士"):
         levels = [cid for cid in children.get(college_id, [])
-                  if cats[cid]["education_level"] in (education, "研究生")]
-        if len(levels) != 1:
-            return college_id
-        college_id = levels[0]
+                  if cats[cid]["education_level"] in (effective_edu, "研究生")]
+        if len(levels) == 1 and not cats[levels[0]].get("course_id") and (
+            children.get(levels[0]) or cats[levels[0]]["name"] == effective_edu
+        ):
+            college_id = levels[0]
     if not profile.identity_major:
         return college_id
     major_matches = [
@@ -386,7 +396,7 @@ def api_plaza_materials(request):
     except (TypeError, ValueError):
         return _err("目录范围无效", 400)
 
-    catalog = _visible_catalog(_get_user(request))
+    catalog = _visible_catalog(_get_user(request), request=request)
     category = catalog["cats"].get(category_id)
     if category is None or category["is_divider"]:
         return _err("目录不存在", 404)
@@ -543,11 +553,19 @@ def api_plaza_materials(request):
     })
 
 
+def _display_node_name(cat, education):
+    if cat["parent_id"] is None and cat["name"] == "通识课":
+        return general_root_label(education)
+    return cat["name"]
+
+
 def _node_summary(cat_id, catalog, current_id=None):
     cat = catalog["cats"][cat_id]
+    education = catalog.get("education") or "本科"
     return {
         "id": cat_id,
         "name": cat["name"],
+        "display_name": _display_node_name(cat, education),
         "parent_id": cat["parent_id"],
         "has_children": bool(catalog["children"].get(cat_id)),
         "is_course": _is_course_node(cat, catalog),
@@ -558,6 +576,7 @@ def _node_summary(cat_id, catalog, current_id=None):
 def _path_levels(cat_id, catalog):
     cats = catalog["cats"]
     children = catalog["children"]
+    education = catalog.get("education") or "本科"
     chain = []
     node = cats[cat_id]
     while node is not None:
@@ -572,6 +591,7 @@ def _path_levels(cat_id, catalog):
         levels.append({
             "id": node_id,
             "name": cats[node_id]["name"],
+            "display_name": _display_node_name(cats[node_id], education),
             "course_type": "major" if _root_type(cats[node_id], cats) == "专业课" else "general",
             "siblings": [
                 _node_summary(sibling_id, catalog, current_id=node_id)
@@ -589,7 +609,8 @@ def api_course_navigation(request):
     位置。导航是公开数据，身份只影响本次默认定位，不进入公共缓存。
     """
     user = _get_user(request)
-    catalog = _visible_catalog(user)
+    catalog = _visible_catalog(user, request=request)
+    education = catalog.get("education") or education_for_user(user, request)
     category_id = request.GET.get("category_id")
     course_type = request.GET.get("course_type")
     if course_type not in (None, "", "major", "general"):
@@ -605,7 +626,8 @@ def api_course_navigation(request):
             return _err("目录不存在", 404)
     else:
         category_id = _default_category_id(
-            course_type or "general", user, catalog,
+            course_type or "general", user, catalog, education=education,
+            peeking_undergrad=is_peeking_undergrad(user, request),
         )
         if category_id is None:
             return _err("课程目录尚未建立", 404)
@@ -632,6 +654,8 @@ def api_course_navigation(request):
     data = {
         "category_id": category_id,
         "name": cat["name"],
+        "display_name": _display_node_name(cat, education),
+        "education": education,
         "course_type": "major" if _root_type(cat, catalog["cats"]) == "专业课" else "general",
         "path": _path_levels(category_id, catalog),
         "children": children,

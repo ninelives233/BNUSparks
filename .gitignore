@@ -25,6 +25,7 @@ data/
 *.sqlite3
 *.sqlite
 tmp_seed_pdfs/
+tmp_*.md
 staticfiles/
 test_data/
 *账号清单*.xlsx
@@ -61,6 +62,7 @@ implementation-plan-*.md
 docs/*
 !docs/OPERATIONS.md
 !docs/PROJECT_MAP.md
+!docs/GRADUATE_DEVELOPMENT.md
 !docs/BUG_TROUBLESHOOTING.md
 !docs/COLLABORATOR_AGENT_PROMPT.md
 !docs/TUTORIAL_DESIGN_SPEC.md

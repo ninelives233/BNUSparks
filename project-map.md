@@ -14,6 +14,7 @@
 | 认证、令牌、个人资料 | `materials/views/auth.py`、`utils_auth.py`、`profile.py` |
 | 权限、审核、举报 | `utils_moderation.py`、`moderation.py`、`reports.py` |
 | 课程树、课程申请、推荐 | `courses.py`、`utils_course_tree.py`、`course_requests.py`、`recommendations.py`；培养层次与占位代码：`services/course_visibility.py`、`services/course_codes.py` |
+| 研究生板块开发与调查接续 | [开发入口](docs/GRADUATE_DEVELOPMENT.md)：产品约定、源码、验收及本地调查索引 |
 | 资料广场（目录范围卡片/智能排序/课程导航） | `materials/views/plaza.py`、`materials/services/plaza_ranking.py`、`public/js/materials-plaza.js`、`public/css/plaza.css` |
 | 搜索（v2 独立结果页） | `materials/views/search.py`（`/api/search/?v=2`、`/api/qa/search/?v=2` 版本分发在 `courses.py`/`qa_public.py` 入口内）、`public/js/search.js`、`public/css/search.css`；入口 `views.js showSearch` |
 | 上传、下载、预览、删除 | `files_*.py`、`utils_upload.py`、`utils_security.py`、`utils_trash.py` |

@@ -5,8 +5,8 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from .helpers import BnuTestCase, create_category, create_college, create_course, create_user
-from ..models import Course, CourseCreationRequest, Material
+from .helpers import BnuTestCase, create_category, create_college, create_course, create_material, create_user
+from ..models import Course, CourseCategory, CourseCreationRequest, Material
 from ..services.course_codes import is_placeholder, placeholder_code
 
 
@@ -209,3 +209,97 @@ class GraduateCourseTest(BnuTestCase):
         by_title = {item["title"]: item for item in data["top_downloaded"]}
         self.assertEqual(by_title["硕士资料"]["course_type"], "major")
         self.assertEqual(by_title["通识资料"]["course_type"], "general")
+
+
+class FlattenedGraduateAndPeekTest(BnuTestCase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.college = create_college("文学院", "wenxue")
+        self.major_root = create_category("专业课")
+        self.col_node = create_category(self.college.name, parent=self.major_root)
+        self.ug_major = create_category("汉语言文学", parent=self.col_node)
+        self.grad_major = create_category("中国语言文学", parent=self.col_node)
+        self.grad_major.education_level = "硕士"
+        self.grad_major.save()
+
+        self.gen_root = create_category("通识课")
+        self.ug_gen = create_category("大学外语类", parent=self.gen_root)
+        self.grad_gen = create_category("思想政治理论课", parent=self.gen_root)
+        self.grad_gen.education_level = "研究生"
+        self.grad_gen.save()
+
+        self.ug_course = create_course("CHN1001", "古代汉语", college=self.college, course_type="major")
+        self.ug_leaf = create_category("古代汉语", parent=self.ug_major, course=self.ug_course)
+        self.ug_mat = create_material(self.ug_course, self.admin, review_status="approved")
+        self.ug_mat.title = "本科古汉资料"
+        self.ug_mat.save(update_fields=["title"])
+
+        self.grad_course = create_course("CHN2001", "文学研究方法", college=self.college, course_type="major")
+        self.grad_leaf = create_category("文学研究方法", parent=self.grad_major, course=self.grad_course)
+        self.grad_mat = create_material(self.grad_course, self.admin, review_status="approved")
+        self.grad_mat.title = "硕士研究方法资料"
+        self.grad_mat.save(update_fields=["title"])
+
+        self.shared_course = create_course("CHN1500", "跨选经典导读", college=self.college, course_type="major")
+        self.shared_ug_leaf = create_category("经典导读（本科名）", parent=self.ug_major, course=self.shared_course)
+        self.shared_grad_leaf = create_category("经典导读（硕士名）", parent=self.grad_major, course=self.shared_course)
+        self.shared_mat = create_material(self.shared_course, self.admin, review_status="approved")
+        self.shared_mat.title = "共享导读讲义"
+        self.shared_mat.save(update_fields=["title"])
+
+        self.grad_user = create_user("grad_flat")
+        self.grad_user.profile.identity_education = "硕士"
+        self.grad_user.profile.identity_college = self.college.name
+        self.grad_user.profile.identity_major = self.grad_major.name
+        self.grad_user.profile.save()
+        self.client.set_token(self.grad_user)
+
+    def test_flattened_tree_hides_undergrad_and_labels_public_courses(self):
+        tree = self.client.get("/api/courses/tree/").json()["data"]
+        college_children = tree["专业课"]["children"][0]["children"]
+        self.assertEqual([item["name"] for item in college_children], ["中国语言文学"])
+        self.assertEqual([item["name"] for item in tree["通识课"]["children"]], ["思想政治理论课"])
+
+        major_nav = self.client.get("/api/courses/navigation/", {"course_type": "major"}).json()["data"]
+        self.assertEqual(major_nav["category_id"], self.grad_major.id)
+
+        gen_nav = self.client.get("/api/courses/navigation/", {"course_type": "general"}).json()["data"]
+        self.assertEqual(gen_nav["category_id"], self.grad_gen.id)
+        self.assertEqual(gen_nav["path"][0]["display_name"], "公共课")
+
+    def test_graduate_can_peek_undergrad_without_changing_identity(self):
+        peek_tree = self.client.get("/api/courses/tree/", {"edu": "undergrad"}).json()["data"]
+        college_children = peek_tree["专业课"]["children"][0]["children"]
+        self.assertEqual([item["name"] for item in college_children], ["汉语言文学"])
+        self.assertEqual([item["name"] for item in peek_tree["通识课"]["children"]], ["大学外语类"])
+
+        peek_nav = self.client.get("/api/courses/navigation/", {"course_type": "general", "edu": "undergrad"}).json()["data"]
+        self.assertEqual(peek_nav["path"][0]["display_name"], "通识课")
+
+        peek_major_nav = self.client.get("/api/courses/navigation/", {"course_type": "major", "edu": "undergrad"}).json()["data"]
+        self.assertEqual(peek_major_nav["category_id"], self.ug_major.id)
+
+        peek_search = self.client.get("/api/search/", {"v": "2", "type": "course", "q": "古代汉语", "edu": "undergrad"}).json()["data"]
+        self.assertEqual(peek_search["total"], 1)
+        self.grad_user.profile.refresh_from_db()
+        self.assertEqual(self.grad_user.profile.identity_education, "硕士")
+
+    def test_recommendations_isolate_undergrad_and_recall_flattened_graduate_major(self):
+        data = self.client.get("/api/recommendations/", {"limit": 10}).json()["data"]
+        titles = {item["title"]: item for item in data["items"]}
+        self.assertNotIn("本科古汉资料", titles)
+        self.assertIn("硕士研究方法资料", titles)
+        self.assertEqual(titles["硕士研究方法资料"]["reason"], "与你的专业相关。")
+        self.assertIn("共享导读讲义", titles)
+        self.assertEqual(titles["共享导读讲义"]["course_name"], "经典导读（硕士名）")
+
+    def test_cross_level_course_check_hides_undergrad_paths_but_marks_cross_level(self):
+        res = self.client.get("/api/courses/request/check/", {
+            "course_code": "CHN1001",
+            "target_category_id": self.grad_major.id,
+        }).json()["data"]
+        self.assertTrue(res["exists"])
+        self.assertFalse(res["in_target"])
+        self.assertEqual(res["locations"], [])
+        self.assertTrue(res["cross_level"])

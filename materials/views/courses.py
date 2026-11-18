@@ -58,9 +58,15 @@ def _tree_response_from_cache(request, payload):
 
 
 def _visible_tree_response(request, payload):
+    user = _get_user(request)
+    education = education_for_user(user, request)
+    cache_key = f"{COURSE_TREE_CACHE_KEY}_{education}_{payload['etag'].strip('\"')}"
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict) and cached.get("v") == 2:
+        return _tree_response_from_cache(request, cached)
     rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
-    education = education_for_user(_get_user(request))
     if education == "本科" and not any(row["education_level"] for row in rows):
+        cache.set(cache_key, payload, 600)
         return _tree_response_from_cache(request, payload)
     allowed = visible_category_ids(rows, education)
     tree = json.loads(payload["body"].decode("utf-8"))["data"]
@@ -81,7 +87,9 @@ def _visible_tree_response(request, payload):
 
     for root in tree.values():
         root["children"] = prune(root.get("children", []))
-    return _tree_response_from_cache(request, _tree_cache_payload(tree))
+    scoped_payload = _tree_cache_payload(tree)
+    cache.set(cache_key, scoped_payload, 600)
+    return _tree_response_from_cache(request, scoped_payload)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -97,7 +105,9 @@ def api_courses(request):
     # 文件夹被删除后残留的孤儿 Course 不再出现在列表里。
     qs = qs.filter(coursecategory__isnull=False)
     from .plaza import _visible_course_ids
-    visible_ids = _visible_course_ids(_get_user(request))
+    user = _get_user(request)
+    education = education_for_user(user, request)
+    visible_ids = _visible_course_ids(user, request=request)
     if visible_ids is not None:
         qs = qs.filter(id__in=visible_ids)
     t = request.GET.get("type")
@@ -115,7 +125,7 @@ def api_courses(request):
     qs = qs.order_by("code")[:100]
     course_list = list(qs)
     # 课程名与导航树一致：重命名目录只改 CourseCategory.name，不同步 Course.name
-    tree_names = course_display_names({c.id for c in course_list})
+    tree_names = course_display_names({c.id for c in course_list}, education=education)
     return _ok([{
         "code": c.code,
         "name": tree_names.get(c.id) or c.name,
@@ -384,7 +394,9 @@ def api_search(request):
 
     results = {"courses": [], "materials": []}
     from .plaza import _visible_course_ids
-    visible_ids = _visible_course_ids(_get_user(request))
+    user = _get_user(request)
+    education = education_for_user(user, request)
+    visible_ids = _visible_course_ids(user, request=request)
 
     if search_type in ("all", "course"):
         # 同名合并：别名课程代码也命中主课程（merged_courses 反向联表），
@@ -426,7 +438,7 @@ def api_search(request):
                 if len(results["courses"]) >= 20:
                     break
         # 课程名与导航树一致（重命名目录只改 CourseCategory.name）
-        course_tree_names = course_display_names({c.id for c in kept_courses})
+        course_tree_names = course_display_names({c.id for c in kept_courses}, education=education)
         for row, c in zip(results["courses"], kept_courses):
             row["name"] = course_tree_names.get(c.id) or row["name"]
 
@@ -439,7 +451,7 @@ def api_search(request):
         material_list = list(materials_qs)
         material_tree_names = course_display_names({
             m.course_id for m in material_list if m.course_id
-        })
+        }, education=education)
         results["materials"] = [{
             "id": m.id,
             "title": m.title,
