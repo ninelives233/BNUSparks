@@ -33,7 +33,7 @@ class UserTimetableSyncTest(BnuTestCase):
         assert resp.json()["data"]["data"] is None
 
     def test_put_then_get_roundtrip(self):
-        resp = self.client.put_json("/api/user/timetable/", {"data": DATA})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         assert resp.json()["ok"] is True
         assert UserTimetable.objects.filter(user=self.user).count() == 1
 
@@ -43,9 +43,9 @@ class UserTimetableSyncTest(BnuTestCase):
         assert body["data"]["updated_at"] is not None
 
     def test_put_overwrites(self):
-        self.client.put_json("/api/user/timetable/", {"data": DATA})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         changed = dict(DATA, courses=[])
-        self.client.put_json("/api/user/timetable/", {"data": changed})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": changed})
         assert UserTimetable.objects.get(user=self.user).data["courses"] == []
 
     def test_slots_envelope_roundtrip(self):
@@ -62,7 +62,7 @@ class UserTimetableSyncTest(BnuTestCase):
             }],
             activeId="ttsabc",
         )
-        resp = self.client.put_json("/api/user/timetable/", {"data": envelope})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": envelope})
         assert resp.json()["ok"] is True
         got = UserTimetable.objects.get(user=self.user).data
         assert got["activeId"] == "ttsabc"
@@ -73,14 +73,14 @@ class UserTimetableSyncTest(BnuTestCase):
 
     def test_import_event_is_recorded_idempotently(self):
         event = {"type": "import", "id": "tti-test-1"}
-        self.client.put_json("/api/user/timetable/", {"data": DATA, "event": event})
-        self.client.put_json("/api/user/timetable/", {"data": DATA, "event": event})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA, "event": event})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA, "event": event})
         record = TimetableImportRecord.objects.get(user=self.user, event_id="tti-test-1")
         assert record.course_count == 1
         assert TimetableImportRecord.objects.filter(user=self.user).count() == 1
 
     def test_get_since_returns_unchanged_without_payload(self):
-        self.client.put_json("/api/user/timetable/", {"data": DATA})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         first = self.client.get_json("/api/user/timetable/").json()
         since = first["data"]["updated_at"]
 
@@ -90,18 +90,18 @@ class UserTimetableSyncTest(BnuTestCase):
         assert second["data"]["data"] is None
 
     def test_older_upload_cannot_overwrite_newer_timetable(self):
-        self.client.put_json("/api/user/timetable/", {"data": DATA})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         older = dict(DATA, courses=[], importedAt=DATA["importedAt"] - 1)
-        response = self.client.put_json("/api/user/timetable/", {"data": older}).json()
+        response = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": older}).json()
 
         assert response["ok"] is True
         assert response["data"]["accepted"] is False
         assert UserTimetable.objects.get(user=self.user).data["courses"] == DATA["courses"]
 
     def test_rejects_bad_payload(self):
-        resp = self.client.put_json("/api/user/timetable/", {"data": {"nope": 1}})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": {"nope": 1}})
         assert resp.json()["ok"] is False
-        resp = self.client.put_json("/api/user/timetable/", {})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id})
         assert resp.json()["ok"] is False
         assert not UserTimetable.objects.filter(user=self.user).exists()
 
@@ -109,9 +109,22 @@ class UserTimetableSyncTest(BnuTestCase):
         other = create_user("209911900002")
         other_client = AuthClient()
         other_client.set_token(other)
-        self.client.put_json("/api/user/timetable/", {"data": DATA})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         resp = other_client.get_json("/api/user/timetable/")
         assert resp.json()["data"]["data"] is None
+
+    def test_wrong_or_missing_owner_cannot_write_or_record_import(self):
+        other = create_user("209911900003")
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
+        before = UserTimetable.objects.get(user=self.user).data
+        for owner in (None, other.id):
+            response = self.client.put_json("/api/user/timetable/", {
+                "owner_id": owner, "data": dict(DATA, courses=[]),
+                "event": {"type": "import", "id": "wrong-owner"},
+            })
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(UserTimetable.objects.get(user=self.user).data, before)
+            self.assertFalse(TimetableImportRecord.objects.filter(event_id="wrong-owner").exists())
 
     def test_requires_login(self):
         anon = AuthClient()
@@ -119,7 +132,7 @@ class UserTimetableSyncTest(BnuTestCase):
         assert resp.status_code in (401, 403)
 
     def test_delete(self):
-        self.client.put_json("/api/user/timetable/", {"data": DATA})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         resp = self.client.delete_json("/api/user/timetable/")
         assert resp.json()["ok"] is True
         assert not UserTimetable.objects.filter(user=self.user).exists()
@@ -132,7 +145,7 @@ class UserTimetableSyncTest(BnuTestCase):
 
         strict = Client(enforce_csrf_checks=True)
         resp = strict.put(
-            "/api/user/timetable/", data=json.dumps({"data": DATA}),
+            "/api/user/timetable/", data=json.dumps({"owner_id": self.user.id, "data": DATA}),
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {_make_jwt(self.user.id)}",
         )

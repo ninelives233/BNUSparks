@@ -5,7 +5,7 @@ BNU Sparks · 木铎星火 — 我的课表同步 API
 按用户的云端存储以支持跨设备同步；数据互相隔离，仅本人可读写。
 
 GET    /api/user/timetable/   读取（未导入时 data=null）
-PUT    /api/user/timetable/   保存/覆盖（body: {"data": {...}, "event": {"type": "import", "id": "..."}}）
+PUT    /api/user/timetable/   保存/覆盖（body: {"owner_id": 当前用户 ID, "data": {...}, "event": {"type": "import", "id": "..."}}）
 DELETE /api/user/timetable/   清除云端课表
 """
 
@@ -116,6 +116,9 @@ def api_user_timetable(request):
             body = json.loads(request.body or b"{}")
         except Exception:
             return _err("请求格式错误")
+        # 旧页面或切换账号时的在途数据不得写到另一个令牌所属的账号。
+        if str(body.get("owner_id") or "") != str(request.user.id):
+            return _err("登录账号已变化，请刷新页面后重试", 409)
         data = body.get("data")
         if not isinstance(data, dict) or not isinstance(data.get("courses"), list):
             return _err("课表数据格式不正确")

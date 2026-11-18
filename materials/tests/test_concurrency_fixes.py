@@ -102,20 +102,20 @@ class TimetableRevisionTest(BnuTestCase):
         self.client.set_token(self.user)
 
     def test_revision_advances_on_accepted_writes(self):
-        resp = self.client.put_json("/api/user/timetable/", {"data": DATA})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         assert resp.json()["data"]["accepted"] is True
         assert UserTimetable.objects.get(user=self.user).revision == 0
         older = dict(DATA, importedAt=DATA["importedAt"] + 1)
-        resp = self.client.put_json("/api/user/timetable/", {"data": older})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": older})
         assert resp.json()["data"]["accepted"] is True
         assert UserTimetable.objects.get(user=self.user).revision == 1
 
     def test_stale_version_rejected_keeps_revision(self):
-        self.client.put_json("/api/user/timetable/", {"data": DATA})
+        self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         newer = UserTimetable.objects.get(user=self.user)
         newer_data = newer.data
         stale = dict(DATA, importedAt=DATA["importedAt"] - 1000)
-        resp = self.client.put_json("/api/user/timetable/", {"data": stale})
+        resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": stale})
         body = resp.json()
         assert body["data"]["accepted"] is False
         assert body["data"]["data"] == newer_data, "拒绝时应回传云端现版本"
@@ -128,7 +128,7 @@ class TimetableRevisionTest(BnuTestCase):
         payload = {"updated_at": "2026-09-20T00:00:00.000001", "accepted": True, "import_recorded": False}
         with mock.patch.object(vt, "_timetable_put_once", side_effect=[OperationalError("locked"), payload]), \
              mock.patch.object(vt.time, "sleep"):
-            resp = self.client.put_json("/api/user/timetable/", {"data": DATA})
+            resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         assert resp.json()["data"]["accepted"] is True
 
     def test_persistent_operational_error_returns_503(self):
@@ -136,7 +136,7 @@ class TimetableRevisionTest(BnuTestCase):
         from ..views import user_timetable as vt
         with mock.patch.object(vt, "_timetable_put_once", side_effect=OperationalError("locked")), \
              mock.patch.object(vt.time, "sleep"):
-            resp = self.client.put_json("/api/user/timetable/", {"data": DATA})
+            resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA})
         assert resp.status_code == 503
 
     def test_import_event_recorded_once_despite_retry(self):
@@ -147,7 +147,7 @@ class TimetableRevisionTest(BnuTestCase):
         with mock.patch.object(vt, "_timetable_put_once", side_effect=[OperationalError("locked"), payload]), \
              mock.patch.object(vt.time, "sleep"):
             event = {"type": "import", "id": "tti-retry-1"}
-            resp = self.client.put_json("/api/user/timetable/", {"data": DATA, "event": event})
+            resp = self.client.put_json("/api/user/timetable/", {"owner_id": self.user.id, "data": DATA, "event": event})
         assert resp.json()["data"]["import_recorded"] is True
         assert TimetableImportRecord.objects.filter(user=self.user, event_id="tti-retry-1").count() == 1
 

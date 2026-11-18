@@ -724,7 +724,13 @@ function ttLoadStore() {
     return data;
   } catch (e) { return null; }
 }
+function ttOwnsState() {
+  return !!(currentUser && currentUser.id && !ttState.viewerMode &&
+    String(currentUser.id) === String(ttState.uid));
+}
 function ttSaveStore(data) {
+  // 过期异步回调不能把旧账号对象写入当前账号的缓存。
+  if (!ttOwnsState() || data !== ttState.data) return;
   try { localStorage.setItem(ttStoreKey(), JSON.stringify(data)); } catch (e) {}
 }
 
@@ -1009,7 +1015,7 @@ function ttAdoptCloudTimetable(cloud) {
 }
 
 function ttSyncUpload(event) {
-  if (!ttState.data || typeof api !== 'function') return Promise.resolve(false);
+  if (!ttOwnsState() || !ttState.data || typeof api !== 'function') return Promise.resolve(false);
   if (event && event.type === 'import' && event.id) ttSyncPendingEvent = event;
   ttSyncMutationVersion++;
   ttSyncUploadQueued = true;
@@ -1020,7 +1026,7 @@ function ttSyncUpload(event) {
   var uidAtCall = ttState.uid;
   var generation = ttSyncGeneration;
   var flush = function () {
-    if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return Promise.resolve(false);
+    if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall || !ttOwnsState()) return Promise.resolve(false);
     if (!ttSyncUploadQueued || !ttState.data) return Promise.resolve(true);
     ttSyncUploadQueued = false;
     // 请求期间本地对象可能继续变化，发送快照避免旧请求携带新对象的半成品。
@@ -1029,9 +1035,9 @@ function ttSyncUpload(event) {
     var snapshotAt = Number(snapshot.importedAt) || 0;
     var sentEvent = ttSyncPendingEvent;
     ttSyncPendingEvent = null;
-    return api('/api/user/timetable/', { method: 'PUT', body: { data: snapshot, event: sentEvent } })
+    return api('/api/user/timetable/', { method: 'PUT', body: { owner_id: uidAtCall, data: snapshot, event: sentEvent } })
       .then(function (res) {
-        if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return false;
+        if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall || !ttOwnsState()) return false;
         if (res && res.updated_at) ttState.cloudUpdatedAt = res.updated_at;
         if (res && res.accepted === false && res.data && Array.isArray(res.data.courses)) {
           // 服务端已有更新版本：只有当前没有更新中的本地编辑时才采用它。
@@ -1052,7 +1058,7 @@ function ttSyncUpload(event) {
         return true;
       })
       .catch(function () {
-        if (generation === ttSyncGeneration && ttState.uid === uidAtCall) {
+        if (generation === ttSyncGeneration && ttState.uid === uidAtCall && ttOwnsState()) {
           if (sentEvent) ttSyncPendingEvent = sentEvent;
           ttState.cloudSynced = false;
           ttToast('课表云端同步失败，本次改动仅保存在本机');
@@ -1073,7 +1079,7 @@ function ttSyncUpload(event) {
 }
 
 function ttSyncPull() {
-  if (typeof api !== 'function') return Promise.resolve(false);
+  if (!ttOwnsState() || typeof api !== 'function') return Promise.resolve(false);
   if (ttSyncPullPromise) return ttSyncPullPromise;
   var uidAtCall = ttState.uid;
   var generation = ttSyncGeneration;
@@ -1081,7 +1087,7 @@ function ttSyncPull() {
   if (ttState.cloudUpdatedAt) url += '?since=' + encodeURIComponent(ttState.cloudUpdatedAt);
   var request = api(url).then(function (res) {
     // 请求期间切换了账号：丢弃结果
-    if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall) return false;
+    if (generation !== ttSyncGeneration || ttState.uid !== uidAtCall || !ttOwnsState()) return false;
     if (res && res.updated_at) ttState.cloudUpdatedAt = res.updated_at;
     // since 命中时 data=null 代表“未变化”，不能误判为空表再上传本地数据。
     if (res && res.unchanged) return true;
@@ -1118,7 +1124,7 @@ function ttSyncPull() {
 
 function ttSyncIsActive() {
   var view = document.getElementById('timetableView');
-  return !!(currentUser && !ttState.viewerMode && view && view.classList.contains('active'));
+  return !!(ttOwnsState() && view && view.classList.contains('active'));
 }
 
 // F05：稳定态 30 秒、编辑后短期 10 秒；连续失败按 2^n 退避（封顶 ×8），
@@ -1163,6 +1169,28 @@ function ttStartSyncWatchers() {
     }
   });
 }
+
+// 认证变化立即清空课表与在途同步，不能等下次进入页面或轮询。
+window.addEventListener('bnuauthchange', function () {
+  ttResetSyncState();
+  ttResetCourseCounts();
+  ttState.data = null;
+  ttState.uid = null;
+  ttState.mode = null;
+  ttState.viewerMode = false;
+  ttState.viewerUid = null;
+  ttState._renderRoot = null;
+  ttState._inlineBody = null;
+  var overlay = document.getElementById('ttOverlay');
+  if (overlay) ttCloseModal(overlay);
+  var body = document.getElementById('ttBody');
+  if (body) body.textContent = '';
+  var view = document.getElementById('timetableView');
+  var shell = document.getElementById('ttShell');
+  if (currentUser && view && view.classList.contains('active') && shell && shell.dataset.ready) {
+    ttInitShell(null);
+  }
+});
 
 // ── 视图入口（供导航/恢复调用；所有已登录用户可用） ──
 function showTimetable(skipHistory, viewerUserId) {
@@ -1989,9 +2017,11 @@ function ttOnFilePicked(ev) {
   var input = ev.target;
   var file = input.files && input.files[0];
   input.value = '';
-  if (!file) return;
+  if (!file || !ttOwnsState()) return;
+  var generation = ttSyncGeneration;
   var reader = new FileReader();
   reader.onload = function () {
+    if (generation !== ttSyncGeneration || !ttOwnsState()) return;
     // 真二进制 Excel（珠海校区 .xls）走 SheetJS；其余仍是 GBK HTML 伪装 .xls
     var pending = ttIsBinaryExcel(reader.result)
       ? ttParseBinaryExcel(reader.result).catch(function (err) {
@@ -2000,7 +2030,7 @@ function ttOnFilePicked(ev) {
         })
       : Promise.resolve(ttParseImport(ttDecodeBuffer(reader.result)));
     pending.then(function (parsed) {
-      if (!parsed) return;
+      if (generation !== ttSyncGeneration || !ttOwnsState() || !parsed) return;
       if (parsed.rejected === 'grid') {
         // 拒收「按周方式显示」网格文件：说明原因并重新弹出导入教程
         ttShowTutorial('grid');
@@ -2013,7 +2043,7 @@ function ttOnFilePicked(ev) {
       ttShowConfirmModal(parsed);
     });
   };
-  reader.onerror = function () { ttShowImportError('文件读取失败，请重试。'); };
+  reader.onerror = function () { if (generation === ttSyncGeneration && ttOwnsState()) ttShowImportError('文件读取失败，请重试。'); };
   reader.readAsArrayBuffer(file);
 }
 
@@ -2304,6 +2334,8 @@ function ttIsUnlinkedSchedule() {
 
 // ── 确认弹窗（汇总 + 课程清单 + 未建课位置选择） ──
 function ttShowConfirmModal(parsed) {
+  if (!ttOwnsState()) return;
+  var generation = ttSyncGeneration;
   // 非本科身份或无目录体系格式（noLink）：无链接/建课可确认，
   // 跳过弹窗直接纯导入，并告知原因
   if (!ttIsUndergrad() || parsed.noLink) {
@@ -2319,7 +2351,9 @@ function ttShowConfirmModal(parsed) {
   // 先清 api() 内存缓存（树 TTL 10 分钟），保证已建课判定是新鲜的
   if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
   var ready = (typeof loadCourseTree === 'function') ? Promise.resolve(loadCourseTree()).catch(function () {}) : Promise.resolve();
-  ready.then(function () { ttRenderConfirmModal(parsed); });
+  ready.then(function () {
+    if (generation === ttSyncGeneration && ttOwnsState()) ttRenderConfirmModal(parsed);
+  });
 }
 
 function ttRenderConfirmModal(parsed) {
@@ -2676,6 +2710,8 @@ function ttPickLevel(node, pathNames) {
 // 后端辖区逻辑（v=153）：管理员 + 目标位置在辖区内 → auto_approved 直接建课；
 // 否则走审核。直接建课的不标 pending，重新拉树后立即可点击跳转。
 function ttApplyImport(parsed, requests) {
+  if (!ttOwnsState()) return;
+  var generation = ttSyncGeneration;
   // 「我的课程」≠ 导入课表：手动添加课程（src='manual'）的去留在导入弹窗里由用户
   // 勾选决定（parsed.keepManual，默认保留）。保留时与导入同代码/同名者仍以导入为准。
   var prev = ttState.data;
@@ -2729,8 +2765,8 @@ function ttApplyImport(parsed, requests) {
     parsed.activeId = newSlot.id;
   }
   var importEvent = { type: 'import', id: ttNewImportEventId() };
-  ttSaveStore(parsed);
   ttState.data = parsed;
+  ttSaveStore(parsed);
   ttResetCourseCounts();
   ttComputeWeek();
   ttCloseModal();
@@ -2745,6 +2781,7 @@ function ttApplyImport(parsed, requests) {
   var jobs = requests.map(function (r) {
     return api('/api/courses/request/', { method: 'POST', body: r.body })
       .then(function (res) {
+        if (generation !== ttSyncGeneration || !ttOwnsState() || ttState.data !== parsed) return;
         if (res && res.merged) {
           mergedN++;
           treeDirty = true;
@@ -2765,6 +2802,7 @@ function ttApplyImport(parsed, requests) {
         ttSaveRequestState(parsed, r.code, pendingState);
       })
       .catch(function (err) {
+        if (generation !== ttSyncGeneration || !ttOwnsState() || ttState.data !== parsed) return;
         // 「已在目标位置」= 缓存过期导致的重复申请，课程其实已建好
         if (err && err.message && err.message.indexOf('已在') >= 0) {
           direct++;
@@ -2778,6 +2816,7 @@ function ttApplyImport(parsed, requests) {
       });
   });
   Promise.all(jobs).then(function () {
+    if (generation !== ttSyncGeneration || !ttOwnsState() || ttState.data !== parsed) return;
     ttSaveStore(parsed);
     ttSyncUpload();
     ttRefreshRequestStatuses(true);
@@ -3446,6 +3485,8 @@ function ttStripCurrentWeek(wc) {
 }
 
 function ttEditSave(wc, isNew, skipStatusRefresh) {
+  if (!ttOwnsState()) return;
+  var generation = ttSyncGeneration;
   ttEditSyncFromDom(wc);
   if (!wc.name) {
     ttToast('请先填写课程名称');
@@ -3457,6 +3498,7 @@ function ttEditSave(wc, isNew, skipStatusRefresh) {
   if (!skipStatusRefresh && ttLinksEnabled() && ttRequestState(wc.code) &&
       ttRequestState(wc.code).status === 'rejected') {
     ttRefreshRequestStatuses(true).then(function (ok) {
+      if (generation !== ttSyncGeneration || !ttOwnsState()) return;
       if (ok) ttEditSave(wc, isNew, true);
       else ttToast('课程状态暂时无法确认，请稍后重试');
     });
@@ -3499,7 +3541,9 @@ function ttEditSave(wc, isNew, skipStatusRefresh) {
     return;
   }
   var submitRequest = function () {
+    if (generation !== ttSyncGeneration || !ttOwnsState() || ttState.data !== data) return Promise.resolve();
     return api('/api/courses/request/', { method: 'POST', body: body }).then(function (res) {
+      if (generation !== ttSyncGeneration || !ttOwnsState() || ttState.data !== data) return;
       var requestKey = ttRequestCode(code);
       if (res && (res.auto_approved || res.merged)) {
         delete ttState.requestStatuses[requestKey];
@@ -3522,6 +3566,7 @@ function ttEditSave(wc, isNew, skipStatusRefresh) {
         ttToast('已保存「' + wc.name + '」，建课申请已送审');
       }
     }).catch(function (err) {
+      if (generation !== ttSyncGeneration || !ttOwnsState() || ttState.data !== data) return;
       var message = err && err.message || '';
       if (err && (err.status === 409 || message.indexOf('已有申请') >= 0)) {
         ttRefreshRequestStatuses(true);
@@ -4237,8 +4282,8 @@ function __ttLoadHtmlText(text) {
   if (!parsed.start) parsed.start = ttGuessSemesterStart(parsed.meta && parsed.meta.semester);
   if (!parsed.pendingCodes) parsed.pendingCodes = {};
   parsed.importedAt = Date.now();
-  ttSaveStore(parsed);
   ttState.data = parsed;
+  ttSaveStore(parsed);
   ttResetCourseCounts();
   ttComputeWeek();
   ttRenderAll();

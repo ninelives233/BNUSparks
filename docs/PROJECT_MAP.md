@@ -166,7 +166,7 @@ setupSearch → showSearch(views.js) → /search → BnuSearch(search.js)
 timetable.js → /api/user/timetable/ → user_timetable.py → UserTimetable.revision
 ```
 
-写入必须携带并校验 revision；SQLite 上不能假定行锁能解决并发覆盖。
+课表写入请求须携带当前课表所属 `owner_id`，服务端核对其与令牌用户一致；旧页面需要刷新后才能继续同步；服务端通过 revision 条件更新仲裁并发写入；SQLite 上不能假定行锁能解决并发覆盖。
 
 教室查询通过 `/api/classrooms/context/`、`catalog/`、`query/` 使用站内认证。
 后端固定访问北京教务公开源，校验报表的校区、教学周和节次；目录与查询结果由
