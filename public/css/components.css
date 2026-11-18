@@ -509,37 +509,67 @@ html[data-bnu-theme="dark"] .filter-pill { background: var(--surface); }
 
 /* 跨培养层次临时浏览提示条（资料广场 / 课程目录底部及临时态顶部） */
 .edu-peek-bar {
-  margin: 18px 0 6px;
-  padding: 11px 16px;
+  margin: 22px 0 8px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 12px 16px;
   flex-wrap: wrap;
-  border: 1px dashed var(--border-light);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--pill-bg);
   color: var(--ink-soft);
   font-size: var(--fs-sm);
 }
 .edu-peek-bar--top {
-  margin: 0 0 14px;
-  border-style: solid;
-  border-color: var(--primary-light);
-  background: var(--primary-surface);
+  margin: 2px 0 14px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
 }
 .edu-peek-bar.is-peeking {
-  border-color: var(--primary-light);
+  border-color: oklch(from var(--primary) l c h / 0.22);
+  background: oklch(from var(--primary) l c h / 0.055);
+}
+.edu-peek-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.edu-peek-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+  background: var(--raised);
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.edu-peek-badge.is-active {
+  border-color: oklch(from var(--primary) l c h / 0.28);
+  background: var(--primary-surface);
+  color: var(--primary);
 }
 .edu-peek-text {
   line-height: 1.5;
+  font-size: 0.83rem;
+  color: var(--ink-soft);
 }
 .edu-peek-btn {
   flex: 0 0 auto;
-  min-height: 34px;
-  padding: 6px 12px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
   background: var(--raised);
   color: var(--primary);
   font: inherit;
@@ -547,23 +577,33 @@ html[data-bnu-theme="dark"] .filter-pill { background: var(--surface); }
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: border-color var(--t-fast), background-color var(--t-fast);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.04);
+  transition: border-color var(--t-fast), background-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
 }
 .edu-peek-btn:hover {
   border-color: var(--primary);
   background: var(--primary-surface);
 }
+.edu-peek-bar.is-peeking .edu-peek-btn {
+  border-color: oklch(from var(--primary) l c h / 0.32);
+}
 .edu-peek-btn:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+html[data-bnu-theme="dark"] .edu-peek-bar {
+  background: var(--surface);
+}
+html[data-bnu-theme="dark"] .edu-peek-bar.is-peeking {
+  background: oklch(from var(--primary) l c h / 0.12);
+}
 @media (max-width: 640px) {
   .edu-peek-bar {
     padding: 10px 12px;
-    gap: 8px;
+    gap: 10px;
   }
   .edu-peek-btn {
-    min-height: 40px;
+    min-height: 36px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

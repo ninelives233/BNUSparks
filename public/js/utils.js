@@ -1213,19 +1213,27 @@
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'edu=undergrad';
   }
 
+  var _PEEK_ARROW_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+
   function eduPeekBarHtml(mode) {
     if (!isGraduateIdentity()) return '';
     var level = currentUser.identity_education;
     var safeEsc = typeof esc === 'function' ? esc : escapeHtml;
     if (isPeekingUndergrad()) {
       return '<div class="edu-peek-bar is-peeking" role="region" aria-label="临时浏览本科板块">' +
-        '<span class="edu-peek-text">当前正在临时浏览本科板块（未更改你的' + safeEsc(level) + '身份）</span>' +
-        '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(false,\'' + safeEsc(mode || '') + '\')">返回' + safeEsc(level) + '板块 →</button>' +
+        '<div class="edu-peek-info">' +
+          '<span class="edu-peek-badge is-active">本科视角</span>' +
+          '<span class="edu-peek-text">正在临时浏览本科板块，未更改你的' + safeEsc(level) + '身份</span>' +
+        '</div>' +
+        '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(false,\'' + safeEsc(mode || '') + '\')"><span>返回' + safeEsc(level) + '板块</span>' + _PEEK_ARROW_SVG + '</button>' +
       '</div>';
     }
     return '<div class="edu-peek-bar" role="region" aria-label="跨培养层次浏览提示">' +
-      '<span class="edu-peek-text">' + safeEsc(level) + '板块资料仍在持续建设中 · 想看看本科板块或查找基础课资料？</span>' +
-      '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(true,\'' + safeEsc(mode || '') + '\')">去看看本科板块 →</button>' +
+      '<div class="edu-peek-info">' +
+        '<span class="edu-peek-badge">提示</span>' +
+        '<span class="edu-peek-text">' + safeEsc(level) + '板块仍在持续建设中，可先浏览本科目录寻找公共课或基础课资料</span>' +
+      '</div>' +
+      '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(true,\'' + safeEsc(mode || '') + '\')"><span>去看看本科板块</span>' + _PEEK_ARROW_SVG + '</button>' +
     '</div>';
   }
 
@@ -1234,8 +1242,11 @@
     var level = currentUser.identity_education;
     var safeEsc = typeof esc === 'function' ? esc : escapeHtml;
     return '<div class="edu-peek-bar edu-peek-bar--top is-peeking" role="status">' +
-      '<span class="edu-peek-text">正在临时浏览本科板块（未更改你的' + safeEsc(level) + '身份）</span>' +
-      '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(false,\'' + safeEsc(mode || '') + '\')">返回' + safeEsc(level) + '板块 →</button>' +
+      '<div class="edu-peek-info">' +
+        '<span class="edu-peek-badge is-active">本科视角</span>' +
+        '<span class="edu-peek-text">正在临时浏览本科板块，未更改你的' + safeEsc(level) + '身份</span>' +
+      '</div>' +
+      '<button type="button" class="edu-peek-btn" onclick="togglePeekUndergrad(false,\'' + safeEsc(mode || '') + '\')"><span>返回' + safeEsc(level) + '板块</span>' + _PEEK_ARROW_SVG + '</button>' +
     '</div>';
   }
 
