@@ -17,7 +17,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
-from ..services.course_visibility import browse_mode_for_profile
+from ..services.course_visibility import browse_mode_for_profile, education_for_user
 
 from .utils import (
     _err, _ok, _get_user, _get_or_create_profile, _identity_can_edit,
@@ -104,6 +104,7 @@ def _profile_payload(request, profile):
         "contact_way": profile.contact_way or "",
         "bio": profile.bio or "",
         "identity_education": profile.identity_education or "",
+        "course_navigation_education": education_for_user(request.user),
         "identity_college": profile.identity_college or "",
         "identity_major": profile.identity_major or "",
         "show_education_public": profile.show_education_public,

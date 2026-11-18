@@ -281,13 +281,14 @@
   }
 
   function _isGraduateIdentity() {
-    return !!(currentUser && (currentUser.identity_education === '硕士' || currentUser.identity_education === '博士'));
+    var level = currentUser && (currentUser.course_navigation_education || currentUser.identity_education);
+    return level === '硕士' || level === '博士';
   }
 
   function _collegeMajorNodes(colNode) {
     var children = (colNode && colNode.children) || [];
     if (!_isGraduateIdentity()) return children;
-    var level = children.find(function(c) { return c.educationLevel === currentUser.identity_education; });
+    var level = children.find(function(c) { return c.educationLevel === (currentUser.course_navigation_education || currentUser.identity_education) || c.educationLevel === '研究生'; });
     return level ? (level.children || []) : [];
   }
 

@@ -33,7 +33,7 @@ from .utils import (
     require_login, UserProfile,
     DAILY_DOWNLOAD_LIMIT,
 )
-from ..services.course_visibility import browse_mode_for_profile
+from ..services.course_visibility import browse_mode_for_profile, education_for_user
 from ..monitoring_events import record_login_outcome, record_monitoring_event
 from ..models import MonitoringEvent, Notification
 
@@ -488,6 +488,7 @@ def api_verify_email(request):
             "role": profile.role,
             "avatar_url": profile.avatar.url if profile.avatar else "",
             "identity_education": profile.identity_education or "",
+            "course_navigation_education": education_for_user(user),
             "identity_college": profile.identity_college or "",
             "identity_major": profile.identity_major or "",
             "identity_can_edit": _identity_can_edit(profile),
@@ -588,6 +589,7 @@ def api_login(request):
             "role": profile.role,
             "avatar_url": profile.avatar.url if profile.avatar else "",
             "identity_education": profile.identity_education or "",
+            "course_navigation_education": education_for_user(user),
             "identity_college": profile.identity_college or "",
             "identity_major": profile.identity_major or "",
             "identity_can_edit": _identity_can_edit(profile),
@@ -643,6 +645,7 @@ def api_me(request):
         "is_staff": user.is_staff,
         "avatar_url": profile.avatar.url if profile.avatar else "",
         "identity_education": profile.identity_education or "",
+        "course_navigation_education": education_for_user(user),
         "identity_college": profile.identity_college or "",
         "identity_major": profile.identity_major or "",
         "show_education_public": profile.show_education_public,

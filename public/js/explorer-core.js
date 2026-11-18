@@ -99,7 +99,18 @@
   // 首次从首页/排行榜进入时，必须先等 explorer 和课程树都就绪再查路径。
   function navToCourse(type, code) {
     var rootType = type === '通识课' ? '通识课' : '专业课';
+    var targetFileId = highlightFileId;
     var fallback = function () {
+      // 排行榜/最近上传可能包含当前身份的目录树中没有的课程。
+      // 不能跳到默认目录；直接按文件 ID 打开所选资料。
+      if (targetFileId) {
+        if (highlightFileId !== targetFileId) return;
+        highlightFileId = null;
+        returnState = null;
+        if (currentUser) showFileDetail({ id: targetFileId });
+        else showLoginModal();
+        return;
+      }
       if (typeof showExplorer === 'function') showExplorer(rootType);
       navToLast(code);
     };

@@ -48,10 +48,47 @@ class GraduateCourseTest(BnuTestCase):
         self.assertEqual([item['name'] for item in college['children']], ['硕士'])
 
     def test_graduate_tree_defaults_to_plaza_but_respects_saved_preference(self):
-        self.assertEqual(self.client.get('/api/auth/me/').json()['data']['material_browse_mode'], 'plaza')
+        me = self.client.get('/api/auth/me/').json()['data']
+        self.assertEqual(me['material_browse_mode'], 'plaza')
+        self.assertEqual(me['course_navigation_education'], '硕士')
         self.user.profile.material_browse_mode = 'directory'
         self.user.profile.save()
         self.assertEqual(self.client.get('/api/auth/me/').json()['data']['material_browse_mode'], 'directory')
+
+    def test_master_without_own_directory_uses_undergraduate_tree_and_search(self):
+        root = self.undergrad.parent.parent
+        other = create_college("法学院", "grad-fallback-law")
+        other_cat = create_category(other.name, parent=root)
+        major = create_category("法学", parent=other_cat)
+        course = create_course("LAW-FALLBACK", "民法测试", college=other, course_type="major")
+        create_category(course.name, parent=major, course=course)
+        self.user.profile.identity_college = other.name
+        self.user.profile.identity_major = major.name
+        self.user.profile.save()
+        me = self.client.get('/api/auth/me/').json()['data']
+        self.assertEqual(me['identity_education'], '硕士')
+        self.assertEqual(me['course_navigation_education'], '本科')
+        self.assertEqual(me['material_browse_mode'], 'directory')
+        profile = self.client.get('/api/auth/profile/').json()['data']
+        self.assertEqual(profile['course_navigation_education'], '本科')
+        tree = self.client.get('/api/courses/tree/').json()['data']
+        colleges = {item['name']: item for item in tree['专业课']['children']}
+        self.assertIn('法学院', colleges)
+        self.assertEqual([x['name'] for x in colleges[self.college.name]['children']], ['金融学'])
+        nav = self.client.get('/api/courses/navigation/', {'course_type': 'major'}).json()['data']
+        self.assertEqual([p['name'] for p in nav['path']][:3], ['专业课', '法学院', '法学'])
+        result = self.client.get('/api/search/', {'v': '2', 'type': 'course', 'q': '民法测试'}).json()['data']
+        self.assertEqual(result['total'], 1)
+        self.assertEqual(self.user.profile.identity_education, '硕士')
+
+    def test_master_with_unknown_college_does_not_auto_enter_another_college(self):
+        self.user.profile.identity_college = '尚无目录学院'
+        self.user.profile.save()
+        response = self.client.get('/api/courses/navigation/', {'course_type': 'major'}).json()['data']
+        self.assertEqual([p['name'] for p in response['path']], ['专业课'])
+        root = self.undergrad.parent.parent
+        explicit = self.client.get('/api/courses/navigation/', {'category_id': root.id}).json()['data']
+        self.assertEqual([p['name'] for p in explicit['path']], ['专业课'])
 
     def test_placeholder_is_college_and_name_stable(self):
         self.assertTrue(is_placeholder(self.code))

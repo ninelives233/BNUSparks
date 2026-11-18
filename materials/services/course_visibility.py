@@ -1,11 +1,26 @@
 """Apply education-level navigation boundaries to the shared course tree."""
 
 
+def _has_graduate_directory(profile):
+    """当前学院是否已有对应研究生层次的专业课入口。"""
+    if not profile or not profile.identity_college or profile.identity_education not in ("硕士", "博士"):
+        return False
+    from ..models import CourseCategory
+    return CourseCategory.objects.filter(
+        education_level__in=(profile.identity_education, "研究生"),
+        parent__name=profile.identity_college,
+        parent__parent__name="专业课", parent__parent__parent__isnull=True,
+    ).exists()
+
+
 def education_for_user(user):
+    """未开通本院硕士目录时，暂按本科范围浏览；不改变用户身份。"""
     if user is None:
         return "本科"
     profile = getattr(user, "profile", None)
     level = getattr(profile, "identity_education", "")
+    if level == "硕士" and not _has_graduate_directory(profile):
+        return "本科"
     return level if level in ("硕士", "博士") else "本科"
 
 
@@ -13,16 +28,7 @@ def browse_mode_for_profile(profile):
     """Default a graduate to the plaza once their college has a matching tree."""
     if profile.material_browse_mode:
         return profile.material_browse_mode
-    level = profile.identity_education
-    if level in ("硕士", "博士") and profile.identity_college:
-        from ..models import CourseCategory
-        if CourseCategory.objects.filter(
-            education_level__in=(level, "研究生"),
-            parent__name=profile.identity_college,
-            parent__parent__name="专业课", parent__parent__parent__isnull=True,
-        ).exists():
-            return "plaza"
-    return "directory"
+    return "plaza" if _has_graduate_directory(profile) else "directory"
 
 
 def visible_category_ids(categories, education):

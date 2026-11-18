@@ -226,9 +226,10 @@ def _default_category_id(course_type, user, catalog):
     if len(college_matches) != 1:
         return root_id
     college_id = college_matches[0]
-    if profile.identity_education in ("硕士", "博士"):
+    education = education_for_user(user)
+    if education in ("硕士", "博士"):
         levels = [cid for cid in children.get(college_id, [])
-                  if cats[cid]["education_level"] == profile.identity_education]
+                  if cats[cid]["education_level"] in (education, "研究生")]
         if len(levels) != 1:
             return college_id
         college_id = levels[0]
@@ -587,7 +588,8 @@ def api_course_navigation(request):
     参数 category_id 指定明确节点；没有时按 course_type + 当前身份解析默认
     位置。导航是公开数据，身份只影响本次默认定位，不进入公共缓存。
     """
-    catalog = _visible_catalog(_get_user(request))
+    user = _get_user(request)
+    catalog = _visible_catalog(user)
     category_id = request.GET.get("category_id")
     course_type = request.GET.get("course_type")
     if course_type not in (None, "", "major", "general"):
@@ -603,12 +605,23 @@ def api_course_navigation(request):
             return _err("目录不存在", 404)
     else:
         category_id = _default_category_id(
-            course_type or "general", _get_user(request), catalog,
+            course_type or "general", user, catalog,
         )
         if category_id is None:
             return _err("课程目录尚未建立", 404)
 
-    category_id = _auto_skip(category_id, catalog)
+    # 硕士的学院未匹配时，暂停从专业课根目录自动跳进唯一的其他学院。
+    cat = catalog["cats"][category_id]
+    profile = getattr(user, "profile", None) if user else None
+    keep_root = bool(
+        profile and profile.identity_education == "硕士" and cat["parent_id"] is None
+        and cat["name"] == "专业课" and not any(
+            catalog["cats"][cid]["name"] == profile.identity_college
+            for cid in catalog["children"].get(category_id, [])
+        )
+    )
+    if not keep_root:
+        category_id = _auto_skip(category_id, catalog)
     catalog = _with_scoped_leaves(catalog, category_id)
     cat = catalog["cats"][category_id]
     children = [
