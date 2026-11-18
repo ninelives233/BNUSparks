@@ -17,6 +17,13 @@
       });
       return;
     }
+    // 课程树之外的直达课程（如跨培养层次课程）跳过单子节点自动跳转与目录记忆
+    if (typeof _directCourse !== 'undefined' && _directCourse &&
+        expPath.length >= 2 && expPath[expPath.length - 1] === _directCourse.name) {
+      renderBC();
+      renderFiles({ courseId: _directCourse.code, name: _directCourse.name });
+      return;
+    }
     // 自动跳过单文件夹中间层（防止恢复历史路径时落到中间节点）
     const origLen = expPath.length;
     while (true) {
@@ -299,9 +306,12 @@
       const allItems = isFavoriteRanking ? (s.top_favorited || []) : (s.top_downloaded || []);
 
       function renderList(filterCollege, filterType) {
+        var isGeneralItem = function(m) {
+          return m.course_type ? m.course_type === 'general' : (m.course_code || '').startsWith('GEN');
+        };
         var filtered = allItems;
         if (filterType === 'general') {
-          filtered = filtered.filter(function(m){ return m.course_code.startsWith('GEN'); });
+          filtered = filtered.filter(isGeneralItem);
         }
         if (filterCollege) {
           filtered = filtered.filter(function(m){ return m.college === filterCollege; });
@@ -360,9 +370,12 @@
       const allItems = s.recent_uploads || [];
 
       function renderList(filterCollege, filterType) {
+        var isGeneralItem = function(m) {
+          return m.course_type ? m.course_type === 'general' : (m.course_code || '').startsWith('GEN');
+        };
         var filtered = allItems;
         if (filterType === 'general') {
-          filtered = filtered.filter(function(m){ return m.course_code.startsWith('GEN'); });
+          filtered = filtered.filter(isGeneralItem);
         }
         if (filterCollege) {
           filtered = filtered.filter(function(m){ return m.college === filterCollege; });
@@ -1309,6 +1322,7 @@
   }
 
   function showExplorerPath(path) {
+    if (typeof _directCourse !== 'undefined') _directCourse = null;
     var nextPath = Array.isArray(path) && path.length ? path.slice() : ['通识课'];
     pushViewState('explorer', { expPath: nextPath });
     switchView('explorer');

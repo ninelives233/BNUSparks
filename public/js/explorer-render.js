@@ -593,6 +593,22 @@
     if (!code) return;
 
     var proceed = function (allFiles) {
+      if (course.name === code && allFiles && allFiles.length &&
+          allFiles[0].course_name && allFiles[0].course_name !== code) {
+        var resolvedName = allFiles[0].course_name;
+        course.name = resolvedName;
+        if (typeof _directCourse !== 'undefined' && _directCourse && _directCourse.code === code) {
+          _directCourse.name = resolvedName;
+          if (expPath.length >= 2) {
+            expPath[expPath.length - 1] = resolvedName;
+            if (typeof renderBC === 'function') renderBC();
+          }
+        }
+        var headingEl = container.querySelector('.mf-course-name, .file-area-header h3');
+        if (headingEl) {
+          headingEl.textContent = isMobileLayout ? resolvedName : resolvedName + ' — 资料列表';
+        }
+      }
       // 缓存全量数据供筛选排序使用（断点跨越重渲染时直接复用，不再请求）
       _allFilesCache = allFiles;
       if (!keepState) {

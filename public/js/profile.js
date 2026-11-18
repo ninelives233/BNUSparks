@@ -347,7 +347,7 @@
           meta,
           actions,
           esc(m.created_at),
-          'navToCourse(\'' + escJs(ctype) + '\',\'' + escJs(m.course_code) + '\')'
+          'navToCourse(\'' + escJs(ctype) + '\',\'' + escJs(m.course_code) + '\',\'' + escJs(m.course_name || '') + '\')'
         );
       });
       list.innerHTML = html;
@@ -500,7 +500,7 @@
           meta,
           '',
           '<span class="pc-side-icon">' + _IC_STAR + '</span>',
-          'navToCourse(\'' + (r.course_type === 'major' ? '专业课' : '通识课') + '\',\'' + escJs(r.course_code) + '\')'
+          'navToCourse(\'' + (r.course_type === 'major' ? '专业课' : '通识课') + '\',\'' + escJs(r.course_code) + '\',\'' + escJs(r.course_name || '') + '\')'
         );
       }).join('');
     }).catch(function() {

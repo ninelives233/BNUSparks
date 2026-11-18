@@ -159,3 +159,28 @@ class RankingsNavigationBrowserTest(StaticLiveServerTestCase):
         page.wait_for_url('**/file/' + str(self.files[2].id))
         page.wait_for_function('(title) => document.querySelector("#fdTitle").textContent === title',
                                arg=self.files[2].title)
+
+    def test_graduate_cross_level_course_breadcrumb_and_nav(self):
+        self.page.goto(self.live_server_url + '/rankings')
+        self.page.wait_for_function('window._bnusparksReady === true && currentUser')
+        self.page.wait_for_selector('#rankingsContent .rankings-item')
+        self.page.locator('#rankingsContent .rankings-item').filter(
+            has=self.page.get_by_text(self.files[0].title, exact=True)).click()
+        self.page.wait_for_url('**/file/' + str(self.files[0].id))
+        self.page.wait_for_selector('#fileDetailView.active #fdBreadcrumb a')
+        # 点击详情面包屑中的跨层次课程名，应进入该课程资料列表而非硕士默认目录
+        self.page.locator('#fdBreadcrumb a', has_text='本科课程0').click()
+        self.page.wait_for_selector('#explorerView.active #fileTableBody tr[data-file-id]')
+        self.assertIn('本科课程0', self.page.locator('#explorerView .file-area-header h3').inner_text())
+        self.assertIn(self.files[0].title, self.page.locator('#fileTableBody').inner_text())
+        self.assertNotIn('研究生专业', self.page.locator('#explorerContent').inner_text())
+        # 刷新直达课程链接仍保留在目标课程列表
+        self.page.reload()
+        self.page.wait_for_function('window._bnusparksReady === true')
+        self.page.wait_for_selector('#explorerView.active #fileTableBody tr[data-file-id]')
+        self.assertIn('本科课程0', self.page.locator('#explorerView .file-area-header h3').inner_text())
+        # 从个人中心等直接调用 navToCourse（无 highlightFileId）也应直达跨层次课程
+        self.page.evaluate("navToCourse('专业课', 'RANKNAV1', '本科课程1')")
+        self.page.wait_for_function("document.querySelector('#explorerView .file-area-header h3')?.textContent.includes('本科课程1')")
+        self.page.wait_for_selector('#explorerView.active #fileTableBody tr[data-file-id]')
+        self.assertIn(self.files[1].title, self.page.locator('#fileTableBody').inner_text())

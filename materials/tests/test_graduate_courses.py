@@ -195,3 +195,17 @@ class GraduateCourseTest(BnuTestCase):
         self.assertEqual(self.course.code, self.code)
         self.assertFalse(Course.objects.filter(code='EBA21151041').exists())
         self.assertEqual(set(Path(settings.MEDIA_ROOT).rglob('*.txt')), before)
+
+    def test_stats_rankings_include_course_type(self):
+        from .helpers import create_material
+        m1 = create_material(self.course, self.user, review_status="approved")
+        m1.title = "硕士资料"
+        m1.save(update_fields=["title"])
+        general = create_course("GEN1001", "大学英语", course_type="general")
+        m2 = create_material(general, self.user, review_status="approved")
+        m2.title = "通识资料"
+        m2.save(update_fields=["title"])
+        data = self.client.get("/api/stats/?limit=10").json()["data"]
+        by_title = {item["title"]: item for item in data["top_downloaded"]}
+        self.assertEqual(by_title["硕士资料"]["course_type"], "major")
+        self.assertEqual(by_title["通识资料"]["course_type"], "general")

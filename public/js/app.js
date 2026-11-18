@@ -326,11 +326,19 @@ window.addEventListener('popstate', async function(e) {
     if (state.view === 'explorer' && state.expPath && Array.isArray(state.expPath)) {
       // 关闭上传等弹窗后 popstate 回到同一视图：expPath 未变且视图已激活 → 跳过冗余重渲染
       // （避免文件列表重新拉取 + 侧边栏高亮丢失）
-      var _samePath = expPath.length === state.expPath.length &&
+      var _curDirect = typeof _directCourse !== 'undefined' ? _directCourse : null;
+      var _sameDirect = (!_curDirect && !state.directCourse) ||
+        (_curDirect && state.directCourse && _curDirect.code === state.directCourse.code);
+      var _samePath = _sameDirect && expPath.length === state.expPath.length &&
         expPath.every(function(p, i) { return p === state.expPath[i]; });
       var _expEl = document.getElementById('explorerView');
       var _expActive = _expEl && _previousActiveView === _expEl;
       if (!(_samePath && _expActive)) {
+        if (typeof _directCourse !== 'undefined') {
+          _directCourse = state.directCourse
+            ? { code: state.directCourse.code, name: state.directCourse.name, type: state.directCourse.type }
+            : null;
+        }
         expPath = state.expPath.slice();
         renderExplorer();
       }
@@ -640,6 +648,11 @@ document.addEventListener('DOMContentLoaded', () => {
       switch (saved.view) {
         case 'home': showDefaultLanding(saved.scrollY); break;
         case 'explorer':
+          if (typeof _directCourse !== 'undefined') {
+            _directCourse = saved.directCourse
+              ? { code: saved.directCourse.code, name: saved.directCourse.name, type: saved.directCourse.type }
+              : null;
+          }
           expPath = saved.expPath || ['专业课'];
           renderExplorer();
           switchView('explorer', true);

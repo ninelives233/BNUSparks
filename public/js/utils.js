@@ -496,7 +496,11 @@
   function routeToPath(view, state) {
     if (view === 'explorer') {
       var p = (state && state.expPath) || [];
-      return p.length ? '/explorer/' + p.map(encodeURIComponent).join('/') : '/explorer';
+      var ep = p.length ? '/explorer/' + p.map(encodeURIComponent).join('/') : '/explorer';
+      if (state && state.directCourse && state.directCourse.code) {
+        return ep + '?course=' + encodeURIComponent(state.directCourse.code);
+      }
+      return ep;
     }
     // 资料广场：目录范围与筛选/分页全部进 URL，刷新、分享和返回可恢复。
     if (view === 'plaza') {
@@ -596,7 +600,21 @@
     if (path === '/') return { view: 'home' };
     var segs = path.split('/').filter(Boolean).map(decodeURIComponent);
     var head = segs[0];
-    if (head === 'explorer') return { view: 'explorer', expPath: segs.slice(1) };
+    if (head === 'explorer') {
+      var expRoute = { view: 'explorer', expPath: segs.slice(1) };
+      try {
+        var esp = new URLSearchParams(location.search);
+        var dCode = (esp.get('course') || '').trim();
+        if (dCode) {
+          expRoute.directCourse = {
+            code: dCode,
+            name: segs[segs.length - 1] || dCode,
+            type: segs[1] === '通识课' ? '通识课' : '专业课',
+          };
+        }
+      } catch (e) { /* URLSearchParams 不可用时保留普通目录路由 */ }
+      return expRoute;
+    }
     if (head === 'plaza') {
       var plazaRoute = {
         view: 'plaza', categoryId: null, q: '',

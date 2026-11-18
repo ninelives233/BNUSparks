@@ -43,7 +43,13 @@
     var locate = function () {
       _ensureCourseTreeReady().then(function () {
         const path = findPathByCourseId(code);
-        if (!path) return;
+        if (!path) {
+          if (code && typeof showDirectCourse === 'function') {
+            showDirectCourse(expPath[0] === '通识课' ? '通识课' : '专业课', code, '', { replace: true });
+          }
+          return;
+        }
+        _directCourse = null;
         expPath = path;
         pushViewState('explorer', { expPath: [...expPath] }, true);
         renderExplorer();
@@ -93,11 +99,56 @@
     }).then(go, function () { return false; });
   }
 
+  // 课程不在当前用户的可见课程树内时（如跨培养层次课程），直接按课程代码渲染资料列表，
+  // 避免回退到根目录后被单子目录自动跳过逻辑带入当前用户的默认板块。
+  function showDirectCourse(type, code, courseName, options) {
+    var rootType = type === '通识课' ? '通识课' : '专业课';
+    if (!code) {
+      if (highlightFileId && typeof showFileDetail === 'function') {
+        var fid = highlightFileId;
+        highlightFileId = null;
+        showFileDetail({ id: fid, title: courseName || ('#' + fid) });
+        return Promise.resolve(true);
+      }
+      return typeof showExplorer === 'function' ? showExplorer(rootType) : Promise.resolve(false);
+    }
+    var displayName = courseName || code;
+    _directCourse = { code: code, name: displayName, type: rootType };
+    expPath = [rootType, displayName];
+    var replace = !!(options && options.replace);
+    pushViewState('explorer', {
+      expPath: expPath.slice(),
+      directCourse: { code: code, name: displayName, type: rootType },
+    }, replace);
+    switchView('explorer');
+    updateSidebar('allCourses');
+    var ready = Promise.resolve();
+    if (typeof ensureFeature === 'function' &&
+        !(window._bnusparksFeatureReady && window._bnusparksFeatureReady.explorer)) {
+      var content = document.getElementById('explorerContent');
+      if (content) content.innerHTML = '<div class="empty-state compact">课程目录加载中…</div>';
+      ready = ensureFeature('explorer');
+    }
+    return ready.then(function () {
+      return _ensureCourseTreeReady();
+    }).then(function () {
+      if (_directCourse && _directCourse.code === code) renderExplorer();
+      return true;
+    }).catch(function () {
+      if (_directCourse && _directCourse.code === code && typeof renderFiles === 'function') {
+        renderBC();
+        renderFiles({ courseId: code, name: displayName });
+        return true;
+      }
+      return false;
+    });
+  }
+
   // 「打开板块 + 定位课程」一步式入口（搜索结果/首页卡片/同名课程侧栏等外部跳转）。
   // 树中能定位到课程时直接进入资料列表，不走 showExplorer 的板块根渲染——
   // 两者的异步渲染会互相覆盖（后注册的根渲染会把已定位的 expPath 冲回根）。
   // 首次从首页/排行榜进入时，必须先等 explorer 和课程树都就绪再查路径。
-  function navToCourse(type, code) {
+  function navToCourse(type, code, courseName) {
     var rootType = type === '通识课' ? '通识课' : '专业课';
     var targetFileId = highlightFileId;
     var fallback = function () {
@@ -111,13 +162,13 @@
         else showLoginModal();
         return;
       }
-      if (typeof showExplorer === 'function') showExplorer(rootType);
-      navToLast(code);
+      showDirectCourse(rootType, code, courseName);
     };
     var go = function () {
       var path = null;
       try { path = findPathByCourseId(code); } catch (e) { path = null; }
       if (!path) { fallback(); return; }
+      _directCourse = null;
       // 排行榜等入口需要定位并高亮具体文件，沿用文件列表的定位能力。
       if (highlightFileId) showExplorerPath(path);
       else openPreferredMaterialPath(path);
@@ -138,17 +189,23 @@
   function navToFdBreadcrumbDepth(depth) {
     var path = _fdBreadcrumbPath;
     if (!path || !path.length) return;
+    _directCourse = null;
     expPath = path.slice(0, depth);
     // 验证路径在课程树中是否存在
     var node = getNode(expPath);
     if (!node) {
       // 路径无效时，尝试通过课程代码在树中找到正确路径
       var code = _currentDetailFile && _currentDetailFile.course_code;
+      var courseName = (_currentDetailFile && _currentDetailFile.course_name) || path[depth - 1] || '';
+      var rootType = path[0] === '通识课' ? '通识课' : '专业课';
       if (code) {
         var found = findPathByCourseId(code);
         if (found && found.length >= depth) {
           expPath = found.slice(0, depth);
           node = getNode(expPath);
+        } else if (!found && depth >= 2) {
+          showDirectCourse(rootType, code, courseName, { replace: true });
+          return;
         }
       }
       // 仍无效，回退到根分类
@@ -297,6 +354,7 @@
 
   // ── State ──
   let expPath = [];
+  let _directCourse = null; // 跨培养层次等未出现在当前可见课程树中的课程直达状态
   // 文件计数已嵌入课程树响应（fileCount），无需单独请求
   let courseTree = null;  // 从 API 动态加载
   let _pendingNavToLastCode = null;
@@ -586,8 +644,9 @@
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;'); }
 
   // ── Navigation ──
-  function navTo(depth) { expPath = expPath.slice(0, depth); pushViewState('explorer', { expPath: [...expPath] }); renderExplorer(); window.scrollTo({ top: 0 }); }
+  function navTo(depth) { _directCourse = null; expPath = expPath.slice(0, depth); pushViewState('explorer', { expPath: [...expPath] }); renderExplorer(); window.scrollTo({ top: 0 }); }
   function navIn(name) {
+    _directCourse = null;
     const node = getNode(expPath);
     if (!node || !node.children) return;
     const child = node.children.find(c => c.name === name);
@@ -721,7 +780,10 @@
     const oldPlazaLink = actionGroup.querySelector(':scope > .explorer-plaza-link');
     if (oldPlazaLink) oldPlazaLink.remove();
     topRow.classList.remove('has-mgmt-new');
-    if (isMgmtActive()) {
+    var isDirectCourse = !!(_directCourse && expPath.length >= 2 && expPath[expPath.length - 1] === _directCourse.name);
+    if (isDirectCourse) {
+      actionGroup.hidden = !courseNavHost || !courseNavHost.childElementCount;
+    } else if (isMgmtActive()) {
       const node = getNode(expPath);
       let showNewBtn = true;
       // 最后一层（有course关联的节点）不显示
@@ -819,6 +881,7 @@
       if (!button) return;
       var targetRoot = button.getAttribute('data-root');
       var targetCategory = button.getAttribute('data-category');
+      _directCourse = null;
       expPath = targetCategory ? [targetRoot, targetCategory] : [targetRoot];
       pushViewState('explorer', { expPath: expPath.slice() });
       switchView('explorer');
