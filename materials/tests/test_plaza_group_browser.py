@@ -290,6 +290,8 @@ class PlazaGroupBrowserTest(StaticLiveServerTestCase):
         page.locator('[data-sheet-apply]').tap()
         self.assertEqual(page.locator('#plazaSortSelect').input_value(), 'latest')
         tree = page.locator('.plaza-tree-btn')
+        self.assertEqual(tree.inner_text().strip(), '展开')
+        self.assertTrue(page.evaluate("document.querySelector('#plazaNavCluster .plaza-tree-btn') !== null"))
         tree.focus()
         page.keyboard.press('Enter')
         page.locator('#plazaTreeBody').wait_for()

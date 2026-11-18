@@ -836,7 +836,7 @@
   }
 
   function renderTreeHost() {
-    var host = document.querySelector('#plazaView .plaza-top-actions');
+    var host = document.getElementById('plazaNavCluster') || document.querySelector('#plazaView .plaza-top-row');
     if (!host) return;
     var old = host.querySelector('.plaza-tree-btn');
     if (old) old.remove();
@@ -844,10 +844,10 @@
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'plaza-tree-btn';
-    button.setAttribute('aria-label', '展开课程树');
-    button.innerHTML = iconSvg('layers') + '<span>课程树</span>';
+    button.setAttribute('aria-label', '展开下级课程目录');
+    button.innerHTML = iconSvg('layers') + '<span>展开</span>';
     button.addEventListener('click', openCourseTree);
-    host.insertBefore(button, host.firstChild);
+    host.appendChild(button);
   }
 
   function navigateCategory(categoryId, replace) {
