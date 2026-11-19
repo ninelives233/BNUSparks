@@ -20,7 +20,7 @@ from django.utils.cache import patch_vary_headers
 logger = logging.getLogger(__name__)
 
 from .utils import (
-    _err, _ok, _get_user, _get_or_create_profile,
+    _err, _ok, _get_user, _get_or_create_profile, require_login,
     _build_tree_node, _get_courses_in_category,
     _create_notification, _user_can_edit_material,
     _follow_merge, _merged_codes_map,
@@ -29,8 +29,44 @@ from .utils import (
     UserProfile, Course, College, CourseCategory, Material,
     Notification, DownloadRecord, Favorite,
 )
-from ..models import COURSE_TREE_CACHE_KEY, get_stats_cache_key
+from ..models import COURSE_TREE_CACHE_KEY, get_course_tree_version, get_stats_cache_key
 from ..services.course_visibility import education_for_user, visible_category_ids
+from ..services.course_codes import adopt_course_code, is_placeholder
+
+
+@csrf_exempt
+@require_login
+def api_course_adopt_code(request):
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return _err("请求格式错误")
+    if not isinstance(body, dict):
+        return _err("请求格式错误")
+    placeholder = body.get("placeholder_code") or body.get("course_code")
+    teaching = body.get("teaching_code")
+    if not isinstance(placeholder, str) or not isinstance(teaching, str):
+        return _err("请填写课程代码")
+    placeholder = placeholder.strip().upper()
+    teaching = teaching.strip().upper()
+    if not is_placeholder(placeholder) or not teaching:
+        return _err("请填写有效的占位课程代码和教务课程代码")
+    course = Course.objects.filter(code=placeholder).first()
+    if not course:
+        return _err("课程不存在", 404)
+    if course.merged_into_id:
+        return _err("课程代码已更新，请刷新后重试")
+    categories = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
+    visible = visible_category_ids(categories, education_for_user(request.user, request))
+    if not CourseCategory.objects.filter(course=course, id__in=visible, children__isnull=True).exists():
+        return _err("课程不存在", 404)
+    try:
+        course = adopt_course_code(course, teaching)
+    except ValueError as exc:
+        return _err(str(exc), 409 if str(exc) == "该课程代码已有课程，请联系管理员核对后关联" else 400)
+    return _ok({"code": course.code, "name": course.name, "course_id": course.id, "placeholder_code": placeholder})
 
 
 def _tree_cache_payload(tree):
@@ -57,13 +93,7 @@ def _tree_response_from_cache(request, payload):
     return resp
 
 
-def _visible_tree_response(request, payload):
-    user = _get_user(request)
-    education = education_for_user(user, request)
-    cache_key = f"{COURSE_TREE_CACHE_KEY}_{education}_{payload['etag'].strip('\"')}"
-    cached = cache.get(cache_key)
-    if isinstance(cached, dict) and cached.get("v") == 2:
-        return _tree_response_from_cache(request, cached)
+def _visible_tree_response(request, payload, education, cache_key):
     rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
     if education == "本科" and not any(row["education_level"] for row in rows):
         cache.set(cache_key, payload, 600)
@@ -274,14 +304,20 @@ def api_course_tree(request):
     F12：缓存直接存序列化好的 bytes + ETag——热命中不再把整棵树重新
     JSON 编码再哈希；304 在编码之前返回。滚动过渡期兼容旧格式（裸 tree）。
     """
-    CACHE_KEY = COURSE_TREE_CACHE_KEY
-    cached = cache.get(CACHE_KEY)
+    education = education_for_user(_get_user(request), request)
+    version = get_course_tree_version()
+    cache_key = f"{COURSE_TREE_CACHE_KEY}_{version}_{education}"
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict) and cached.get("v") == 2:
+        return _tree_response_from_cache(request, cached)
+    raw_key = f"{COURSE_TREE_CACHE_KEY}_{version}_raw"
+    cached = cache.get(raw_key)
     if cached is not None:
         if isinstance(cached, dict) and cached.get("v") == 2:
-            return _visible_tree_response(request, cached)
+            return _visible_tree_response(request, cached, education, cache_key)
         payload = _tree_cache_payload(cached)
-        cache.set(CACHE_KEY, payload, 600)
-        return _visible_tree_response(request, payload)
+        cache.set(raw_key, payload, 600)
+        return _visible_tree_response(request, payload, education, cache_key)
 
     # 1. 一次性加载所有 CourseCategory（避免 FK N+1；merged_into 供同名合并展示）
     all_cats = CourseCategory.objects.select_related('course', 'course__merged_into').all()
@@ -320,8 +356,8 @@ def api_course_tree(request):
             }
 
     payload = _tree_cache_payload(tree)
-    cache.set(CACHE_KEY, payload, 600)
-    return _visible_tree_response(request, payload)
+    cache.set(raw_key, payload, 600)
+    return _visible_tree_response(request, payload, education, cache_key)
 
 
 # ═══════════════════════════════════════════════════════════════

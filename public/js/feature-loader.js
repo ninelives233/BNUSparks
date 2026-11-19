@@ -104,7 +104,8 @@
   //        未补全/未填写口径文案统一；v382 已被 plaza 长课程名截断占用；缓存键同步推进。
   // v384：身份四列网格修复培养层次卡被挤扁——数字列改 auto 永不截断、
   //        各列设内容下限、2 列断点 1180→1340；缓存键同步推进。
-  var VERSION = '405';
+  // v406：课表支持研究生课程目录关联补码与建课入口。
+  var VERSION = '406';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

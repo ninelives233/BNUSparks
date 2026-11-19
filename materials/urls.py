@@ -22,6 +22,7 @@ urlpatterns = [
 
     # 课程
     path("courses/", views.api_courses, name="api_courses"),
+    path("courses/adopt-code/", views.api_course_adopt_code, name="api_course_adopt_code"),
     path("courses/tree/", views.api_course_tree, name="api_course_tree"),
     path("courses/navigation/", views.api_course_navigation, name="api_course_navigation"),
     path("courses/timetable-summary/", views.api_course_timetable_summary, name="api_course_timetable_summary"),

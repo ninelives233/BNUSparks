@@ -25,7 +25,7 @@ from .utils import (
     ReviewComment, DeletionRecord, Course, _bump_user_public_gen,
 )
 from ..monitoring_events import record_request_event
-from ..models import COURSE_TREE_CACHE_KEY, invalidate_stats_cache
+from ..models import invalidate_course_tree_cache, invalidate_stats_cache
 
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
@@ -156,7 +156,7 @@ def api_moderation_batch_approve(request):
         reviewed_by=request.user, reviewed_at=now,
     )
     # qs.update() 不触发 post_save 信号，手动失效树缓存 + 首页统计 + 递增上传者公开页代际
-    cache.delete(COURSE_TREE_CACHE_KEY)
+    invalidate_course_tree_cache()
     invalidate_stats_cache()
     # 按上传者聚合通知（与单条 approve 一致，避免「一键过审后上传者零感知」）
     for uid in uploader_ids:
@@ -218,7 +218,7 @@ def api_moderation_approve(request, file_id):
     if updated == 0:
         return _err("该资料已审核，不可重复操作")
     # update() 不触发 post_save 信号，手动失效缓存 + 递增上传者公开页代际
-    cache.delete(COURSE_TREE_CACHE_KEY)
+    invalidate_course_tree_cache()
     invalidate_stats_cache()
     _bump_user_public_gen(material.uploader_id)
 
@@ -273,7 +273,7 @@ def api_moderation_reject(request, file_id):
     if updated == 0:
         return _err("该资料已审核，不可重复操作")
     # update() 不触发 post_save 信号，手动失效缓存 + 递增上传者公开页代际
-    cache.delete(COURSE_TREE_CACHE_KEY)
+    invalidate_course_tree_cache()
     invalidate_stats_cache()
     _bump_user_public_gen(material.uploader_id)
 

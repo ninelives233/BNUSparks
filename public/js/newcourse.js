@@ -132,6 +132,7 @@
     var preCourseName = options && options.courseName ? String(options.courseName).trim() : '';
     var preCourseCode = options && options.courseCode ? String(options.courseCode).trim() : '';
     var preCollegeName = options && options.collegeName ? String(options.collegeName).trim() : '';
+    var preMajorName = options && options.majorName ? String(options.majorName).trim() : '';
     var isMajorPath = !!(path && path.length && path[0].course_type === 'major')
       || !!(path && path.length >= 3 && path[0].name === '专业课')
       || !!(preCollegeName && preCollegeName !== '通识课' && preCollegeName !== '公共课');
@@ -156,6 +157,20 @@
         _ncEl('ncMCollegeSearch').value = college.name;
         _populateMajors();
         var majorSel = _ncEl('ncMMajor');
+        var majorName = preMajorName;
+        if (!majorName && !(path && path.length) && preCourseCode && preCollegeName && _isGraduateIdentity() &&
+            currentUser && currentUser.identity_college === targetCollegeName && currentUser.identity_major) {
+          majorName = currentUser.identity_major;
+        }
+        if (majorName && majorSel) {
+          var majorOpt = Array.from(majorSel.options).find(function(opt) {
+            return opt.value && opt.textContent.trim() === majorName;
+          });
+          if (majorOpt) {
+            majorSel.value = majorOpt.value;
+            onMajorChange();
+          }
+        }
         if (path && path.length >= 3 && _isGraduateIdentity()) {
           var majorIdx = path.findIndex(function(seg, idx) {
             return idx >= 2 && majorSel && Array.from(majorSel.options).some(function(o) { return o.value === String(seg.id); });

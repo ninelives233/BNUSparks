@@ -83,7 +83,7 @@ var ttState = {
   editing: false, links: {}, counts: {}, _countKey: '', _countError: false,
   requestStatuses: {}, _requestStatusKey: '', _requestStatusAt: 0, _requestStatusPromise: null,
   _treeError: false, cloudUpdatedAt: null, cloudSynced: false,
-  viewerMode: false, viewerUserName: '', viewerEducation: '', _renderRoot: null, _inlineBody: null
+  viewerMode: false, viewerUserName: '', viewerEducation: '', viewerCourseNavEdu: '', viewerCollege: '', _renderRoot: null, _inlineBody: null
 };
 
 // 课表既可以渲染在独立页面，也可以嵌入管理员用户主页。
@@ -897,7 +897,7 @@ function ttRefreshCourseTreeForLink() {
 // 清掉旧端遗留的 pending 标记；申请批准或管理员手动建课后自动刷新课程树。
 function ttRefreshRequestStatuses(force) {
   if (!currentUser || ttState.viewerMode || !ttState.data ||
-      !ttIsUndergrad() || ttState.data.noLink) {
+      !ttLinksEnabled()) {
     return Promise.resolve(false);
   }
   var key = ttRequestCodesKey();
@@ -1359,6 +1359,8 @@ function ttLoadAdminUserData(userId) {
   ttState.viewerUid = Number(userId);
   ttState.viewerUserName = '';
   ttState.viewerEducation = '';
+  ttState.viewerCourseNavEdu = '';
+  ttState.viewerCollege = '';
   ttState.data = null;
   ttState.cloudUpdatedAt = null;
   ttState.cloudSynced = false;
@@ -1378,6 +1380,8 @@ function ttLoadAdminUserData(userId) {
     if (!ttState.viewerMode || ttState.uid !== Number(userId)) return;
     ttState.viewerUserName = res.user && res.user.nickname ? res.user.nickname : '用户课表';
     ttState.viewerEducation = (res.user && res.user.education) || '';
+    ttState.viewerCourseNavEdu = (res.user && res.user.course_navigation_education) || '';
+    ttState.viewerCollege = (res.user && res.user.college) || '';
     ttState.data = res.data && Array.isArray(res.data.courses) ? ttNormalizeMeetings(res.data) : null;
     if (ttState.data && !ttState.data.start) ttState.data.start = ttGuessSemesterStart(ttState.data.meta && ttState.data.meta.semester);
     if (ttState.data) ttComputeWeek();
@@ -1403,6 +1407,8 @@ function ttRenderInlineAdminTimetable(panel, userId) {
   ttState.viewerUid = uid;
   ttState.viewerUserName = '';
   ttState.viewerEducation = '';
+  ttState.viewerCourseNavEdu = '';
+  ttState.viewerCollege = '';
   ttState.data = null;
   ttState.cloudUpdatedAt = null;
   ttState.cloudSynced = false;
@@ -1445,6 +1451,8 @@ function ttRenderInlineAdminTimetable(panel, userId) {
     if (!ttState.viewerMode || ttState.uid !== uid || ttState._renderRoot !== panel) return res;
     ttState.viewerUserName = res.user && res.user.nickname ? res.user.nickname : '用户';
     ttState.viewerEducation = (res.user && res.user.education) || '';
+    ttState.viewerCourseNavEdu = (res.user && res.user.course_navigation_education) || '';
+    ttState.viewerCollege = (res.user && res.user.college) || '';
     var title = panel.querySelector('.tt-inline-title strong');
     if (title) title.textContent = '用户课表 · ' + ttState.viewerUserName;
     ttState.data = res.data && Array.isArray(res.data.courses) ? ttNormalizeMeetings(res.data) : null;
@@ -1465,6 +1473,8 @@ function ttClearInlineAdminTimetable() {
   ttState.viewerMode = false;
   ttState.viewerUid = null;
   ttState.viewerEducation = '';
+  ttState.viewerCourseNavEdu = '';
+  ttState.viewerCollege = '';
   ttState.uid = currentUser ? currentUser.id : null;
   ttState.data = null;
   ttResetCourseCounts();
@@ -1976,7 +1986,7 @@ function ttRenderEditEmpty(body) {
     '<div class="tt-empty">' +
       '<div class="glyph">编</div>' +
       '<h2>手动建立课程列表</h2>' +
-      '<p>逐门添加课程：填名称和上课时间即可，不依赖教务导出文件。' + (ttIsUndergrad()
+      '<p>逐门添加课程：填名称和上课时间即可，不依赖教务导出文件。' + (ttLinksEnabled()
         ? '填了课程代码的课程会自动链接到资料目录，未建目录的可提交建课申请。'
         : '课程代码会先保存，硕博板块上线后自动链接资料目录。') + '</p>' +
       '<button type="button" class="tt-btn primary" id="ttManualAddBtn">＋ 添加课程</button>' +
@@ -2201,6 +2211,85 @@ function ttFindPathByCode(code, courseName) {
   return matches[0];
 }
 
+function ttFindSameCollegePlaceholder(courseName) {
+  if (ttState.viewerMode || !ttIsGraduateDirectoryOwner() || !ttTreeReady() || !currentUser.identity_college) return null;
+  var colleges = (courseTree['专业课'] && courseTree['专业课'].children) || [];
+  var college = colleges.find(function (node) { return node.name === currentUser.identity_college; });
+  if (!college) return null;
+  function normalized(name) { return String(name || '').normalize('NFKC').replace(/\s+/gu, '').toLowerCase(); }
+  var wanted = normalized(courseName);
+  if (!wanted) return null;
+  var matches = {};
+  function walk(nodes, path) {
+    nodes.forEach(function (node) {
+      var next = path.concat(node.name);
+      if ((!node.children || !node.children.length) && /^BNUX[0-9A-F]{32}$/i.test(node.courseId || '') &&
+          normalized(node.name) === wanted) {
+        var key = node.courseId.toUpperCase();
+        if (!matches[key]) matches[key] = { placeholderCode: node.courseId, name: node.name, path: next, id: node.id };
+      }
+      if (node.children) walk(node.children, next);
+    });
+  }
+  walk(college.children || [], ['专业课', college.name]);
+  var keys = Object.keys(matches);
+  return keys.length === 1 ? matches[keys[0]] : null;
+}
+
+function ttPlaceholderForCourse(course) {
+  if (!course || !course.code || /^BNUX[0-9A-F]{32}$/i.test(course.code) ||
+      ttFindPathByCode(course.code, course.name)) return null;
+  return ttFindSameCollegePlaceholder(course.name);
+}
+
+function ttOpenNewCourse(course) {
+  if (!ttLinksEnabled() || ttState.viewerMode || !course || !course.code || typeof openNewCourseEntry !== 'function') return;
+  openNewCourseEntry({ courseName: course.name, courseCode: course.code,
+    collegeName: currentUser.identity_college || '', majorName: currentUser.identity_major || '' });
+}
+
+function ttShowAdoptPlaceholderModal(course, match, onSuccess, importing) {
+  if (ttState.viewerMode || !ttOwnerHasDirectory() || (!importing && ttState.data && ttState.data.noLink)) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'tt-overlay';
+  overlay.innerHTML = '<div class="tt-modal" role="dialog" aria-modal="true" aria-label="确认关联课程">' +
+    '<header><h3>确认关联并补码</h3></header><div class="tt-mbody">' +
+    '<p>课表课程：' + esc(course.name) + '（' + esc(course.code) + '）</p>' +
+    '<p>已有课程：' + esc(match.path.join(' / ')) + '</p>' +
+    '<p>确认后将真实代码绑定到既有课程，保留原有资料与链接。</p>' +
+    '<p class="tt-adopt-error" role="alert"></p></div><footer>' +
+    '<button type="button" class="tt-btn" data-cancel>取消</button>' +
+    '<button type="button" class="tt-btn primary" data-adopt>确认关联并补码</button></footer></div>';
+  document.body.appendChild(overlay);
+  var previous = document.activeElement;
+  var close = function () { overlay.remove(); if (previous && previous.isConnected) previous.focus(); };
+  overlay.querySelector('[data-cancel]').onclick = close;
+  overlay.addEventListener('click', function (event) { if (event.target === overlay) close(); });
+  overlay.addEventListener('keydown', function (event) { if (event.key === 'Escape') close(); });
+  var button = overlay.querySelector('[data-adopt]');
+  button.onclick = function () {
+    button.disabled = true;
+    api('/api/courses/adopt-code/', { method: 'POST', body: {
+      placeholder_code: match.placeholderCode, teaching_code: course.code
+    } }).then(function () {
+      if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
+      ttResetCourseCounts();
+      return Promise.resolve(typeof refreshCourseTree === 'function' ? refreshCourseTree() : loadCourseTree()).then(function () {
+        ttResolveCourseLinks();
+        ttRepaintCurrent();
+        ttLoadCourseCounts();
+        close();
+        ttToast('关联补码成功');
+        if (onSuccess) onSuccess();
+      });
+    }).catch(function (error) {
+      button.disabled = false;
+      overlay.querySelector('.tt-adopt-error').textContent = (error && error.message) || '关联失败，请稍后重试';
+    });
+  };
+  button.focus();
+}
+
 function ttResolveCourseLinks() {
   var map = {};
   ttState.links = map;
@@ -2264,7 +2353,8 @@ function ttResolveCourseLinks() {
           payload: requestState.payload || null
         };
       } else {
-        map[c.code] = { state: 'missing' };
+        var placeholder = ttPlaceholderForCourse(c);
+        map[c.code] = { state: 'missing', placeholder: placeholder };
       }
     }
   });
@@ -2300,7 +2390,6 @@ function ttIs2026Student() {
   });
 }
 
-// 硕博板块筹备中：非本科身份（含未设置）导入课表一律不链接资料目录、不提交建课，后续再适配
 function ttIsUndergrad() {
   return !!(typeof currentUser !== 'undefined' && currentUser &&
     currentUser.identity_education === '本科');
@@ -2309,14 +2398,24 @@ function ttIsUndergrad() {
 // 目录功能归属于「课表主人」：管理员查看他人课表时以被查看用户的身份为准，
 // 而非当前登录者（总管理员多半是本科身份，不代表正在查看的硕博用户也有目录体系）
 function ttOwnerHasDirectory() {
-  if (ttState.viewerMode) return ttState.viewerEducation === '本科';
-  if (ttIsUndergrad()) return true;
-  if (!currentUser || !['硕士', '博士'].includes(currentUser.identity_education) || !ttTreeReady()) return false;
+  var education = ttState.viewerMode ? ttState.viewerEducation : (currentUser && currentUser.identity_education);
+  var collegeName = ttState.viewerMode ? ttState.viewerCollege : (currentUser && currentUser.identity_college);
+  var navigation = ttState.viewerMode ? ttState.viewerCourseNavEdu : (currentUser && currentUser.course_navigation_education);
+  if (education === '本科') return true;
+  if (!['硕士', '博士'].includes(education)) return false;
+  if (!ttTreeReady()) return navigation === education;
   var colleges = (courseTree['专业课'] && courseTree['专业课'].children) || [];
-  var college = colleges.find(function (node) { return node.name === currentUser.identity_college; });
-  return !!(college && (college.children || []).some(function (node) {
-    return node.educationLevel === currentUser.identity_education || node.educationLevel === '研究生';
-  }));
+  var college = colleges.find(function (node) { return node.name === collegeName; });
+  function hasLevel(node) {
+    return node.educationLevel === education || node.educationLevel === '研究生' ||
+      (node.children || []).some(hasLevel);
+  }
+  return !!(college && (college.children || []).some(hasLevel));
+}
+
+function ttIsGraduateDirectoryOwner() {
+  var education = ttState.viewerMode ? ttState.viewerEducation : (currentUser && currentUser.identity_education);
+  return ['硕士', '博士'].includes(education) && ttOwnerHasDirectory();
 }
 
 // 目录链接总开关 = 课表主人是本科 且 课表本身未锁定目录。
@@ -2336,29 +2435,30 @@ function ttIsUnlinkedSchedule() {
 function ttShowConfirmModal(parsed) {
   if (!ttOwnsState()) return;
   var generation = ttSyncGeneration;
-  // 非本科身份或无目录体系格式（noLink）：无链接/建课可确认，
-  // 跳过弹窗直接纯导入，并告知原因
-  if (!ttIsUndergrad() || parsed.noLink) {
+  function importWithoutDirectory() {
     parsed.keepManual = true;
     if (!parsed.pendingCodes || typeof parsed.pendingCodes !== 'object') parsed.pendingCodes = {};
     ttApplyImport(parsed, []);
     ttToast(parsed.noLink
       ? '珠海校区资料跳转功能暂未上线，暂时只有课程表功能'
       : '课表已导入，可在资料广场查找课程资料');
-    return;
   }
+  if (parsed.noLink) { importWithoutDirectory(); return; }
   // 课程树用于判断已建课 / 提供位置选择；失败时降级为纯导入。
   // 先清 api() 内存缓存（树 TTL 10 分钟），保证已建课判定是新鲜的
   if (typeof clearApiCache === 'function') clearApiCache('/api/courses/tree/');
   var ready = (typeof loadCourseTree === 'function') ? Promise.resolve(loadCourseTree()).catch(function () {}) : Promise.resolve();
   ready.then(function () {
-    if (generation === ttSyncGeneration && ttOwnsState()) ttRenderConfirmModal(parsed);
+    if (generation !== ttSyncGeneration || !ttOwnsState()) return;
+    if (!ttOwnerHasDirectory()) importWithoutDirectory();
+    else ttRenderConfirmModal(parsed);
   });
 }
 
 function ttRenderConfirmModal(parsed) {
   var meta = parsed.meta || {};
   var courses = parsed.courses;
+  var graduate = ttIsGraduateDirectoryOwner();
   var existing = ttModalOverlay();
   ttLocPicks = {}; // 本次导入的位置选择从零开始
   var credits = meta.credits || courses.reduce(function (a, c) { return a + (parseFloat(c.credits) || 0); }, 0).toFixed(2);
@@ -2388,8 +2488,8 @@ function ttRenderConfirmModal(parsed) {
   var pendingCount = Object.keys(statusByCode).filter(function (code) { return statusByCode[code] === 'pending'; }).length;
   var genCount = missing.filter(function (c) { return /^GEN/i.test(c.code); }).length;
   // 有非 GEN 的待建课 → 顶部提醒可手动归入通识课（见下方「通识课」学院选项）
-  var majorMissing = missing.some(function (c) { return !/^GEN/i.test(c.code); });
-  var showAdmissionReminder = ttIs2026Student() && missing.length > 0;
+  var majorMissing = !graduate && missing.some(function (c) { return !/^GEN/i.test(c.code); });
+  var showAdmissionReminder = !graduate && ttIs2026Student() && missing.length > 0;
   var rejectedReasons = missing.filter(function (c) {
     return statusByCode[ttRequestCode(c.code)] === 'rejected';
   }).map(function (c) {
@@ -2409,7 +2509,7 @@ function ttRenderConfirmModal(parsed) {
   var locRendered = {};
   var rows = courses.map(function (c) {
     // 与导入后的取色口径一致：硕博 / 珠海 noLink 课表按 16 色自由池分配
-    var tone = ttCourseTone(c.name, (!ttIsUndergrad() || parsed.noLink) ? 16 : 8);
+    var tone = ttCourseTone(c.name, (!ttOwnerHasDirectory() || parsed.noLink) ? 16 : 8);
     var times = c.meetings.map(function (mt) {
       return TT_DAY_NAMES[mt.day - 1] + mt.ps + '-' + mt.pe + '节';
     }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(' ');
@@ -2426,7 +2526,12 @@ function ttRenderConfirmModal(parsed) {
       if (st === 'rejected') {
         extra += '<span class="tt-request-rejected">上次申请已驳回：' + esc(ttRequestReviewReason(requestState)) + '</span>';
       }
-      extra += ttLocationControls(c);
+      if (graduate) {
+        var ph = ttPlaceholderForCourse(c);
+        extra += ph
+          ? '<button type="button" class="tt-btn is-ghost" data-tt-action="adopt-preview" data-code="' + esc(code) + '">同名无码可关联</button>'
+          : '<span class="tt-edit-hint">未建目录（导入后可一键新建）</span>';
+      } else extra += ttLocationControls(c);
     }
     return '<div class="tt-mrow ttp' + tone + '">' +
       '<span class="dot"></span>' +
@@ -2463,9 +2568,9 @@ function ttRenderConfirmModal(parsed) {
             : '<div class="tt-privacy-note">' + iconSvg('alert') + ' 导入将整表替换现有课程与手动编辑。</div>')
           : '') +
         (missing.length
-          ? '<div class="tt-privacy-note">' + iconSvg('info') + ' 有 <b>' + missing.length + '</b> 门课程需要建立资料目录' +
+          ? (graduate ? '<div class="tt-privacy-note">' + iconSvg('info') + ' 有 <b>' + missing.length + '</b> 门课程尚未建立目录，可关联同名课程或导入后新建。</div>' : '<div class="tt-privacy-note">' + iconSvg('info') + ' 有 <b>' + missing.length + '</b> 门课程需要建立资料目录' +
             (rejectedCount ? '，其中 <b>' + rejectedCount + '</b> 门上次申请被驳回，可重新选择位置' : '') +
-            '（通识 ' + genCount + ' 门）。导入后将提交新建/重新申请，管理员批准前点击课程不会跳转。</div>'
+            '（通识 ' + genCount + ' 门）。导入后将提交新建/重新申请，管理员批准前点击课程不会跳转。</div>')
           : (pendingCount
             ? '<div class="tt-privacy-note">' + iconSvg('clock') + ' 有 <b>' + pendingCount + '</b> 门课程的建课申请正在审核，批准后会自动恢复课程链接。</div>'
             : '<div class="tt-privacy-note">✓ 全部课程都已建立资料目录，导入后点击课程卡即可直达资料列表。</div>')) +
@@ -2474,7 +2579,7 @@ function ttRenderConfirmModal(parsed) {
       '<footer>' +
         '<button type="button" class="tt-btn" data-close>取消</button>' +
         '<button type="button" class="tt-btn primary" id="ttConfirmImport">导入课表' +
-          (missing.length ? '（申请/重新申请 ' + missing.length + ' 门）' : '') + '</button>' +
+          (missing.length && !graduate ? '（申请/重新申请 ' + missing.length + ' 门）' : '') + '</button>' +
       '</footer>' +
     '</div>';
 
@@ -2482,6 +2587,17 @@ function ttRenderConfirmModal(parsed) {
     b.addEventListener('click', function () { ttCloseModal(existing); });
   });
   existing.addEventListener('click', function (e) { if (e.target === existing) ttCloseModal(existing); });
+  existing.querySelectorAll('[data-tt-action="adopt-preview"]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var code = button.getAttribute('data-code');
+      var course = courses.find(function (item) { return ttRequestCode(item.code) === code; });
+      var match = ttPlaceholderForCourse(course);
+      if (!match) return;
+      ttShowAdoptPlaceholderModal(course, match, function () {
+        button.outerHTML = '<span class="tt-ok-tag">✓ 已有目录</span>';
+      }, true);
+    });
+  });
 
   // 学院变更 → 重置该课的层级选择并启用层级选择器
   ttBindLocationControls(existing);
@@ -2489,7 +2605,7 @@ function ttRenderConfirmModal(parsed) {
   existing.querySelector('#ttConfirmImport').addEventListener('click', function () {
     var requests = [];
     var unchosen = 0;
-    missing.forEach(function (c) {
+    (graduate ? [] : missing).forEach(function (c) {
       var isGen = /^GEN/i.test(c.code);
       if (isGen) {
         var sel = existing.querySelector('select[data-role="gen"][data-code="' + c.code + '"]');
@@ -2897,6 +3013,13 @@ function ttOpenCourse(code) {
     } else {
       go();
     }
+  } else if (info.state === 'missing' && !ttState.viewerMode && ttIsGraduateDirectoryOwner() &&
+      code && !/^BNUX[0-9A-F]{32}$/i.test(code)) {
+    var course = ttState.data && ttState.data.courses.find(function (item) { return item.code === code; });
+    if (!course) return;
+    var match = info.placeholder || ttPlaceholderForCourse(course);
+    if (match) ttShowAdoptPlaceholderModal(course, match);
+    else ttOpenNewCourse(course);
   } else if (info.state === 'pending') {
     ttToast('「' + ttCourseNameByCode(code) + '」的新课程申请审核中，批准后即可跳转');
   } else if (info.state === 'rejected') {
@@ -3378,7 +3501,7 @@ function ttEditRenderLink(wc) {
   var requestState = code ? ttRequestState(code) : null;
   var rejectionEl = document.getElementById('ttEdRejection');
   var showRejection = function () {
-    if (!rejectionEl || !requestState || requestState.status !== 'rejected' || !code || !ttIsUndergrad()) return;
+    if (!rejectionEl || !requestState || requestState.status !== 'rejected' || !code || !ttOwnerHasDirectory()) return;
     rejectionEl.innerHTML = '<span class="tt-code-note-mark">!</span><div>' +
       '<strong>上次申请已被驳回，请先查看原因</strong>' +
       '<p><b>课程：</b>「' + esc(name || code) + '」</p>' +
@@ -3426,7 +3549,24 @@ function ttEditRenderLink(wc) {
     el.innerHTML = '<span class="tt-edit-hint">该代码的新课程申请审核中，批准后自动可跳转</span>';
     return;
   }
-  if (!ttIsUndergrad()) {
+  if (ttIsGraduateDirectoryOwner()) {
+    hideRejection();
+    if (/^BNUX[0-9A-F]{32}$/i.test(code)) {
+      el.innerHTML = '<span class="tt-edit-hint">课程目录尚未建立，请填写真实课程代码。</span>';
+      return;
+    }
+    var course = { code: code, name: name };
+    var match = ttPlaceholderForCourse(course);
+    el.innerHTML = match
+      ? '<span class="tt-edit-hint">发现同学院同名无码课程</span><button type="button" class="tt-btn is-ghost">确认关联并补码</button>'
+      : '<span class="tt-edit-hint">目录未建立</span><button type="button" class="tt-btn is-ghost">一键去新建课程</button>';
+    el.querySelector('button').onclick = function () {
+      if (match) ttShowAdoptPlaceholderModal(course, match, function () { ttEditRenderLink(wc); });
+      else { ttCloseModal(); ttOpenNewCourse(course); }
+    };
+    return;
+  }
+  if (!ttOwnerHasDirectory()) {
     hideRejection();
     el.innerHTML = '<span class="tt-edit-hint">课程目录尚未建立，可在资料广场查找或创建课程。</span>';
     return;
@@ -3866,6 +4006,13 @@ function ttPaintGrid(animate) {
 
   // 网格点击（事件委托）：普通模式=跳转/状态提示；编辑模式=编辑课程/空位新建
   grid.onclick = function (e) {
+    var action = e.target.closest('[data-tt-action="adopt"], [data-tt-action="newcourse"]');
+    if (action) {
+      e.preventDefault();
+      e.stopPropagation();
+      ttOpenCourse(action.getAttribute('data-code'));
+      return;
+    }
     var reapply = e.target.closest('[data-tt-action="reapply"]');
     if (reapply) {
       e.preventDefault();
@@ -3990,6 +4137,12 @@ function ttStatusTag(link, code) {
   // 硕博课表 / noLink 格式：无目录体系，不渲染任何目录状态签，右上角留白
   if (!ttLinksEnabled()) return '';
   if (!code) return '<span class="tt-tag tt-tag-cold">待绑定代码</span>';
+  if (!ttState.editing && !ttState.viewerMode && ttIsGraduateDirectoryOwner() && link &&
+      link.state === 'missing' && !link.quick && !/^BNUX[0-9A-F]{32}$/i.test(code)) {
+    return link.placeholder
+      ? '<button type="button" class="tt-tag tt-tag-warm" data-tt-action="adopt" data-code="' + esc(code) + '">关联补码</button>'
+      : '<span class="tt-tag tt-tag-cold">未建目录</span><button type="button" class="tt-tag tt-tag-warm" data-tt-action="newcourse" data-code="' + esc(code) + '">去建课</button>';
+  }
   if (link && link.state === 'rejected') return ttRejectedStatusTag(link, code);
   // 轻量摘要已经足够显示数量；点击课程时才补完整目录路径。
   if (link && link.quick) {
@@ -4096,6 +4249,13 @@ function ttRenderList(body, animate) {
 
   // 行点击（事件委托）：普通模式=跳转/提示；编辑模式=编辑课程
   list.onclick = function (e) {
+    var action = e.target.closest('[data-tt-action="adopt"], [data-tt-action="newcourse"]');
+    if (action) {
+      e.preventDefault();
+      e.stopPropagation();
+      ttOpenCourse(action.getAttribute('data-code'));
+      return;
+    }
     var reapply = e.target.closest('[data-tt-action="reapply"]');
     if (reapply) {
       e.preventDefault();

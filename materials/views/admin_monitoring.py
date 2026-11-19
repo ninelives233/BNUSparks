@@ -27,6 +27,7 @@ from ..models import (
     UserTimetable,
 )
 from ..monitoring_events import monitoring_events_payload
+from ..services.course_visibility import education_for_user
 
 
 # 监测接口只服务于管理员诊断，不允许请求参数把 SQLite 查询或 Python
@@ -887,6 +888,7 @@ def api_admin_user_timetable(request, uid):
             "id": user.id,
             "nickname": user.first_name or user.username,
             "education": profile.identity_education if profile else "",
+            "course_navigation_education": education_for_user(user),
             "college": profile.identity_college if profile else "",
             "major": profile.identity_major if profile else "",
         },

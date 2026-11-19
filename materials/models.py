@@ -918,8 +918,23 @@ class Report(models.Model):
 # ═══════════════════════════════════════════════════════════════
 
 COURSE_TREE_CACHE_KEY = "api_course_tree_data"
+COURSE_TREE_VERSION_KEY = "api_course_tree_version"
 STATS_CACHE_VERSION_KEY = "api_stats_data_version"
 PLAZA_INDEX_VERSION_KEY = "api_plaza_index_version"
+
+
+def get_course_tree_version():
+    version = cache.get(COURSE_TREE_VERSION_KEY)
+    if version is None:
+        version = uuid.uuid4().hex
+        cache.add(COURSE_TREE_VERSION_KEY, version, timeout=None)
+        version = cache.get(COURSE_TREE_VERSION_KEY) or version
+    return version
+
+
+def invalidate_course_tree_cache():
+    cache.set(COURSE_TREE_VERSION_KEY, uuid.uuid4().hex, timeout=None)
+    cache.delete(COURSE_TREE_CACHE_KEY)
 
 
 def get_stats_cache_key(limit):
@@ -951,7 +966,7 @@ from django.dispatch import receiver
 @receiver(post_save, sender=Course)
 @receiver(post_delete, sender=Course)
 def _invalidate_course_and_stats_caches(sender, **kwargs):
-    cache.delete(COURSE_TREE_CACHE_KEY)
+    invalidate_course_tree_cache()
     cache.set(PLAZA_INDEX_VERSION_KEY, uuid.uuid4().hex, timeout=None)
     invalidate_stats_cache()
 
@@ -981,7 +996,7 @@ def _bump_user_public_gen(user_id):
 @receiver(post_save, sender=Material)
 @receiver(post_delete, sender=Material)
 def _invalidate_material_caches(sender, instance, **kwargs):
-    cache.delete(COURSE_TREE_CACHE_KEY)
+    invalidate_course_tree_cache()
     # 首页统计（最近上传/下载榜/计数）也依赖 Material，删除/上传/审批后必须即时失效，
     # 否则被删除的文件最长残留 120s 仍显示在「最近上传排行榜」里。
     invalidate_stats_cache()

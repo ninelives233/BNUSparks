@@ -14,10 +14,18 @@ import json
 import os
 import re
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.core.cache import cache
+from django.db import connections
 from django.test import SimpleTestCase
+
+from materials.models import Course
+from materials.services.course_codes import placeholder_code
+from .helpers import AuthClient, _make_jwt, create_category, create_college, create_course, create_material, create_user
 
 ROOT = Path(settings.BASE_DIR)
 
@@ -111,6 +119,155 @@ class TimetableParserSourceContractTest(SimpleTestCase):
             self.assertIn(token, src)
         self.assertNotIn("'thead td, thead th'", src)
         self.assertNotIn("'tbody tr'", src)
+
+    def test_graduate_linkage_symbols_and_asset_version(self):
+        src = (ROOT / 'public/js/timetable.js').read_text(encoding='utf-8')
+        for token in ('function ttShowAdoptPlaceholderModal(', 'function ttPlaceholderForCourse(',
+                      'function ttOpenNewCourse(', '/api/courses/adopt-code/',
+                      'if (parsed.noLink) { importWithoutDirectory(); return; }',
+                      '<header><h3>确认关联并补码</h3></header><div class="tt-mbody">'):
+            self.assertIn(token, src)
+        loader = (ROOT / 'public/js/feature-loader.js').read_text(encoding='utf-8')
+        index = (ROOT / 'public/index.html').read_text(encoding='utf-8')
+        version = re.search(r"var VERSION = '([^']+)'", loader).group(1)
+        self.assertIn('feature-loader.js?v=' + version, index)
+        self.assertIn("'timetable.js'", loader)
+        self.assertIn("'newcourse.js'", loader)
+
+
+@unittest.skipUnless(os.environ.get('BNU_BROWSER_TESTS') == '1' and importlib.util.find_spec('playwright'),
+                     '设置 BNU_BROWSER_TESTS=1 并安装 Playwright 后运行浏览器验收')
+class GraduateTimetableLinkageBrowserTest(StaticLiveServerTestCase):
+    def setUp(self):
+        from playwright.sync_api import sync_playwright
+
+        cache.clear()
+        self.college = create_college('经济与工商管理学院', 'econ-browser')
+        root = create_category('专业课')
+        college_node = create_category(self.college.name, parent=root)
+        master = create_category('硕士', parent=college_node)
+        master.education_level = '硕士'
+        master.save(update_fields=['education_level'])
+        self.major = create_category('理论经济学', parent=master)
+        self.exact = create_course('ECON2001', '高级微观经济学', self.college, 'major')
+        self.exact_leaf = create_category(self.exact.name, parent=self.major, course=self.exact)
+        self.old_code = placeholder_code(self.college.id, '高级宏观经济学')
+        self.placeholder = create_course(self.old_code, '高级宏观经济学', self.college, 'major')
+        create_category(self.placeholder.name, parent=self.major, course=self.placeholder)
+        self.user = create_user('graduate_browser')
+        self.user.profile.identity_education = '硕士'
+        self.user.profile.identity_college = self.college.name
+        self.user.profile.identity_major = self.major.name
+        self.user.profile.save()
+        create_material(self.placeholder, self.user, review_status='approved')
+        client = AuthClient()
+        client.set_token(self.user)
+        self.assertEqual(client.post_json('/api/auth/tutorial/', {'action': 'dismiss_offer'}).status_code, 200)
+        self.pw = sync_playwright().start()
+        self.addCleanup(self.pw.stop)
+        self.browser = getattr(self.pw, os.environ.get('BNU_BROWSER_ENGINE', 'chromium')).launch()
+        self.addCleanup(self.browser.close)
+        self.context = self.browser.new_context(viewport={'width': 1280, 'height': 900}, reduced_motion='reduce')
+        self.addCleanup(self.context.close)
+        self.page = self.context.new_page()
+        self.errors = []
+        self.page.on('pageerror', lambda error: self.errors.append(str(error)))
+        self.page.add_init_script("""(() => {
+          const s = %s;
+          sessionStorage.setItem('token', s.token);
+          localStorage.setItem('bnusparks_user_id', String(s.uid));
+          localStorage.setItem('bnusparks_timetable_view_u' + s.uid, 'list');
+        })();""" % json.dumps({'uid': self.user.id, 'token': _make_jwt(self.user.id)}))
+        self.page.goto(self.live_server_url + '/timetable')
+        self.page.wait_for_function('typeof ttSetView === "function" && currentUser && document.getElementById("ttFileInput")')
+
+    def tearDown(self):
+        self.assertEqual(self.errors, [])
+
+    @staticmethod
+    def db_call(func, **kwargs):
+        def call():
+            try:
+                return func(**kwargs)
+            finally:
+                connections.close_all()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(call).result()
+
+    @staticmethod
+    def graduate_html():
+        html = original_export_html()
+        for old, new in zip(
+            ('[ECO12004]中级微观经济学', '[GEN01242]武术与强身避险', '[GEN01103]马克思主义基本原理'),
+            ('[ECON2001]高级微观经济学', '[ECON2002]高级宏观经济学', '[ECON2999]计量经济学'),
+        ):
+            html = html.replace(old, new)
+        return html
+
+    def import_graduate(self):
+        self.page.locator('#ttFileInput').set_input_files({
+            'name': 'graduate.html', 'mimeType': 'text/html', 'buffer': self.graduate_html().encode('utf-8'),
+        })
+        self.page.locator('[aria-label="确认导入课表"]').wait_for()
+        self.page.locator('#ttConfirmImport').click()
+        self.page.wait_for_function('ttState.data && ttState.data.courses.length === 3')
+        self.page.locator('.tt-lrow[data-code="ECON2001"]').wait_for()
+
+    def test_graduate_import_and_exact_code_opens_materials(self):
+        self.import_graduate()
+        self.page.wait_for_function("ttState.links['ECON2001'] && ttState.links['ECON2001'].state === 'linked'")
+        self.page.locator('.tt-lrow[data-code="ECON2001"]').click()
+        self.page.wait_for_selector('#explorerView.active, #plazaView.active')
+        self.page.wait_for_function("(typeof expPath !== 'undefined' && expPath.includes('高级微观经济学')) || location.search.includes('category_id=%s')" % self.exact_leaf.id)
+
+    def test_adopt_placeholder_code_preserves_material_and_alias(self):
+        self.import_graduate()
+        self.page.wait_for_function("ttState.links['ECON2002'] && ttState.links['ECON2002'].placeholder")
+        self.page.locator('.tt-lrow[data-code="ECON2002"]').click()
+        dialog = self.page.locator('[aria-label="确认关联课程"]')
+        dialog.wait_for()
+        self.assertEqual(dialog.locator('.tt-mbody').count(), 1)
+        with self.page.expect_response(lambda response: '/api/courses/adopt-code/' in response.url and response.request.method == 'POST') as response:
+            dialog.locator('[data-adopt]').click()
+        self.assertEqual(response.value.status, 200)
+        self.page.wait_for_function("ttState.links['ECON2002'] && ttState.links['ECON2002'].state === 'linked' && ttState.links['ECON2002'].fileCount === 1")
+        self.assertIn('1 份资料', self.page.locator('.tt-lrow[data-code="ECON2002"]').inner_text())
+        self.db_call(self.placeholder.refresh_from_db)
+        self.assertEqual(self.placeholder.code, 'ECON2002')
+        alias = self.db_call(Course.objects.get, code=self.old_code)
+        self.assertEqual(alias.merged_into_id, self.placeholder.id)
+        self.assertEqual(self.db_call(self.placeholder.materials.count), 1)
+
+    def test_missing_code_prefills_graduate_new_course(self):
+        self.import_graduate()
+        self.page.wait_for_function("ttState.links['ECON2999'] && ttState.links['ECON2999'].state === 'missing' && !ttState.links['ECON2999'].quick")
+        self.page.locator('.tt-lrow[data-code="ECON2999"]').click()
+        self.page.wait_for_selector('#newCourseView.active')
+        self.page.wait_for_function("document.getElementById('ncMCollegeSearch').value === '经济与工商管理学院' && document.getElementById('ncMMajor').selectedOptions[0]?.textContent.trim() === '理论经济学'")
+        self.assertEqual(self.page.locator('#ncMName').input_value(), '计量经济学')
+        self.assertEqual(self.page.locator('#ncMCode').input_value(), 'ECON2999')
+
+    def test_binary_excel_no_link_stays_local(self):
+        self.page.add_script_tag(path=str(ROOT / 'public/js/xlsx.full.min.js'))
+        payload = self.page.evaluate("""html => {
+          const book = XLSX.read(html, {type: 'string', raw: true});
+          return Array.from(new Uint8Array(XLSX.write(book, {type: 'array', bookType: 'xlsx'})));
+        }""", self.graduate_html())
+        self.page.locator('#ttFileInput').set_input_files({
+            'name': 'zhuhai.xlsx', 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'buffer': bytes(payload),
+        })
+        self.page.get_by_text('珠海校区资料跳转功能暂未上线', exact=False).wait_for()
+        self.page.wait_for_function('ttState.data && ttState.data.noLink && ttState.data.courses.length === 3')
+        self.assertEqual(self.page.locator('[aria-label="确认导入课表"]').count(), 0)
+        row = self.page.locator('.tt-lrow[data-code="ECON2001"]')
+        row.wait_for()
+        self.assertEqual(self.page.locator('[data-tt-action="adopt"], [data-tt-action="newcourse"]').count(), 0)
+        row.click()
+        self.page.locator('.tt-detail').wait_for()
+        self.assertEqual(self.page.locator('#explorerView.active, #plazaView.active, #newCourseView.active').count(), 0)
+        self.assertEqual(self.page.get_by_text('关联补码').count(), 0)
+        self.assertEqual(self.page.get_by_text('去建课').count(), 0)
 
 
 @unittest.skipUnless(os.environ.get('BNU_BROWSER_TESTS') == '1' and importlib.util.find_spec('playwright'),

@@ -324,6 +324,41 @@
     }).catch(function() {});
   }
 
+  function _resolveFileCoursePath(file) {
+    var code = file.course_code || '';
+    var path = null;
+    var expectedRoot = file.course_type === 'general' ? '通识课' : file.course_type === 'major' ? '专业课' : null;
+    if (code && expPath && expPath.length) {
+      var node = getNode(expPath);
+      if ((!expectedRoot || expPath[0] === expectedRoot) && node && (node.courseId === code || (node.courseCodes && node.courseCodes.indexOf(code) >= 0))) {
+        path = expPath.slice();
+      }
+    }
+    function findCategory(nodes, parentPath) {
+      for (var i = 0; i < nodes.length; i++) {
+        var item = nodes[i];
+        var itemPath = parentPath.concat(item.name);
+        if (item.id === file.category_id && !item.children) return itemPath;
+        var found = item.children && findCategory(item.children, itemPath);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (!path && file.category_id && courseTree) {
+      for (var root in courseTree) {
+        if (expectedRoot && root !== expectedRoot) continue;
+        path = findCategory(courseTree[root].children || [], [root]);
+        if (path) break;
+      }
+    }
+    if (!path && code) path = findPathByCourseId(code);
+    if (path && expectedRoot && path[0] !== expectedRoot) path = null;
+    if (path && path.length) return path;
+    var type = file.course_type === 'general' ? '通识课' : file.course_type === 'major' ? '专业课' :
+      (code.startsWith('GEN') ? '通识课' : '专业课');
+    return [type, file.course_name || ''];
+  }
+
   function showFileDetail(file, options) {
     // 文件详情可从搜索、通知或管理追溯页直接打开；这些入口可能尚未加载 explorer 核心。
     if (typeof expPath === 'undefined' && typeof ensureFeature === 'function') {
@@ -389,7 +424,7 @@
             return;
           }
           if (file.course_code) {
-            var t = file.course_code.startsWith('GEN') ? '通识课' : '专业课';
+            var t = _resolveFileCoursePath(file)[0];
             showExplorer(t);
             requestAnimationFrame(function() {
               requestAnimationFrame(function() { navToLast(file.course_code); });
@@ -451,31 +486,18 @@
           tailStatic: '文件详情'
         });
       } else {
-        var treePath = null;
-        // 优先用当前导航上下文（expPath），验证最后一个节点是否匹配课程
-        if (expPath && expPath.length > 0) {
-          var lastNode = getNode(expPath);
-          if (lastNode && lastNode.courseId === file.course_code) {
-            treePath = expPath.slice();
-          }
-        }
-        // 回退到全局树搜索
-        if (!treePath) {
-          treePath = findPathByCourseId(file.course_code || '');
-        }
-        if (treePath && treePath.length > 0) {
-          _fdBreadcrumbPath = treePath;
-          _renderBreadcrumb(bc, treePath, {
-            onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
-            tailStatic: '文件详情'
-          });
-        } else {
-          var type = file.course_code && file.course_code.startsWith('GEN') ? '通识课' : '专业课';
-          _fdBreadcrumbPath = [type, file.course_name || ''];
+        var renderCourseBreadcrumb = function() {
+          _fdBreadcrumbPath = _resolveFileCoursePath(file);
           _renderBreadcrumb(bc, _fdBreadcrumbPath, {
             onNavigate: function(depth) { navToFdBreadcrumbDepth(depth); },
             tailStatic: '文件详情'
           });
+        };
+        renderCourseBreadcrumb();
+        if ((!courseTree || !Object.keys(courseTree).length) && typeof _ensureCourseTreeReady === 'function') {
+          _ensureCourseTreeReady().then(function() {
+            if (_currentDetailFile && _currentDetailFile.id === file.id) renderCourseBreadcrumb();
+          }).catch(function() {});
         }
       }
     }

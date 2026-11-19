@@ -1,16 +1,27 @@
 """Apply education-level navigation boundaries to the shared course tree."""
 
+import hashlib
+
+from django.core.cache import cache
+
 
 def _has_graduate_directory(profile):
     """当前学院是否已有对应研究生层次的专业课入口。"""
     if not profile or not profile.identity_college or profile.identity_education not in ("硕士", "博士"):
         return False
-    from ..models import CourseCategory
-    return CourseCategory.objects.filter(
+    from ..models import CourseCategory, get_course_tree_version
+    scope = f"{profile.identity_college}\0{profile.identity_education}"
+    key = f"course_directory_{get_course_tree_version()}_{hashlib.sha256(scope.encode()).hexdigest()}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    available = CourseCategory.objects.filter(
         education_level__in=(profile.identity_education, "研究生"),
         parent__name=profile.identity_college,
         parent__parent__name="专业课", parent__parent__parent__isnull=True,
     ).exists()
+    cache.set(key, available, 600)
+    return available
 
 
 def is_peeking_undergrad(user, request=None):

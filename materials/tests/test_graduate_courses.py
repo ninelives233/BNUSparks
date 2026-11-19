@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+import subprocess
 from unittest.mock import patch
 
 from django.conf import settings
@@ -46,6 +48,86 @@ class GraduateCourseTest(BnuTestCase):
         tree = self.client.get('/api/courses/tree/').json()['data']
         college = tree['专业课']['children'][0]
         self.assertEqual([item['name'] for item in college['children']], ['硕士'])
+
+    def test_file_detail_general_course_navigation_and_visibility(self):
+        root = create_category('通识课')
+        section = create_category('思想政治理论课', parent=root)
+        section.education_level = '研究生'
+        section.save()
+        course = create_course('MAR2001', '马克思主义理论', course_type='general')
+        leaf = create_category(course.name, parent=section, course=course)
+        other_leaf = create_category('理论课别名', parent=section, course=course)
+        leaf.order = 10
+        leaf.save()
+        material = create_material(course, self.user, review_status='approved')
+
+        data = self.client.get_json(f'/api/files/{material.id}/').json()['data']
+        self.assertEqual(data['course_type'], 'general')
+        self.assertEqual(data['category_id'], min(leaf.id, other_leaf.id))
+
+        data = self.client.get_json(f'/api/files/{material.id}/', {'edu': 'undergrad'}).json()['data']
+        self.assertEqual(data['course_type'], 'general')
+        self.assertIsNone(data['category_id'])
+
+        self.user.profile.delete()
+        data = self.client.get_json(f'/api/files/{material.id}/').json()['data']
+        self.assertEqual(data['course_type'], 'general')
+        self.assertIsNone(data['category_id'])
+
+    def test_file_detail_general_breadcrumb_javascript(self):
+        if not shutil.which('node'):
+            self.skipTest('Node.js 不可用')
+        script = r'''
+const assert = require('assert');
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync('public/js/explorer-file.js', 'utf8');
+const core = fs.readFileSync('public/js/explorer-core.js', 'utf8');
+const breadcrumb = core.slice(core.indexOf('  function _renderBreadcrumb('), core.indexOf('  // ── 资料区切换条'));
+const element = () => ({children: [], classList: {add() {}, remove() {}},
+  appendChild(child) { this.children.push(child); }, setAttribute() {}, set innerHTML(value) { this.children = []; }});
+const bc = element();
+let finishTree;
+const context = {
+  window: {addEventListener() {}, scrollY: 0},
+  document: {getElementById(id) { return id === 'fdBreadcrumb' ? bc : null; },
+    querySelector() { return null; }, createElement: element},
+  expPath: ['专业课', '跨选课程'], courseTree: null,
+  getNode() { return {courseId: 'MAR2001'}; },
+  findPathByCourseId() { return ['专业课', '跨选课程']; },
+  displayCategoryLabel(name) { return name === '通识课' ? '公共课' : name; },
+  _ensureCourseTreeReady() { return new Promise(resolve => { finishTree = resolve; }); },
+  console,
+};
+vm.createContext(context);
+vm.runInContext(source + '\n' + breadcrumb, context);
+context._renderFdReturnSearch = () => {};
+const file = {id: 42, course_code: 'MAR2001', course_name: '马克思主义理论', course_type: 'general', category_id: 9};
+assert.strictEqual(context._resolveFileCoursePath(file)[0], '通识课');
+context._currentDetailFile = file;
+assert.throws(() => context._renderFileDetail(file), /currentUser is not defined/);
+assert.strictEqual(context._fdBreadcrumbPath[0], '通识课');
+assert(bc.children.some(child => child.textContent === '公共课'));
+context.courseTree = {'通识课': {children: [{name: '思想政治理论课', children: [{id: 9, name: file.course_name}]}]}};
+finishTree();
+Promise.resolve().then(() => {
+  assert.deepStrictEqual(Array.from(context._fdBreadcrumbPath), ['通识课', '思想政治理论课', file.course_name]);
+  context.courseTree = null;
+  context._showFileDetailSkeleton = () => {};
+  context.updateSidebar = () => {};
+  context.pushViewState = () => 1;
+  context._fdLoadIsCurrent = () => true;
+  context.api = () => Promise.reject(new Error('network'));
+  context.showExplorer = root => { context.destination = root; };
+  context.requestAnimationFrame = () => {};
+  context.showFileDetail(file);
+  return new Promise(resolve => setImmediate(resolve));
+}).then(() => {
+  assert.strictEqual(context.destination, '通识课');
+}).catch(error => { console.error(error); process.exitCode = 1; });
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_graduate_tree_defaults_to_plaza_but_respects_saved_preference(self):
         me = self.client.get('/api/auth/me/').json()['data']
@@ -112,6 +194,102 @@ class GraduateCourseTest(BnuTestCase):
         self.assertIn('private', undergraduate_response['Cache-Control'])
         tree = undergraduate_response.json()['data']
         self.assertEqual([node['name'] for node in tree['专业课']['children'][0]['children']], ['金融学'])
+
+    def test_tree_shards_serve_warm_304_without_rebuilding(self):
+        etags = {}
+        for level in ('本科', '硕士', '博士'):
+            self.user.profile.identity_education = level
+            self.user.profile.save()
+            response = self.client.get('/api/courses/tree/')
+            self.assertEqual(response.status_code, 200)
+            etags[level] = response['ETag']
+        self.assertEqual(len(set(etags.values())), 3)
+        with patch('materials.views.courses._visible_tree_response', side_effect=AssertionError('recomputed')):
+            for level in ('本科', '硕士', '博士'):
+                self.user.profile.identity_education = level
+                self.user.profile.save()
+                response = self.client.get('/api/courses/tree/', HTTP_IF_NONE_MATCH=etags[level])
+                self.assertEqual(response.status_code, 304)
+
+    def test_tree_shard_invalidated_by_course_and_material_changes(self):
+        from ..models import get_course_tree_version
+        from ..services.course_codes import adopt_course_code
+
+        original = self.client.get('/api/courses/tree/')['ETag']
+        version = get_course_tree_version()
+        adopt_course_code(self.course, 'ECON123')
+        self.assertNotEqual(version, get_course_tree_version())
+        response = self.client.get('/api/courses/tree/', HTTP_IF_NONE_MATCH=original)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response['ETag'], original)
+        version = get_course_tree_version()
+        create_material(self.course, self.user, review_status='approved')
+        self.assertNotEqual(version, get_course_tree_version())
+        self.assertEqual(self.client.get('/api/courses/tree/', HTTP_IF_NONE_MATCH=response['ETag']).status_code, 200)
+
+    def test_adopt_code_preserves_material_alias_and_invalidates_tree(self):
+        from ..models import get_course_tree_version
+
+        material = create_material(self.course, self.user, review_status='approved')
+        original_path = material.file_path
+        original = self.client.get('/api/courses/tree/')
+        version = get_course_tree_version()
+        response = self.client.post_json('/api/courses/adopt-code/', {
+            'placeholder_code': ' ' + self.code.lower() + ' ', 'teaching_code': ' econ123 ',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['data'], {
+            'code': 'ECON123', 'name': self.course.name,
+            'course_id': self.course.id, 'placeholder_code': self.code,
+        })
+        self.course.refresh_from_db()
+        material.refresh_from_db()
+        self.assertEqual(self.course.code, 'ECON123')
+        self.assertEqual(Course.objects.get(code=self.code).merged_into_id, self.course.id)
+        self.assertEqual(material.course_id, self.course.id)
+        self.assertEqual(material.file_path, original_path)
+        self.assertNotEqual(version, get_course_tree_version())
+        tree = self.client.get('/api/courses/tree/', HTTP_IF_NONE_MATCH=original['ETag'])
+        self.assertEqual(tree.status_code, 200)
+        self.assertContains(tree, 'ECON123')
+        self.assertEqual(self.client.post_json('/api/courses/adopt-code/', {
+            'placeholder_code': self.code, 'teaching_code': 'ECON123',
+        }).status_code, 400)
+
+    def test_adopt_code_conflict_and_invalid_input(self):
+        create_course('ECON123', '已有课程', college=self.college)
+        response = self.client.post_json('/api/courses/adopt-code/', {
+            'course_code': self.code, 'teaching_code': 'econ123',
+        })
+        self.assertEqual(response.status_code, 409)
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.code, self.code)
+        for placeholder, teaching in [('ECON123', 'ECON456'), (self.code, ''), (self.code, 'BAD-CODE')]:
+            response = self.client.post_json('/api/courses/adopt-code/', {
+                'placeholder_code': placeholder, 'teaching_code': teaching,
+            })
+            self.assertEqual(response.status_code, 400)
+
+    def test_adopt_code_rejects_hidden_and_orphan_courses(self):
+        hidden = create_course(placeholder_code(self.college.id, '博士课程'), '博士课程', college=self.college)
+        create_category(hidden.name, parent=self.other_level, course=hidden)
+        orphan = create_course(placeholder_code(self.college.id, '孤儿课程'), '孤儿课程', college=self.college)
+        for course in (hidden, orphan):
+            response = self.client.post_json('/api/courses/adopt-code/', {
+                'placeholder_code': course.code, 'teaching_code': 'ECON456',
+            })
+            self.assertEqual(response.status_code, 404)
+            course.refresh_from_db()
+            self.assertTrue(is_placeholder(course.code))
+
+    def test_admin_timetable_reports_viewed_user_navigation_education(self):
+        self.client.set_token(self.admin)
+        response = self.client.get_json(f'/api/admin/users/{self.user.id}/timetable/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['data']['user']['course_navigation_education'], '硕士')
+        self.master.delete()
+        response = self.client.get_json(f'/api/admin/users/{self.user.id}/timetable/')
+        self.assertEqual(response.json()['data']['user']['course_navigation_education'], '本科')
 
     def test_same_course_name_without_code_reuses_college_course(self):
         response = self.client.post_json('/api/courses/request/', {

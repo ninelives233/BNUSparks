@@ -11,6 +11,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from django.db.models import Count, F
 
+from ..models import Course, CourseCategory
+from ..services.course_visibility import education_for_user, visible_category_ids
+from .utils_course_tree import _follow_merge
 from .utils import (
     _err, _ok, _get_or_create_profile,
     _check_moderator_access, _user_can_edit_material,
@@ -19,6 +22,51 @@ from .utils import (
     require_login,
     UserProfile, Material, Notification, course_display_names,
 )
+
+
+def _detail_course_navigation(user, request, course):
+    if not course:
+        return '', None
+    course = _follow_merge(course)
+    rows = list(CourseCategory.objects.order_by('order', 'id').values(
+        'id', 'parent_id', 'name', 'education_level', 'course_id', 'is_divider',
+    ))
+    visible = visible_category_ids(rows, education_for_user(user, request))
+    by_id = {row['id']: row for row in rows}
+    parents = {row['parent_id'] for row in rows if row['id'] in visible}
+    merged = dict(Course.objects.values_list('id', 'merged_into_id'))
+
+    def canonical_id(course_id):
+        seen = set()
+        while merged.get(course_id) and merged[course_id] not in seen:
+            seen.add(course_id)
+            course_id = merged[course_id]
+        return course_id
+
+    profile = getattr(user, 'profile', None)
+    major = getattr(profile, 'identity_major', '')
+    college = getattr(profile, 'identity_college', '')
+    matches = []
+    for row in rows:
+        if (row['id'] not in visible or row['id'] in parents or row['is_divider']
+                or not row['course_id'] or canonical_id(row['course_id']) != course.id):
+            continue
+        path = [row]
+        while path[-1]['parent_id'] in by_id:
+            path.append(by_id[path[-1]['parent_id']])
+        path.reverse()
+        root = path[0]['name']
+        if root not in ('通识课', '专业课'):
+            continue
+        names = [node['name'] for node in path[1:-1]]
+        rank = 0 if root == '专业课' and major and major in names[1:] else (
+            1 if root == '专业课' and college and names and names[0] == college else 2
+        )
+        matches.append((rank, row['id'], root))
+    if not matches:
+        return course.course_type, None
+    rank, category_id, root = min(matches, key=lambda match: (match[0], match[1]))
+    return ('general' if root == '通识课' else 'major'), category_id
 
 
 def _scope_matched_moderators(material, actor, include_super_admin=False):
@@ -196,6 +244,7 @@ def api_file_detail(request, file_id):
         course_display_names([material.course_id]).get(material.course_id)
         if material.course_id else None
     )
+    course_type, category_id = _detail_course_navigation(user, request, material.course)
     return _ok({
         "id": material.id,
         "title": material.title,
@@ -210,6 +259,8 @@ def api_file_detail(request, file_id):
         "description": material.description or "",
         "course_name": tree_course_name or (material.course.name if material.course else ""),
         "course_code": material.course.code if material.course else "",
+        "course_type": course_type,
+        "category_id": category_id,
         "view_count": material.view_count,
         "download_count": material.download_count,
         "favorite_count": getattr(material, "favorite_count", 0),
