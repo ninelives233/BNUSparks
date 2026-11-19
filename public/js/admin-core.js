@@ -2,6 +2,7 @@
   // ── 管理后台（Iter 3） ──
   function adminFeatureForTab(tab) {
     if (tab === 'users') return 'admin-users';
+    if (tab === 'placeholders') return 'admin-placeholders';
     if (tab === 'pending' || tab === 'history') return 'admin-pending';
     if (tab === 'deletions' || tab === 'operations' || tab === 'report-history') return 'admin-records';
     if (tab === 'qa-records') return 'admin-qa';
@@ -60,6 +61,10 @@
     if (usersTab) {
       usersTab.style.display = currentUser && ['super_admin', 'moderator', 'sub_moderator'].indexOf(currentUser.role) !== -1 ? '' : 'none';
     }
+    var placeholdersTab = document.getElementById('adminPlaceholdersTab');
+    if (placeholdersTab) {
+      placeholdersTab.style.display = currentUser && ['super_admin', 'moderator', 'sub_moderator'].indexOf(currentUser.role) !== -1 ? '' : 'none';
+    }
     // 显示操作记录 tab（所有管理员可见）
     var opTab = document.querySelector('.admin-tab[data-tab="operations"]');
     if (opTab) opTab.style.display = '';
@@ -86,7 +91,7 @@
     var persistedState = typeof getPersistedViewState === 'function' ? getPersistedViewState() : null;
     var savedTab = (persistedState && persistedState.view === 'admin' && persistedState.adminTab) ||
       sessionStorage.getItem('bnusparks_admin_tab') || 'overview';
-    var validTabs = ['overview', 'pending', 'history', 'deletions', 'operations', 'report-history', 'qa-records', 'users'];
+    var validTabs = ['overview', 'pending', 'history', 'deletions', 'operations', 'report-history', 'qa-records', 'users', 'placeholders'];
     if (validTabs.indexOf(savedTab) === -1) savedTab = 'overview';
     document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
     var tabBtn = document.querySelector('.admin-tab[data-tab="' + savedTab + '"]');
@@ -118,6 +123,7 @@
     else if (tab === 'history') renderAdminHistory(content, 1);
     else if (tab === 'deletions') renderAdminDeletions(content, 1);
     else if (tab === 'users') renderAdminUsers(content, '', 1);
+    else if (tab === 'placeholders') renderAdminPlaceholders(content, 1);
     else if (tab === 'operations') renderAdminOperations(content);
     else if (tab === 'report-history') renderAdminReportHistory(content, 1);
     else if (tab === 'qa-records') renderAdminQaRecords(content, 1);

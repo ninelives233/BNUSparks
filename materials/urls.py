@@ -172,6 +172,9 @@ urlpatterns = [
     path("admin/qa/upload-image/", views.api_qa_admin_upload_image, name="api_qa_admin_upload_image"),
 
     # 用户管理：身份汇总对全体管理员开放，其余功能仅 super_admin。
+    path("admin/placeholder-courses/", views.api_admin_placeholder_courses, name="api_admin_placeholder_courses"),
+    path("admin/placeholder-courses/<int:course_id>/adopt/", views.api_admin_placeholder_adopt, name="api_admin_placeholder_adopt"),
+    path("admin/placeholder-courses/<int:course_id>/merge-into/", views.api_admin_placeholder_merge, name="api_admin_placeholder_merge"),
     path("admin/users/", views.api_admin_users, name="api_admin_users"),
     path("admin/monitoring/", views.api_admin_monitoring, name="api_admin_monitoring"),
     path("admin/users/<int:uid>/downloads/", views.api_admin_user_downloads, name="api_admin_user_downloads"),

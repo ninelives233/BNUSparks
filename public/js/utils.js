@@ -172,6 +172,7 @@
     if (!data.ok) {
       var apiError = new Error(data.error || '请求失败');
       apiError.status = resp.status;
+      apiError.data = data;
       throw apiError;
     }
     return data.data;

@@ -15,9 +15,14 @@ def normalized_course_name(name):
     return "".join(unicodedata.normalize("NFKC", str(name)).split()).casefold()
 
 
-def placeholder_code(college_id, name):
+def placeholder_code(college_id, name, education=None):
+    """Keep legacy graduate codes stable while separating other levels."""
     normalized = normalized_course_name(name)
-    digest = hashlib.sha256(f"{college_id}\0{normalized}".encode()).hexdigest()[:32].upper()
+    level = str(education or "").strip()
+    source = f"{college_id}\0{normalized}"
+    if level and level not in ("硕士", "研究生"):
+        source = f"{college_id}\0{level}\0{normalized}"
+    digest = hashlib.sha256(source.encode()).hexdigest()[:32].upper()
     return PREFIX + digest
 
 

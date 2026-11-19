@@ -73,6 +73,17 @@ def _graduate_target_college(category, college_id):
     return college if graduate and in_college else None
 
 
+def _target_education_level(category, user):
+    node = category
+    while node:
+        if node.education_level in ("硕士", "博士"):
+            return node.education_level
+        if node.education_level == "研究生":
+            break
+        node = node.parent
+    return education_for_user(user)
+
+
 def _graduate_name_course(college, name, education=None):
     rows = list(CourseCategory.objects.values("id", "parent_id", "name", "education_level"))
     if education in ("硕士", "博士"):
@@ -547,13 +558,16 @@ def api_course_request_create(request):
     if not course_code:
         if graduate_college is None:
             return _err("请填写课程代码（可在教务管理网站查询）")
+        target_education = _target_education_level(target_cat, request.user)
         try:
             existing_name = _graduate_name_course(
-                graduate_college, course_name, education=education_for_user(request.user),
+                graduate_college, course_name, education=target_education,
             )
         except ValueError as exc:
             return _err(str(exc), 409)
-        course_code = existing_name.code if existing_name else placeholder_code(graduate_college.id, course_name)
+        course_code = existing_name.code if existing_name else placeholder_code(
+            graduate_college.id, course_name, education=target_education,
+        )
     elif course_code.startswith(PREFIX):
         return _err("请填写教务系统中的课程代码", 400)
     is_auto = (

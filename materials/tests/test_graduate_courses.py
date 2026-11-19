@@ -10,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from .helpers import BnuTestCase, create_category, create_college, create_course, create_material, create_user
 from ..models import Course, CourseCategory, CourseCreationRequest, Material
 from ..services.course_codes import is_placeholder, placeholder_code
+from ..views.course_requests import _target_education_level
 
 
 class GraduateCourseTest(BnuTestCase):
@@ -179,6 +180,25 @@ Promise.resolve().then(() => {
         self.assertEqual(placeholder_code(self.college.id, '高级经济学Ⅰ'),
                          placeholder_code(self.college.id, '高级经济学 I'))
 
+    def test_placeholder_education_compatibility_and_isolation(self):
+        self.assertEqual(placeholder_code(42, '测试课程'), 'BNUX828B3ACF187DAFDFC40089676FAF7E4D')
+        for education in (None, '', '  ', '硕士', ' 硕士 ', '研究生'):
+            with self.subTest(education=education):
+                self.assertEqual(self.code, placeholder_code(self.college.id, '测试课程', education))
+        doctor_code = placeholder_code(self.college.id, '测试课程', education='博士')
+        self.assertTrue(is_placeholder(doctor_code))
+        self.assertNotEqual(self.code, doctor_code)
+        self.assertEqual(doctor_code, placeholder_code(self.college.id, '测试课程', education=' 博士 '))
+        self.assertNotEqual(doctor_code, placeholder_code(self.college.id, '测试课程', education='其他'))
+
+    def test_target_education_prefers_explicit_level_and_falls_back_for_shared(self):
+        self.assertEqual(_target_education_level(self.other_level, self.user), '博士')
+        shared = create_category('共享目录', parent=self.doctor)
+        shared.education_level = '研究生'
+        shared.save()
+        self.assertEqual(_target_education_level(shared, self.user), '硕士')
+        self.assertEqual(_target_education_level(self.undergrad, self.user), '硕士')
+
     def test_undergraduate_cannot_see_graduate_navigation_or_search(self):
         graduate_response = self.client.get('/api/courses/tree/')
         graduate_etag = graduate_response['ETag']
@@ -309,6 +329,47 @@ Promise.resolve().then(() => {
         self.assertEqual(response.status_code, 200, response.content)
         request = CourseCreationRequest.objects.get(id=response.json()['data']['id'])
         self.assertEqual(request.course_code, placeholder_code(self.college.id, '新课程'))
+
+    def test_same_name_code_free_requests_isolate_master_and_doctor_courses(self):
+        master_material = create_material(self.course, self.user, review_status='approved')
+        master_response = self.client.post_json('/api/courses/request/', {
+            'course_type': 'major', 'course_name': '测试课程', 'course_code': '',
+            'college_id': self.college.id, 'target_category_id': self.specialty.id,
+        })
+        self.assertEqual(master_response.status_code, 200, master_response.content)
+        master_request = CourseCreationRequest.objects.get(id=master_response.json()['data']['id'])
+        self.assertEqual(master_request.course_code, self.code)
+        self.assertTrue(master_response.json()['data']['will_link'])
+
+        doctor_response = self.client.post_json('/api/courses/request/', {
+            'course_type': 'major', 'course_name': '测试课程', 'course_code': '',
+            'college_id': self.college.id, 'target_category_id': self.other_level.id,
+        })
+        self.assertEqual(doctor_response.status_code, 200, doctor_response.content)
+        doctor_request = CourseCreationRequest.objects.get(id=doctor_response.json()['data']['id'])
+        self.assertEqual(doctor_request.course_code, placeholder_code(self.college.id, '测试课程', '博士'))
+        self.assertTrue(is_placeholder(doctor_request.course_code))
+        self.assertNotEqual(master_request.course_code, doctor_request.course_code)
+        self.assertFalse(doctor_response.json()['data']['will_link'])
+
+        file = SimpleUploadedFile('doctor.txt', b'doctor notes', content_type='text/plain')
+        attached = self.client.post(f'/api/courses/request/{doctor_request.id}/files/',
+                                    {'file': file, 'title': '博士笔记'}, **self.client.defaults)
+        self.assertEqual(attached.status_code, 200, attached.content)
+        self.client.set_token(self.admin)
+        for course_request in (master_request, doctor_request):
+            approved = self.client.post_json(f'/api/moderation/course-requests/{course_request.id}/approve/')
+            self.assertEqual(approved.status_code, 200, approved.content)
+
+        doctor_course = Course.objects.get(code=doctor_request.course_code)
+        doctor_material = Material.objects.get(id=attached.json()['data']['id'])
+        master_material.refresh_from_db()
+        self.assertEqual(master_material.course_id, self.course.id)
+        self.assertEqual(doctor_material.course_id, doctor_course.id)
+        self.assertTrue(self.specialty.children.filter(course=self.course).exists())
+        self.assertTrue(self.other_level.children.filter(course=doctor_course).exists())
+        self.assertFalse(self.specialty.children.filter(course=doctor_course).exists())
+        self.assertFalse(self.other_level.children.filter(course=self.course).exists())
 
     def test_code_free_request_with_file_can_be_approved(self):
         response = self.client.post_json('/api/courses/request/', {

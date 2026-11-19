@@ -88,6 +88,9 @@ from .course_requests import (
 )
 
 # 管理员
+from .admin_placeholders import (
+    api_admin_placeholder_courses, api_admin_placeholder_adopt, api_admin_placeholder_merge,
+)
 from .admin import (
     api_admin_users, api_admin_set_role,
     api_admin_sections, api_admin_auto_approve_toggle,

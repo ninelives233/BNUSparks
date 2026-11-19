@@ -1979,3 +1979,36 @@ html[data-bnu-theme="dark"] .admin-search-box .admin-role-filter {
 @media (prefers-reduced-motion: reduce) {
   .health-console *, .health-console *::before, .health-console *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+.ap-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 16px; }
+.ap-toolbar label, .ap-actions label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--ink); font-size: 0.8rem; }
+.ap-toolbar input, .ap-toolbar select, .ap-actions input { min-width: 0; max-width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--paper); color: var(--ink); font: inherit; }
+.ap-list { display: grid; gap: 12px; }
+.ap-card { min-width: 0; overflow-wrap: anywhere; }
+.ap-card-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.ap-card-header h4, .ap-conflicts h4, .ap-clue-group h5 { margin: 0; color: var(--ink); }
+.ap-code, .ap-clue code, .ap-aliases code { color: var(--accent); overflow-wrap: anywhere; }
+.ap-counts, .ap-college, .ap-paths, .ap-clue, .ap-empty { color: var(--ink-faint); font-size: 0.8rem; }
+.ap-card-paths, .ap-aliases, .ap-conflicts, .ap-actions { margin-top: 12px; }
+.ap-paths { margin: 5px 0; padding-left: 20px; }
+.ap-conflicts { display: grid; gap: 8px; }
+.ap-clue-group { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--paper); }
+.ap-clue { padding-top: 8px; }
+.ap-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ap-adopt, .ap-merge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.ap-error { flex-basis: 100%; color: var(--danger); font-size: 0.8rem; overflow-wrap: anywhere; }
+.ap-error:empty { display: none; }
+.ap-error .ap-conflict-merge { display: block; margin-top: 8px; }
+.ap-confirm-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(20, 17, 14, 0.58); }
+.ap-confirm-dialog { width: min(100%, 420px); max-height: calc(100vh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); box-shadow: var(--shadow-md); overflow-wrap: anywhere; }
+.ap-confirm-dialog h3 { margin: 0; color: var(--ink); }
+.ap-confirm-dialog p { margin: 14px 0 22px; line-height: 1.6; }
+.ap-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.ap-confirm-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .ap-toolbar label { flex: 1 1 140px; }
+  .ap-toolbar input, .ap-toolbar select { flex: 1 1 100px; }
+  .ap-adopt, .ap-merge { flex: 1 1 100%; }
+  .ap-actions label { flex: 1 1 170px; }
+  .ap-actions input { flex: 1 1 100px; }
+}

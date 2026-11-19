@@ -105,7 +105,8 @@
   // v384：身份四列网格修复培养层次卡被挤扁——数字列改 auto 永不截断、
   //        各列设内容下限、2 列断点 1180→1340；缓存键同步推进。
   // v406：课表支持研究生课程目录关联补码与建课入口。
-  var VERSION = '406';
+  // v408：占位码治理确认弹窗与冲突合并交互。
+  var VERSION = '408';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);
@@ -128,6 +129,7 @@
     // 各个后台 Tab 的脚本在 admin-core.js 中按当前 Tab 延迟加载。
     admin: [],
     'admin-users': ['admin-users.js', 'admin-health.js', 'admin-events.js'],
+    'admin-placeholders': ['admin-users.js', 'admin-placeholders.js'],
     'admin-pending': ['admin-pending.js', 'admin-users.js', 'admin-health.js', 'admin-events.js'],
     'admin-records': ['admin-pending.js', 'admin-users.js', 'admin-health.js', 'admin-events.js', 'admin-records.js'],
     'admin-qa': [
@@ -169,6 +171,7 @@
     qa: ['qa.css'],
     admin: ['admin.css'],
     'admin-users': ['admin.css'],
+    'admin-placeholders': ['admin.css'],
     'admin-pending': ['admin.css'],
     'admin-records': ['admin.css'],
     'admin-qa': ['admin.css', 'qa.css'],
