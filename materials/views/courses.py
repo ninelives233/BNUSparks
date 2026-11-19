@@ -586,11 +586,7 @@ def api_colleges(request):
     if cached is not None:
         return _ok(cached)
 
-    # 经济与工商管理学院固定排在所有学院第一位，不因历史 order 负偏移被其他学院顶到前面
-    colleges = sorted(
-        College.objects.order_by("order", "id"),
-        key=lambda c: (0 if "经济与工商" in (c.name or "") else 1, c.order, c.id),
-    )
+    colleges = College.objects.order_by("order", "id")
     result = [{
         "id": c.id,
         "name": c.name,

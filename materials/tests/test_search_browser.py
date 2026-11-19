@@ -44,8 +44,8 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
             'identity_education': '本科', 'identity_college': '搜索学院', 'identity_major': '搜索专业'})
         self.author = User.objects.create_user('2099search_a', password='browser-test-only', first_name='问答作者')
         self.college = College.objects.create(name='搜索学院', slug='search-browser')
-        College.objects.create(name='法学院', short_name='法学院', slug='law-order-test', order=-184)
-        College.objects.create(name='经济与工商管理学院', short_name='经管学院', slug='econ-order-test', order=0)
+        College.objects.create(name='法学院', short_name='法学院', slug='law-order-test', order=2)
+        College.objects.create(name='经济与工商管理学院', short_name='经管学院', slug='econ-order-test', order=-1)
         self.course = Course.objects.create(code='SRCH101', name='搜索学导论', college=self.college)
         self.course2 = Course.objects.create(code='SRCH202', name='搜索学进阶', college=self.college)
         parent = None
@@ -419,7 +419,7 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('#uploadView.active')
         self.assertTrue(self.page.url.endswith('/upload'))
 
-        # 所属院系下拉中，经管学院排在所有学院第一位（不会因法学院负数 order 排在前面）
+        # 所属院系下拉中，按 College.order 排序使经管学院排在所有学院第一位
         self.page.click('#upCollegeInput')
         self.page.wait_for_selector('#upCollegeList .up-combo-item')
         college_names = self.page.eval_on_selector_all(

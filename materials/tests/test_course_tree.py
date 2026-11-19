@@ -349,9 +349,14 @@ class CourseDisplayNameContractTest(BnuTestCase):
         )
         self.assertEqual(material_hit["course_name"], "孤儿课程")
 
-    def test_api_colleges_always_puts_econ_first(self):
-        """即使其他学院 order 为更小的负值，/api/colleges/ 仍保证经管排在第一位。"""
+    def test_fix_college_order_migration_makes_api_colleges_put_econ_first(self):
+        """0063 数据迁移清理法学院历史负 order 并置顶经管后，/api/colleges/ 按 order 返回经管第一。"""
+        import importlib
+        from django.apps import apps as django_apps
         from django.core.cache import cache
+        from django.db import connection
+
+        mig = importlib.import_module("materials.migrations.0063_fix_college_sort_order")
 
         law = create_college("法学院", "law")
         law.order = -184
@@ -359,10 +364,21 @@ class CourseDisplayNameContractTest(BnuTestCase):
         econ = create_college("经济与工商管理学院", "econ")
         econ.order = 0
         econ.save(update_fields=["order"])
+
+        class _FakeSchemaEditor:
+            pass
+
+        _FakeSchemaEditor.connection = connection
+        mig.fix_college_order(django_apps, _FakeSchemaEditor)
         cache.delete("api_colleges_data")
+
+        law.refresh_from_db()
+        econ.refresh_from_db()
+        self.assertEqual(econ.order, -1)
+        self.assertEqual(law.order, 2)
 
         res = self.client.get_json("/api/colleges/")
         self.assertEqual(res.status_code, 200)
         names = [c["name"] for c in res.json()["data"]]
         self.assertEqual(names[0], econ.name)
-        self.assertIn(law.name, names)
+        self.assertLess(names.index(econ.name), names.index(law.name))

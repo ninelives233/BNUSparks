@@ -148,23 +148,21 @@
 
   function _buildCollegesList(apiColleges) {
     var genLabel = _generalLabel();
-    var generalItem = {
+    var list = [{
       name: '通识课',
       displayName: genLabel,
       short_name: genLabel === '公共课' ? '通识 公共 研究生公共课' : '通识 公共',
       isGeneral: true,
-    };
+    }];
     var seen = { '通识课': true };
-    var colleges = [];
     (Array.isArray(apiColleges) ? apiColleges : []).forEach(function (c) {
       if (!c || !c.name || seen[c.name]) return;
       seen[c.name] = true;
-      colleges.push({
+      list.push({
         name: c.name,
         displayName: c.name,
         short_name: c.short_name || '',
         isGeneral: false,
-        _idx: colleges.length,
       });
     });
     // 兜底补齐树中存在但未在 /api/colleges/ 中的学院节点
@@ -173,22 +171,9 @@
     majorChildren.forEach(function (node) {
       if (!node || !node.name || seen[node.name]) return;
       seen[node.name] = true;
-      colleges.push({
-        name: node.name,
-        displayName: node.name,
-        short_name: '',
-        isGeneral: false,
-        _idx: colleges.length,
-      });
+      list.push({ name: node.name, displayName: node.name, short_name: '', isGeneral: false });
     });
-    // 经济与工商管理学院永远排在学院第一位
-    colleges.sort(function (a, b) {
-      var aEc = /经济与工商/.test(a.name) ? 0 : 1;
-      var bEc = /经济与工商/.test(b.name) ? 0 : 1;
-      if (aEc !== bEc) return aEc - bEc;
-      return a._idx - b._idx;
-    });
-    _state.collegesList = [generalItem].concat(colleges);
+    _state.collegesList = list;
   }
 
   function _renderSkeleton() {
