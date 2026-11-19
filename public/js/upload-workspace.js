@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   BNU Sparks · upload-workspace.js —— Plib 风格双栏独立上传工作区（/upload）
+   BNU Sparks · upload-workspace.js —— 独立上传工作区（/upload）
    ═══════════════════════════════════════════════════════════ */
 (function () {
   var MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -184,49 +184,95 @@
         '<div class="breadcrumb" id="uploadBreadcrumb"></div>' +
       '</nav>' +
       '<div class="up-page">' +
-        '<div class="up-header">' +
-          '<h1 class="up-title">上传课程资料</h1>' +
-          '<p class="up-sub" id="upSubContext"></p>' +
-        '</div>' +
-        '<div class="up-mode-tabs" role="tablist" aria-label="上传方式">' +
-          '<button type="button" class="up-mode-tab is-active" role="tab" aria-selected="true" data-up-mode="file">上传文件</button>' +
-          '<button type="button" class="up-mode-tab" role="tab" aria-selected="false" data-up-mode="text">文字录入</button>' +
-        '</div>' +
-        '<div class="up-grid">' +
-          '<form class="up-card" id="upForm" novalidate>' +
+        '<header class="up-header">' +
+          '<div class="up-head-copy">' +
+            '<span class="up-kicker">木铎星火 · 课程资料汇集</span>' +
+            '<h1 class="up-title">上传课程资料</h1>' +
+            '<p class="up-sub" id="upSubContext"></p>' +
+          '</div>' +
+          '<div class="up-mode-tabs" role="tablist" aria-label="上传方式">' +
+            '<button type="button" class="up-mode-tab is-active" role="tab" aria-selected="true" data-up-mode="file">' +
+              iconSvg('upload') + '<span>上传文件</span>' +
+            '</button>' +
+            '<button type="button" class="up-mode-tab" role="tab" aria-selected="false" data-up-mode="text">' +
+              iconSvg('document') + '<span>文字录入</span>' +
+            '</button>' +
+          '</div>' +
+        '</header>' +
+        '<form class="up-card up-sheet" id="upForm" novalidate>' +
+          '<section class="up-step-block" aria-labelledby="upStep1Title">' +
+            '<div class="nc-step up-step">' +
+              '<span class="nc-step-no up-step-no" aria-hidden="true">01</span>' +
+              '<div class="nc-step-body up-step-body">' +
+                '<h2 class="nc-step-title up-step-title" id="upStep1Title">选定课程与归属目录</h2>' +
+                '<p class="nc-step-sub up-step-sub">从我的课表或收藏快速点选，或按院系与课程名检索定位</p>' +
+              '</div>' +
+              '<button type="button" class="up-locate-btn up-locate-head-btn" id="upLocateIdleBtn">' +
+                iconSvg('layers') + '<span>从课程树定位</span>' +
+              '</button>' +
+            '</div>' +
+            '<div class="up-quick-panel" id="upQuickPanel">' +
+              '<div class="up-quick-head">' +
+                '<span class="up-quick-label">' + iconSvg('calendar') + '<span>我的课程 · 快捷带入</span></span>' +
+                '<button type="button" class="up-quick-link" id="upQuickTimetableBtn">我的课表 ' + iconSvg('chevron-right') + '</button>' +
+              '</div>' +
+              '<div class="up-my-list" id="upMyList"></div>' +
+              '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
+            '</div>' +
             '<div class="up-row-2">' +
               '<div class="up-field">' +
-                '<label class="up-label" for="upCollegeInput">所属院系 <span class="up-opt">（可选）</span></label>' +
-                '<div class="up-input-wrap" id="upCollegeWrap">' +
-                  '<input type="text" id="upCollegeInput" class="up-input up-input-has-clear" role="combobox" aria-expanded="false" aria-controls="upCollegeList" autocomplete="off" placeholder="输入院系名称或公共课搜索">' +
+                '<label class="up-label" for="upCollegeInput">所属院系 <span class="up-opt">（可选，用于缩小范围）</span></label>' +
+                '<div class="up-input-wrap up-input-wrap--search" id="upCollegeWrap">' +
+                  '<span class="up-input-icon" aria-hidden="true">' + iconSvg('building') + '</span>' +
+                  '<input type="text" id="upCollegeInput" class="up-input up-input-has-icon up-input-has-clear" role="combobox" aria-expanded="false" aria-controls="upCollegeList" autocomplete="off" placeholder="输入院系名称或公共课搜索">' +
                   '<button type="button" id="upCollegeClear" class="up-clear-btn" aria-label="清空院系筛选" style="display:none">×</button>' +
                   '<div class="up-combo-list" id="upCollegeList" role="listbox" style="display:none"></div>' +
                 '</div>' +
               '</div>' +
               '<div class="up-field">' +
                 '<label class="up-label" for="upCourseInput">课程名称 <span class="up-req">*</span></label>' +
-                '<div class="up-input-wrap" id="upCourseWrap">' +
-                  '<input type="text" id="upCourseInput" class="up-input up-input-has-clear" role="combobox" aria-expanded="false" aria-controls="upCourseList" autocomplete="off" placeholder="输入课程名称或代码搜索">' +
+                '<div class="up-input-wrap up-input-wrap--search" id="upCourseWrap">' +
+                  '<span class="up-input-icon" aria-hidden="true">' + iconSvg('search') + '</span>' +
+                  '<input type="text" id="upCourseInput" class="up-input up-input-has-icon up-input-has-clear" role="combobox" aria-expanded="false" aria-controls="upCourseList" autocomplete="off" placeholder="输入课程名称或代码搜索">' +
                   '<button type="button" id="upCourseClear" class="up-clear-btn" aria-label="清空已选课程" style="display:none">×</button>' +
                   '<div class="up-combo-list" id="upCourseList" role="listbox" style="display:none"></div>' +
                 '</div>' +
-                '<p class="up-field-hint" id="upCourseIdleHint">先搜课程也行，院系会自动填上</p>' +
+                '<p class="up-field-hint" id="upCourseIdleHint">可直接搜课程名或课程代码，选定后将自动补全所属院系</p>' +
               '</div>' +
-            '</div>' +
-            '<div class="up-locate-row-idle" id="upLocateIdleRow">' +
-              '<span>不确定课程在哪个专业目录下？</span>' +
-              '<button type="button" class="up-locate-btn" id="upLocateIdleBtn">' + iconSvg('folder') + ' 从课程树精准定位</button>' +
             '</div>' +
             '<div class="up-course-meta-bar" id="upCourseMetaBar" style="display:none">' +
               '<div class="up-course-meta-body">' +
                 '<div class="up-course-selected-line" id="upCourseSelectedLine"></div>' +
                 '<div class="up-majors-line" id="upMajorsLine"></div>' +
               '</div>' +
-              '<button type="button" class="up-locate-btn" id="upLocateBtn">' + iconSvg('folder') + ' 精准定位</button>' +
+              '<button type="button" class="up-locate-btn" id="upLocateBtn">' + iconSvg('layers') + '<span>精准定位</span></button>' +
             '</div>' +
-            '<div class="up-field">' +
-              '<label class="up-label" for="upTitle">资料标题 <span class="up-opt">（可选）</span></label>' +
-              '<input type="text" id="upTitle" class="up-input" placeholder="留空则自动使用文件名">' +
+          '</section>' +
+          '<section class="up-step-block" aria-labelledby="upStep2Title">' +
+            '<div class="nc-step up-step">' +
+              '<span class="nc-step-no up-step-no" aria-hidden="true">02</span>' +
+              '<div class="nc-step-body up-step-body">' +
+                '<h2 class="nc-step-title up-step-title" id="upStep2Title">上传文件与资料信息</h2>' +
+                '<p class="nc-step-sub up-step-sub" id="upStep2Sub">添加资料内容并注明类型与任课教师，方便同校同学检索查阅</p>' +
+              '</div>' +
+            '</div>' +
+            '<div class="up-field" id="upModeFile">' +
+              '<label class="up-label" for="upFileInput">资料文件 <span class="up-req">*</span></label>' +
+              '<div class="up-dropzone" id="upDropzone">' +
+                '<div class="up-drop-badge" aria-hidden="true">' + iconSvg('upload') + '</div>' +
+                '<div class="up-drop-copy">' +
+                  '<div class="up-file-summary" id="upFileSummary">点击选择文件，或将资料拖拽到此处</div>' +
+                  '<div class="up-drop-formats">支持 pdf、doc(x)、ppt(x)、xls(x)、zip、txt、md、png、jpg 等 · 可多选 · 单文件 ≤ 50MB</div>' +
+                '</div>' +
+                '<button type="button" class="up-file-trigger" id="upFileTrigger">浏览文件</button>' +
+                '<input type="file" id="upFileInput" multiple style="display:none">' +
+              '</div>' +
+              '<ul class="up-file-list" id="upFileList" style="display:none"></ul>' +
+            '</div>' +
+            '<div class="up-field" id="upModeText" style="display:none">' +
+              '<label class="up-label" for="upTextContent">文字内容 <span class="up-req">*</span></label>' +
+              '<textarea id="upTextContent" class="up-textarea" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等"></textarea>' +
+              '<p class="up-field-hint">录入的文字将自动保存为 .txt 文档；篇幅较长时建议整理为 PDF 或 Word 后上传。</p>' +
             '</div>' +
             '<div class="up-row-2">' +
               '<div class="up-field">' +
@@ -240,23 +286,12 @@
                 '<input type="text" id="upTeacher" class="up-input" required placeholder="如：张老师">' +
               '</div>' +
             '</div>' +
-            '<div class="up-field" id="upModeFile">' +
-              '<label class="up-label" for="upFileInput">选择文件 <span class="up-req">*</span></label>' +
-              '<div class="up-dropzone" id="upDropzone">' +
-                '<button type="button" class="up-file-trigger" id="upFileTrigger">选择文件</button>' +
-                '<span class="up-file-summary" id="upFileSummary">未选择文件（可点击或拖拽到此处）</span>' +
-                '<input type="file" id="upFileInput" multiple style="display:none">' +
-              '</div>' +
-              '<ul class="up-file-list" id="upFileList" style="display:none"></ul>' +
-              '<p class="up-field-hint">支持 pdf、doc(x)、ppt(x)、xls(x)、zip、txt、md、png、jpg 等常见格式，支持多选，单个文件不超过 50MB。</p>' +
-            '</div>' +
-            '<div class="up-field" id="upModeText" style="display:none">' +
-              '<label class="up-label" for="upTextContent">文字内容 <span class="up-req">*</span></label>' +
-              '<textarea id="upTextContent" class="up-textarea" placeholder="在此粘贴或输入文字内容…考试题目、笔记、知识点整理等"></textarea>' +
-              '<p class="up-field-hint">录入的文字将保存为 .txt 文件，若字数较多建议生成文档后上传。</p>' +
+            '<div class="up-field">' +
+              '<label class="up-label" for="upTitle">资料标题 <span class="up-opt">（可选，留空自动使用文件名）</span></label>' +
+              '<input type="text" id="upTitle" class="up-input" placeholder="留空则自动使用文件名">' +
             '</div>' +
             '<details class="up-extra" id="upExtraDetails">' +
-              '<summary>补充信息（可选）</summary>' +
+              '<summary>补充信息（教务代码与资料描述，可选）</summary>' +
               '<div class="up-extra-body">' +
                 '<div class="up-field" id="upTeachingCodeGroup" style="display:none">' +
                   '<label class="up-label" for="upTeachingCode">教务课程代码 <span class="up-opt">（选填，代码待补充课程可顺手补全）</span></label>' +
@@ -264,28 +299,25 @@
                 '</div>' +
                 '<div class="up-field" style="margin-bottom:0">' +
                   '<label class="up-label" for="upDesc">资料描述 <span class="up-opt">（选填）</span></label>' +
-                  '<textarea id="upDesc" class="up-textarea up-textarea-sm" placeholder="简述适用学期、版本、试卷回忆完整度等…"></textarea>' +
+                  '<textarea id="upDesc" class="up-textarea up-textarea-sm" placeholder="简述适用学期、教材版本、试卷回忆完整度等…"></textarea>' +
                 '</div>' +
               '</div>' +
             '</details>' +
-            '<div class="up-error" id="upError" role="alert" style="display:none"></div>' +
-            '<div class="mf-progress" id="upProgress" role="status" aria-live="polite" style="display:none;margin-bottom:12px">' +
-              '<div class="mf-progress-bar"><div class="mf-progress-fill" id="upProgressFill"></div></div>' +
-              '<span id="upProgressText">上传中...</span>' +
-            '</div>' +
-            '<div class="up-success-box" id="upSuccessBox" style="display:none"></div>' +
-            '<div class="up-actions">' +
-              '<button type="button" class="up-btn-ghost" id="upCancelBtn">取消</button>' +
+          '</section>' +
+          '<div class="up-error" id="upError" role="alert" style="display:none"></div>' +
+          '<div class="mf-progress" id="upProgress" role="status" aria-live="polite" style="display:none;margin-bottom:12px">' +
+            '<div class="mf-progress-bar"><div class="mf-progress-fill" id="upProgressFill"></div></div>' +
+            '<span id="upProgressText">上传中...</span>' +
+          '</div>' +
+          '<div class="up-success-box" id="upSuccessBox" style="display:none"></div>' +
+          '<div class="up-actions">' +
+            '<button type="button" class="up-btn-ghost" id="upCancelBtn">取消</button>' +
+            '<div class="up-actions-right">' +
+              '<span class="up-actions-note">提交后进入审核队列，通过即向同学公开</span>' +
               '<button type="submit" class="up-btn-primary" id="upSubmitBtn">确认上传</button>' +
             '</div>' +
-          '</form>' +
-          '<aside class="up-side-card" aria-label="我的课程">' +
-            '<h2 class="up-side-title">我的课程</h2>' +
-            '<p class="up-side-desc">点击已导入课表或收藏的课程，可一键填入左侧所属院系与课程名称。</p>' +
-            '<div class="up-my-list" id="upMyList"></div>' +
-            '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
-          '</aside>' +
-        '</div>' +
+          '</div>' +
+        '</form>' +
       '</div>';
 
     _bindEvents();
@@ -354,9 +386,15 @@
       if (crsWrap && !crsWrap.contains(e.target)) _closeCombo('upCourseList', 'upCourseInput');
     });
 
-    // 精准定位入口
+    // 精准定位与课表快捷入口
     _el('upLocateIdleBtn').addEventListener('click', _openLocateOverlay);
     _el('upLocateBtn').addEventListener('click', _openLocateOverlay);
+    var quickTtBtn = _el('upQuickTimetableBtn');
+    if (quickTtBtn) {
+      quickTtBtn.addEventListener('click', function () {
+        if (typeof ttNavTimetable === 'function') ttNavTimetable();
+      });
+    }
 
     // 资料类型课件提示
     _el('upMaterialType').addEventListener('change', function () {
@@ -419,6 +457,10 @@
     });
     _el('upModeFile').style.display = _state.mode === 'file' ? '' : 'none';
     _el('upModeText').style.display = _state.mode === 'text' ? '' : 'none';
+    var step2Title = _el('upStep2Title');
+    if (step2Title) {
+      step2Title.textContent = _state.mode === 'text' ? '文字录入与资料信息' : '上传文件与资料信息';
+    }
     var titleInput = _el('upTitle');
     if (titleInput) {
       titleInput.placeholder = _state.mode === 'text' ? '留空则自动取内容前20字' : '留空则自动使用文件名';
@@ -706,19 +748,19 @@
 
   function _renderSelectedCourseBar() {
     var bar = _el('upCourseMetaBar');
-    var idleRow = _el('upLocateIdleRow');
+    var idleBtn = _el('upLocateIdleBtn');
     var idleHint = _el('upCourseIdleHint');
     if (!bar) return;
 
     if (!_state.selectedCourse) {
       bar.style.display = 'none';
-      if (idleRow) idleRow.style.display = '';
+      if (idleBtn) idleBtn.style.display = '';
       if (idleHint) idleHint.style.display = '';
       return;
     }
 
     bar.style.display = '';
-    if (idleRow) idleRow.style.display = 'none';
+    if (idleBtn) idleBtn.style.display = 'none';
     if (idleHint) idleHint.style.display = 'none';
 
     var c = _state.selectedCourse;
@@ -1013,14 +1055,17 @@
   function _renderMyCourses() {
     var listEl = _el('upMyList');
     var noteEl = _el('upMyNote');
+    var quickBtn = _el('upQuickTimetableBtn');
     if (!listEl) return;
     if (noteEl && !_state.myNote) noteEl.style.display = 'none';
 
     if (!_state.myCourses.length) {
+      if (quickBtn) quickBtn.style.display = 'none';
+      listEl.classList.add('is-empty');
       listEl.innerHTML =
-        '<div class="up-my-note" style="margin-top:0">' +
-          '暂未找到课表或收藏课程。导入课表或收藏常看课程后，这里可以一键填入。<br>' +
-          '<button type="button" class="up-link-btn" id="upGoTimetableBtn">去课表导入</button>' +
+        '<div class="up-my-empty">' +
+          '<span>暂未导入课表或收藏课程，导入后可在此一键填入院系与课程。</span>' +
+          '<button type="button" class="up-link-btn" id="upGoTimetableBtn">去课表导入 →</button>' +
         '</div>';
       var goBtn = listEl.querySelector('#upGoTimetableBtn');
       if (goBtn) {
@@ -1030,6 +1075,9 @@
       }
       return;
     }
+
+    if (quickBtn) quickBtn.style.display = '';
+    listEl.classList.remove('is-empty');
 
     listEl.innerHTML = _state.myCourses.map(function (item, idx) {
       var codeDisp = item.code && !_isPlaceholder(item.code) ? item.code : '';
@@ -1147,7 +1195,7 @@
     if (!_state.files.length) {
       listEl.style.display = 'none';
       listEl.innerHTML = '';
-      sumEl.textContent = '未选择文件（可点击或拖拽到此处）';
+      sumEl.textContent = '点击选择文件，或将资料拖拽到此处';
       _hideError();
       return;
     }
