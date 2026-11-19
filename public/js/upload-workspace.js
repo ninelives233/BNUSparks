@@ -148,21 +148,23 @@
 
   function _buildCollegesList(apiColleges) {
     var genLabel = _generalLabel();
-    var list = [{
+    var generalItem = {
       name: '通识课',
       displayName: genLabel,
       short_name: genLabel === '公共课' ? '通识 公共 研究生公共课' : '通识 公共',
       isGeneral: true,
-    }];
+    };
     var seen = { '通识课': true };
+    var colleges = [];
     (Array.isArray(apiColleges) ? apiColleges : []).forEach(function (c) {
       if (!c || !c.name || seen[c.name]) return;
       seen[c.name] = true;
-      list.push({
+      colleges.push({
         name: c.name,
         displayName: c.name,
         short_name: c.short_name || '',
         isGeneral: false,
+        _idx: colleges.length,
       });
     });
     // 兜底补齐树中存在但未在 /api/colleges/ 中的学院节点
@@ -171,9 +173,22 @@
     majorChildren.forEach(function (node) {
       if (!node || !node.name || seen[node.name]) return;
       seen[node.name] = true;
-      list.push({ name: node.name, displayName: node.name, short_name: '', isGeneral: false });
+      colleges.push({
+        name: node.name,
+        displayName: node.name,
+        short_name: '',
+        isGeneral: false,
+        _idx: colleges.length,
+      });
     });
-    _state.collegesList = list;
+    // 经济与工商管理学院永远排在学院第一位
+    colleges.sort(function (a, b) {
+      var aEc = /经济与工商/.test(a.name) ? 0 : 1;
+      var bEc = /经济与工商/.test(b.name) ? 0 : 1;
+      if (aEc !== bEc) return aEc - bEc;
+      return a._idx - b._idx;
+    });
+    _state.collegesList = [generalItem].concat(colleges);
   }
 
   function _renderSkeleton() {
@@ -205,19 +220,11 @@
               '<span class="nc-step-no up-step-no" aria-hidden="true">01</span>' +
               '<div class="nc-step-body up-step-body">' +
                 '<h2 class="nc-step-title up-step-title" id="upStep1Title">选定课程与归属目录</h2>' +
-                '<p class="nc-step-sub up-step-sub">从我的课表或收藏快速点选，或按院系与课程名检索定位</p>' +
+                '<p class="nc-step-sub up-step-sub">按院系筛选或直接搜索课程名称，也可从课程树或我的课程辅助填入</p>' +
               '</div>' +
               '<button type="button" class="up-locate-btn up-locate-head-btn" id="upLocateIdleBtn">' +
                 iconSvg('layers') + '<span>从课程树定位</span>' +
               '</button>' +
-            '</div>' +
-            '<div class="up-quick-panel" id="upQuickPanel">' +
-              '<div class="up-quick-head">' +
-                '<span class="up-quick-label">' + iconSvg('calendar') + '<span>我的课程 · 快捷带入</span></span>' +
-                '<button type="button" class="up-quick-link" id="upQuickTimetableBtn">我的课表 ' + iconSvg('chevron-right') + '</button>' +
-              '</div>' +
-              '<div class="up-my-list" id="upMyList"></div>' +
-              '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
             '</div>' +
             '<div class="up-row-2">' +
               '<div class="up-field">' +
@@ -247,6 +254,14 @@
               '</div>' +
               '<button type="button" class="up-locate-btn" id="upLocateBtn">' + iconSvg('layers') + '<span>精准定位</span></button>' +
             '</div>' +
+            '<div class="up-quick-panel" id="upQuickPanel">' +
+              '<div class="up-quick-head" id="upQuickHead">' +
+                '<span class="up-quick-label">' + iconSvg('calendar') + '<span>辅助填入 · 我的课程（课表 / 收藏）</span></span>' +
+                '<button type="button" class="up-quick-link" id="upQuickTimetableBtn">我的课表 ' + iconSvg('chevron-right') + '</button>' +
+              '</div>' +
+              '<div class="up-my-list" id="upMyList"></div>' +
+              '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
+            '</div>' +
           '</section>' +
           '<section class="up-step-block" aria-labelledby="upStep2Title">' +
             '<div class="nc-step up-step">' +
@@ -258,13 +273,10 @@
             '</div>' +
             '<div class="up-field" id="upModeFile">' +
               '<label class="up-label" for="upFileInput">资料文件 <span class="up-req">*</span></label>' +
-              '<div class="up-dropzone" id="upDropzone">' +
-                '<div class="up-drop-badge" aria-hidden="true">' + iconSvg('upload') + '</div>' +
-                '<div class="up-drop-copy">' +
-                  '<div class="up-file-summary" id="upFileSummary">点击选择文件，或将资料拖拽到此处</div>' +
-                  '<div class="up-drop-formats">支持 pdf、doc(x)、ppt(x)、xls(x)、zip、txt、md、png、jpg 等 · 可多选 · 单文件 ≤ 50MB</div>' +
-                '</div>' +
-                '<button type="button" class="up-file-trigger" id="upFileTrigger">浏览文件</button>' +
+              '<div class="up-dropzone" id="upDropzone" role="button" tabindex="0" aria-controls="upFileInput">' +
+                '<span class="up-drop-icon" aria-hidden="true">' + iconSvg('upload') + '</span>' +
+                '<div class="up-file-summary" id="upFileSummary">点击或拖拽文件到这里上传</div>' +
+                '<div class="up-drop-formats">支持 pdf、doc(x)、ppt(x)、xls(x)、zip、txt、md、png、jpg 等 · 可多选 · 单文件 ≤ 50MB</div>' +
                 '<input type="file" id="upFileInput" multiple style="display:none">' +
               '</div>' +
               '<ul class="up-file-list" id="upFileList" style="display:none"></ul>' +
@@ -290,19 +302,14 @@
               '<label class="up-label" for="upTitle">资料标题 <span class="up-opt">（可选，留空自动使用文件名）</span></label>' +
               '<input type="text" id="upTitle" class="up-input" placeholder="留空则自动使用文件名">' +
             '</div>' +
-            '<details class="up-extra" id="upExtraDetails">' +
-              '<summary>补充信息（教务代码与资料描述，可选）</summary>' +
-              '<div class="up-extra-body">' +
-                '<div class="up-field" id="upTeachingCodeGroup" style="display:none">' +
-                  '<label class="up-label" for="upTeachingCode">教务课程代码 <span class="up-opt">（选填，代码待补充课程可顺手补全）</span></label>' +
-                  '<input type="text" id="upTeachingCode" class="up-input" placeholder="如：ECO20201（留空也可正常上传）">' +
-                '</div>' +
-                '<div class="up-field" style="margin-bottom:0">' +
-                  '<label class="up-label" for="upDesc">资料描述 <span class="up-opt">（选填）</span></label>' +
-                  '<textarea id="upDesc" class="up-textarea up-textarea-sm" placeholder="简述适用学期、教材版本、试卷回忆完整度等…"></textarea>' +
-                '</div>' +
-              '</div>' +
-            '</details>' +
+            '<div class="up-field" id="upTeachingCodeGroup" style="display:none">' +
+              '<label class="up-label" for="upTeachingCode">教务课程代码 <span class="up-opt">（选填，代码待补充课程可顺手补全）</span></label>' +
+              '<input type="text" id="upTeachingCode" class="up-input" placeholder="如：ECO20201（留空也可正常上传）">' +
+            '</div>' +
+            '<div class="up-field" style="margin-bottom:0">' +
+              '<label class="up-label" for="upDesc">资料描述 <span class="up-opt">（选填）</span></label>' +
+              '<textarea id="upDesc" class="up-textarea up-textarea-sm" placeholder="简述适用学期、教材版本、试卷回忆完整度等…"></textarea>' +
+            '</div>' +
           '</section>' +
           '<div class="up-error" id="upError" role="alert" style="display:none"></div>' +
           '<div class="mf-progress" id="upProgress" role="status" aria-live="polite" style="display:none;margin-bottom:12px">' +
@@ -404,12 +411,14 @@
     // 文件拖拽 & 选择
     var fileInput = _el('upFileInput');
     var dropzone = _el('upDropzone');
-    _el('upFileTrigger').addEventListener('click', function (e) {
-      e.stopPropagation();
-      fileInput.click();
-    });
     dropzone.addEventListener('click', function () {
       fileInput.click();
+    });
+    dropzone.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput.click();
+      }
     });
     fileInput.addEventListener('change', function () {
       _addFiles(fileInput.files);
@@ -735,14 +744,11 @@
   function _syncTeachingCodeVisibility() {
     var grp = _el('upTeachingCodeGroup');
     var tcInp = _el('upTeachingCode');
-    var details = _el('upExtraDetails');
     if (!grp || !tcInp) return;
     var show = !!(_state.selectedCourse && _state.selectedCourse.isPlaceholder);
     grp.style.display = show ? '' : 'none';
     if (!show) {
       tcInp.value = '';
-    } else if (details) {
-      details.open = true;
     }
   }
 
@@ -1055,16 +1061,18 @@
   function _renderMyCourses() {
     var listEl = _el('upMyList');
     var noteEl = _el('upMyNote');
-    var quickBtn = _el('upQuickTimetableBtn');
+    var panelEl = _el('upQuickPanel');
+    var quickHead = _el('upQuickHead');
     if (!listEl) return;
     if (noteEl && !_state.myNote) noteEl.style.display = 'none';
 
     if (!_state.myCourses.length) {
-      if (quickBtn) quickBtn.style.display = 'none';
+      if (panelEl) panelEl.classList.add('is-empty');
+      if (quickHead) quickHead.style.display = 'none';
       listEl.classList.add('is-empty');
       listEl.innerHTML =
         '<div class="up-my-empty">' +
-          '<span>暂未导入课表或收藏课程，导入后可在此一键填入院系与课程。</span>' +
+          '<span class="up-my-empty-text">' + iconSvg('calendar') + '<span>辅助填入：导入课表或收藏课程后可在此一键选课</span></span>' +
           '<button type="button" class="up-link-btn" id="upGoTimetableBtn">去课表导入 →</button>' +
         '</div>';
       var goBtn = listEl.querySelector('#upGoTimetableBtn');
@@ -1076,7 +1084,8 @@
       return;
     }
 
-    if (quickBtn) quickBtn.style.display = '';
+    if (panelEl) panelEl.classList.remove('is-empty');
+    if (quickHead) quickHead.style.display = '';
     listEl.classList.remove('is-empty');
 
     listEl.innerHTML = _state.myCourses.map(function (item, idx) {
@@ -1195,11 +1204,11 @@
     if (!_state.files.length) {
       listEl.style.display = 'none';
       listEl.innerHTML = '';
-      sumEl.textContent = '点击选择文件，或将资料拖拽到此处';
+      sumEl.textContent = '点击或拖拽文件到这里上传';
       _hideError();
       return;
     }
-    sumEl.textContent = '已选择 ' + _state.files.length + ' 个文件';
+    sumEl.textContent = '已选择 ' + _state.files.length + ' 个文件（点击或拖拽可继续添加）';
     var hasOversize = false;
     listEl.innerHTML = _state.files.map(function (f, idx) {
       var over = f.size > MAX_FILE_BYTES;

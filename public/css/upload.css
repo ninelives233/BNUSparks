@@ -168,13 +168,20 @@
   align-self: center;
 }
 
-/* ── 我的课程 · 快捷带入区（嵌入式发丝线区块，避免孤立侧栏留白） ── */
+/* ── 我的课程 · 快捷带入区（置于核心搜索框之后作为辅助快捷入口） ── */
 .up-quick-panel {
   background: var(--v9-surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  margin-bottom: var(--space-md);
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.up-quick-panel.is-empty {
+  background: transparent;
+  border-style: dashed;
+  padding: 9px 12px;
 }
 
 .up-quick-head {
@@ -213,6 +220,8 @@
   font-weight: 550;
   color: var(--primary);
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .up-quick-link .ui-icon {
@@ -249,6 +258,19 @@
   font-size: var(--fs-xs);
   color: var(--ink-faint);
   line-height: 1.5;
+}
+
+.up-my-empty-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.up-my-empty-text .ui-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-faint);
+  flex-shrink: 0;
 }
 
 .up-my-item {
@@ -570,7 +592,7 @@
 
 /* ── 已选课程 & 包含专业上下文条 ── */
 .up-course-meta-bar {
-  margin: 0;
+  margin: -4px 0 var(--space-md);
   padding: 12px 14px;
   background: oklch(from var(--primary) l c h / 0.055);
   border: 1px solid oklch(from var(--primary) l c h / 0.24);
@@ -661,47 +683,39 @@
   background: var(--primary-surface);
 }
 
-/* ── 文件上传投递区（纸墨卡片式拖拽区） ── */
+/* ── 文件上传投递区（单一焦点：极简居中点击/拖拽区） ── */
 .up-dropzone {
   border: 1.5px dashed var(--border);
   border-radius: var(--radius-md);
   background: var(--v9-surface);
-  padding: 18px;
+  padding: 22px 18px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
+  gap: 5px;
   cursor: pointer;
   transition: border-color var(--t-fast), background var(--t-fast);
 }
 
 .up-dropzone:hover,
-.up-dropzone.is-dragover {
+.up-dropzone.is-dragover,
+.up-dropzone:focus-visible {
   border-color: var(--primary);
   background: var(--primary-surface);
+  outline: none;
 }
 
-.up-drop-badge {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-sm);
-  background: var(--primary-surface);
+.up-drop-icon {
   color: var(--primary);
-  border: 1px solid oklch(from var(--primary) l c h / 0.22);
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  margin-bottom: 2px;
 }
 
-.up-drop-badge .ui-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.up-drop-copy {
-  flex: 1 1 200px;
-  min-width: 0;
+.up-drop-icon .ui-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .up-file-summary {
@@ -712,30 +726,9 @@
 }
 
 .up-drop-formats {
-  margin-top: 2px;
   font-size: var(--fs-xs);
   color: var(--ink-faint);
   line-height: 1.45;
-}
-
-.up-file-trigger {
-  border: 1px solid var(--primary);
-  background: var(--raised);
-  color: var(--primary);
-  font: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background var(--t-fast), color var(--t-fast);
-}
-
-.up-dropzone:hover .up-file-trigger,
-.up-file-trigger:hover {
-  background: var(--primary);
-  color: var(--on-primary);
 }
 
 .up-file-list {
@@ -803,45 +796,6 @@
 
 .up-textarea-sm {
   min-height: 82px;
-}
-
-/* ── 补充信息折叠区 ── */
-.up-extra {
-  margin-top: 2px;
-  margin-bottom: var(--space-md);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
-  background: var(--v9-surface);
-}
-
-.up-extra summary {
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--ink-soft);
-  user-select: none;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.up-extra summary::before {
-  content: "▸";
-  font-size: 0.78rem;
-  color: var(--accent);
-  transition: transform var(--t-fast);
-}
-
-.up-extra[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.up-extra-body {
-  padding-top: 12px;
-  display: grid;
-  gap: 12px;
 }
 
 /* ── 提示与底部操作区 ── */
@@ -1045,7 +999,6 @@ html[data-bnu-theme="dark"] .up-textarea:focus {
 
 html[data-bnu-theme="dark"] .up-quick-panel,
 html[data-bnu-theme="dark"] .up-dropzone,
-html[data-bnu-theme="dark"] .up-extra,
 html[data-bnu-theme="dark"] .up-tree-box {
   background: var(--bg);
 }
@@ -1087,10 +1040,7 @@ html[data-bnu-theme="dark"] .up-tree-box {
     margin-left: 0;
   }
   .up-dropzone {
-    padding: 14px;
-  }
-  .up-drop-badge {
-    display: none;
+    padding: 16px 14px;
   }
   .up-actions {
     flex-direction: row;
@@ -1110,8 +1060,6 @@ html[data-bnu-theme="dark"] .up-tree-box {
   .up-major-chip,
   .up-locate-btn,
   .up-dropzone,
-  .up-file-trigger,
-  .up-extra summary::before,
   .up-btn-primary,
   .up-my-item {
     transition: none;

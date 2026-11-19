@@ -44,6 +44,8 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
             'identity_education': '本科', 'identity_college': '搜索学院', 'identity_major': '搜索专业'})
         self.author = User.objects.create_user('2099search_a', password='browser-test-only', first_name='问答作者')
         self.college = College.objects.create(name='搜索学院', slug='search-browser')
+        College.objects.create(name='法学院', short_name='法学院', slug='law-order-test', order=-184)
+        College.objects.create(name='经济与工商管理学院', short_name='经管学院', slug='econ-order-test', order=0)
         self.course = Course.objects.create(code='SRCH101', name='搜索学导论', college=self.college)
         self.course2 = Course.objects.create(code='SRCH202', name='搜索学进阶', college=self.college)
         parent = None
@@ -409,7 +411,7 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('[data-sr-group="material"] .sr-item')
         self.assertEqual(self.page.evaluate('history.state.searchQuery'), '搜索学')
 
-    # ── 场景 7：无 JS 错误 & Plib 风格双模式上传工作区（首页/非叶子 → /upload；叶子 → 轻量弹窗） ──
+    # ── 场景 7：无 JS 错误 & 双模式上传工作区（首页/非叶子 → /upload；叶子 → 轻量弹窗） ──
     def test_upload_workspace_dual_mode(self):
         self._login()
         self._goto_root_ready()
@@ -417,7 +419,21 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('#uploadView.active')
         self.assertTrue(self.page.url.endswith('/upload'))
 
-        # 右侧「我的课程」卡片挂载并支持一键填入
+        # 所属院系下拉中，经管学院排在所有学院第一位（不会因法学院负数 order 排在前面）
+        self.page.click('#upCollegeInput')
+        self.page.wait_for_selector('#upCollegeList .up-combo-item')
+        college_names = self.page.eval_on_selector_all(
+            '#upCollegeList .up-combo-name',
+            'els => els.map(el => el.textContent.trim())',
+        )
+        self.assertLess(
+            college_names.index('经济与工商管理学院'),
+            college_names.index('法学院'),
+        )
+        self.assertEqual(college_names[1], '经济与工商管理学院')
+        self.page.keyboard.press('Escape')
+
+        # 「我的课程」辅助区支持一键填入
         self.page.wait_for_selector('#upMyList .up-my-item')
         self.page.click('#upMyList .up-my-item')
         self.assertEqual(self.page.input_value('#upCollegeInput'), '搜索学院')
@@ -445,6 +461,9 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_timeout(200)
         self.assertFalse(self.page.evaluate(
             "!!document.querySelector('#upTreeLocateOverlay')"))
+
+        # 资料描述直接可见（不再折叠）
+        self.assertTrue(self.page.is_visible('#upDesc'))
 
         # 文字录入提交真实生效（id=5 对应前端 MATERIAL_TYPES 固定「笔记」）
         self.page.click('.up-mode-tab[data-up-mode="text"]')

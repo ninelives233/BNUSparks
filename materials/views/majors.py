@@ -22,10 +22,17 @@ def _build_catalog():
     """
     result = {}
     grad_levels = set()
-    majors = (
+    majors = sorted(
         Major.objects.filter(is_active=True)
         .select_related("college")
-        .order_by("college__order", "college__id", "order", "id")
+        .order_by("college__order", "college__id", "order", "id"),
+        key=lambda m: (
+            0 if "经济与工商" in (m.college.name or "") else 1,
+            m.college.order,
+            m.college.id,
+            m.order,
+            m.id,
+        ),
     )
     for major in majors:
         level_bucket = result.setdefault(major.level, {})

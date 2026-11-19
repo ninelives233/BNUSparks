@@ -348,3 +348,21 @@ class CourseDisplayNameContractTest(BnuTestCase):
             m for m in search.json()["data"]["materials"] if m["id"] == orphan_material.id
         )
         self.assertEqual(material_hit["course_name"], "孤儿课程")
+
+    def test_api_colleges_always_puts_econ_first(self):
+        """即使其他学院 order 为更小的负值，/api/colleges/ 仍保证经管排在第一位。"""
+        from django.core.cache import cache
+
+        law = create_college("法学院", "law")
+        law.order = -184
+        law.save(update_fields=["order"])
+        econ = create_college("经济与工商管理学院", "econ")
+        econ.order = 0
+        econ.save(update_fields=["order"])
+        cache.delete("api_colleges_data")
+
+        res = self.client.get_json("/api/colleges/")
+        self.assertEqual(res.status_code, 200)
+        names = [c["name"] for c in res.json()["data"]]
+        self.assertEqual(names[0], econ.name)
+        self.assertIn(law.name, names)

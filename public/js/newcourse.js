@@ -248,9 +248,14 @@
   function _populateColleges() {
     if (_ncColleges.length) return;
     api('/api/colleges/').then(function(list) {
-      // 默认按学院创建顺序（pk 升序）排列，让最早创建的学院排在最前
+      // 经济与工商管理学院固定置顶，其余按学院创建顺序（pk 升序）排列
       _ncColleges = (Array.isArray(list) ? list : []).slice()
-        .sort(function(a, b) { return (a.id || 0) - (b.id || 0); });
+        .sort(function(a, b) {
+          var aEc = /经济与工商/.test(a.name || '') ? 0 : 1;
+          var bEc = /经济与工商/.test(b.name || '') ? 0 : 1;
+          if (aEc !== bEc) return aEc - bEc;
+          return (a.id || 0) - (b.id || 0);
+        });
     }).catch(function() { _ncColleges = []; });
   }
 
