@@ -166,6 +166,68 @@ class CourseTreeImporterTests(TestCase):
         result = import_course_tree(tree, apply=True)
         self.assertEqual(result["summary"].get("CROSS_LEVEL_LINK"), 1)
 
+    def test_duplicate_folders_are_disambiguated_by_level(self):
+        college = create_college(name="测试学院", slug="test-college")
+        root = create_category(name="专业课")
+        college_node = create_category(name=college.name, parent=root)
+        undergraduate = create_category(name="哲学", parent=college_node)
+        master = create_category(name="哲学", parent=college_node)
+        master.education_level = "硕士"
+        master.save(update_fields=["education_level"])
+        path = ["专业课", college.name, "哲学"]
+        course = {"path": path, "name": "逻辑学", "course_type": "major", "college": college.name,
+                  "code": "LOGIC101"}
+        tree = {"folders": [{"path": path, "education_level": "硕士"}], "courses": [course]}
+        import_course_tree(tree, apply=True)
+        self.assertTrue(CourseCategory.objects.filter(parent=master, name="逻辑学").exists())
+        self.assertFalse(CourseCategory.objects.filter(parent=undergraduate).exists())
+        undergraduate.refresh_from_db()
+        self.assertEqual(undergraduate.education_level, "")
+        with self.assertRaises(ImportConflict):
+            import_course_tree({"courses": [course]})
+        import_course_tree({"courses": [{**course, "education_level": "硕士"}]})
+        duplicate = create_category(name="哲学", parent=college_node)
+        duplicate.education_level = "硕士"
+        duplicate.save(update_fields=["education_level"])
+        with self.assertRaises(ImportConflict):
+            import_course_tree(tree)
+
+    def test_same_name_courses_are_isolated_by_level(self):
+        college = create_college(name="测试学院", slug="test-college")
+        root = create_category(name="专业课")
+        college_node = create_category(name=college.name, parent=root)
+        undergraduate = create_category(name="本科", parent=college_node)
+        original = create_course(code="REAL101", name="逻辑学", college=college, course_type="major")
+        create_category(name=original.name, parent=undergraduate, course=original)
+        levels = ("硕士", "博士")
+        tree = {
+            "folders": [{"path": ["专业课", college.name, level], "education_level": level} for level in levels],
+            "courses": [{"path": ["专业课", college.name, level], "name": original.name,
+                         "course_type": "major", "college": college.name, "allow_placeholder": True}
+                        for level in levels],
+        }
+        self.run_import(tree, "--apply", "--json")
+        ids = set(Course.objects.filter(name=original.name).values_list("pk", flat=True))
+        self.assertEqual(len(ids), 3)
+        for level in levels:
+            code = placeholder_code(college.pk, original.name, education=level)
+            self.assertTrue(code.startswith("BNUX"))
+            self.assertTrue(Course.objects.filter(name=original.name, code=code).exists())
+        category_ids = set(CourseCategory.objects.values_list("pk", flat=True))
+        self.run_import(tree, "--apply", "--json")
+        self.assertEqual(ids, set(Course.objects.filter(name=original.name).values_list("pk", flat=True)))
+        self.assertEqual(category_ids, set(CourseCategory.objects.values_list("pk", flat=True)))
+        conflict = {**tree["courses"][0], "path": ["专业课", college.name, "硕士", "其他"], "code": "OTHER101"}
+        with self.assertRaises(ImportConflict):
+            import_course_tree({"courses": [conflict]}, apply=True)
+        master_code = placeholder_code(college.pk, original.name, education="硕士")
+        master = Course.objects.get(code=master_code)
+        adopt = {**tree["courses"][0], "code": "MASTER101", "adopt_placeholder": True}
+        import_course_tree({"courses": [adopt]}, apply=True)
+        master.refresh_from_db()
+        self.assertEqual(master.code, "MASTER101")
+        self.assertTrue(Course.objects.filter(code=placeholder_code(college.pk, original.name, education="博士")).exists())
+
     def test_conflict_rolls_back_whole_batch(self):
         college = create_college(name="测试学院", slug="test-college")
         create_course(code="DUPLICATE", name="已有课程", college=college, course_type="major")

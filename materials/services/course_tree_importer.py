@@ -85,6 +85,7 @@ class CourseTreeImporter:
         self.colleges = list(College.objects.all())
         self.courses = list(Course.objects.all())
         self.nodes = list(CourseCategory.objects.all())
+        self.folder_levels = {tuple(row['path']): row['education_level'] for row in manifest.get('folders', []) if 'education_level' in row}
         self.targets = {}
         for row in manifest['courses']:
             code = row.get('code', '').strip().upper()
@@ -116,9 +117,13 @@ class CourseTreeImporter:
             obj.save(update_fields=changed)
         return bool(changed)
 
-    def find_child(self, parent_id, name, path):
+    def find_child(self, parent_id, name, path, target_level=None):
         found = [node for node in self.nodes if node.parent_id == parent_id and node.name == name]
         if len(found) > 1:
+            if target_level is not None:
+                found = [node for node in found if node.education_level in ('', '本科')] if target_level in ('', '本科') else [node for node in found if node.education_level == target_level]
+                if len(found) == 1:
+                    return found[0]
             self.fail(path, '同父目录存在多个同名节点')
         return found[0] if found else None
 
@@ -148,13 +153,16 @@ class CourseTreeImporter:
     def next_order(self, parent_id):
         return max((node.order for node in self.nodes if node.parent_id == parent_id), default=-1) + 1
 
-    def folder(self, path, fields=None):
+    def folder(self, path, fields=None, target_level=None):
         parent = None
         for index, name in enumerate(path):
             current = path[:index + 1]
             parent_id = parent.pk if parent else None
-            node = self.find_child(parent_id, name, current)
             attrs = fields if index == len(path) - 1 and fields else {}
+            expected_level = attrs.get('education_level') if 'education_level' in attrs else self.folder_levels.get(current)
+            if expected_level is None:
+                expected_level = target_level
+            node = self.find_child(parent_id, name, current, expected_level)
             if node:
                 if node.course_id or node.course_text or (node.is_divider and not attrs.get('is_divider', False)):
                     self.fail(current, '目录与课程叶子或分隔线冲突')
@@ -203,10 +211,19 @@ class CourseTreeImporter:
             return rule
         return None
 
+    def levels_overlap(self, first, second):
+        return first == second or (first == '研究生' and second in ('硕士', '博士')) or (second == '研究生' and first in ('硕士', '博士'))
+
+    def same_level(self, item, level):
+        refs = [node for node in self.nodes if node.course_id == item.pk]
+        if refs:
+            return any(self.levels_overlap(self.level(node), level) for node in refs)
+        return not is_placeholder(item.code) or item.code == placeholder_code(item.college_id, item.name, education=level)
+
     def course(self, row):
         parent_path = tuple(row['path'])
         path = parent_path + (row['name'],)
-        parent = self.folder(parent_path)
+        parent = self.folder(parent_path, target_level=row.get('education_level'))
         leaf = self.find_child(parent.pk, row['name'], path)
         if leaf and (not leaf.course_id or leaf.course_text or leaf.is_divider or any(node.parent_id == leaf.pk for node in self.nodes)):
             self.fail(path, '叶子与目录或通配节点冲突')
@@ -222,7 +239,7 @@ class CourseTreeImporter:
         if len(hits) > 1:
             self.fail(path, '课程代码不唯一', code)
         course = hits[0] if hits else None
-        same_name = [item for item in self.courses if not item.merged_into_id and item.college_id == (college.pk if college else None) and normalized_course_name(item.name) == normalized_course_name(name)]
+        same_name = [item for item in self.courses if not item.merged_into_id and item.college_id == (college.pk if college else None) and normalized_course_name(item.name) == normalized_course_name(name) and self.same_level(item, level)]
         if course and row.get('adopt_placeholder') and any(is_placeholder(item.code) and item.pk != course.pk for item in same_name):
             self.fail(path, '目标代码已被其他课程占用', code)
         if not course and row.get('adopt_placeholder'):
