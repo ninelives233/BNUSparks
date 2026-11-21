@@ -106,7 +106,7 @@
   //        各列设内容下限、2 列断点 1180→1340；缓存键同步推进。
   // v406：课表支持研究生课程目录关联补码与建课入口。
   // v408：占位码治理确认弹窗与冲突合并交互。
-  var VERSION = '408';
+  var VERSION = '409';
   var loadedScripts = Object.create(null);
   var loadedStyles = Object.create(null);
   var scriptPromises = Object.create(null);

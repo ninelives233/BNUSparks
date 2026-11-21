@@ -623,10 +623,7 @@
     var url = '/api/admin/users/?' + params.join('&');
     api(url).then(function(resp) {
       var users = resp.users || [];
-      if (!users.length) {
-        content.innerHTML = '<div class="admin-empty">未找到用户</div>';
-        return;
-      }
+      // 标题与搜索框始终渲染：无结果时不能整块替换，否则搜索框消失、无法修改条件
       var html = '<div class="monitor-section-head"><div><h3>用户名单</h3><p>搜索用户并配置角色、管辖板块与自动托管权限。</p></div><span class="monitor-total-note">共 ' + (resp.total || 0) + ' 人</span></div>' +
         '<div class="admin-search-box">' +
         '<input type="text" id="adminUserSearch" placeholder="搜索昵称 / 邮箱…" value="' + escapeHtml(search) + '" onkeydown="if(event.key===\'Enter\')adminSearchUsers()">' +
@@ -637,6 +634,11 @@
         '</select>' +
         '<button onclick="adminSearchUsers()">搜索</button>' +
         '</div>';
+      if (!users.length) {
+        html += '<div class="admin-empty">未找到用户</div>';
+        content.innerHTML = html;
+        return;
+      }
       var isSuperAdmin = currentUser && currentUser.role === 'super_admin';
       var userTableClass = isSuperAdmin ? ' admin-users-table-super' : '';
       html += '<div class="admin-table-card admin-users-table-card"><div class="admin-table-wrap"><table class="admin-table admin-users-table' + userTableClass + '">' +
