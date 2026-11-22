@@ -119,7 +119,7 @@ Browser
 auth.js → /api/auth/* → auth.py → utils_auth.py → User/UserProfile
 ```
 
-停用账号、密码变化和令牌版本必须通过统一账号有效性检查。
+注册验证走 6 位邮箱验证码：register/resend-verification 发码（缓存哈希、错 5 次作废），verify-email-code 校验激活换 JWT，旧链接端点仅兼容在途旧邮件；登录监控区分 failure/unverified，429 不计失败。停用账号、密码变化和令牌版本必须通过统一账号有效性检查。
 
 ### 上传和下载
 

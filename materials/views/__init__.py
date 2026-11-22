@@ -6,7 +6,8 @@ BNU Sparks · 木铎星火 — views 包
 
 # 认证
 from .auth import (
-    api_register, api_resend_verification, api_verify_email, api_login, api_me,
+    api_register, api_resend_verification, api_verify_email,
+    api_verify_email_code, api_login, api_me,
     api_change_password, api_forgot_password, api_reset_password,
 )
 

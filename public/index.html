@@ -61,7 +61,7 @@
   }
 </script>
 <link rel="stylesheet" href="/static/css/tokens.css?v=308">
-<link rel="stylesheet" href="/static/css/base.css?v=387">
+<link rel="stylesheet" href="/static/css/base.css?v=388">
 <link rel="stylesheet" href="/static/css/user.css?v=214">
 <link rel="stylesheet" href="/static/css/files.css?v=387">
 <link rel="stylesheet" href="/static/css/announcement.css?v=189">
@@ -1438,8 +1438,8 @@
     </form>
     <div id="loginError" class="mf-error" role="alert" aria-live="assertive"></div>
     <div id="loginResendAction" class="login-resend-action" style="display:none">
-      <p>这个账号还没有完成邮箱验证。</p>
-      <button type="button" class="ms-resend-btn" onclick="showVerificationResend()">前往重发验证邮件</button>
+      <p>这个账号还没有完成邮箱验证。前往重新获取验证码，输入后即可完成验证并自动登录。</p>
+      <button type="button" class="ms-resend-btn" onclick="showVerificationResend()">前往获取验证码</button>
     </div>
   </div>
 </div>
@@ -1462,8 +1462,8 @@
         <p class="mf-email-hint">学生邮箱后缀一般为 @mail.bnu.edu.cn，注册前请核对后缀是否正确</p>
         <p class="mf-email-hint">学生邮箱可在数字京师首页直接进入</p>
         <div id="registerResendAction" class="register-resend register-resend-error" style="display:none">
-          <p class="register-resend-note">已注册但未验证？填写学号并选择邮箱后缀即可重新发送，无需重填其他信息。</p>
-          <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
+          <p class="register-resend-note">已注册但未验证？填写学号并选择邮箱后缀即可重新获取验证码，无需重填其他信息。</p>
+          <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证码</button>
           <span class="register-resend-status" role="status" aria-live="polite"></span>
         </div>
       </div>
@@ -1527,14 +1527,20 @@
     <div id="registerError" class="mf-error" role="alert" aria-live="assertive" style="display:none"></div>
     <div id="registerSuccess" class="mf-success" style="display:none">
       <div class="ms-check">✓</div>
-      <p class="ms-title">注册成功！</p>
-      <p class="ms-desc">验证邮件已发送到你的校园邮箱，请点击邮件中的链接完成注册。</p>
-      <p class="ms-secure-hint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">可能需要检查垃圾邮件箱。链接过期或未收到邮件？可以重新发送一封，请使用最新邮件中的链接。</p>
+      <p class="ms-title">验证码已发送</p>
+      <p class="ms-desc">验证码已发送到你的校园邮箱 <strong id="codeTargetEmail" class="code-target-email"></strong>，请输入邮件中的 6 位验证码完成验证（30 分钟内有效）。</p>
+      <form id="verifyCodeForm" onsubmit="return handleVerifyCode(event)">
+        <div class="mf-group">
+          <input type="text" id="regCode" class="mf-input mf-code-input" required inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="请输入 6 位验证码" aria-label="邮箱验证码">
+        </div>
+        <div id="codeError" class="mf-error" role="alert" aria-live="assertive" style="display:none"></div>
+        <button type="submit" class="mf-btn ms-btn">完成验证</button>
+      </form>
+      <p class="ms-secure-hint" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">可能需要检查垃圾邮件箱。重新发送后，只有最新一封邮件中的验证码可用。</p>
       <div class="register-resend">
-        <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证邮件</button>
+        <button type="button" class="ms-resend-btn register-resend-btn" onclick="resendVerificationEmail()">重新发送验证码</button>
         <span class="register-resend-status" role="status" aria-live="polite"></span>
       </div>
-      <button type="button" class="mf-btn ms-btn" onclick="closeAuthModal()">知道了</button>
     </div>
     <div class="external-access">
       <a href="mailto:bnusparks@163.com?subject=校外人员访问申请" class="external-access-btn" onclick="return confirm('考虑到潜在的知识产权风险，此入口的可用性会受到较大局限，我们可能将不再受理以“获取资料”为目的的访问申请。');">校外人员访问申请 →</a>
@@ -1689,11 +1695,11 @@
 <script src="/static/js/utils.js?v=408" defer></script>
 <script src="/static/js/monitoring-events.js?v=388" defer></script>
 <script src="/static/js/appearance.js?v=15" defer></script>
-<script src="/static/js/auth.js?v=388" defer></script>
+<script src="/static/js/auth.js?v=389" defer></script>
 <script src="/static/js/profile.js?v=396" defer></script>
 <script src="/static/js/notifications.js?v=385" defer></script>
 <script src="/static/js/admin-core.js?v=407" defer></script>
-<script src="/static/js/views.js?v=397" defer></script>
+<script src="/static/js/views.js?v=398" defer></script>
 <script src="/static/js/tutorial-entry.js?v=355" defer></script>
 <script src="/static/js/explorer-core.js?v=399" defer></script>
 <script src="/static/js/explorer-file.js?v=375" defer></script>

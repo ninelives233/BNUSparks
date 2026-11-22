@@ -249,7 +249,10 @@ def record_outcome(event_success, event_failure):
 
 
 def record_login_outcome(view):
-    """登录成功由视图显式带 user；其它响应统一记录无账户内容的失败。"""
+    """登录成功由视图显式带 user；其它响应统一记录无账户内容的失败。
+
+    401/403 是权限边界，429 是限流拒绝（请求未被处理），都不算业务失败。
+    """
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         request._monitor_login_recorded = False
@@ -260,7 +263,7 @@ def record_login_outcome(view):
             raise
         if not getattr(request, "_monitor_login_recorded", False):
             status = getattr(response, "status_code", 500)
-            if status not in (401, 403):
+            if status not in (401, 403, 429):
                 record_request_event(request, MonitoringEvent.EventName.LOGIN_FAILURE)
         return response
     return wrapped

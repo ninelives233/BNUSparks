@@ -141,8 +141,9 @@
     document.getElementById('registerForm').style.display = 'block';
     document.getElementById('registerSuccess').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
+    _clearVerifyCodeState();
     document.querySelectorAll('.register-resend-status').forEach(function(status) {
-      status.textContent = message || '填写上方学号并选择邮箱后缀，然后重新发送验证邮件。';
+      status.textContent = message || '填写上方学号并选择邮箱后缀，然后重新发送验证码。';
     });
     var sidInput = document.getElementById('regSid');
     if (sidInput) setTimeout(function() { sidInput.focus(); }, 80);
@@ -181,6 +182,7 @@
     document.getElementById('registerSuccess').style.display = 'none';
     document.getElementById('registerForm').style.display = 'block';
     _clearVerificationResendState();
+    _clearVerifyCodeState();
     _pendingVerificationEmail = '';
     unlockScroll();
     _popModalHistory();
@@ -599,7 +601,7 @@
     }
     document.querySelectorAll('.register-resend-btn').forEach(function(btn) {
       btn.disabled = false;
-      btn.textContent = '重新发送验证邮件';
+      btn.textContent = '重新发送验证码';
     });
     document.querySelectorAll('.register-resend-status').forEach(function(status) {
       status.textContent = '';
@@ -617,10 +619,10 @@
       var suffix = remaining > 0 ? '（' + remaining + ' 秒后可再次发送）' : '';
       document.querySelectorAll('.register-resend-btn').forEach(function(btn) {
         btn.disabled = remaining > 0;
-        btn.textContent = remaining > 0 ? '重新发送（' + remaining + ' 秒）' : '重新发送验证邮件';
+        btn.textContent = remaining > 0 ? '重新发送（' + remaining + ' 秒）' : '重新发送验证码';
       });
       document.querySelectorAll('.register-resend-status').forEach(function(status) {
-        status.textContent = (message || '验证邮件已重新发送。') + suffix;
+        status.textContent = (message || '验证码已重新发送。') + suffix;
       });
       if (remaining > 0) {
         remaining--;
@@ -630,6 +632,74 @@
       }
     }
     tick();
+  }
+
+  // ── 注册验证码面板：注册成功 / 重发验证码后共用 ──
+  function _showVerifyCodePanel() {
+    var form = document.getElementById('registerForm');
+    var errBox = document.getElementById('registerError');
+    var resendAction = document.getElementById('registerResendAction');
+    var success = document.getElementById('registerSuccess');
+    if (form) form.style.display = 'none';
+    if (errBox) errBox.style.display = 'none';
+    if (resendAction) resendAction.style.display = 'none';
+    if (!success) return;
+    success.style.display = 'block';
+    var target = document.getElementById('codeTargetEmail');
+    if (target) target.textContent = _pendingVerificationEmail || '';
+    var codeInput = document.getElementById('regCode');
+    if (codeInput) setTimeout(function() { codeInput.focus(); }, 80);
+  }
+
+  function _clearVerifyCodeState() {
+    var codeInput = document.getElementById('regCode');
+    if (codeInput) codeInput.value = '';
+    var codeError = document.getElementById('codeError');
+    if (codeError) {
+      codeError.textContent = '';
+      codeError.style.display = 'none';
+    }
+  }
+
+  async function handleVerifyCode(e) {
+    e.preventDefault();
+    var el = document.getElementById('codeError');
+    var codeInput = document.getElementById('regCode');
+    var code = codeInput ? codeInput.value.replace(/\s+/g, '') : '';
+    el.textContent = '';
+    el.style.display = 'none';
+    if (!/^\d{6}$/.test(code)) {
+      el.textContent = '请输入邮件中的 6 位数字验证码';
+      el.style.display = 'block';
+      return false;
+    }
+    if (!_pendingVerificationEmail) {
+      el.textContent = '验证会话已丢失，请重新注册或重新发送验证码';
+      el.style.display = 'block';
+      return false;
+    }
+    var submitBtn = document.querySelector('#verifyCodeForm button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      var data = await api('/api/auth/verify-email-code/', { method: 'POST',
+        body: { email: _pendingVerificationEmail, code: code } });
+      // 验证成功即视为登录成功：与登录/旧链接验证共用 token 持久化路径
+      if (data.token) {
+        _persistToken(data.token, true, data.user && data.user.id);
+      }
+      setAuthenticatedUser(data.user || null);
+      closeAuthModal();
+    } catch (err) {
+      el.textContent = err.message;
+      el.style.display = 'block';
+      // 码作废/过期时清空输入，方便直接粘贴重发后的新码
+      if (codeInput && /作废|过期|重新获取/.test(err.message || '')) {
+        codeInput.value = '';
+      }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+    return false;
   }
 
   async function resendVerificationEmail() {
@@ -647,10 +717,12 @@
       return;
     }
     buttons.forEach(function(btn) { btn.disabled = true; });
-    statuses.forEach(function(status) { status.textContent = '正在发送验证邮件…'; });
+    statuses.forEach(function(status) { status.textContent = '正在发送验证码…'; });
     try {
       var data = await api('/api/auth/resend-verification/', { method: 'POST',
         body: { email: _pendingVerificationEmail } });
+      // 重发后同样进入验证码输入面板；倒计时在面板内继续走
+      _showVerifyCodePanel();
       _startVerificationResendCooldown(data.cooldown_seconds, data.message);
     } catch (err) {
       buttons.forEach(function(btn) { btn.disabled = false; });
@@ -687,11 +759,8 @@
                 education: education,
                 college: college,
                 major: major } });
-      // 不自动登录 — 用户需要先验证邮箱
-      el.style.display = 'none';
-      form.style.display = 'none';
-      document.getElementById('registerResendAction').style.display = 'none';
-      success.style.display = 'block';
+      // 不自动登录 — 用户需输入邮件中的验证码；成功后自动登录
+      _showVerifyCodePanel();
       // 清除密码字段
       document.getElementById('regPassword').value = '';
       document.getElementById('regPasswordConfirm').value = '';
@@ -701,7 +770,7 @@
       success.style.display = 'none';
       var canResend = (err.message || '').indexOf('未验证') !== -1;
       if (canResend) {
-        _showVerificationResendAction('该邮箱已注册但尚未验证，可在这里重新发送验证邮件。');
+        _showVerificationResendAction('该邮箱已注册但尚未验证，可在这里重新获取验证码。');
       } else {
         _hideVerificationResendAction();
       }

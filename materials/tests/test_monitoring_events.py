@@ -1,8 +1,9 @@
 import json
 from datetime import timedelta
 
+from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from .helpers import AuthClient, create_user
@@ -106,6 +107,71 @@ class MonitoringEventsTest(TestCase):
         row = MonitoringEvent.objects.get(event_name=MonitoringEvent.EventName.LOGIN_FAILURE)
         self.assertIsNone(row.user_id)
         self.assertNotIn(self.user.username, row.actor_hash)
+
+    def test_login_unverified_password_correct_uses_dedicated_event(self):
+        """密码正确但未验证邮箱：单独记 unverified 事件，不混入 LOGIN_FAILURE。"""
+        pending = User.objects.create_user(
+            username="unverified@mail.bnu.edu.cn",
+            email="unverified@mail.bnu.edu.cn",
+            password="testpass123",
+            is_active=False,
+        )
+        self.client.defaults.clear()
+        response = self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": pending.username, "password": "testpass123"}),
+            content_type="application/json",
+            HTTP_X_BNU_VISITOR="login-browser-day",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("请先验证邮箱", response.json()["error"])
+        self.assertTrue(MonitoringEvent.objects.filter(
+            event_name=MonitoringEvent.EventName.LOGIN_UNVERIFIED,
+        ).exists())
+        self.assertFalse(MonitoringEvent.objects.filter(
+            event_name=MonitoringEvent.EventName.LOGIN_FAILURE,
+        ).exists())
+        row = MonitoringEvent.objects.get(event_name=MonitoringEvent.EventName.LOGIN_UNVERIFIED)
+        self.assertIsNone(row.user_id)
+        self.assertNotIn(pending.username, row.actor_hash)
+
+    @override_settings(CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "login-rate-monitoring-tests",
+        },
+    })
+    def test_rate_limited_login_attempt_is_not_recorded_as_failure(self):
+        """429 是限流拒绝而非业务失败：不计入 LOGIN_FAILURE。"""
+        self.client.defaults.clear()
+        payload = json.dumps({"username": self.user.username, "password": "wrong-password"})
+        # login_account 限 10 次/300s：前 10 次按密码错误记事件，第 11 次 429 不记
+        for _ in range(10):
+            response = self.client.post(
+                "/api/auth/login/",
+                data=payload,
+                content_type="application/json",
+                HTTP_X_BNU_VISITOR="login-browser-day",
+            )
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            MonitoringEvent.objects.filter(event_name=MonitoringEvent.EventName.LOGIN_FAILURE).count(),
+            10,
+        )
+        limited = self.client.post(
+            "/api/auth/login/",
+            data=payload,
+            content_type="application/json",
+            HTTP_X_BNU_VISITOR="login-browser-day",
+        )
+        self.assertEqual(limited.status_code, 429)
+        self.assertEqual(
+            MonitoringEvent.objects.filter(event_name=MonitoringEvent.EventName.LOGIN_FAILURE).count(),
+            10,
+        )
+        self.assertFalse(MonitoringEvent.objects.filter(
+            event_name=MonitoringEvent.EventName.LOGIN_UNVERIFIED,
+        ).exists())
 
     def test_upload_validation_failure_is_recorded_without_file_metadata(self):
         self.client.defaults.clear()

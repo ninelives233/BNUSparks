@@ -1378,6 +1378,15 @@
   }
   .mf-input:focus { outline: none; border-color: var(--primary); }
   .mf-textarea { min-height: 70px; resize: vertical; }
+  /* 邮箱验证码输入：6 位数字居中宽字距，等宽数字避免跳动 */
+  .mf-code-input {
+    text-align: center;
+    font-size: 1.2rem;
+    letter-spacing: 0.45em;
+    text-indent: 0.45em;
+    font-variant-numeric: tabular-nums;
+  }
+  .code-target-email { word-break: break-all; }
   /* 身份标签：培养层次、学院、专业同组排列。 */
   .mf-ident-row {
     display: grid; grid-template-columns: minmax(84px, .75fr) minmax(110px, 1.2fr) minmax(96px, 1fr); gap: 8px;

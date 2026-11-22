@@ -18,6 +18,7 @@ urlpatterns = [
     path("auth/forgot-password/", views.api_forgot_password, name="api_forgot_password"),
     path("auth/reset-password/", views.api_reset_password, name="api_reset_password"),
     path("auth/verify-email/", views.api_verify_email, name="api_verify_email"),
+    path("auth/verify-email-code/", views.api_verify_email_code, name="api_verify_email_code"),
     path("auth/tutorial/", views.api_tutorial, name="api_tutorial"),
 
     # 课程

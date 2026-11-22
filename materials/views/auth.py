@@ -8,12 +8,13 @@ forgot-password, reset-password
 import hashlib
 import json
 import logging
+import secrets
 import smtplib
 import time
-from urllib.parse import urlencode
 
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
@@ -34,7 +35,7 @@ from .utils import (
     DAILY_DOWNLOAD_LIMIT,
 )
 from ..services.course_visibility import browse_mode_for_profile, education_for_user
-from ..monitoring_events import record_login_outcome, record_monitoring_event
+from ..monitoring_events import record_login_outcome, record_monitoring_event, record_request_event
 from ..models import MonitoringEvent, Notification
 
 
@@ -70,6 +71,7 @@ def _log_login_ip(request, username):
 VERIFICATION_RESEND_COOLDOWN = 60
 VERIFICATION_FAILURE_COOLDOWN = 15
 VERIFICATION_TOKEN_SALT = "bnusparks.email-verification.v1"
+VERIFICATION_CODE_MAX_ATTEMPTS = 5
 AUTH_RATE_LIMITS = {
     "register_ip": (10, 3600),
     "register_account": (4, 3600),
@@ -147,17 +149,38 @@ def _check_verification_token(user, token):
     return payload == {"uid": user.pk, "email": user.email}
 
 
-def _send_verification_email(request, user):
-    """为未激活用户发送邮箱验证邮件。"""
-    token = _make_verification_token(user)
-    query = urlencode({"uid": user.id, "vtoken": token})
-    link = request.build_absolute_uri(f"/verify-email/?{query}")
+def _verification_code_cache_key(email):
+    digest = hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+    return f"email_verify_code:{digest}"
+
+
+def _verification_code_attempts_key(email):
+    digest = hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+    return f"email_verify_code_attempts:{digest}"
+
+
+def _send_verification_code_email(request, user):
+    """为未激活用户发送 6 位邮箱验证码，并把哈希码写入缓存等待校验。
+
+    码值以 Django 密码哈希落缓存（防缓存表泄露后离线爆破 6 位空间），
+    尝试计数独立成键，验证侧用原子 incr 限 5 次错误。先写缓存再发信：
+    发信失败时残留的码要么随未激活账号一起作废（注册路径会删号），
+    要么被下次重发覆盖。
+    """
+    code = f"{secrets.randbelow(1000000):06d}"
+    timeout = getattr(settings, "EMAIL_VERIFICATION_TIMEOUT", 1800)
+    code_key = _verification_code_cache_key(user.email)
+    attempts_key = _verification_code_attempts_key(user.email)
+    # 覆盖旧码（以最新一封邮件为准）并重置尝试计数。
+    cache.set(code_key, {"uid": user.pk, "code": make_password(code)}, timeout)
+    cache.delete(attempts_key)
+
     display_name = escape(user.first_name or user.username)
-    escaped_link = escape(link)
     text_body = (
         f"你好 {user.first_name or user.username}，\n\n"
         f"感谢注册 BNU Sparks（木铎星火）课程资料共享平台！\n\n"
-        f"请点击以下链接验证你的北师大邮箱（30 分钟内有效）：\n{link}\n\n"
+        f"你的邮箱验证码是：{code}（30 分钟内有效）。\n\n"
+        f"请回到注册窗口输入该验证码完成验证。验证码等同于账号凭证，请勿泄露给任何人；"
         f"如果这不是你本人操作，请忽略此邮件。\n\n"
         f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn"
     )
@@ -168,19 +191,18 @@ def _send_verification_email(request, user):
       <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:32px 28px;">
         <p style="margin:0 0 20px;color:#203a70;font-size:18px;font-weight:700;">BNU Sparks · 木铎星火</p>
         <p style="margin:0 0 12px;">你好，{display_name}：</p>
-        <p style="margin:0 0 22px;">感谢注册课程资料共享平台。点击下面的按钮验证你的北师大邮箱，链接 30 分钟内有效。</p>
-        <p style="margin:0 0 24px;text-align:center;">
-          <a href="{escaped_link}" style="display:inline-block;padding:12px 24px;background:#203a70;border-radius:6px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">立即验证邮箱</a>
+        <p style="margin:0 0 14px;">感谢注册课程资料共享平台。你的邮箱验证码为（30 分钟内有效）：</p>
+        <p style="margin:0 0 22px;text-align:center;">
+          <span style="display:inline-block;padding:12px 28px;background:#f0f4fb;border:1px solid #d7e0ef;border-radius:8px;color:#203a70;font-size:30px;font-weight:700;letter-spacing:12px;">{code}</span>
         </p>
-        <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">如果按钮无法点击，请复制下面的完整链接到浏览器打开：</p>
-        <p style="margin:0 0 20px;word-break:break-all;color:#203a70;font-size:13px;">{escaped_link}</p>
-        <p style="margin:0;color:#9ca3af;font-size:12px;">如果这不是你本人操作，请忽略此邮件。</p>
+        <p style="margin:0 0 20px;">请回到注册窗口输入该验证码完成验证。</p>
+        <p style="margin:0;color:#9ca3af;font-size:12px;">验证码等同于账号凭证，请勿泄露给任何人；如果这不是你本人操作，请忽略此邮件。</p>
       </div>
     </div>
   </body>
 </html>"""
     message = EmailMultiAlternatives(
-        "BNU Sparks — 验证你的邮箱",
+        "BNU Sparks — 邮箱验证码",
         text_body,
         "bnusparks@163.com",
         [user.email],
@@ -188,7 +210,7 @@ def _send_verification_email(request, user):
     message.attach_alternative(html_body, "text/html")
     sent = message.send(fail_silently=False)
     if sent != 1:
-        raise RuntimeError(f"verification email backend returned sent={sent}")
+        raise RuntimeError(f"verification code email backend returned sent={sent}")
 
 
 def _recipient_was_rejected(exc):
@@ -291,7 +313,7 @@ def api_register(request):
         if existing.is_active:
             return _err("该邮箱已注册，请直接登录")
         else:
-            return _err("该邮箱已注册但未验证，请检查校园邮箱中的验证邮件（可能需要检查垃圾邮件箱）")
+            return _err("该邮箱已注册但未验证，可重新获取验证码完成验证（可能需要检查垃圾邮件箱）")
 
     failure_response = _verification_failure_limited(request, email)
     if failure_response is not None:
@@ -321,7 +343,7 @@ def api_register(request):
         if existing and existing.is_active:
             return _err("该邮箱已注册，请直接登录")
         if existing:
-            return _err("该邮箱已注册但未验证，请重新发送验证邮件")
+            return _err("该邮箱已注册但未验证，请重新获取验证码")
         logger.exception("registration database integrity failure email_domain=%s", email.partition("@")[2])
         return _err("注册信息保存失败，请稍后重试", 500)
     except Exception:
@@ -331,10 +353,10 @@ def api_register(request):
         return _err("注册信息保存失败，请稍后重试", 500)
 
     try:
-        _send_verification_email(request, user)
+        _send_verification_code_email(request, user)
     except Exception as exc:
         logger.exception(
-            "verification email send failed user_id=%s email_domain=%s",
+            "verification code email send failed user_id=%s email_domain=%s",
             user.id,
             email.partition("@")[2],
         )
@@ -347,12 +369,12 @@ def api_register(request):
         _set_verification_failure_cooldown(request, email)
         return _mail_failure_response(exc)
 
-    return _ok({"message": "注册成功！请查收验证邮件（可能需要检查垃圾邮件箱），点击邮件中的链接完成注册。"})
+    return _ok({"message": "注册成功！验证码已发送至你的校园邮箱（30 分钟内有效），请在注册窗口输入验证码完成验证。"})
 
 
 @csrf_exempt
 def api_resend_verification(request):
-    """POST /api/auth/resend-verification/ — 为未激活账号重发验证邮件"""
+    """POST /api/auth/resend-verification/ — 为未激活账号重发验证码"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
     try:
@@ -383,7 +405,7 @@ def api_resend_verification(request):
     cache_key = _verification_resend_cache_key(email)
     try:
         if not cache.add(cache_key, True, VERIFICATION_RESEND_COOLDOWN):
-            response = _err(f"验证邮件刚刚发送过，请稍候 {VERIFICATION_RESEND_COOLDOWN} 秒后再试", 429)
+            response = _err(f"验证码刚刚发送过，请稍候 {VERIFICATION_RESEND_COOLDOWN} 秒后再试", 429)
             response["Retry-After"] = str(VERIFICATION_RESEND_COOLDOWN)
             return response
     except Exception:
@@ -397,10 +419,10 @@ def api_resend_verification(request):
         return _rate_limit_error("resend_account")
 
     try:
-        _send_verification_email(request, user)
+        _send_verification_code_email(request, user)
     except Exception as exc:
         logger.exception(
-            "verification resend failed user_id=%s email_domain=%s",
+            "verification code resend failed user_id=%s email_domain=%s",
             user.id,
             email.partition("@")[2],
         )
@@ -418,14 +440,67 @@ def api_resend_verification(request):
         return _mail_failure_response(exc)
 
     return _ok({
-        "message": "验证邮件已重新发送，请查收最新邮件（可能需要检查垃圾邮件箱）。",
+        "message": "验证码已重新发送，请查收最新邮件（可能需要检查垃圾邮件箱）。",
         "cooldown_seconds": VERIFICATION_RESEND_COOLDOWN,
     })
 
 
+def _send_registration_thanks_email(user):
+    """注册完成（邮箱验证通过）后发送感谢邮件，失败不影响注册结果。"""
+    try:
+        send_mail(
+            "BNU Sparks — 感谢您的注册",
+            f"你好 {user.first_name or user.username}，\n\n"
+            f"感谢您的注册！\n\n"
+            f"建议添加微信 Rsun1949，以直接反馈任何遇到的问题。\n\n"
+            f"这能够让我们以更快的速度和更高的质量来完善网站的功能。\n\n"
+            f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn",
+            "bnusparks@163.com",
+            [user.email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
+
+def _auth_user_payload(user):
+    """激活成功后签发 7 天 JWT 并返回与登录接口同构的完整用户信息。"""
+    profile = _get_or_create_profile(user)
+    jwt_token = _jwt_encode({
+        "user_id": user.id,
+        "exp": time.time() + 7 * 86400,
+    })
+    return {
+        "token": jwt_token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "nickname": user.first_name or user.username,
+            "email": user.email,
+            "role": profile.role,
+            "avatar_url": profile.avatar.url if profile.avatar else "",
+            "identity_education": profile.identity_education or "",
+            "course_navigation_education": education_for_user(user),
+            "identity_college": profile.identity_college or "",
+            "identity_major": profile.identity_major or "",
+            "identity_can_edit": _identity_can_edit(profile),
+            "home_layout": profile.home_layout or UserProfile.HomeLayout.COMPACT,
+            "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
+            "mobile_nav": _mobile_nav_for_profile(profile),
+            "default_view": _default_view_for_profile(profile),
+            "material_browse_mode": browse_mode_for_profile(profile),
+            "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
+            "appearance_configured": bool(
+                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
+                profile.material_browse_mode or profile.timetable_text_align
+            ),
+        },
+    }
+
+
 @csrf_exempt
 def api_verify_email(request):
-    """POST /api/auth/verify-email/ — 验证邮箱并激活账号"""
+    """POST /api/auth/verify-email/ — 旧邮件链接验证（兼容在途旧邮件）"""
     if request.method != "POST":
         return _err("仅支持 POST", 405)
     try:
@@ -456,53 +531,78 @@ def api_verify_email(request):
         return _err("该邮箱已完成验证，请直接登录")
     user.is_active = True
 
-    # 注册完成（邮箱验证通过）后发送感谢邮件，失败不影响注册结果
-    try:
-        send_mail(
-            "BNU Sparks — 感谢您的注册",
-            f"你好 {user.first_name or user.username}，\n\n"
-            f"感谢您的注册！\n\n"
-            f"建议添加微信 Rsun1949，以直接反馈任何遇到的问题。\n\n"
-            f"这能够让我们以更快的速度和更高的质量来完善网站的功能。\n\n"
-            f"BNU Sparks · 木铎星火\nhttps://bnusparks.cn",
-            "bnusparks@163.com",
-            [user.email],
-            fail_silently=True,
-        )
-    except Exception:
-        pass
-
-    jwt_token = _jwt_encode({
-        "user_id": user.id,
-        "exp": time.time() + 7 * 86400,
-    })
-    profile = _get_or_create_profile(user)
+    _send_registration_thanks_email(user)
     return _ok({
-        "token": jwt_token,
         "message": "邮箱验证成功！",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "nickname": user.first_name or user.username,
-            "email": user.email,
-            "role": profile.role,
-            "avatar_url": profile.avatar.url if profile.avatar else "",
-            "identity_education": profile.identity_education or "",
-            "course_navigation_education": education_for_user(user),
-            "identity_college": profile.identity_college or "",
-            "identity_major": profile.identity_major or "",
-            "identity_can_edit": _identity_can_edit(profile),
-            "home_layout": profile.home_layout or UserProfile.HomeLayout.COMPACT,
-            "color_theme": profile.color_theme or UserProfile.ColorTheme.WARM,
-            "mobile_nav": _mobile_nav_for_profile(profile),
-            "default_view": _default_view_for_profile(profile),
-            "material_browse_mode": browse_mode_for_profile(profile),
-            "timetable_text_align": profile.timetable_text_align or UserProfile.TimetableTextAlign.LEFT,
-            "appearance_configured": bool(
-                profile.home_layout or profile.color_theme or profile.mobile_nav or profile.default_view or
-                profile.material_browse_mode or profile.timetable_text_align
-            ),
-        },
+        **_auth_user_payload(user),
+    })
+
+
+@csrf_exempt
+def api_verify_email_code(request):
+    """POST /api/auth/verify-email-code/ — 校验 6 位邮箱验证码并激活账号"""
+    if request.method != "POST":
+        return _err("仅支持 POST", 405)
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return _err("请求格式错误")
+
+    email = (body.get("email") or "").strip().lower()
+    code = (body.get("code") or "").replace(" ", "").strip()
+
+    if not email or not code:
+        return _err("参数不完整")
+
+    code_key = _verification_code_cache_key(email)
+    attempts_key = _verification_code_attempts_key(email)
+    try:
+        entry = cache.get(code_key)
+    except Exception:
+        logger.warning("verification code cache unavailable", exc_info=True)
+        return _err("验证服务暂时不可用，请稍后重试", 503)
+    if not entry or not isinstance(entry, dict):
+        return _err("验证码已过期或未发送，请重新获取")
+
+    stored_uid = entry.get("uid")
+    stored_hash = entry.get("code") or ""
+    if not (code.isdigit() and len(code) == 6) or not check_password(code, stored_hash):
+        try:
+            if cache.add(attempts_key, 1, getattr(settings, "EMAIL_VERIFICATION_TIMEOUT", 1800)):
+                attempts = 1
+            else:
+                attempts = cache.incr(attempts_key)
+        except ValueError:
+            # add 与 incr 竞争间隙计数键被删（过期/重发）：按首次错误起算。
+            attempts = 1
+        except Exception:
+            # 计数暂不可用时按单次错误处理；取码本身仍走缓存，不影响可用性。
+            logger.warning("verification code attempt counter unavailable", exc_info=True)
+            attempts = 0
+        if attempts and attempts >= VERIFICATION_CODE_MAX_ATTEMPTS:
+            cache.delete(code_key)
+            cache.delete(attempts_key)
+            return _err("错误次数过多，验证码已作废，请重新获取")
+        return _err("验证码错误，请重试")
+
+    # 条件更新保证同一个验证码只能有一个并发请求成功激活并换取 JWT。
+    activated = User.objects.filter(
+        pk=stored_uid, is_active=False, username__iexact=email,
+    ).update(is_active=True)
+    if not activated:
+        existing = User.objects.filter(pk=stored_uid).first()
+        if existing is not None and existing.is_active and existing.username.lower() == email:
+            return _err("该邮箱已完成验证，请直接登录")
+        return _err("验证码已过期或未发送，请重新获取")
+    cache.delete(code_key)
+    cache.delete(attempts_key)
+    user = User.objects.get(pk=stored_uid)
+    user.is_active = True
+
+    _send_registration_thanks_email(user)
+    return _ok({
+        "message": "邮箱验证成功！",
+        **_auth_user_payload(user),
     })
 
 
@@ -549,24 +649,31 @@ def api_login(request):
             username = cand
             break
 
+    def _unverified_response():
+        # 未验证邮箱单独成事件，密码错误的 LOGIN_FAILURE 不再被混入；
+        # 主体是匿名访客（未验证用户没有登录态），匿名标识从请求头提取。
+        record_request_event(request, MonitoringEvent.EventName.LOGIN_UNVERIFIED)
+        request._monitor_login_recorded = True
+        return _err("请先验证邮箱后再登录；可在注册窗口重新获取验证码。")
+
     if user is None:
         for cand in candidates:
             try:
                 inactive_user = User.objects.get(username=cand)
                 if inactive_user.check_password(password) and not inactive_user.is_active:
-                    return _err("请先验证邮箱后再登录；可在注册窗口重新发送验证邮件。")
+                    return _unverified_response()
             except User.DoesNotExist:
                 pass
             try:
                 inactive_user = User.objects.get(email__iexact=cand)
                 if inactive_user.check_password(password) and not inactive_user.is_active:
-                    return _err("请先验证邮箱后再登录；可在注册窗口重新发送验证邮件。")
+                    return _unverified_response()
             except User.DoesNotExist:
                 pass
-        return _err("邮箱或密码错误")
+        return _err("邮箱或密码错误。新注册账号需先完成邮箱验证。")
 
     if not user.is_active:
-        return _err("请先验证邮箱后再登录；可在注册窗口重新发送验证邮件。")
+        return _unverified_response()
 
     _log_login_ip(request, user.username)
 

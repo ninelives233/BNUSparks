@@ -1348,6 +1348,7 @@ class MonitoringEvent(models.Model):
     class EventName(models.TextChoices):
         LOGIN_SUCCESS = "auth.login.success", "登录成功"
         LOGIN_FAILURE = "auth.login.failure", "登录失败"
+        LOGIN_UNVERIFIED = "auth.login.unverified", "登录失败（邮箱未验证）"
         VIEW_OPEN = "view.open", "页面打开"
         SEARCH_EXECUTE = "search.execute", "执行搜索"
         SEARCH_NO_RESULT = "search.no_result", "搜索无结果"
