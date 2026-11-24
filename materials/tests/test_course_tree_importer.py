@@ -218,8 +218,9 @@ class CourseTreeImporterTests(TestCase):
         self.assertEqual(ids, set(Course.objects.filter(name=original.name).values_list("pk", flat=True)))
         self.assertEqual(category_ids, set(CourseCategory.objects.values_list("pk", flat=True)))
         conflict = {**tree["courses"][0], "path": ["专业课", college.name, "硕士", "其他"], "code": "OTHER101"}
-        with self.assertRaises(ImportConflict):
-            import_course_tree({"courses": [conflict]}, apply=True)
+        # 占位码候选不参与真码行的并存判断：真码行与占位同名课允许并存
+        import_course_tree({"courses": [conflict]}, apply=True)
+        self.assertTrue(Course.objects.filter(code="OTHER101", name=original.name).exists())
         master_code = placeholder_code(college.pk, original.name, education="硕士")
         master = Course.objects.get(code=master_code)
         adopt = {**tree["courses"][0], "code": "MASTER101", "adopt_placeholder": True}
@@ -227,6 +228,123 @@ class CourseTreeImporterTests(TestCase):
         master.refresh_from_db()
         self.assertEqual(master.code, "MASTER101")
         self.assertTrue(Course.objects.filter(code=placeholder_code(college.pk, original.name, education="博士")).exists())
+
+    def test_placeholder_row_coexists_with_real_code_same_name(self):
+        college = create_college(name="测试学院", slug="test-college")
+        root = create_category(name="专业课")
+        create_category(name=college.name, parent=root)
+        tree = {
+            "folders": [
+                {"path": ["专业课", college.name, "电子信息"], "education_level": "硕士"},
+                {"path": ["专业课", college.name, "电子信息", "计算机技术"]},
+                {"path": ["专业课", college.name, "电子信息", "人工智能"]},
+                {"path": ["专业课", college.name, "电子信息", "计算机技术", "学位基础课"]},
+                {"path": ["专业课", college.name, "电子信息", "人工智能", "学位基础课"]},
+            ],
+            "courses": [
+                {"path": ["专业课", college.name, "电子信息", "计算机技术", "学位基础课"],
+                 "name": "数字图像处理", "course_type": "major", "college": college.name,
+                 "code": "SAI22063001"},
+                {"path": ["专业课", college.name, "电子信息", "人工智能", "学位基础课"],
+                 "name": "数字图像处理", "course_type": "major", "college": college.name,
+                 "allow_placeholder": True},
+            ],
+        }
+        result = self.run_import(tree, "--apply", "--json")
+        self.assertEqual(result["summary"].get("CREATE_PLACEHOLDER_VARIANT"), 1)
+        codes = set(Course.objects.filter(name="数字图像处理").values_list("code", flat=True))
+        self.assertEqual(len(codes), 2)
+        self.assertIn("SAI22063001", codes)
+        self.assertIn(placeholder_code(college.pk, "数字图像处理", education="硕士"), codes)
+        category_ids = set(CourseCategory.objects.values_list("pk", flat=True))
+        second = self.run_import(tree, "--apply", "--json")
+        self.assertEqual(category_ids, set(CourseCategory.objects.values_list("pk", flat=True)))
+        self.assertTrue(all(
+            item["action"].startswith("KEEP_") or item["action"] == "REUSE_COURSE"
+            for item in second["actions"]))
+
+    def test_same_major_real_code_conflict_still_blocked(self):
+        college = create_college(name="测试学院", slug="test-college")
+        root = create_category(name="专业课")
+        create_category(name=college.name, parent=root)
+        tree = {
+            "folders": [
+                {"path": ["专业课", college.name, "电子信息"], "education_level": "硕士"},
+                {"path": ["专业课", college.name, "电子信息", "计算机技术"]},
+                {"path": ["专业课", college.name, "电子信息", "人工智能"]},
+                {"path": ["专业课", college.name, "电子信息", "计算机技术", "学位基础课"]},
+                {"path": ["专业课", college.name, "电子信息", "人工智能", "学位基础课"]},
+            ],
+            "courses": [
+                {"path": ["专业课", college.name, "电子信息", "计算机技术", "学位基础课"],
+                 "name": "算法设计", "course_type": "major", "college": college.name,
+                 "code": "SAI2001"},
+                {"path": ["专业课", college.name, "电子信息", "人工智能", "学位基础课"],
+                 "name": "算法设计", "course_type": "major", "college": college.name,
+                 "code": "SAI2002"},
+            ],
+        }
+        with self.assertRaises(ImportConflict):
+            import_course_tree(tree, apply=True)
+        self.assertFalse(Course.objects.filter(name="算法设计").exists())
+
+    def test_cross_major_real_variant_allowed(self):
+        college = create_college(name="测试学院", slug="test-college")
+        root = create_category(name="专业课")
+        create_category(name=college.name, parent=root)
+        tree = {
+            "folders": [
+                {"path": ["专业课", college.name, "智能科学与技术"], "education_level": "硕士"},
+                {"path": ["专业课", college.name, "智能科学与技术", "学位基础课"]},
+                {"path": ["专业课", college.name, "电子信息"], "education_level": "硕士"},
+                {"path": ["专业课", college.name, "电子信息", "学位基础课"]},
+            ],
+            "courses": [
+                {"path": ["专业课", college.name, "智能科学与技术", "学位基础课"],
+                 "name": "机器学习", "course_type": "major", "college": college.name,
+                 "code": "AIC2001"},
+                {"path": ["专业课", college.name, "电子信息", "学位基础课"],
+                 "name": "机器学习", "course_type": "major", "college": college.name,
+                 "code": "SAI2003"},
+            ],
+        }
+        result = self.run_import(tree, "--apply", "--json")
+        self.assertEqual(result["summary"].get("CREATE_CROSS_MAJOR_VARIANT"), 1)
+        self.assertEqual(Course.objects.filter(name="机器学习").count(), 2)
+
+    def test_orphan_real_candidate_is_not_auto_merged(self):
+        college = create_college(name="测试学院", slug="test-college")
+        root = create_category(name="专业课")
+        create_category(name=college.name, parent=root)
+        orphan = create_course(code="ORPHAN01", name="孤儿同名课", college=college, course_type="major")
+        real_tree = {
+            "folders": [{"path": ["专业课", college.name, "某专业"], "education_level": "硕士"}],
+            "courses": [
+                {"path": ["专业课", college.name, "某专业", "学位基础课"],
+                 "name": "孤儿同名课", "course_type": "major", "college": college.name,
+                 "code": "NEW9001"},
+            ],
+        }
+        with self.assertRaises(ImportConflict):
+            import_course_tree(real_tree, apply=True)
+        orphan.refresh_from_db()
+        self.assertIsNone(orphan.merged_into_id)
+        self.assertFalse(Course.objects.filter(code="NEW9001").exists())
+
+        placeholder_tree = {
+            "folders": [{"path": ["专业课", college.name, "某专业"], "education_level": "硕士"}],
+            "courses": [
+                {"path": ["专业课", college.name, "某专业", "学位基础课"],
+                 "name": "孤儿同名课", "course_type": "major", "college": college.name,
+                 "allow_placeholder": True},
+            ],
+        }
+        result = self.run_import(placeholder_tree, "--apply", "--json")
+        self.assertEqual(result["summary"].get("CREATE_PLACEHOLDER_VARIANT"), 1)
+        self.assertIsNone(result["summary"].get("MERGE_ORPHAN_COURSE"))
+        orphan.refresh_from_db()
+        self.assertIsNone(orphan.merged_into_id)
+        self.assertEqual(Course.objects.filter(name="孤儿同名课", merged_into_id__isnull=True).count(), 2)
 
     def test_conflict_rolls_back_whole_batch(self):
         college = create_college(name="测试学院", slug="test-college")

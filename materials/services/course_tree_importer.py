@@ -220,6 +220,34 @@ class CourseTreeImporter:
             return any(self.levels_overlap(self.level(node), level) for node in refs)
         return not is_placeholder(item.code) or item.code == placeholder_code(item.college_id, item.name, education=level)
 
+    def ref_majors(self, item):
+        """候选课程挂树节点的专业名集合（仅统计研究生专业课链；空集=孤儿或全跨挂）。"""
+        nodes_by_id = {node.pk: node for node in self.nodes}
+        majors = set()
+        for node in self.nodes:
+            if node.course_id != item.pk:
+                continue
+            chain = []
+            current = node
+            seen = set()
+            while current and current.pk not in seen:
+                seen.add(current.pk)
+                chain.append(current.name)
+                current = nodes_by_id.get(current.parent_id)
+            chain.reverse()
+            if not chain or chain[0] != '专业课':
+                continue
+            index = 3 if len(chain) > 3 and chain[2] == '博士' else 2
+            if len(chain) > index:
+                majors.add(chain[index])
+        return majors
+
+    def row_major(self, parent_path):
+        if parent_path[0] != '专业课' or len(parent_path) <= 2:
+            return None
+        index = 3 if len(parent_path) > 3 and parent_path[2] == '博士' else 2
+        return parent_path[index] if len(parent_path) > index else None
+
     def course(self, row):
         parent_path = tuple(row['path'])
         path = parent_path + (row['name'],)
@@ -274,7 +302,21 @@ class CourseTreeImporter:
             if row['course_type'] == 'major' and not college:
                 self.fail(path, '新建专业课程必须声明学院', code)
             if same_name:
-                self.fail(path, '同院同名课程已存在其他代码', code)
+                # 同院同层次同名异码放行口径（方向行不借码前提下的并存语义）：
+                # a) 本行为占位码 → 与既有同名课程（真码/占位码/孤儿）并存，独立建课且不自动合并旧卡；
+                # b) 本行为真码 → 仅当全部真码候选均有挂树专业且与本行专业互不相交才建变体；
+                #    同专业冲突或未挂树孤儿真码候选均拦截，交人工核对。
+                major = self.row_major(parent_path)
+                real_items = [item for item in same_name if not is_placeholder(item.code)]
+                if is_placeholder(code):
+                    self.record('CREATE_PLACEHOLDER_VARIANT', path, code)
+                elif all(
+                    self.ref_majors(item) and major and major not in self.ref_majors(item)
+                    for item in real_items
+                ):
+                    self.record('CREATE_CROSS_MAJOR_VARIANT', path, code)
+                else:
+                    self.fail(path, '同院同名课程已存在其他代码', code)
             course = self.create(Course, self.courses, name=name, code=code, course_type=row['course_type'], college_id=college.pk if college else None)
             self.record('CREATE_COURSE', path, code)
         if leaf and leaf.course_id != course.pk:
