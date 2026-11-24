@@ -184,6 +184,10 @@
   padding: 9px 12px;
 }
 
+.up-quick-panel.is-collapsed {
+  padding: 9px 14px;
+}
+
 .up-quick-head {
   display: flex;
   align-items: center;
@@ -192,13 +196,78 @@
   margin-bottom: 10px;
 }
 
+.up-quick-panel.is-collapsed .up-quick-head {
+  margin-bottom: 0;
+}
+
+.up-quick-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.up-quick-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
 .up-quick-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: var(--fs-xs);
   font-weight: 650;
   color: var(--ink-soft);
+}
+
+.up-quick-count {
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.up-quick-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+  background: var(--raised);
+  font-size: var(--fs-2xs);
+  font-weight: 550;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+
+.up-quick-toggle:hover .up-quick-toggle-pill {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.up-quick-toggle-pill .ui-icon {
+  width: 12px;
+  height: 12px;
+  transform: rotate(90deg);
+  transition: transform var(--t-fast);
+}
+
+.up-quick-panel.is-collapsed .up-quick-toggle-pill .ui-icon {
+  transform: rotate(0deg);
 }
 
 .up-quick-label .ui-icon {
@@ -430,7 +499,7 @@
 }
 
 .up-input-has-clear {
-  padding-right: 32px;
+  padding-right: 38px;
 }
 
 .up-input:focus,
@@ -444,21 +513,23 @@
 
 .up-clear-btn {
   position: absolute;
-  right: 6px;
+  right: 5px;
   top: 50%;
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
   border: none;
   border-radius: 50%;
   background: transparent;
   color: var(--ink-faint);
-  font-size: 0.9rem;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--t-fast), color var(--t-fast);
 }
 
 .up-clear-btn:hover {
@@ -559,6 +630,15 @@
   font-size: var(--fs-sm);
   color: var(--ink-faint);
   text-align: center;
+}
+
+.up-combo-section {
+  padding: 6px 10px 4px;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  color: var(--ink-faint);
+  border-bottom: 1px dashed var(--border-light);
+  margin-bottom: 4px;
 }
 
 .up-combo-foot {
@@ -1056,6 +1136,9 @@ html[data-bnu-theme="dark"] .up-tree-box {
   .up-input,
   .up-select,
   .up-textarea,
+  .up-clear-btn,
+  .up-quick-toggle-pill,
+  .up-quick-toggle-pill .ui-icon,
   .up-combo-item,
   .up-major-chip,
   .up-locate-btn,

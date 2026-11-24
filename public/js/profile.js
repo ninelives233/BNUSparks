@@ -140,12 +140,17 @@
         identity_college: college,
         identity_major: major,
       }});
-      // 即时刷新当前用户（供专业课置顶/搜索跳转）与资料卡
+      // 即时刷新当前用户（供专业课置顶/默认浏览方式/搜索跳转）与资料卡
       if (currentUser) {
         currentUser.identity_education = (data && data.identity_education) || '';
         currentUser.identity_college = (data && data.identity_college) || '';
         currentUser.identity_major = (data && data.identity_major) || '';
+        currentUser.course_navigation_education = (data && data.course_navigation_education) || '';
+        if (data && data.material_browse_mode) currentUser.material_browse_mode = data.material_browse_mode;
+        if (data && data.default_view) currentUser.default_view = data.default_view;
         currentUser.identity_can_edit = data && data.identity_can_edit;
+        if (typeof applyAppearanceForUser === 'function') applyAppearanceForUser(currentUser);
+        if (typeof syncGeneralRootLabels === 'function') syncGeneralRootLabels();
       }
       if (typeof refreshCourseTree === 'function') await refreshCourseTree();
       closeIdentityEditor();

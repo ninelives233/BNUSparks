@@ -6,6 +6,20 @@
   var SIZE_ERR_MSG = '文件大小超出限制，建议使用文件瘦身、压缩、拆分等方式处理后上传';
   var PLACEHOLDER_RE = /^BNUX[0-9A-F]{32}$/i;
 
+  var QUICK_COLLAPSED_KEY = 'bnusparks_upload_quick_collapsed';
+
+  function _readQuickCollapsed() {
+    try { return sessionStorage.getItem(QUICK_COLLAPSED_KEY) === '1'; }
+    catch (e) { return false; }
+  }
+
+  function _writeQuickCollapsed(collapsed) {
+    try {
+      if (collapsed) sessionStorage.setItem(QUICK_COLLAPSED_KEY, '1');
+      else sessionStorage.removeItem(QUICK_COLLAPSED_KEY);
+    } catch (e) {}
+  }
+
   var _state = {
     rendered: false,
     mode: 'file',            // 'file' | 'text'
@@ -22,6 +36,8 @@
     myCourses: [],           // [{ code, name, teachers, source, collegeName }]
     myCoursesLoadedFor: null,
     myNote: null,
+    quickCollapsed: _readQuickCollapsed(),
+    entryScope: null,        // { categoryId, path, collegeName, label, codes }
     collegeHighlight: -1,
     courseHighlight: -1,
     lastUploadResult: null,
@@ -241,11 +257,16 @@
             '</div>' +
             '<div class="up-quick-panel" id="upQuickPanel">' +
               '<div class="up-quick-head" id="upQuickHead">' +
-                '<span class="up-quick-label">' + iconSvg('calendar') + '<span>辅助填入 · 我的课程（课表 / 收藏）</span></span>' +
+                '<button type="button" class="up-quick-toggle" id="upQuickToggleBtn" aria-expanded="true" aria-controls="upQuickBody">' +
+                  '<span class="up-quick-label">' + iconSvg('calendar') + '<span>辅助填入 · 我的课程（课表 / 收藏）</span><span class="up-quick-count" id="upQuickCount"></span></span>' +
+                  '<span class="up-quick-toggle-pill"><span id="upQuickToggleText">收起</span>' + iconSvg('chevron-right') + '</span>' +
+                '</button>' +
                 '<button type="button" class="up-quick-link" id="upQuickTimetableBtn">我的课表 ' + iconSvg('chevron-right') + '</button>' +
               '</div>' +
-              '<div class="up-my-list" id="upMyList"></div>' +
-              '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
+              '<div class="up-quick-body" id="upQuickBody">' +
+                '<div class="up-my-list" id="upMyList"></div>' +
+                '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
+              '</div>' +
             '</div>' +
           '</section>' +
           '<section class="up-step-block" aria-labelledby="upStep2Title">' +
@@ -341,16 +362,21 @@
     colInput.addEventListener('keydown', function (e) {
       _handleComboKeydown(e, 'upCollegeList', 'college');
     });
-    colClear.addEventListener('click', function () {
+    colClear.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    colClear.addEventListener('click', function (e) {
+      e.stopPropagation();
       _selectCollege('');
-      colInput.focus();
+      if (document.activeElement === colInput) colInput.blur();
     });
 
     // 课程名称 combobox
     var crsInput = _el('upCourseInput');
     var crsClear = _el('upCourseClear');
     crsInput.addEventListener('focus', function () {
-      _renderCourseList();
+      if (_norm(crsInput.value) || _canShowEntryScopeEmpty()) _renderCourseList();
+      else _closeCombo('upCourseList', 'upCourseInput');
     });
     crsInput.addEventListener('input', function () {
       _state.courseQuery = crsInput.value;
@@ -360,27 +386,49 @@
         _renderSelectedCourseBar();
       }
       _updateClearButtons();
-      _renderCourseList();
+      if (_norm(crsInput.value) || _canShowEntryScopeEmpty()) _renderCourseList();
+      else _closeCombo('upCourseList', 'upCourseInput');
     });
     crsInput.addEventListener('keydown', function (e) {
       _handleComboKeydown(e, 'upCourseList', 'course');
     });
-    crsClear.addEventListener('click', function () {
+    crsClear.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    crsClear.addEventListener('click', function (e) {
+      e.stopPropagation();
       _clearCourseSelection();
+      _closeCombo('upCourseList', 'upCourseInput');
       crsInput.focus();
     });
 
     // 点击空白关闭下拉
     document.addEventListener('click', function (e) {
       var colWrap = _el('upCollegeWrap');
-      if (colWrap && !colWrap.contains(e.target)) _closeCombo('upCollegeList', 'upCollegeInput');
+      if (colWrap && !colWrap.contains(e.target)) {
+        _closeCombo('upCollegeList', 'upCollegeInput');
+        if (_state.selectedCollege) {
+          var matchedCol = _state.collegesList.find(function (c) { return c.name === _state.selectedCollege; });
+          colInput.value = matchedCol ? matchedCol.displayName : _state.selectedCollege;
+        } else if (colInput.value && !_state.selectedCollege) {
+          colInput.value = '';
+          _state.collegeQuery = '';
+        }
+        _updateClearButtons();
+      }
       var crsWrap = _el('upCourseWrap');
       if (crsWrap && !crsWrap.contains(e.target)) _closeCombo('upCourseList', 'upCourseInput');
     });
 
-    // 精准定位与课表快捷入口
+    // 精准定位与辅助填入折叠/课表快捷入口
     _el('upLocateIdleBtn').addEventListener('click', _openLocateOverlay);
     _el('upLocateBtn').addEventListener('click', _openLocateOverlay);
+    var quickToggleBtn = _el('upQuickToggleBtn');
+    if (quickToggleBtn) {
+      quickToggleBtn.addEventListener('click', function () {
+        _setQuickCollapsed(!_state.quickCollapsed);
+      });
+    }
     var quickTtBtn = _el('upQuickTimetableBtn');
     if (quickTtBtn) {
       quickTtBtn.addEventListener('click', function () {
@@ -487,7 +535,7 @@
     if (!box || box.style.display === 'none') {
       if (e.key === 'ArrowDown') {
         if (kind === 'college') _renderCollegeList();
-        else _renderCourseList();
+        else if (_norm(e.target && e.target.value) || _canShowEntryScopeEmpty()) _renderCourseList();
       }
       return;
     }
@@ -557,6 +605,11 @@
 
   function _selectCollege(collegeName) {
     _state.selectedCollege = collegeName || '';
+    if (!_state.selectedCollege) {
+      _state.entryScope = null;
+    } else if (_state.entryScope && _state.entryScope.collegeName && _state.entryScope.collegeName !== _state.selectedCollege) {
+      _state.entryScope = null;
+    }
     var colInp = _el('upCollegeInput');
     if (colInp) {
       var found = _state.collegesList.find(function (c) { return c.name === _state.selectedCollege; });
@@ -580,9 +633,151 @@
     _updateClearButtons();
   }
 
+  function _capturePriorScope(opts) {
+    if (opts && (opts.categoryId || (Array.isArray(opts.path) && opts.path.length))) {
+      return {
+        categoryId: opts.categoryId || null,
+        pathNames: Array.isArray(opts.path) ? opts.path.map(function (s) {
+          return typeof s === 'string' ? s : (s && s.name) || '';
+        }).filter(Boolean) : [],
+      };
+    }
+    var expView = _el('explorerView');
+    if (expView && expView.classList.contains('active') &&
+        typeof expPath !== 'undefined' && Array.isArray(expPath) && expPath.length) {
+      return { categoryId: null, pathNames: expPath.slice() };
+    }
+    var plazaView = _el('plazaView');
+    if (plazaView && plazaView.classList.contains('active') &&
+        window.BnuPlaza && typeof window.BnuPlaza.getCategoryId === 'function') {
+      var pid = window.BnuPlaza.getCategoryId();
+      if (pid) return { categoryId: pid, pathNames: [] };
+    }
+    if (typeof getLastCourseRange === 'function' && typeof getScopePosition === 'function') {
+      var range = getLastCourseRange();
+      var mode = typeof getMaterialBrowseMode === 'function' ? getMaterialBrowseMode() : 'directory';
+      var saved = getScopePosition(mode, range) || getScopePosition(mode === 'plaza' ? 'directory' : 'plaza', range);
+      if (saved && (saved.categoryId || (Array.isArray(saved.path) && saved.path.length))) {
+        return {
+          categoryId: saved.categoryId || null,
+          pathNames: Array.isArray(saved.path) ? saved.path.slice() : [],
+        };
+      }
+    }
+    return null;
+  }
+
+  function _resolveEntryScope(prior) {
+    _state.entryScope = null;
+    if (!prior) return;
+    var tree = typeof courseTree !== 'undefined' && courseTree ? courseTree : {};
+    var targetNode = null;
+    var targetPath = null;
+
+    function walkById(nodes, path) {
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (!n || n.divider) continue;
+        var nextPath = path.concat(n.name);
+        if (n.id && n.id === prior.categoryId) {
+          targetNode = n;
+          targetPath = nextPath;
+          return true;
+        }
+        if (Array.isArray(n.children) && walkById(n.children, nextPath)) return true;
+      }
+      return false;
+    }
+
+    if (prior.categoryId) {
+      ['通识课', '专业课'].some(function (rootKey) {
+        if (!tree[rootKey]) return false;
+        if (tree[rootKey].id === prior.categoryId) {
+          targetNode = tree[rootKey];
+          targetPath = [rootKey];
+          return true;
+        }
+        return Array.isArray(tree[rootKey].children) && walkById(tree[rootKey].children, [rootKey]);
+      });
+    }
+    if (!targetNode && Array.isArray(prior.pathNames) && prior.pathNames.length) {
+      var cur = tree[prior.pathNames[0]];
+      if (cur) {
+        var resolved = [prior.pathNames[0]];
+        for (var i = 1; i < prior.pathNames.length; i++) {
+          if (!Array.isArray(cur.children)) { cur = null; break; }
+          cur = cur.children.find(function (c) { return c && !c.divider && c.name === prior.pathNames[i]; });
+          if (!cur) break;
+          resolved.push(cur.name);
+        }
+        if (cur) {
+          targetNode = cur;
+          targetPath = resolved;
+        }
+      }
+    }
+    if (!targetNode || !targetPath) return;
+    var minDepth = targetPath[0] === '通识课' ? 2 : 3;
+    if (targetPath.length < minDepth) return;
+
+    var codes = Object.create(null);
+    function collectCodes(node) {
+      if (!node || node.divider) return;
+      if (node.courseId) codes[String(node.courseId)] = true;
+      if (Array.isArray(node.children)) node.children.forEach(collectCodes);
+    }
+    collectCodes(targetNode);
+    if (!Object.keys(codes).length) return;
+
+    _state.entryScope = {
+      categoryId: targetNode.id || prior.categoryId || null,
+      path: targetPath,
+      collegeName: targetPath[0] === '专业课' ? (targetPath[1] || '') : '通识课',
+      label: targetPath.slice(1).map(_displaySeg).join(' › '),
+      codes: codes,
+    };
+  }
+
+  function _canShowEntryScopeEmpty() {
+    var scope = _state.entryScope;
+    if (!scope || !scope.codes) return false;
+    if (_state.selectedCollege && scope.collegeName && _state.selectedCollege !== scope.collegeName) return false;
+    return true;
+  }
+
+  function _placementInScope(course, placements) {
+    var scope = _state.entryScope;
+    if (!scope) return placements[0];
+    var prefix = scope.path;
+    for (var i = 0; i < placements.length; i++) {
+      var p = placements[i].path;
+      if (p.length >= prefix.length && prefix.every(function (seg, idx) { return p[idx] === seg; })) {
+        return placements[i];
+      }
+    }
+    return placements[0];
+  }
+
   function _matchingCourses() {
     var q = _norm(_el('upCourseInput') ? _el('upCourseInput').value : _state.courseQuery);
     var col = _state.selectedCollege;
+    if (!q) {
+      if (!_canShowEntryScopeEmpty()) return [];
+      var scoped = [];
+      for (var k = 0; k < _state.coursesIndex.length; k++) {
+        var sc = _state.coursesIndex[k];
+        if (!_state.entryScope.codes[sc.code]) continue;
+        var pls = col ? sc.placements.filter(function (p) { return p.collegeName === col; }) : sc.placements;
+        if (!pls.length) continue;
+        var pl = _placementInScope(sc, pls);
+        scoped.push({ course: sc, placement: pl, score: pl.fileCount > 0 ? 1 : 0 });
+      }
+      scoped.sort(function (a, b) {
+        if (a.score !== b.score) return b.score - a.score;
+        return a.course.name.localeCompare(b.course.name, 'zh-Hans-CN');
+      });
+      return scoped.slice(0, 40);
+    }
     var results = [];
     for (var i = 0; i < _state.coursesIndex.length; i++) {
       var c = _state.coursesIndex[i];
@@ -590,11 +785,6 @@
         ? c.placements.filter(function (p) { return p.collegeName === col; })
         : c.placements;
       if (col && !scopedPlacements.length) continue;
-
-      if (!q) {
-        results.push({ course: c, placement: scopedPlacements[0], score: 1 });
-        continue;
-      }
 
       var nName = _norm(c.name);
       var codeMatch = c.codes.some(function (cd) { return !_isPlaceholder(cd) && _norm(cd).indexOf(q) >= 0; });
@@ -608,7 +798,13 @@
       else if (nameIdx > 0) score += 30;
       if (codeMatch) score += 45;
       if (pathMatch) score += 10;
-      results.push({ course: c, placement: scopedPlacements[0], score: score });
+      var inScope = !!(_state.entryScope && _state.entryScope.codes[c.code]);
+      if (inScope) score += 25;
+      results.push({
+        course: c,
+        placement: inScope ? _placementInScope(c, scopedPlacements) : scopedPlacements[0],
+        score: score,
+      });
     }
     results.sort(function (a, b) {
       if (a.score !== b.score) return b.score - a.score;
@@ -621,10 +817,22 @@
     var box = _el('upCourseList');
     var inp = _el('upCourseInput');
     if (!box || !inp) return;
+    var hasQuery = !!_norm(inp.value);
+    if (!hasQuery && !_canShowEntryScopeEmpty()) {
+      _closeCombo('upCourseList', 'upCourseInput');
+      return;
+    }
     var list = _matchingCourses();
+    if (!hasQuery && !list.length) {
+      _closeCombo('upCourseList', 'upCourseInput');
+      return;
+    }
     _state.courseHighlight = -1;
 
     var html = '';
+    if (!hasQuery && _state.entryScope) {
+      html += '<div class="up-combo-section">当前所在目录 · ' + esc(_state.entryScope.label) + '</div>';
+    }
     if (!list.length) {
       html += '<div class="up-combo-empty">' +
         (_state.selectedCollege
@@ -1043,17 +1251,37 @@
     return null;
   }
 
+  function _setQuickCollapsed(collapsed) {
+    _state.quickCollapsed = !!collapsed;
+    _writeQuickCollapsed(_state.quickCollapsed);
+    var panelEl = _el('upQuickPanel');
+    var bodyEl = _el('upQuickBody');
+    var toggleBtn = _el('upQuickToggleBtn');
+    var toggleText = _el('upQuickToggleText');
+    if (panelEl) panelEl.classList.toggle('is-collapsed', _state.quickCollapsed);
+    if (bodyEl) bodyEl.hidden = _state.quickCollapsed;
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', _state.quickCollapsed ? 'false' : 'true');
+    if (toggleText) toggleText.textContent = _state.quickCollapsed ? '展开' : '收起';
+  }
+
   function _renderMyCourses() {
     var listEl = _el('upMyList');
     var noteEl = _el('upMyNote');
     var panelEl = _el('upQuickPanel');
     var quickHead = _el('upQuickHead');
+    var bodyEl = _el('upQuickBody');
+    var countEl = _el('upQuickCount');
     if (!listEl) return;
     if (noteEl && !_state.myNote) noteEl.style.display = 'none';
 
     if (!_state.myCourses.length) {
-      if (panelEl) panelEl.classList.add('is-empty');
+      if (panelEl) {
+        panelEl.classList.add('is-empty');
+        panelEl.classList.remove('is-collapsed');
+      }
+      if (bodyEl) bodyEl.hidden = false;
       if (quickHead) quickHead.style.display = 'none';
+      if (countEl) countEl.textContent = '';
       listEl.classList.add('is-empty');
       listEl.innerHTML =
         '<div class="up-my-empty">' +
@@ -1071,7 +1299,9 @@
 
     if (panelEl) panelEl.classList.remove('is-empty');
     if (quickHead) quickHead.style.display = '';
+    if (countEl) countEl.textContent = '（' + _state.myCourses.length + ' 门）';
     listEl.classList.remove('is-empty');
+    _setQuickCollapsed(_state.quickCollapsed);
 
     listEl.innerHTML = _state.myCourses.map(function (item, idx) {
       var codeDisp = item.code && !_isPlaceholder(item.code) ? item.code : '';
@@ -1461,6 +1691,7 @@
       if (typeof showLoginModal === 'function') showLoginModal();
       return Promise.resolve();
     }
+    var priorScope = _capturePriorScope(opts);
     _renderSkeleton();
     _populateMaterialTypes();
 
@@ -1488,6 +1719,7 @@
       _rebuildCourseIndex();
       _buildCollegesList(res[1]);
       _applyOpenPrefill(opts);
+      _resolveEntryScope(priorScope);
       _renderSelectedCourseBar();
       _updateClearButtons();
       _loadMyCourses();

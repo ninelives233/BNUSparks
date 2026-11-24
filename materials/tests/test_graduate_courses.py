@@ -10,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from .helpers import BnuTestCase, create_category, create_college, create_course, create_material, create_user
 from ..models import Course, CourseCategory, CourseCreationRequest, Material
 from ..services.course_codes import is_placeholder, placeholder_code
+from ..services.course_visibility import SPARSE_MAJOR_COURSE_THRESHOLD
 from ..views.course_requests import _target_education_level
 
 
@@ -134,9 +135,102 @@ Promise.resolve().then(() => {
         me = self.client.get('/api/auth/me/').json()['data']
         self.assertEqual(me['material_browse_mode'], 'plaza')
         self.assertEqual(me['course_navigation_education'], '硕士')
+        self.assertFalse(me['appearance_configured'])
         self.user.profile.material_browse_mode = 'directory'
         self.user.profile.save()
         self.assertEqual(self.client.get('/api/auth/me/').json()['data']['material_browse_mode'], 'directory')
+
+    def test_all_graduate_users_default_to_plaza_regardless_of_college_or_tree(self):
+        cases = (
+            ('硕士', '', ''),
+            ('硕士', '尚无目录学院', '未知专业'),
+            ('博士', '', ''),
+            ('博士', '尚无目录学院', '未知专业'),
+            ('博士', self.college.name, '理论经济学'),
+        )
+        for index, (education, college, major) in enumerate(cases):
+            with self.subTest(education=education, college=college, major=major):
+                grad = create_user(f"grad_default_plaza_{index}")
+                grad.profile.identity_education = education
+                grad.profile.identity_college = college
+                grad.profile.identity_major = major
+                grad.profile.save()
+                client = self.client.__class__()
+                client.set_token(grad)
+                me = client.get('/api/auth/me/').json()['data']
+                self.assertEqual(me['material_browse_mode'], 'plaza')
+                self.assertFalse(me['appearance_configured'])
+                profile = client.get('/api/auth/profile/').json()['data']
+                self.assertEqual(profile['material_browse_mode'], 'plaza')
+
+    def test_sparse_undergrad_tree_major_defaults_to_plaza_until_populated(self):
+        ug = create_user('ug_sparse_major')
+        ug.profile.identity_education = '本科'
+        ug.profile.identity_college = self.college.name
+        ug.profile.identity_major = self.undergrad.name
+        ug.profile.save()
+        client = self.client.__class__()
+        client.set_token(ug)
+
+        # 0 courses with materials -> sparse -> defaults to plaza
+        self.assertEqual(client.get('/api/auth/me/').json()['data']['material_browse_mode'], 'plaza')
+
+        # Multiple materials, pending/rejected materials, and merged aliases on < threshold courses still stay sparse
+        c1 = create_course('FIN101', '公司金融', college=self.college, course_type='major')
+        c1_alias = create_course('FIN101-OLD', '公司金融旧码', college=self.college, course_type='major')
+        c1_alias.merged_into = c1
+        c1_alias.save(update_fields=['merged_into'])
+        create_category('公司金融', parent=self.undergrad, course=c1)
+        create_category('公司金融（旧）', parent=self.undergrad, course=c1_alias)
+        for _ in range(3):
+            create_material(c1, self.user, review_status='approved')
+        create_material(c1_alias, self.user, review_status='approved')
+
+        c_pending = create_course('FIN199', '待审课程', college=self.college, course_type='major')
+        create_category('待审课程', parent=self.undergrad, course=c_pending)
+        create_material(c_pending, self.user, review_status='pending')
+        rejected = create_material(c_pending, self.user, review_status='rejected')
+        rejected.is_approved = True
+        rejected.save(update_fields=['is_approved'])
+
+        for idx in range(2, SPARSE_MAJOR_COURSE_THRESHOLD):
+            c = create_course(f'FIN10{idx}', f'专业课{idx}', college=self.college, course_type='major')
+            create_category(c.name, parent=self.undergrad, course=c)
+            create_material(c, self.user, review_status='approved')
+
+        self.assertEqual(client.get('/api/auth/me/').json()['data']['material_browse_mode'], 'plaza')
+
+        # Adding the threshold-th course with approved material invalidates cache and switches default to directory
+        c_full = create_course(f'FIN10{SPARSE_MAJOR_COURSE_THRESHOLD}', '达标课程', college=self.college, course_type='major')
+        create_category(c_full.name, parent=self.undergrad, course=c_full)
+        create_material(c_full, self.user, review_status='approved')
+        me = client.get('/api/auth/me/').json()['data']
+        self.assertEqual(me['material_browse_mode'], 'directory')
+        self.assertFalse(me['appearance_configured'])
+
+        # Switching identity via PATCH /api/auth/profile/ to a sparse major immediately updates returned browse mode
+        sparse_major = create_category('国际商务（本科）', parent=self.undergrad.parent)
+        patched = client.patch_json('/api/auth/profile/', {
+            'identity_education': '本科',
+            'identity_college': self.college.name,
+            'identity_major': sparse_major.name,
+        }).json()['data']
+        self.assertEqual(patched['material_browse_mode'], 'plaza')
+
+        # Explicit user preference overrides sparse-major default
+        explicit = client.patch_json('/api/auth/profile/', {'material_browse_mode': 'directory'}).json()['data']
+        self.assertEqual(explicit['material_browse_mode'], 'directory')
+        self.assertTrue(explicit['appearance_configured'])
+
+    def test_undergrad_major_not_on_college_tree_defaults_to_directory(self):
+        ug = create_user('ug_off_tree_major')
+        ug.profile.identity_education = '本科'
+        ug.profile.identity_college = '珠海未上树学院'
+        ug.profile.identity_major = '汉语言文学'
+        ug.profile.save()
+        client = self.client.__class__()
+        client.set_token(ug)
+        self.assertEqual(client.get('/api/auth/me/').json()['data']['material_browse_mode'], 'directory')
 
     def test_master_without_own_directory_uses_undergraduate_tree_and_search(self):
         root = self.undergrad.parent.parent
@@ -151,7 +245,7 @@ Promise.resolve().then(() => {
         me = self.client.get('/api/auth/me/').json()['data']
         self.assertEqual(me['identity_education'], '硕士')
         self.assertEqual(me['course_navigation_education'], '本科')
-        self.assertEqual(me['material_browse_mode'], 'directory')
+        self.assertEqual(me['material_browse_mode'], 'plaza')
         profile = self.client.get('/api/auth/profile/').json()['data']
         self.assertEqual(profile['course_navigation_education'], '本科')
         tree = self.client.get('/api/courses/tree/').json()['data']

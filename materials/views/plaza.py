@@ -20,7 +20,9 @@ from ..models import (
 from .utils import _err, _get_or_create_profile, _get_user, _ok
 from ..services.plaza_ranking import interaction_signals, material_score
 from ..services.course_visibility import (
-    education_for_user, general_root_label, is_peeking_undergrad, visible_category_ids,
+    education_for_user, follow_merge as _follow_merge, general_root_label,
+    is_peeking_undergrad, normalized_course_code as _normalized_course_code,
+    scoped_course_ids as _scoped_course_ids, visible_category_ids,
 )
 
 
@@ -39,10 +41,6 @@ def _index_token():
         cache.add(PLAZA_INDEX_VERSION_KEY, token, timeout=None)
         token = cache.get(PLAZA_INDEX_VERSION_KEY) or token
     return token
-
-
-def _normalized_course_code(value):
-    return str(value or "").strip().upper().replace("*", "").replace("-", "")
 
 
 def _build_catalog():
@@ -155,17 +153,6 @@ def _visible_course_ids(user, request=None):
     return result
 
 
-def _follow_merge(course_id, courses):
-    seen = set()
-    while course_id and course_id in courses and course_id not in seen:
-        seen.add(course_id)
-        merged_into = courses[course_id]["merged_into_id"]
-        if not merged_into:
-            break
-        course_id = merged_into
-    return course_id
-
-
 def _root_type(cat, cats):
     node = cat
     while node["parent_id"]:
@@ -250,61 +237,6 @@ def _default_category_id(course_type, user, catalog, education=None, peeking_und
         if cats[cid]["name"] == profile.identity_major
     ]
     return major_matches[0] if len(major_matches) == 1 else college_id
-
-
-def _scoped_course_ids(cat_id, catalog):
-    """分类子树内的课程 ID，展开同码共享与合并链；空范围保持为空。"""
-    cats = catalog["cats"]
-    children = catalog["children"]
-    courses = catalog["courses"]
-    selected = set()
-    prefixes = []
-    exact_patterns = []
-    stack = [cat_id]
-    while stack:
-        node_id = stack.pop()
-        cat = cats.get(node_id)
-        if cat is None:
-            continue
-        if cat["course_id"]:
-            selected.add(cat["course_id"])
-        raw_pattern = (cat["course_text"] or "").strip()
-        pattern = raw_pattern.replace("*", "").replace("-", "")
-        if pattern:
-            prefixes.append(pattern)
-        if raw_pattern:
-            exact_patterns.append(raw_pattern)
-        stack.extend(children.get(node_id, []))
-
-    if prefixes or exact_patterns:
-        for course_id, course in courses.items():
-            code = course["code"] or ""
-            if any(code.startswith(pattern) for pattern in prefixes) or code in exact_patterns:
-                selected.add(course_id)
-
-    normalized = {
-        _normalized_course_code(courses[cid]["code"]): cid
-        for cid in selected
-        if cid in courses
-    }
-    if normalized:
-        for norm, course_ids in catalog["normalized_courses"].items():
-            if norm in normalized:
-                selected.update(course_ids)
-
-    changed = True
-    while changed:
-        changed = False
-        for course_id in list(selected):
-            merged_into = courses.get(course_id, {}).get("merged_into_id")
-            if merged_into and merged_into not in selected:
-                selected.add(merged_into)
-                changed = True
-        for course_id, course in courses.items():
-            if course["merged_into_id"] in selected and course_id not in selected:
-                selected.add(course_id)
-                changed = True
-    return {cid for cid in selected if cid in courses}
 
 
 def _practical_course_ids(catalog):

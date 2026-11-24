@@ -257,6 +257,7 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
 
     def test_course_result_navigates_and_returns(self):
         self._login()
+        self.page.evaluate("setAppearance('material_browse_mode', 'directory')")
         self._search_from_top('搜索学导论')
         self.page.wait_for_selector('[data-sr-group="course"] .sr-item-title')
         # 全部页课程组：点击进入课程目录
@@ -433,15 +434,30 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.assertEqual(college_names[1], '经济与工商管理学院')
         self.page.keyboard.press('Escape')
 
-        # 「我的课程」辅助区支持一键填入
+        # 「我的课程」辅助区支持一键填入，且支持收起/展开并记住状态
         self.page.wait_for_selector('#upMyList .up-my-item')
+        self.page.click('#upQuickToggleBtn')
+        self.assertTrue(self.page.evaluate("document.getElementById('upQuickPanel').classList.contains('is-collapsed')"))
+        self.assertFalse(self.page.is_visible('#upMyList'))
+        self.assertEqual(self.page.get_attribute('#upQuickToggleBtn', 'aria-expanded'), 'false')
+        self.page.click('#upQuickToggleBtn')
+        self.assertFalse(self.page.evaluate("document.getElementById('upQuickPanel').classList.contains('is-collapsed')"))
+        self.assertTrue(self.page.is_visible('#upMyList'))
+        self.assertEqual(self.page.get_attribute('#upQuickToggleBtn', 'aria-expanded'), 'true')
+
         self.page.click('#upMyList .up-my-item')
         self.assertEqual(self.page.input_value('#upCollegeInput'), '搜索学院')
         self.assertEqual(self.page.input_value('#upCourseInput'), '搜索学进阶')
 
-        # 清空后仅搜课程名称 → 下拉项后方显示课程代码；选中后自动填院系 + 展示包含专业
+        # 点击院系叉号取消选中状态，不重新弹出学院列表；空课程框聚焦不弹出乱序课程列表
         self.page.click('#upCollegeClear')
+        self.assertEqual(self.page.input_value('#upCollegeInput'), '')
+        self.assertFalse(self.page.is_visible('#upCollegeClear'))
+        self.assertFalse(self.page.is_visible('#upCollegeList'))
         self.page.click('#upCourseClear')
+        self.assertEqual(self.page.input_value('#upCourseInput'), '')
+        self.page.focus('#upCourseInput')
+        self.assertFalse(self.page.is_visible('#upCourseList'))
         self.page.fill('#upCourseInput', '搜索学导论')
         self.page.wait_for_selector('#upCourseList .up-combo-item')
         combo_text = self.page.locator('#upCourseList .up-combo-item').first.inner_text()
@@ -485,12 +501,25 @@ class SearchPageBrowserTest(StaticLiveServerTestCase):
         self.page.wait_for_selector('#uploadModal', state='visible')
         self.page.evaluate('closeUploadModal()')
 
-        # 广场非叶子节点上传按钮进入 /upload 并自动带入学院上下文 + 窄屏/暗色无溢出
+        # 从专业目录进入 /upload 时，空课程框聚焦优先展示该范围内的课程
+        self.page.evaluate("showExplorerPath(['专业课', '搜索学院', '搜索专业'])")
+        self.page.wait_for_function("document.querySelector('#explorerView.active') && Array.isArray(expPath) && expPath.includes('搜索专业')")
+        self.page.evaluate("() => window.BnuUploadWorkspace ? window.BnuUploadWorkspace.open() : openCourseSearchUpload()")
+        self.page.wait_for_selector('#uploadView.active #upCourseInput')
+        self.page.focus('#upCourseInput')
+        self.page.wait_for_selector('#upCourseList .up-combo-section')
+        self.assertIn('搜索学院 › 搜索专业', self.page.locator('#upCourseList .up-combo-section').inner_text())
+        self.assertIn('搜索学导论', self.page.locator('#upCourseList').inner_text())
+
+        # 广场节点上传按钮进入 /upload 并自动带入学院与当前所在目录上下文；点击学院叉号后清空范围
         self.page.goto(f'{self.live_server_url}/plaza?category_id={self.college_cat.id}')
         self.page.wait_for_selector('#plazaUploadBtn')
         self.page.click('#plazaUploadBtn')
         self.page.wait_for_selector('#uploadView.active')
         self.page.wait_for_function("document.getElementById('upCollegeInput').value === '搜索学院'")
+        self.page.click('#upCollegeClear')
+        self.page.focus('#upCourseInput')
+        self.assertFalse(self.page.is_visible('#upCourseList'))
         self.page.set_viewport_size({'width': 360, 'height': 760})
         self.page.evaluate("document.documentElement.dataset.bnuTheme = 'dark'")
         self.page.wait_for_timeout(100)
