@@ -9,14 +9,13 @@
   var QUICK_COLLAPSED_KEY = 'bnusparks_upload_quick_collapsed';
 
   function _readQuickCollapsed() {
-    try { return sessionStorage.getItem(QUICK_COLLAPSED_KEY) === '1'; }
-    catch (e) { return false; }
+    try { return sessionStorage.getItem(QUICK_COLLAPSED_KEY) !== '0'; }
+    catch (e) { return true; }
   }
 
   function _writeQuickCollapsed(collapsed) {
     try {
-      if (collapsed) sessionStorage.setItem(QUICK_COLLAPSED_KEY, '1');
-      else sessionStorage.removeItem(QUICK_COLLAPSED_KEY);
+      sessionStorage.setItem(QUICK_COLLAPSED_KEY, collapsed ? '1' : '0');
     } catch (e) {}
   }
 
@@ -255,15 +254,15 @@
               '</div>' +
               '<button type="button" class="up-locate-btn" id="upLocateBtn">' + iconSvg('layers') + '<span>精准定位</span></button>' +
             '</div>' +
-            '<div class="up-quick-panel" id="upQuickPanel">' +
+            '<div class="up-quick-panel' + (_state.quickCollapsed ? ' is-collapsed' : '') + '" id="upQuickPanel">' +
               '<div class="up-quick-head" id="upQuickHead">' +
-                '<button type="button" class="up-quick-toggle" id="upQuickToggleBtn" aria-expanded="true" aria-controls="upQuickBody">' +
+                '<button type="button" class="up-quick-toggle" id="upQuickToggleBtn" aria-expanded="' + (_state.quickCollapsed ? 'false' : 'true') + '" aria-controls="upQuickBody">' +
                   '<span class="up-quick-label">' + iconSvg('calendar') + '<span>辅助填入 · 我的课程（课表 / 收藏）</span><span class="up-quick-count" id="upQuickCount"></span></span>' +
-                  '<span class="up-quick-toggle-pill"><span id="upQuickToggleText">收起</span>' + iconSvg('chevron-right') + '</span>' +
+                  '<span class="up-quick-toggle-pill"><span id="upQuickToggleText">' + (_state.quickCollapsed ? '展开' : '收起') + '</span>' + iconSvg('chevron-right') + '</span>' +
                 '</button>' +
                 '<button type="button" class="up-quick-link" id="upQuickTimetableBtn">我的课表 ' + iconSvg('chevron-right') + '</button>' +
               '</div>' +
-              '<div class="up-quick-body" id="upQuickBody">' +
+              '<div class="up-quick-body" id="upQuickBody"' + (_state.quickCollapsed ? ' hidden' : '') + '>' +
                 '<div class="up-my-list" id="upMyList"></div>' +
                 '<div class="up-my-note" id="upMyNote" style="display:none"></div>' +
               '</div>' +
@@ -362,12 +361,10 @@
     colInput.addEventListener('keydown', function (e) {
       _handleComboKeydown(e, 'upCollegeList', 'college');
     });
-    colClear.addEventListener('mousedown', function (e) {
-      e.preventDefault();
-    });
     colClear.addEventListener('click', function (e) {
       e.stopPropagation();
       _selectCollege('');
+      _closeCombo('upCourseList', 'upCourseInput');
       if (document.activeElement === colInput) colInput.blur();
     });
 
@@ -391,9 +388,6 @@
     });
     crsInput.addEventListener('keydown', function (e) {
       _handleComboKeydown(e, 'upCourseList', 'course');
-    });
-    crsClear.addEventListener('mousedown', function (e) {
-      e.preventDefault();
     });
     crsClear.addEventListener('click', function (e) {
       e.stopPropagation();

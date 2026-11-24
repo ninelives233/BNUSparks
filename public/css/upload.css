@@ -499,7 +499,7 @@
 }
 
 .up-input-has-clear {
-  padding-right: 38px;
+  padding-right: 40px;
 }
 
 .up-input:focus,
@@ -513,17 +513,16 @@
 
 .up-clear-btn {
   position: absolute;
-  right: 5px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2;
-  width: 30px;
-  height: 30px;
+  right: 2px;
+  top: 2px;
+  bottom: 2px;
+  z-index: 3;
+  width: 36px;
   border: none;
-  border-radius: 50%;
+  border-radius: calc(var(--radius-sm) - 2px);
   background: transparent;
-  color: var(--ink-faint);
-  font-size: 1rem;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
