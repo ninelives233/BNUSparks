@@ -342,6 +342,10 @@
     '马克思主义学院': 'college-marxism',
     '艺术与传媒学院': 'college-media',
     '体育与运动学院': 'college-athletics',
+    '系统科学学院': 'college-systems',
+    '水科学研究院': 'college-water',
+    '国际中文教育学院': 'college-chinese-intl',
+    '中华文化研究院（京师书院）': 'college-jingshi',
   };
 
   function cardIconHtml(item) {
@@ -805,14 +809,12 @@
     var isDirectCourse = !!(_directCourse && expPath.length >= 2 && expPath[expPath.length - 1] === _directCourse.name);
     if (isDirectCourse) {
       actionGroup.hidden = !courseNavHost || !courseNavHost.childElementCount;
-    } else if (isMgmtActive()) {
+    } else {
       const node = getNode(expPath);
-      let showNewBtn = true;
-      // 最后一层（有course关联的节点）不显示
-      if (node && node.courseId) showNewBtn = false;
-      // 管辖范围外不显示
-      if (showNewBtn && currentUser && !_userInScope(expPath)) showNewBtn = false;
-      if (showNewBtn) {
+      if (node && node.courseId) {
+        // 课程节点（资料列表视图）不提供：已归属具体课程，此处不再引导新建或申请建课。
+        renderPlazaModeLink(actionGroup);
+      } else if (isMgmtActive() && (!currentUser || _userInScope(expPath))) {
         const newBtn = document.createElement('button');
         newBtn.className = 'mgmt-new-btn';
         // 管理创建入口：文件夹图标 + 「＋ 新建」，与普通用户的「新建课程」申请入口
@@ -825,14 +827,8 @@
         topRow.classList.add('has-mgmt-new');
         renderPlazaModeLink(actionGroup, newBtn);
       } else {
-        renderPlazaModeLink(actionGroup);
-      }
-    } else {
-      // 普通浏览模式：目录工具栏提供「新建课程」申请入口（申请页内自选归属位置）；
-      // 与管理模式「＋ 新建」互斥展示，随模式切换。未登录由 openNewCourseEntry 引导登录。
-      // 课程节点（资料列表视图）不提供：已归属具体课程，此处不再引导申请新建。
-      const node = getNode(expPath);
-      if (!(node && node.courseId)) {
+        // 普通浏览模式，或管理模式下浏览管辖范围外目录：提供「新建课程」申请入口
+        // （申请页内自选归属位置）；未登录由 openNewCourseEntry 引导登录。
         const newCourseBtn = document.createElement('button');
         newCourseBtn.className = 'explorer-newcourse-btn';
         newCourseBtn.innerHTML = iconSvg('document') + '<span>新建课程</span>';
@@ -841,8 +837,6 @@
         actionGroup.appendChild(newCourseBtn);
         actionGroup.hidden = false;
         renderPlazaModeLink(actionGroup, newCourseBtn);
-      } else {
-        renderPlazaModeLink(actionGroup);
       }
     }
   }

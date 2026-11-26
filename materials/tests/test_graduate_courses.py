@@ -636,3 +636,143 @@ class FlattenedGraduateAndPeekTest(BnuTestCase):
         self.assertFalse(res["in_target"])
         self.assertEqual(res["locations"], [])
         self.assertTrue(res["cross_level"])
+
+    def test_explorer_toolbar_new_course_fallback_when_mgmt_out_of_scope_javascript(self):
+        if not shutil.which('node'):
+            self.skipTest('Node.js 不可用')
+        script = r'''
+const assert = require('assert');
+const fs = require('fs');
+const vm = require('vm');
+const core = fs.readFileSync('public/js/explorer-core.js', 'utf8');
+const start = core.indexOf('  function renderPlazaModeLink(');
+const end = core.indexOf('  function renderCourseNav(');
+const scopeStart = core.indexOf('  function _userInScope(');
+const scopeEnd = core.indexOf('  // ── 跳过单节点后的有效子节点数');
+assert(start >= 0 && end > start && scopeStart >= 0 && scopeEnd > scopeStart);
+
+const makeEl = (tag) => {
+  const el = {
+    tagName: tag || 'div',
+    children: [],
+    className: '',
+    innerHTML: '',
+    hidden: false,
+    parentNode: null,
+    classList: {
+      classes: new Set(),
+      add(c) { this.classes.add(c); },
+      remove(c) { this.classes.delete(c); },
+    },
+    setAttribute() {},
+    appendChild(child) {
+      child.parentNode = this;
+      this.children.push(child);
+      return child;
+    },
+    insertBefore(child, ref) {
+      child.parentNode = this;
+      const idx = this.children.indexOf(ref);
+      if (idx >= 0) this.children.splice(idx, 0, child);
+      else this.children.push(child);
+      return child;
+    },
+    remove() {
+      if (!this.parentNode) return;
+      const idx = this.parentNode.children.indexOf(this);
+      if (idx >= 0) this.parentNode.children.splice(idx, 1);
+      this.parentNode = null;
+    },
+    querySelector(sel) {
+      const m = sel.match(/^:scope > \.(.+)$/);
+      if (!m) return null;
+      const cls = m[1];
+      return this.children.find(c => (c.className || '').split(/\s+/).includes(cls)) || null;
+    },
+    closest() { return topRow; },
+  };
+  return el;
+};
+
+const topRow = makeEl('nav');
+const actionGroup = makeEl('div');
+const courseNavBar = makeEl('div');
+const breadcrumb = makeEl('div');
+const tree = {
+  '专业课': {
+    id: 1,
+    name: '专业课',
+    children: [
+      { id: 2, name: '经济与工商管理学院', collegeId: 10, children: [{ id: 3, name: '理论经济学', children: [] }] },
+      { id: 4, name: '心理学部', collegeId: 20, children: [{ id: 5, name: '课程A', courseId: 'PSY101' }] },
+    ],
+  },
+};
+
+const context = {
+  window: { addEventListener() {} },
+  document: {
+    getElementById(id) {
+      if (id === 'breadcrumb') return breadcrumb;
+      if (id === 'explorerTopActions') return actionGroup;
+      if (id === 'courseNavBar') return courseNavBar;
+      return null;
+    },
+    createElement: makeEl,
+  },
+  courseTree: tree,
+  expPath: ['专业课', '经济与工商管理学院'],
+  _directCourse: null,
+  currentUser: { role: 'moderator', managed_majors: [20], moderated_sections: [] },
+  isMgmtActive: () => true,
+  renderCourseNav() {},
+  _renderBreadcrumb() {},
+  iconSvg: (name) => `<svg data-icon="${name}"></svg>`,
+  getNode(path) {
+    let node = tree[path[0]];
+    for (let i = 1; i < path.length && node; i++) {
+      node = (node.children || []).find(c => c.name === path[i]) || null;
+    }
+    return node;
+  },
+};
+vm.createContext(context);
+vm.runInContext(
+  core.slice(start, end) + '\n' + core.slice(scopeStart, scopeEnd),
+  context
+);
+
+// 1) 管理模式开启 + 跨学院浏览（管辖范围外）：回退显示「新建课程」与「资料广场」
+context.renderBC();
+assert.deepStrictEqual(
+  actionGroup.children.map(c => c.className),
+  ['explorer-plaza-link browse-mode-link', 'explorer-newcourse-btn']
+);
+
+// 2) 管理模式开启 + 自己管辖学院内：显示「＋ 新建」与「资料广场」
+context.expPath = ['专业课', '心理学部'];
+context.renderBC();
+assert.deepStrictEqual(
+  actionGroup.children.map(c => c.className),
+  ['explorer-plaza-link browse-mode-link', 'mgmt-new-btn']
+);
+
+// 3) 具体课程叶子节点：不论是否在管辖内，只显示「资料广场」
+context.expPath = ['专业课', '心理学部', '课程A'];
+context.renderBC();
+assert.deepStrictEqual(
+  actionGroup.children.map(c => c.className),
+  ['explorer-plaza-link browse-mode-link']
+);
+
+// 4) 普通模式（isMgmtActive 为 false）：目录节点显示「新建课程」与「资料广场」
+context.expPath = ['专业课', '经济与工商管理学院'];
+context.isMgmtActive = () => false;
+context.renderBC();
+assert.deepStrictEqual(
+  actionGroup.children.map(c => c.className),
+  ['explorer-plaza-link browse-mode-link', 'explorer-newcourse-btn']
+);
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
