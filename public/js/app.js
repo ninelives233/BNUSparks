@@ -626,6 +626,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setupSearch();
 
+  // 校内文件加速站：不新增 UI，仅在可达时接管正式下载目标。
+  if (window.BnuAccelerator && typeof window.BnuAccelerator.init === 'function') {
+    window.BnuAccelerator.init();
+  }
+
   // 首页区块 / hero 子元素的滚动 reveal 绑定（v306）。display:none 中的元素
   // 不会误触发 IntersectionObserver，切换布局或视图后首次可见时才播放。
   if (typeof registerReveals === 'function') registerReveals(document);

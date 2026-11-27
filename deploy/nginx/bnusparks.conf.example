@@ -51,7 +51,9 @@ server {
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
+    # connect-src 必须包含校内加速站 origin（bnu.jort.top），否则浏览器会
+    # 拦截健康探测；上传与预览都在主站，不需要放开 img-src/frame-src。
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://bnu.jort.top; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
 
     # ── 文本资源压缩：课程树 JSON、首页 HTML、JS/CSS 均由边缘层压缩 ──
     gzip on;
@@ -89,6 +91,19 @@ server {
     location /admin/ {
         auth_basic "Restricted Admin Area";
         auth_basic_user_file /etc/nginx/.htpasswd_admin;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ── 校内加速站内部接口：仅允许校内/WireGuard 来源 ──
+    # 公网用户即使猜到路径也无法到达；应用层还会校验 X-Accelerator-Secret。
+    # 把 10.66.0.2 换成校内节点固定 IP/网段。
+    location ^~ /api/internal/ {
+        allow 10.66.0.2;
+        deny all;
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

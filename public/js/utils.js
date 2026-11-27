@@ -751,6 +751,137 @@
     return v ? { view: v } : null;
   }
 
+  // ── 校内文件加速站（不新增按钮；可用时只替换下载目标） ──
+  var _accelConfig = null;
+  var _accelConfigPromise = null;
+  var _accelBase = '';
+  var _accelAvailable = false;
+  var _accelProbeAt = 0;
+  // 可用性缓存只保留 2 分钟：离开校园网/切换网络后尽快重新探测。
+  var _ACCEL_CACHE_TTL = 2 * 60 * 1000;
+
+  // Chrome Private Network Access 要求发起方为安全上下文（HTTPS 或 localhost）。
+  // 从 http://<公网域名> 探测私网地址会被浏览器直接拦截，因此直接视为不可用，
+  // 静默回退公网下载，避免控制台报错和无意义的预检请求。
+  function _accelSecureContext() {
+    return typeof window === 'undefined' || window.isSecureContext !== false;
+  }
+
+  function _accelCached() {
+    try {
+      var raw = sessionStorage.getItem('bnusparks_accel_ok');
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || !data.ok || !data.base || Date.now() - (data.at || 0) > _ACCEL_CACHE_TTL) return null;
+      return data;
+    } catch (e) { return null; }
+  }
+
+  function loadAcceleratorConfig() {
+    if (_accelConfigPromise) return _accelConfigPromise;
+    _accelConfigPromise = fetch('/api/accelerator/config/', { cache: 'no-store' })
+      .then(function(resp) { return resp.json(); })
+      .then(function(payload) {
+        var data = (payload && payload.ok && payload.data) || {};
+        _accelConfig = data;
+        _accelBase = (data.base_url || '').replace(/\/+$/, '');
+        return data;
+      })
+      .catch(function() {
+        _accelConfig = { enabled: false, base_url: '' };
+        _accelBase = '';
+        return _accelConfig;
+      });
+    return _accelConfigPromise;
+  }
+
+  function probeAccelerator(force) {
+    return loadAcceleratorConfig().then(function(config) {
+      if (!config || !config.enabled || !_accelBase) {
+        _accelAvailable = false;
+        return false;
+      }
+      if (!_accelSecureContext()) {
+        _accelAvailable = false;
+        return false;
+      }
+      var cached = !force && _accelCached();
+      if (cached && cached.base === _accelBase) {
+        _accelAvailable = true;
+        return true;
+      }
+      var controller = new AbortController();
+      var timer = setTimeout(function() { controller.abort(); }, 1500);
+      return fetch(_accelBase + '/healthz', {
+        mode: 'cors',
+        cache: 'no-store',
+        signal: controller.signal,
+      }).then(function(resp) {
+        clearTimeout(timer);
+        if (!resp.ok) return false;
+        // 校园网未认证时 Captive Portal 会用 200 HTML 冒充成功，
+        // 必须校验固定 JSON 标识后才认为加速站可用。
+        return resp.json().then(function(data) {
+          return !!(data && data.ok === true && data.service === 'bnusparks-accelerator');
+        }).catch(function() {
+          return false;
+        });
+      }).then(function(ok) {
+        _accelAvailable = !!ok;
+        _accelProbeAt = Date.now();
+        try {
+          sessionStorage.setItem('bnusparks_accel_ok', JSON.stringify({
+            ok: _accelAvailable, base: _accelBase, at: _accelProbeAt,
+          }));
+        } catch (e) {}
+        return _accelAvailable;
+      }).catch(function() {
+        clearTimeout(timer);
+        _accelAvailable = false;
+        return false;
+      });
+    });
+  }
+
+  function initAccelerator() {
+    var cached = _accelSecureContext() ? _accelCached() : null;
+    if (cached && cached.base) {
+      _accelBase = cached.base;
+      _accelAvailable = true;
+    }
+    return probeAccelerator(false).then(function(ok) {
+      return !!ok;
+    }, function() {
+      return false;
+    });
+  }
+
+  function isAcceleratorAvailable() {
+    return !!_accelAvailable;
+  }
+
+  function forgetAccelerator() {
+    _accelAvailable = false;
+    try { sessionStorage.removeItem('bnusparks_accel_ok'); } catch (e) {}
+  }
+
+  window.BnuAccelerator = {
+    init: initAccelerator,
+    refresh: function() { return probeAccelerator(true); },
+    isAvailable: isAcceleratorAvailable,
+    forget: forgetAccelerator,
+  };
+
+  function _triggerDownloadUrl(url, fileName) {
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || '';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
   // ── 下载处理（含限额梯度提醒） ──
   function handleDownloadClick(fileId, el, event) {
     event.preventDefault();
@@ -797,6 +928,26 @@
   async function doDirectDownload(fileId, fileName) {
     var token = getAuthToken();
     if (!token) { showLoginModal(); return; }
+
+    // 校内可用时优先走校内票据；失败/文件不在校内时回退普通下载。
+    if (isAcceleratorAvailable()) {
+      try {
+        var ticket = await api('/api/files/' + fileId + '/accelerate-ticket/', { method: 'POST' });
+        if (ticket && ticket.url) {
+          _triggerDownloadUrl(ticket.url, fileName);
+          return;
+        }
+      } catch (ticketErr) {
+        if (ticketErr && ticketErr.status === 401) { showLoginModal(); return; }
+        if (ticketErr && (ticketErr.status === 403 || ticketErr.status === 409)) {
+          alert(ticketErr.message || '该文件暂不可下载，请稍后重试');
+          return;
+        }
+        // 网络错误/加速站异常：清掉可用缓存，继续走公网普通下载。
+        forgetAccelerator();
+      }
+    }
+
     try {
       var resp = await fetch('/api/files/' + fileId + '/download-token/', {
         headers: { 'Authorization': 'Bearer ' + token }
@@ -805,13 +956,7 @@
       if (!data.ok) throw new Error(data.error || '获取下载令牌失败');
       var dtoken = data.data.token;
       var url = '/api/files/' + fileId + '/download/?dtoken=' + encodeURIComponent(dtoken);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = fileName || '';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      _triggerDownloadUrl(url, fileName);
     } catch (err) {
       alert('下载失败：' + err.message);
     }

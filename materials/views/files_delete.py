@@ -13,6 +13,7 @@ from django.db.models import Count, F
 
 from ..models import Course, CourseCategory
 from ..services.course_visibility import education_for_user, visible_category_ids
+from ..services.accelerator import latest_task, sync_payload
 from .utils_course_tree import _follow_merge
 from .utils import (
     _err, _ok, _get_or_create_profile,
@@ -272,6 +273,7 @@ def api_file_detail(request, file_id):
         "can_delete": user.is_authenticated and _user_can_edit_material(user, material),
         "is_approved": material.is_approved,
         "is_pinned": material.is_pinned,
+        **sync_payload(material, task=latest_task(material)),
     })
 
 

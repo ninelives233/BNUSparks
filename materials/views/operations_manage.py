@@ -22,6 +22,7 @@ from .utils import (
     _safe_dir_name, require_login, require_role,
 )
 from .operations_helpers import _check_category_scope
+from ..services.accelerator import queue_public_to_campus
 
 
 def _unique_merge_destination(directory, filename):
@@ -352,6 +353,10 @@ def api_folder_set_course(request, folder_id):
             if m.file_path and m.file_path.startswith(old_code + "/"):
                 m.file_path = course_code + m.file_path[len(old_code):]
                 m.save(update_fields=["file_path"])
+                try:
+                    queue_public_to_campus(m)
+                except Exception:
+                    pass
 
         # 改 Course.code
         old_course.code = course_code
@@ -428,6 +433,10 @@ def api_folder_set_course(request, folder_id):
                         material.file_path = target_prefix + destination.name
                     material.course = target
                     material.save(update_fields=["course", "file_path"])
+                    try:
+                        queue_public_to_campus(material)
+                    except Exception:
+                        pass
 
                 # 目录中无 Material 记录的遗留文件也保留；冲突时同样改名。
                 if old_dir != new_dir and old_dir.is_dir():

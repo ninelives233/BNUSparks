@@ -51,7 +51,7 @@ Browser
 |---|---|---|
 | 用户与权限 | UserProfile、角色、管理范围 | 停用账号、token 失效、作用域越权 |
 | 课程目录 | College、Major、Course、CourseCategory | 同名课程、别名合并、层级与学院归属 |
-| 资料 | Material、收藏、下载记录、删除记录 | 路径穿越、配额、数据库与文件系统一致性 |
+| 资料 | Material（含同步字段）、收藏、下载记录、删除记录、MaterialSyncTask | 路径穿越、配额、数据库与文件系统一致性、任务重复/失联、单向副本 |
 | 审核与举报 | ReviewComment、Report、课程申请 | 管辖范围、并发状态、通知幂等 |
 | 问答 | Question、Answer、点赞、收藏、编辑历史、删除申请 | 富文本净化、可见范围、计数一致性 |
 | 课表 | UserTimetable | revision 冲突、旧客户端写入、跨设备覆盖 |
@@ -73,7 +73,7 @@ Browser
 | `course_requests.py` | 新课程申请、状态和合并 |
 | `recommendations.py` | 首页及独立页的个性化推荐 |
 | `files_upload.py`、`utils_upload.py` | 上传校验、落盘和失败补偿 |
-| `files_download.py`、`utils_quota.py` | 浏览/下载、令牌、配额、X-Accel |
+| `files_download.py`、`utils_quota.py`、`accelerator.py`、`services/accelerator.py` | 浏览/下载、令牌、配额、X-Accel；校内下载镜像票据、内部鉴权、公网→校内任务与 manifest（校内节点代码在独立仓库） |
 | `files_delete.py`、`utils_trash.py` | 软删除、恢复和物理清理 |
 | `operations_*.py` | 管理员目录、批量操作和记录查询 |
 | `utils_moderation.py`、`moderation.py` | 审核作用域、分配、批准与驳回 |

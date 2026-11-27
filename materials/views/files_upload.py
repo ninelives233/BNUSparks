@@ -5,6 +5,7 @@ file-upload, upload-text
 """
 
 import json
+import logging
 from pathlib import Path
 
 from django.conf import settings
@@ -29,6 +30,7 @@ from .utils import (
 )
 from ..monitoring_events import record_outcome
 from ..services.course_codes import adopt_course_code, is_placeholder
+from ..services.accelerator import queue_public_to_campus
 
 
 def _notify_pending_upload(material, uploader, title, context_category):
@@ -192,6 +194,11 @@ def api_file_upload(request):
     except Exception:
         pass
 
+    try:
+        queue_public_to_campus(material, priority=50 if review_status == "pending" else 100)
+    except Exception:
+        logging.getLogger(__name__).warning("accelerator queue failed material=%s", material.id, exc_info=True)
+
     if review_status == "pending":
         # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），
         # 把待审需求同时通知全部匹配候选——先审先得，审核动作原子归主。
@@ -350,6 +357,11 @@ def api_file_upload_text(request):
         commit_file(f"{course_dir}/{safe_name}")
     except Exception:
         pass
+
+    try:
+        queue_public_to_campus(material, priority=50 if review_status == "pending" else 100)
+    except Exception:
+        logging.getLogger(__name__).warning("accelerator queue failed material=%s", material.id, exc_info=True)
 
     if review_status == "pending":
         # v171 广播式：不指派单一审核人（assigned_moderator 保持 None），

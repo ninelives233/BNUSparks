@@ -2,7 +2,7 @@
   var _previewModal = null;
 
   function _previewUrl(fileId) {
-    // 使用短时下载令牌（异步获取后生成 URL）
+    // 预览始终在主站完成（前 3 页裁剪 / 配额规则不变），不经校内节点。
     return _getDownloadToken(fileId).then(function(dtoken) {
       return '/api/files/' + fileId + '/download/?dtoken=' + encodeURIComponent(dtoken) + '&preview=1&max_pages=3';
     });
