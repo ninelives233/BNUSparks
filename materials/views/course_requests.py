@@ -26,6 +26,7 @@ from .utils import (
 from ..monitoring_events import record_request_event
 from ..services.course_codes import placeholder_code, is_placeholder, normalized_course_name, PREFIX
 from ..services.course_visibility import education_for_user, visible_category_ids
+from ..services.accelerator import queue_public_to_campus
 from .operations import _can_create_under
 from .utils_upload import UploadTooLarge, _atomic_write_chunks, _remove_uploaded_file
 from .utils_email import send_first_upload_thanks
@@ -1036,6 +1037,10 @@ def _approve_request(req, reviewer):
             m.file_path = f"{course_dir}/{new_name}"
             m.course = course
             m.save(update_fields=["course", "file_path"])
+            try:
+                queue_public_to_campus(m, priority=50 if m.review_status == "pending" else 100)
+            except Exception:
+                pass
 
             # Git 镜像只在数据库事务真正提交后执行，避免回滚后提交幽灵路径。
             rel_path = m.file_path

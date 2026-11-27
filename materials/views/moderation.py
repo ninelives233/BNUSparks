@@ -26,6 +26,7 @@ from .utils import (
 )
 from ..monitoring_events import record_request_event
 from ..models import invalidate_course_tree_cache, invalidate_stats_cache
+from ..services.accelerator import cancel_active_tasks, queue_public_to_campus
 
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
@@ -150,11 +151,18 @@ def api_moderation_batch_approve(request):
           .annotate(c=Count("id"))
     )
     uploader_ids = list(uploader_counts.keys())
+    approved_ids = list(qs.values_list("id", flat=True))
     now = timezone.now()
     qs.update(
         is_approved=True, review_status="approved",
         reviewed_by=request.user, reviewed_at=now,
     )
+    # 过审后才镜像到校内：批量 update 不触发信号，逐条入队（已过审才生效）。
+    for material in Material.objects.filter(id__in=approved_ids):
+        try:
+            queue_public_to_campus(material)
+        except Exception:
+            pass
     # qs.update() 不触发 post_save 信号，手动失效树缓存 + 首页统计 + 递增上传者公开页代际
     invalidate_course_tree_cache()
     invalidate_stats_cache()
@@ -217,6 +225,11 @@ def api_moderation_approve(request, file_id):
     )
     if updated == 0:
         return _err("该资料已审核，不可重复操作")
+    material.refresh_from_db()
+    try:
+        queue_public_to_campus(material)
+    except Exception:
+        pass
     # update() 不触发 post_save 信号，手动失效缓存 + 递增上传者公开页代际
     invalidate_course_tree_cache()
     invalidate_stats_cache()
@@ -272,6 +285,10 @@ def api_moderation_reject(request, file_id):
     )
     if updated == 0:
         return _err("该资料已审核，不可重复操作")
+    try:
+        cancel_active_tasks(material, reason="资料被驳回")
+    except Exception:
+        pass
     # update() 不触发 post_save 信号，手动失效缓存 + 递增上传者公开页代际
     invalidate_course_tree_cache()
     invalidate_stats_cache()

@@ -284,14 +284,49 @@ def api_file_download(request, file_id):
     material = get_object_or_404(Material, id=file_id)
     file_path = Path(settings.MEDIA_ROOT) / material.file_path
 
+    aticket = request.GET.get("aticket")
+    ticket_payload = None
+    ticket_user = None
+    # 302 回退与浏览器重试可能重复打到失效票据；用确定性事件 ID 去重，
+    # 避免放大后台的失败监控指标。
+    failure_event_id = (
+        "aticket-fail:" + hashlib.sha256(aticket.encode("utf-8")).hexdigest()[:24]
+        if aticket else None
+    )
+    if aticket:
+        from ..services.accelerator import get_download_ticket, resolve_ticket_user, ticket_matches_material
+        ticket_payload = get_download_ticket(aticket)
+        if ticket_payload and ticket_matches_material(ticket_payload, material):
+            ticket_user = resolve_ticket_user(ticket_payload)
+        if ticket_user is None:
+            _record_download_result(
+                request, preview=request.GET.get("preview") == "1",
+                success=False, request_id=failure_event_id,
+            )
+            return _err("下载票据无效或已过期", 403)
+        if material.review_status != "approved":
+            try:
+                if material.review_status == "rejected":
+                    _check_moderator_access(ticket_user, material, allow_uploader=False)
+                else:
+                    _check_moderator_access(ticket_user, material)
+            except Exception:
+                _record_download_result(
+                    request, preview=request.GET.get("preview") == "1",
+                    success=False, request_id=failure_event_id,
+                )
+                return _err("该资料未通过审核，暂不可下载", 403)
+
     if not file_path.exists():
         _record_download_result(request, preview=request.GET.get("preview") == "1", success=False)
+        if aticket:
+            return _err("文件正在同步，请稍后重试", 409)
         return _err("文件不存在", 404)
 
-    user = _get_user(request)
-    activity_request_id = None
+    user = ticket_user if aticket else _get_user(request)
+    activity_request_id = aticket or None
     dtoken = request.GET.get("dtoken")
-    if dtoken:
+    if dtoken and not aticket:
         portable = _verify_portable_download_token(dtoken, file_id, request)
         if portable:
             uid, activity_request_id = portable

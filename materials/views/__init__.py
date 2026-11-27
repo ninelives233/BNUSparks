@@ -43,6 +43,16 @@ from .files import (
     api_file_detail, api_file_view, api_zip_structure,
 )
 
+# 校内文件加速站（公网票据 / 内部授权 / 公网→校内镜像任务）
+from .accelerator import (
+    api_accelerator_config, api_accelerate_ticket,
+    api_internal_authorize_download,
+    api_internal_sync_tasks, api_internal_sync_task_start,
+    api_internal_sync_task_progress, api_internal_sync_task_complete,
+    api_internal_manifest, api_internal_repair,
+    api_internal_sync_file_source,
+)
+
 # 举报
 from .reports import (
     api_file_report, api_file_report_status,

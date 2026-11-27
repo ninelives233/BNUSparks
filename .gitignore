@@ -18,6 +18,7 @@ venv/
 # ── 密钥与环境（绝不入库）──
 .env
 bnusparks/settings_prod_local.py
+bnusparks/settings_local.py
 backup/
 
 # ── 数据（用户上传、数据库、缓存、日志、校区课程目录）──
@@ -66,6 +67,7 @@ docs/*
 !docs/BUG_TROUBLESHOOTING.md
 !docs/COLLABORATOR_AGENT_PROMPT.md
 !docs/TUTORIAL_DESIGN_SPEC.md
+!docs/ACCELERATOR.md
 ANNOUNCEMENT_*.md
 demo.html
 artifacts/
@@ -89,3 +91,8 @@ output/
 # ── 用户交流群二维码（含真人头像且每周过期，不入库）──
 # 仓库只放占位符 public/group-qr.placeholder.png；部署机自行复制为 public/group-qr.png
 public/group-qr.png
+
+# 校内加速站：本地密钥与独立仓库工作副本（代码在 JingHT-BNU/bnusparks_accelerator）
+.campus_secrets
+bnusparks_accelerator/
+suggestion.md

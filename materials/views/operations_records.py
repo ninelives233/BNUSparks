@@ -24,6 +24,7 @@ from .utils import (
     _purge_expired_trash, require_role,
 )
 from .operations_helpers import _managed_college_subtree_ids
+from ..services.accelerator import queue_public_to_campus
 
 @require_role(UserProfile.Role.SUB_MODERATOR, UserProfile.Role.MODERATOR, UserProfile.Role.SUPER_ADMIN)
 def api_operations(request):
@@ -215,6 +216,14 @@ def api_restore_deletion(request, deletion_id):
                 except Exception:
                     pass
             transaction.on_commit(_commit_restored_file)
+
+            def _queue_mirror():
+                try:
+                    queue_public_to_campus(material)
+                except Exception:
+                    pass
+            # 恢复会新建 approved 的 Material 行，提交后重新排队镜像。
+            transaction.on_commit(_queue_mirror)
     except Exception:
         # Material/DeletionRecord 回滚时，物理文件也必须回到 trash。
         try:

@@ -18,6 +18,7 @@
 | 资料广场（目录范围卡片/智能排序/课程导航） | `materials/views/plaza.py`、`materials/services/plaza_ranking.py`、`public/js/materials-plaza.js`、`public/css/plaza.css` |
 | 搜索（v2 独立结果页） | `materials/views/search.py`（`/api/search/?v=2`、`/api/qa/search/?v=2` 版本分发在 `courses.py`/`qa_public.py` 入口内）、`public/js/search.js`、`public/css/search.css`；入口 `views.js showSearch` |
 | 上传、下载、预览、删除 | `files_*.py`、`utils_upload.py`、`utils_security.py`、`utils_trash.py` |
+| 校内文件加速站（下载镜像，公网侧） | `services/accelerator.py`、`views/accelerator.py`、`docs/ACCELERATOR.md`；校内节点代码见 `JingHT-BNU/bnusparks_accelerator` |
 | 文件与目录管理 | `operations_*.py` |
 | 通知、公告、收藏、反馈 | `notifications.py`、`announcements.py`、`favorites.py`、`feedback.py` |
 | 问答区 | `qa_*.py`、`qa_helpers.py`、`qa_tasks.py` |
@@ -51,6 +52,7 @@
 ## 按需文档
 
 - 当前架构和调用链：`docs/PROJECT_MAP.md`
+- 校内文件加速站：`docs/ACCELERATOR.md`
 - 故障定位：`docs/BUG_TROUBLESHOOTING.md`
 - 部署与恢复：`docs/OPERATIONS.md`
 - 贡献流程：`CONTRIBUTING.md`

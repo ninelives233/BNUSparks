@@ -160,6 +160,21 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 # 按 chunks() 累计校验。允许部署环境下调，但不建议高于 Nginx client_max_body_size。
 MAX_UPLOAD_FILE_SIZE = int(os.environ.get('MAX_UPLOAD_FILE_SIZE', 50 * 1024 * 1024))
 
+# ── 校内文件加速站（可选；为空时保持单机行为） ──
+# 公网通过该 URL 生成校内下载票据；校内 Nginx 反向校验 /f/<ticket>。
+ACCELERATOR_BASE_URL = (
+    os.environ.get('BNUSPARKS_ACCELERATOR_URL')
+    or _env_vars.get('BNUSPARKS_ACCELERATOR_URL', '')
+).rstrip('/')
+# 校内节点调用公网内部接口的共享密钥；与 SECRET_KEY 分离。
+ACCELERATOR_INTERNAL_SECRET = (
+    os.environ.get('BNUSPARKS_ACCELERATOR_SECRET')
+    or _env_vars.get('BNUSPARKS_ACCELERATOR_SECRET', '')
+)
+ACCELERATOR_TICKET_TTL = int(
+    os.environ.get('BNUSPARKS_ACCELERATOR_TICKET_TTL', 30 * 60)
+)
+
 LOGIN_URL = '/admin/login/'
 
 # ── 邮件服务（用于密码重置等） ──

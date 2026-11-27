@@ -1,6 +1,9 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import College, Course, MaterialType, Material, UserProfile, Notification, CourseCategory, Major
+from .models import (
+    College, Course, MaterialType, Material, UserProfile, Notification,
+    CourseCategory, Major, MaterialSyncTask,
+)
 
 
 @admin.register(College)
@@ -67,6 +70,16 @@ class CourseCategoryAdmin(admin.ModelAdmin):
     list_display = ["name", "parent", "order"]
     search_fields = ["name"]
     autocomplete_fields = ["parent", "course"]
+
+
+@admin.register(MaterialSyncTask)
+class MaterialSyncTaskAdmin(admin.ModelAdmin):
+    list_display = ["material", "direction", "status", "priority", "bytes_done",
+                    "total_bytes", "attempts", "updated_at"]
+    list_filter = ["direction", "status"]
+    search_fields = ["material__title"]
+    autocomplete_fields = ["material"]
+    readonly_fields = ["created_at", "updated_at"]
 
 
 @admin.register(Major)

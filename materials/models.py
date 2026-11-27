@@ -308,6 +308,17 @@ class MaterialType(models.Model):
 
 
 class Material(models.Model):
+    class FileSyncDirection(models.TextChoices):
+        NONE = "none", "无"
+        PUBLIC_TO_CAMPUS = "public_to_campus", "公网→校内"
+
+    class FileSyncStatus(models.TextChoices):
+        SYNCED = "synced", "已同步"
+        PENDING = "pending", "待同步"
+        TRANSFERRING = "transferring", "同步中"
+        VERIFYING = "verifying", "校验中"
+        ERROR = "error", "同步失败"
+
     course = models.ForeignKey(
         Course, on_delete=models.CASCADE, null=True, blank=True,
         verbose_name="所属课程", related_name="materials",
@@ -326,6 +337,18 @@ class Material(models.Model):
     file_size = models.IntegerField("文件大小(字节)", default=0)
     file_type = models.CharField("文件类型", max_length=20, blank=True,
                                  help_text="pdf/docx/pptx 等")
+    # 校内文件加速站同步状态。文件同步与审核状态相互独立：
+    # pending 仍只允许上传者/管理员下载，同步完成不代表审核通过。
+    file_sync_direction = models.CharField(
+        "同步方向", max_length=20,
+        choices=FileSyncDirection.choices, default=FileSyncDirection.NONE,
+    )
+    file_sync_status = models.CharField(
+        "同步状态", max_length=20,
+        choices=FileSyncStatus.choices, default=FileSyncStatus.SYNCED,
+    )
+    file_sha256 = models.CharField("文件 SHA-256", max_length=64, blank=True, default="")
+    file_synced_at = models.DateTimeField("同步完成时间", null=True, blank=True)
     uploader_name = models.CharField("上传者昵称", max_length=50, blank=True)
     view_count = models.PositiveIntegerField("浏览量", default=0)
     download_count = models.IntegerField("下载次数", default=0)
@@ -375,8 +398,69 @@ class Material(models.Model):
             models.Index(fields=["review_status", "created_at"], name="material_review_created"),
         ]
 
+    @property
+    def file_on_campus(self):
+        """校内是否已有完整文件。同步失败时按方向判断源侧。"""
+        return not (
+            self.file_sync_direction == self.FileSyncDirection.PUBLIC_TO_CAMPUS
+            and self.file_sync_status != self.FileSyncStatus.SYNCED
+        )
+
     def __str__(self):
         return self.title
+
+
+class MaterialSyncTask(models.Model):
+    """公网→校内文件镜像的持久任务。
+
+    任务状态以本表为准；校内 agent 轮询领取，SQLite 上使用条件更新推进
+    pending→transferring→verifying→synced/error，避免并发重复传输。
+    """
+
+    MAX_ATTEMPTS = 5
+
+    class Direction(models.TextChoices):
+        PUBLIC_TO_CAMPUS = "public_to_campus", "公网→校内"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "待同步"
+        TRANSFERRING = "transferring", "同步中"
+        VERIFYING = "verifying", "校验中"
+        SYNCED = "synced", "已同步"
+        ERROR = "error", "同步失败"
+        CANCELLED = "cancelled", "已取消"
+
+    material = models.ForeignKey(
+        Material, on_delete=models.CASCADE, related_name="sync_tasks",
+        verbose_name="资料",
+    )
+    direction = models.CharField("同步方向", max_length=20, choices=Direction.choices)
+    status = models.CharField("状态", max_length=20, choices=Status.choices, default=Status.PENDING)
+    priority = models.IntegerField("优先级", default=100, help_text="数值越小越优先")
+    attempts = models.PositiveIntegerField("尝试次数", default=0)
+    bytes_done = models.BigIntegerField("已传输字节", default=0)
+    total_bytes = models.BigIntegerField("总字节", default=0)
+    sha256 = models.CharField("期望 SHA-256", max_length=64, blank=True, default="")
+    last_error = models.TextField("最近错误", blank=True, default="")
+    lease_owner = models.CharField("领取者", max_length=100, blank=True, default="")
+    lease_expires_at = models.DateTimeField("领取到期", null=True, blank=True)
+    next_retry_at = models.DateTimeField("下次重试时间", null=True, blank=True)
+    started_at = models.DateTimeField("开始时间", null=True, blank=True)
+    finished_at = models.DateTimeField("完成时间", null=True, blank=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "文件同步任务"
+        verbose_name_plural = "文件同步任务"
+        ordering = ["priority", "created_at", "id"]
+        indexes = [
+            models.Index(fields=["status", "priority", "created_at"], name="sync_task_status_priority"),
+            models.Index(fields=["material", "direction", "status"], name="sync_task_material_dir"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_direction_display()} #{self.material_id} [{self.status}]"
 
 
 class FolderOperation(models.Model):
